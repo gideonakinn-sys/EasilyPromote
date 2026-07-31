@@ -1,3 +1,4 @@
 {
-  "outputDirectory": "apps/web/.next"
+  "installCommand": "cd ../.. && npm install",
+  "buildCommand": "npx turbo run build --filter=@ep/web"
 }
