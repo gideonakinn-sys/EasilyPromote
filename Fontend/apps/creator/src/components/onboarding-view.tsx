@@ -22,7 +22,7 @@ export function OnboardingView({
 
   const isSocialConnected = profile.socialAccounts.length > 0;
   const isNichesChosen = profile.niches.length > 0;
-  const isProfileCompleted = profile.bio !== "" && profile.country !== "";
+  const isProfileCompleted = !!profile.avatar;
 
   return (
     <div className="w-full flex flex-col items-center max-w-xl text-center">
@@ -57,9 +57,9 @@ export function OnboardingView({
 
         <ChecklistStep
           completed={isProfileCompleted}
-          title="Complete your profile"
-          description="Add a display name and photo so brands know who's delivering."
-          actionLabel="Finish profile"
+          title="Add a profile photo"
+          description="Upload a photo so brands know who they're working with."
+          actionLabel="Upload photo"
           onAction={onCompleteProfile}
         />
       </div>

@@ -20,7 +20,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
         <h1 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Create your creator account
         </h1>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-tight">
+        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-[-0.01em]">
           Claim slots and get paid for real views.
         </p>
       </div>
@@ -123,7 +123,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
               {form.showPassword ? <HugeiconsIcon icon={EyeOffIcon} size={16} /> : <HugeiconsIcon icon={EyeIcon} size={16} />}
             </button>
           </div>
-          <span className="text-xs font-medium text-stone-400 block font-rethink">
+          <span className="text-xs font-medium text-stone-400 block font-rethink tracking-[-0.01em]">
             Use at least 8 characters, with a number.
           </span>
         </div>
@@ -150,7 +150,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
           <button
             type="submit"
             disabled={!form.agreed || loading}
-            className="w-full py-4 bg-[#FEB604] disabled:bg-stone-100 text-stone-900 disabled:text-stone-300 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
+            className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 text-stone-900 disabled:text-stone-400 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
           >
             {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Continue"}
           </button>

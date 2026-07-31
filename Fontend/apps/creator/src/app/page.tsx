@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { apiRequest, getToken, getUser, DEMO_MODE, saveAuth } from "../lib/api";
 import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection } from "../components/types";
 import { CreatorHeader } from "../components/creator-header";
@@ -15,9 +16,11 @@ import { CampaignDetailsDrawer } from "../components/campaign-details-drawer";
 import { Skeleton } from "../components/ui/skeleton";
 import { HomeStateSwitcher, type HomePreviewState } from "../components/home-state-switcher";
 import { useReveal } from "../hooks/use-reveal";
+import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 
 function CreatorDashboardContent() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   useReveal();
 
   const [profile, setProfile] = useState<CreatorProfile>({
@@ -49,9 +52,10 @@ function CreatorDashboardContent() {
   const [loading, setLoading] = useState(true);
 
   const [profileForm, setProfileForm] = useState<ProfileForm>({
-    displayName: "",
-    bio: "",
-    country: "",
+    name: "",
+    nickname: "",
+    email: "",
+    phone: "",
     avatarUrl: "",
   });
 
@@ -124,10 +128,12 @@ function CreatorDashboardContent() {
       };
 
       setProfile(p);
+      const user = getUser();
       setProfileForm({
-        displayName: p.displayName,
-        bio: p.bio,
-        country: p.country,
+        name: p.name,
+        nickname: p.displayName,
+        email: user?.email || "",
+        phone: user?.phone || "",
         avatarUrl: p.avatar || "",
       });
     } catch {
@@ -159,13 +165,22 @@ function CreatorDashboardContent() {
         currentViews: c.currentViews as number,
         targetViews: c.targetViews as number,
         videoUrl: c.videoUrl as string,
-        postedPlatforms: c.postedPlatforms as string[],
+        caption: c.caption as string,
+        videoDuration: c.videoDuration as string,
+        submittedAgo: c.submittedAgo as string,
+        postedPlatforms: c.postedPlatforms as Array<{ platform: string; views: number }>,
+        creatorHandle: c.creatorHandle as string | undefined,
         submissionId: c.submissionId as string,
         contentBrief: c.contentBrief as string,
+        description: c.description as string,
         keyMessageCta: c.keyMessageCta as string,
         whatToAvoid: c.whatToAvoid as string,
         platforms: c.platforms as string[],
         contentStyle: c.contentStyle as string,
+        brandName: c.brandName as string | undefined,
+        brandAvatar: c.brandAvatar as string | undefined,
+        scriptUrl: c.scriptUrl as string | undefined,
+        scriptFileName: c.scriptFileName as string | undefined,
       }));
 
       setCampaigns(items);
@@ -221,7 +236,7 @@ function CreatorDashboardContent() {
   };
 
   const markCompleteIfReady = (next: CreatorProfile) => {
-    const complete = next.socialAccounts.length > 0 && next.niches.length > 0 && next.country !== "";
+    const complete = next.socialAccounts.length > 0 && next.niches.length > 0 && !!next.avatar;
     if (complete && !profileComplete && !showAllSet) {
       setShowAllSet(true);
       setHomePreview("allset");
@@ -283,9 +298,8 @@ function CreatorDashboardContent() {
   const handleSaveProfile = async () => {
     const next: CreatorProfile = {
       ...profile,
-      displayName: profileForm.displayName,
-      bio: profileForm.bio,
-      country: profileForm.country,
+      name: profileForm.name,
+      displayName: profileForm.nickname,
       avatar: profileForm.avatarUrl || profile.avatar,
     };
     setProfile(next);
@@ -296,9 +310,7 @@ function CreatorDashboardContent() {
         method: "PUT",
         token: getToken() || undefined,
         body: JSON.stringify({
-          displayName: profileForm.displayName,
-          bio: profileForm.bio,
-          country: profileForm.country,
+          displayName: profileForm.nickname,
           avatar: profileForm.avatarUrl || undefined,
         }),
       });
@@ -318,9 +330,8 @@ function CreatorDashboardContent() {
     setActiveTab("campaign");
   };
 
-  const handleSubmitContent = async (campaignId: string) => {
-    const url = readyPostUrl[campaignId];
-    if (!url) return;
+  const handleSubmitContent = async (campaignId: string, videoUrl: string, caption: string) => {
+    if (!videoUrl) return;
 
     try {
       await apiRequest("/submissions", {
@@ -328,32 +339,25 @@ function CreatorDashboardContent() {
         token: getToken() || undefined,
         body: JSON.stringify({
           campaignId,
-          videoUrl: url,
-          caption: "",
+          videoUrl,
+          caption,
         }),
       });
 
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === campaignId
-            ? { ...c, status: "under_review" as const, delivery: "Submitted just now", videoUrl: url }
+            ? { ...c, status: "under_review" as const, delivery: "Submitted just now", videoUrl, caption }
             : c
         )
       );
-
-      setReadyPostUrl((prev) => {
-        const next = { ...prev };
-        delete next[campaignId];
-        return next;
-      });
     } catch (err) {
       console.error("Failed to submit content:", err);
     }
   };
 
-  const handleUpdateContent = async (campaignId: string) => {
-    const url = readyPostUrl[campaignId];
-    if (!url) return;
+  const handleUpdateContent = async (campaignId: string, videoUrl: string, caption: string) => {
+    if (!videoUrl) return;
 
     try {
       const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
@@ -361,23 +365,17 @@ function CreatorDashboardContent() {
         await apiRequest(`/submissions/${submissionId}`, {
           method: "PUT",
           token: getToken() || undefined,
-          body: JSON.stringify({ videoUrl: url }),
+          body: JSON.stringify({ videoUrl, caption }),
         });
       }
 
       setCampaigns((prev) =>
         prev.map((c) =>
           c.id === campaignId
-            ? { ...c, status: "under_review" as const, comment: undefined, delivery: "Submitted just now", videoUrl: url }
+            ? { ...c, status: "under_review" as const, comment: undefined, delivery: "Submitted just now", videoUrl, caption }
             : c
         )
       );
-
-      setReadyPostUrl((prev) => {
-        const next = { ...prev };
-        delete next[campaignId];
-        return next;
-      });
     } catch (err) {
       console.error("Failed to update content:", err);
     }
@@ -421,7 +419,7 @@ function CreatorDashboardContent() {
     }
   };
 
-  const handleDetailsSubmitPostUrl = async (campaignId: string, urls: { tiktok?: string; instagram?: string; x?: string }) => {
+  const handleDetailsSubmitPostUrl = async (campaignId: string, urls: Record<string, string>) => {
     try {
       const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
       if (submissionId) {
@@ -443,7 +441,9 @@ function CreatorDashboardContent() {
                 status: "live_tracking" as const,
                 progress: 0,
                 currentViews: 0,
-                postedPlatforms: Object.keys(urls).filter((k) => urls[k as keyof typeof urls]),
+                postedPlatforms: Object.keys(urls)
+                  .filter((k) => urls[k])
+                  .map((k) => ({ platform: k, views: 0 })),
               }
             : c
         )
@@ -513,14 +513,22 @@ function CreatorDashboardContent() {
     );
   }
 
-  const profileComplete = profile.socialAccounts.length > 0 && profile.niches.length > 0 && profile.country !== "";
+  const profileComplete = profile.socialAccounts.length > 0 && profile.niches.length > 0 && !!profile.avatar;
 
   const blankProfile: CreatorProfile = {
     ...profile,
     socialAccounts: [],
     niches: [],
+    avatar: null,
     bio: "",
     country: "",
+  };
+
+  const allSetProfile: CreatorProfile = {
+    ...profile,
+    socialAccounts: profile.socialAccounts.length > 0 ? profile.socialAccounts : [{ platform: "tiktok", handle: "@alexcreative", verified: true }],
+    niches: profile.niches.length > 0 ? profile.niches : ["Music", "Lifestyle"],
+    avatar: profile.avatar || avatarSvg,
   };
 
   const renderOnboardingView = (p: CreatorProfile) => (
@@ -538,7 +546,13 @@ function CreatorDashboardContent() {
       campaigns={filteredCampaigns}
       filter={campaignsFilter}
       onFilterChange={setCampaignsFilter}
-      onSelectCampaign={setSelectedCampaign}
+      onSelectCampaign={(camp) => {
+        if (isMobile) {
+          router.push(`/campaign/${camp.id}`);
+        } else {
+          setSelectedCampaign(camp);
+        }
+      }}
       onBrowseCampaign={handleBrowseCampaigns}
     />
   );
@@ -548,7 +562,13 @@ function CreatorDashboardContent() {
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        profile={DEMO_MODE && homePreview === "empty" ? blankProfile : profile}
+        profile={
+          DEMO_MODE
+            ? homePreview === "empty"
+              ? blankProfile
+              : allSetProfile
+            : profile
+        }
         onLogout={handleLogout}
         onOpenProfile={() => openProfile("details")}
       />

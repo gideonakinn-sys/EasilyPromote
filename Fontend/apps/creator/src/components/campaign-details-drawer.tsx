@@ -1,36 +1,180 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, type ChangeEvent } from "react";
+import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { TiktokIcon, Message01Icon } from "@hugeicons/core-free-icons";
+import { TiktokIcon, File01Icon, Download01Icon, CloudUploadIcon, CheckIcon } from "@hugeicons/core-free-icons";
+import { cn } from "@ep/ui/lib/utils";
+import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
+import { useToast } from "@ep/ui/components/toast";
+import emptyActivityImg from "@ep/ui/assets/empty-activity.png";
+import inReviewCreatorImg from "@ep/ui/assets/in-review-creator.png";
+import changesFeedbackImg from "@ep/ui/assets/Changes-feedback-creator.png";
+import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
+import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
 import type { CampaignItem } from "./types";
+import { CampaignStateSwitcher, type CampaignPreviewStatus } from "./campaign-state-switcher";
+import { STATUS_BADGES } from "./campaign-card";
 
 interface CampaignDetailsDrawerProps {
   campaign: CampaignItem;
   onClose: () => void;
-  onSubmitContent: (id: string) => void;
-  onUpdateContent: (id: string) => void;
-  onSubmitPostUrl: (id: string, urls: { tiktok?: string; instagram?: string; x?: string }) => void;
+  onSubmitContent: (id: string, videoUrl: string, caption: string) => void;
+  onUpdateContent: (id: string, videoUrl: string, caption: string) => void;
+  onSubmitPostUrl: (id: string, urls: Record<string, string>) => void;
+  isMobile?: boolean;
 }
 
 export function CampaignDetailsDrawer({
   campaign,
+  isMobile = false,
   onClose,
   onSubmitContent,
   onUpdateContent,
   onSubmitPostUrl,
 }: CampaignDetailsDrawerProps) {
-  const [tiktokUrl, setTiktokUrl] = useState("");
-  const [instagramUrl, setInstagramUrl] = useState("");
-  const [xUrl, setXUrl] = useState("");
+  const [linkInputs, setLinkInputs] = useState<Record<string, string>>({});
+  const [previewStatus, setPreviewStatus] = useState<CampaignPreviewStatus | null>(null);
+
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const displayCampaign = previewStatus ? { ...campaign, status: previewStatus } : campaign;
+
+  const linkPlatforms = displayCampaign.platforms?.length ? displayCampaign.platforms : ["tiktok", "instagram"];
+  const allLinksFilled = linkPlatforms.every((p) => (linkInputs[p] || "").trim().length > 0);
 
   const handleLinkSubmit = () => {
-    onSubmitPostUrl(campaign.id, {
-      tiktok: tiktokUrl,
-      instagram: instagramUrl,
-      x: xUrl,
-    });
+    onSubmitPostUrl(displayCampaign.id, linkInputs);
   };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setUploading(true);
+    setUploadProgress(0);
+    setVideoUrl("");
+
+    const interval = setInterval(() => {
+      setUploadProgress((prev) => {
+        const next = prev + Math.random() * 28;
+        if (next >= 100) {
+          clearInterval(interval);
+          setUploading(false);
+          setVideoUrl(`https://cloudinary.com/videos/${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}`);
+          return 100;
+        }
+        return next;
+      });
+    }, 250);
+
+    e.target.value = "";
+  };
+
+  const handleSubmitUpload = () => {
+    if (!videoUrl) return;
+    if (displayCampaign.status === "changes_requested") {
+      onUpdateContent(displayCampaign.id, videoUrl, caption);
+    } else {
+      onSubmitContent(displayCampaign.id, videoUrl, caption);
+    }
+    toast("Content uploaded successfully!", "success");
+    setUploadOpen(false);
+    setSelectedFile(null);
+    setUploading(false);
+    setUploadProgress(0);
+    setVideoUrl("");
+    setCaption("");
+  };
+
+  const renderUploadPanel = () => (
+    <div className="space-y-4">
+      <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
+      {!selectedFile ? (
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full flex flex-col items-center justify-center gap-2 py-8 bg-white border-2 border-dashed border-stone-200 rounded-2xl font-rethink"
+        >
+          <HugeiconsIcon icon={CloudUploadIcon} size={24} className="text-stone-400" />
+          <span className="text-sm font-medium text-stone-600">Select video</span>
+          <span className="text-[10px] font-medium text-stone-400 tracking-[-0.01em]">MP4, MOV up to 100MB</span>
+        </button>
+      ) : uploading ? (
+        <div className="w-full space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-stone-700 truncate font-rethink tracking-[-0.01em]">{selectedFile.name}</span>
+            <span className="text-[10px] font-medium text-stone-500 font-rethink">{Math.round(uploadProgress)}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-600 rounded-full transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-2xl p-3">
+          <div className="w-8 h-8 rounded-full bg-[#CBF5E5] flex items-center justify-center shrink-0">
+            <HugeiconsIcon icon={CheckIcon} size={16} className="text-[#176448]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-stone-900 truncate font-rethink tracking-[-0.01em]">{selectedFile.name}</p>
+            <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Ready to submit</p>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedFile(null);
+              setVideoUrl("");
+            }}
+            className="text-xs font-medium text-stone-500 font-rethink shrink-0"
+          >
+            Change
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Caption</label>
+        <textarea
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Tell the brand about your video..."
+          className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink resize-none min-h-[88px]"
+        />
+      </div>
+
+      <button
+        onClick={handleSubmitUpload}
+        disabled={!videoUrl}
+        className={cn(
+          "w-full py-3 rounded-full font-semibold text-sm border font-rethink",
+          videoUrl
+            ? "bg-[#FEB604] text-stone-900 border-stone-100"
+            : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
+        )}
+      >
+        Submit for review
+      </button>
+    </div>
+  );
+
+  const renderMobileUploadSheet = () => (
+    <MobileDrawer open={uploadOpen} onOpenChange={setUploadOpen}>
+      <div className="space-y-1.5 mb-4">
+        <h3 className="font-rethink font-semibold text-lg text-stone-900 tracking-tighter">
+          {displayCampaign.status === "changes_requested" ? "Upload new content" : "Upload content"}
+        </h3>
+        <p className="font-rethink text-sm text-stone-500 font-medium tracking-[-0.01em]">
+          Select your video and add a caption
+        </p>
+      </div>
+      {renderUploadPanel()}
+    </MobileDrawer>
+  );
 
   const platformLabels: Record<string, string> = {
     tiktok: "TikTok",
@@ -39,120 +183,154 @@ export function CampaignDetailsDrawer({
     twitter: "X (Twitter)",
   };
 
-  const displayPlatforms = (campaign.platforms || ["tiktok", "instagram"])
+  const displayPlatforms = (displayCampaign.platforms || ["tiktok", "instagram"])
     .map((p) => platformLabels[p] || p);
+
+  const renderInlineUploadPanel = () => (
+    <div className="bg-stone-50 border border-stone-200 rounded-[20px] p-4 space-y-4">
+      {renderUploadPanel()}
+      <button
+        onClick={() => setUploadOpen(false)}
+        className="w-full text-xs font-medium text-stone-500 font-rethink text-center"
+      >
+        Cancel
+      </button>
+    </div>
+  );
 
   const renderActivity = () => {
     const items = [];
 
-    const ActivityPostItem = ({
-      badgeLabel,
-      badgeColorClass,
-      badgeDotColorClass,
-      timeText,
-      commentText,
-    }: {
-      badgeLabel: string;
-      badgeColorClass: string;
-      badgeDotColorClass: string;
-      timeText: string;
-      commentText?: string;
-    }) => (
-      <div className="space-y-3">
-        <div className="flex gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-stone-200 border border-stone-300 relative flex items-center justify-center shrink-0 overflow-hidden">
-            <div className="w-6 h-6 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-stone-900 z-10">
+    const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string) => (
+      <div className={cn("bg-stone-100 rounded-[16px] p-2", review && "space-y-2")}>
+        <div className="flex gap-3">
+          <div className="w-20 h-28 rounded-xl bg-stone-200 relative flex items-center justify-center overflow-hidden shrink-0">
+            <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center text-stone-900 z-10">
               <svg className="w-2.5 h-2.5 translate-x-[1px]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
             <div className="absolute inset-0 bg-gradient-to-tr from-purple-200 to-indigo-100 opacity-60"></div>
           </div>
-
-          <div className="flex-1 space-y-1.5 text-left">
-            <div className="flex items-center gap-2 text-[10px] text-stone-500 font-medium">
-              <span>{timeText}</span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-medium flex items-center gap-1 ${badgeColorClass}`}>
-                <span className={`w-1 h-1 rounded-full ${badgeDotColorClass}`} />
-                {badgeLabel}
-              </span>
+          <div className="flex-1 min-w-0 space-y-2">
+            <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
+              &quot;{displayCampaign.caption || "New drop from Musta4a is banging!!! This new jam called Pass am is so good #nusound #viral"}&quot;
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-stone-500 tracking-[-0.01em] font-rethink">
+              <span>{displayCampaign.videoDuration || "0:45"}</span>
+              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              <span>uploaded {displayCampaign.submittedAgo || "23 mins ago"}</span>
+              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              <StatusDetailsBadge status={badgeStatus} />
             </div>
           </div>
         </div>
-
-        {commentText && (
-          <div className="bg-[#FAF5FF] border border-[#F3E8FF] rounded-2xl p-4 ml-18 flex gap-3 text-left">
-            <HugeiconsIcon icon={Message01Icon} size={16} className="text-purple-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] leading-relaxed text-stone-600 font-medium">
-              &quot;{commentText}&quot;
+        {review && (
+          <div className="bg-white rounded-[16px] p-3">
+            <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
+              {review}
             </p>
           </div>
         )}
       </div>
     );
 
-    if (campaign.status === "delivered") {
+    if (displayCampaign.status === "delivered") {
       items.push(
         <div key="activity-delivered" className="space-y-4 border-b border-stone-100 pb-5">
-          <ActivityPostItem
-            badgeLabel="Delivered"
-            badgeColorClass="bg-teal-50 text-teal-700 border border-teal-100"
-            badgeDotColorClass="bg-teal-500"
-            timeText="Campaign completed"
-          />
+          {renderContentCard("delivered")}
         </div>
       );
-    }
 
-    if (campaign.status === "live_tracking" || campaign.status === "delivered") {
       items.push(
         <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
-          <ActivityPostItem
-            badgeLabel="Live · tracking views"
-            badgeColorClass="bg-blue-50 text-blue-700 border border-blue-100"
-            badgeDotColorClass="bg-blue-500"
-            timeText="Content posted"
-          />
+          {renderContentCard("live_tracking")}
         </div>
       );
-    }
 
-    if (campaign.status === "live_tracking" || campaign.status === "delivered" || campaign.status === "approved_post") {
       items.push(
         <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          <ActivityPostItem
-            badgeLabel="Approved — Ready To Post"
-            badgeColorClass="bg-green-50 text-green-700 border border-green-100"
-            badgeDotColorClass="bg-green-500"
-            timeText="Content approved"
-          />
+          {renderContentCard("approved_post")}
         </div>
       );
-    }
 
-    if (campaign.status === "changes_requested") {
       items.push(
         <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          <ActivityPostItem
-            badgeLabel="Changes requested"
-            badgeColorClass="bg-red-50 text-red-700 border border-red-100"
-            badgeDotColorClass="bg-red-500"
-            timeText="Review feedback"
-            commentText={campaign.comment || "Please revise the content"}
-          />
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-submitted" className="space-y-4">
+          {renderContentCard("under_review")}
         </div>
       );
     }
 
-    if (campaign.status === "under_review" || campaign.status === "approved_post") {
+    if (displayCampaign.status === "live_tracking") {
       items.push(
-        <div key="activity-review" className="space-y-4">
-          <ActivityPostItem
-            badgeLabel="Review In Progress"
-            badgeColorClass="bg-amber-50 text-[#6E330C] border border-amber-100"
-            badgeDotColorClass="bg-[#FEB604]"
-            timeText="Awaiting review"
-          />
+        <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("live_tracking")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("approved_post")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-submitted" className="space-y-4">
+          {renderContentCard("under_review")}
+        </div>
+      );
+    }
+
+    if (displayCampaign.status === "changes_requested") {
+      items.push(
+        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-submitted" className="space-y-4">
+          {renderContentCard("under_review")}
+        </div>
+      );
+    }
+
+    if (displayCampaign.status === "under_review") {
+      items.push(
+        <div key="activity-submitted" className="space-y-4">
+          {renderContentCard("under_review")}
+        </div>
+      );
+    }
+
+    if (displayCampaign.status === "approved_post") {
+      items.push(
+        <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("approved_post")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+        </div>
+      );
+
+      items.push(
+        <div key="activity-submitted" className="space-y-4">
+          {renderContentCard("under_review")}
         </div>
       );
     }
@@ -160,352 +338,382 @@ export function CampaignDetailsDrawer({
     return items;
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div 
-        onClick={onClose}
-        className="w-1/5 bg-stone-900/10 backdrop-blur-md p-6 flex flex-col justify-between cursor-pointer"
-      >
-        <div className="flex items-center gap-2 opacity-80">
-          <div className="w-5 h-5 rounded-full bg-[#FEB604] flex items-center justify-center">
-            <span className="text-[8px] font-semibold text-stone-950">E</span>
-          </div>
-          <span className="font-raleway font-semibold text-xs leading-[20px] text-[#0A0D14] tracking-wide">EasilyPromote</span>
-        </div>
-      </div>
-
-      <div className="w-4/5 h-full bg-[#FAFAF9] rounded-l-[32px] border-l border-stone-250 overflow-y-auto p-10 flex flex-col relative animate-in slide-in-from-right duration-300">
-        <div className="flex justify-between items-center w-full mb-10 pb-4 border-b border-stone-200/60">
-          <button 
-            onClick={onClose}
-            className="text-stone-500 text-xs font-medium transition-colors flex items-center gap-1.5"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            Save and Close
-          </button>
-          
-          <h2 className="font-rethink font-medium text-sm text-stone-900 tracking-wide">
-            {campaign.title}
-          </h2>
-          
-          <div className="w-20"></div>
-        </div>
-
-        <div className="max-w-xl w-full mx-auto space-y-8 pb-12">
-          
-          <div className="bg-stone-50 rounded-3xl border border-stone-100 p-4 flex flex-col items-center text-center relative overflow-hidden">
-            <div className="w-[50px] h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200 mb-4">
+  const panelContent = (
+    <div className={cn("mx-auto space-y-8 pb-10", isMobile ? "w-full max-w-[350px]" : "w-[350px]")}>
+          {/* Identity header */}
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200 flex-shrink-0 overflow-hidden">
               <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
             </div>
-
-            <h3 className="font-rethink font-medium tracking-tight text-[16px] text-stone-900 line-clamp-2 mb-3">
-              {campaign.title}
-            </h3>
-
-            <div className="flex items-center gap-2 mb-6">
-              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
-                {campaign.category}
-              </span>
-              <StatusDetailsBadge status={campaign.status} />
-            </div>
-
-            <div className="w-full border-t border-stone-100 pt-6">
-              
-              {campaign.status === "needs_content" && (
-                <div className="flex gap-2 w-full">
-                  <button
-                    onClick={() => onSubmitContent(campaign.id)}
-                    className="flex-1 py-4 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-xs font-rethink"
-                  >
-                    Upload content
-                  </button>
-                </div>
-              )}
-
-              {campaign.status === "under_review" && (
-                <div className="space-y-5 w-full">
-                  <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-2xl p-4 flex gap-4 text-left">
-                    <div className="w-10 h-10 rounded-full bg-white/90 border border-amber-250 flex items-center justify-center shrink-0">
-                      <span className="text-[#FEB604] text-lg font-medium">⌛</span>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-medium text-stone-900">Waiting on brand review</h4>
-                      <p className="text-[11px] leading-relaxed text-stone-500 font-medium">
-                        Submitted recently. Most reviews are completed within 24 hours.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <button
-                      disabled
-                      className="flex-1 py-4 bg-stone-100 text-stone-400 rounded-full font-medium text-xs border border-stone-200 cursor-not-allowed font-rethink"
-                    >
-                      Upload content
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {campaign.status === "changes_requested" && (
-                <div className="space-y-5 w-full">
-                  <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-2xl p-4 flex gap-4 text-left">
-                    <div className="w-10 h-10 rounded-full bg-white/90 border border-red-200 flex items-center justify-center shrink-0">
-                      <span className="text-red-500 text-base">⚠️</span>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-medium text-stone-900">
-                        {campaign.comment || "Please revise the content"}
-                      </h4>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onUpdateContent(campaign.id)}
-                      className="flex-1 py-4 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-xs font-rethink"
-                    >
-                      Upload new content
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {campaign.status === "approved_post" && (
-                <div className="space-y-5 w-full">
-                  <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-2xl p-4 flex gap-4 text-left">
-                    <div className="w-10 h-10 rounded-full bg-white/90 border border-green-200 flex items-center justify-center shrink-0">
-                      <span className="text-green-500 text-base">📢</span>
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-medium text-stone-900 leading-snug">
-                        Post this on {displayPlatforms.join(", ")}, then paste the link below so we can start tracking your views.
-                      </h4>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <input
-                      type="text"
-                      placeholder="TikTok Post Link"
-                      value={tiktokUrl}
-                      onChange={(e) => setTiktokUrl(e.target.value)}
-                      className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-full text-xs font-medium text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Instagram post link"
-                      value={instagramUrl}
-                      onChange={(e) => setInstagramUrl(e.target.value)}
-                      className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-full text-xs font-medium text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink"
-                    />
-                    <input
-                      type="text"
-                      placeholder="X post link"
-                      value={xUrl}
-                      onChange={(e) => setXUrl(e.target.value)}
-                      className="px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-full text-xs font-medium text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleLinkSubmit}
-                      className="flex-1 py-4 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-xs font-rethink"
-                    >
-                      Submit link
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {(campaign.status === "live_tracking" || campaign.status === "delivered") && (
-                <div className="space-y-4 w-full">
-                  {campaign.status === "delivered" && (
-                    <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-2xl p-4 flex gap-4 text-left">
-                      <div className="w-10 h-10 rounded-full bg-white/90 border border-green-200 flex items-center justify-center shrink-0">
-                        <span className="text-green-500 text-sm">✓</span>
-                      </div>
-                      <div className="space-y-1">
-                        <h4 className="text-xs font-medium text-stone-900">Delivered</h4>
-                        <p className="text-[11px] leading-relaxed text-stone-500 font-medium">
-                          Target reached and verified. ₦{campaign.reward.toLocaleString()} was paid to your wallet
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {campaign.videoUrl && (
-                    <div className="flex gap-4 items-start text-left bg-stone-50 border border-stone-200/60 rounded-2xl p-4">
-                      <div className="w-12 h-12 rounded-xl bg-stone-200 relative flex items-center justify-center overflow-hidden shrink-0">
-                        <div className="w-5 h-5 rounded-full bg-white/80 flex items-center justify-center text-[8px] z-10 font-medium">▶</div>
-                        <div className="absolute inset-0 bg-gradient-to-tr from-purple-200 to-indigo-100 opacity-60"></div>
-                      </div>
-                      <div className="flex-1 space-y-1.5">
-                        <p className="text-xs font-medium text-stone-900 leading-normal truncate">
-                          {campaign.videoUrl}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {campaign.postedPlatforms && campaign.postedPlatforms.length > 0 && (
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {campaign.postedPlatforms.map((p) => (
-                        <span key={p} className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 border border-stone-200 text-stone-700 font-medium text-[10px] rounded-full">
-                          {platformLabels[p] || p}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {(campaign.currentViews !== undefined || campaign.progress !== undefined) && (
-                    <div className="space-y-2 border-t border-stone-100 pt-4">
-                      <div className="flex justify-between text-xs font-medium font-rethink">
-                        <span className={campaign.status === "delivered" ? "text-teal-600 font-medium" : "text-stone-500"}>
-                          {campaign.status === "delivered" ? "100% Complete" : `${campaign.progress || 0}%`}
-                        </span>
-                        <span className="text-stone-500">
-                          {(campaign.currentViews || 0).toLocaleString()} / {(campaign.targetViews || 0).toLocaleString()} views
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 h-2 bg-stone-100 border border-stone-200/50 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              campaign.status === "delivered" ? "bg-teal-500" : "bg-blue-600"
-                            }`}
-                            style={{ width: campaign.status === "delivered" ? "100%" : `${campaign.progress || 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
+            <div className="space-y-1.5">
+              <h2 className="font-rethink font-medium tracking-tighter text-xl text-stone-900 leading-tight">
+                {displayCampaign.title}
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
+                  {displayCampaign.category}
+                </span>
+                <StatusDetailsBadge status={displayCampaign.status} />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <h4 className="font-rethink font-medium text-sm text-stone-900 text-left">Slot details</h4>
-            <div className="border border-stone-200/80 rounded-2xl bg-white p-5 space-y-3.5 text-xs text-left">
-              <div className="flex justify-between">
-                <span className="font-medium text-stone-500">Target</span>
-                <span className="font-medium text-stone-900">{(campaign.targetViews || 0).toLocaleString()} views</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-stone-500">Reward</span>
-                <span className="font-medium text-stone-900">₦{campaign.reward.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-stone-500">Platforms</span>
-                <span className="font-medium text-stone-900">{displayPlatforms.join(", ")}</span>
-              </div>
-              {campaign.viewTarget && (
-                <div className="flex justify-between">
-                  <span className="font-medium text-stone-500">View Target</span>
-                  <span className="font-medium text-stone-900">{campaign.viewTarget.toLocaleString()} views</span>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Live CTA */}
+          {displayCampaign.status === "live_tracking" && (
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+            >
+              Upload more contents
+            </button>
+          )}
+          {uploadOpen && !isMobile && displayCampaign.status === "live_tracking" && renderInlineUploadPanel()}
 
-          {(campaign.contentBrief || campaign.keyMessageCta || campaign.whatToAvoid) && (
-            <div className="bg-stone-50 border border-stone-200 rounded-3xl p-6 text-left space-y-4">
-              <h4 className="font-rethink font-medium text-sm text-stone-900">The brief</h4>
-              
-              {campaign.contentBrief && (
-                <p className="text-xs leading-relaxed text-stone-600 font-medium">
-                  {campaign.contentBrief}
+          {/* Views stats */}
+          {(displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
+            <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+              <div className="space-y-2">
+                <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Total views</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-rethink font-medium text-2xl text-stone-900 tracking-tighter">
+                    {(displayCampaign.currentViews || 0).toLocaleString()}
+                  </span>
+                  <div className="flex-1 max-w-[200px] h-1.5 bg-stone-100 border border-stone-200/50 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${displayCampaign.status === "delivered" ? "bg-teal-500" : "bg-blue-600"}`}
+                      style={{ width: displayCampaign.status === "delivered" ? "100%" : `${displayCampaign.progress || 0}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
+                    / {(displayCampaign.targetViews || displayCampaign.viewTarget || 0).toLocaleString()} target
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-stone-100" />
+              <div className="space-y-3">
+                <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Views breakdown</span>
+                <div className="space-y-3">
+                  {(displayCampaign.platforms || ["tiktok", "instagram"]).map((platform) => {
+                    const entry = (displayCampaign.postedPlatforms || []).find((p) => p.platform === platform);
+                    return (
+                      <div key={platform} className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                        <span className="text-stone-500">{platformLabels[platform] || platform}</span>
+                        <span className="text-stone-900">{(entry?.views || 0).toLocaleString()} views</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status alerts */}
+          {displayCampaign.status === "under_review" && (
+            <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-[#FEFCE8] border-[#854D0E]">
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                <Image src={inReviewCreatorImg} alt="Under review" width={48} height={48} unoptimized className="w-full h-full object-contain" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-rethink font-medium text-sm text-[#854D0E] tracking-[-0.01em]">Under review</h4>
+                <p className="font-rethink text-sm font-medium leading-normal text-[#854D0E] tracking-[-0.01em]">
+                  Submitted recently. Most reviews are completed within 24 hours.
                 </p>
-              )}
+              </div>
+            </div>
+          )}
 
-              {campaign.keyMessageCta && (
-                <div className="text-xs leading-relaxed text-stone-600 font-medium">
-                  <strong>Key Message / CTA:</strong> {campaign.keyMessageCta}
+          {displayCampaign.status === "changes_requested" && (
+            <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-red-50 border-red-200">
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                <Image src={changesFeedbackImg} alt="Changes requested" width={48} height={48} unoptimized className="w-full h-full object-contain" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-rethink font-medium text-sm text-red-800 tracking-[-0.01em]">Changes requested</h4>
+                <p className="font-rethink text-sm font-medium leading-normal text-red-800 tracking-[-0.01em]">
+                  {displayCampaign.comment || "Please revise the content"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {displayCampaign.status === "approved_post" && (
+            <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-[#EBF3FF] border-[#BFDBFE]">
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                <Image src={approvedCreatorImg} alt="Approved" width={48} height={48} unoptimized className="w-full h-full object-contain" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-rethink font-medium text-sm text-blue-800 tracking-[-0.01em]">Approved</h4>
+                <p className="font-rethink text-sm font-medium leading-normal text-blue-800 tracking-[-0.01em]">
+                  Post this on {displayPlatforms.join(", ")}, then paste the link below so we can start tracking your views.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {displayCampaign.status === "delivered" && (
+            <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-green-50 border-green-200">
+              <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                <Image src={deliveredCreatorImg} alt="Delivered" width={48} height={48} unoptimized className="w-full h-full object-contain" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-rethink font-medium text-sm text-green-800 tracking-[-0.01em]">Delivered</h4>
+                <p className="font-rethink text-sm font-medium leading-normal text-green-800 tracking-[-0.01em]">
+                  Target reached and verified. ₦{displayCampaign.reward.toLocaleString()} was paid to your wallet
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Primary actions */}
+          {displayCampaign.status === "needs_content" && (
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+            >
+              Upload content
+            </button>
+          )}
+
+          {displayCampaign.status === "changes_requested" && (
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+            >
+              Upload new content
+            </button>
+          )}
+
+          {uploadOpen &&
+            !isMobile &&
+            (displayCampaign.status === "needs_content" || displayCampaign.status === "changes_requested") &&
+            renderInlineUploadPanel()}
+
+          {displayCampaign.status === "approved_post" && (
+            <div className="space-y-2.5">
+              <div className={cn("grid gap-2.5", isMobile ? "grid-cols-1" : "grid-cols-3")}>
+                {linkPlatforms.map((p) => (
+                  <input
+                    key={p}
+                    type="text"
+                    placeholder={`${platformLabels[p] || p} post link`}
+                    value={linkInputs[p] || ""}
+                    onChange={(e) => setLinkInputs((prev) => ({ ...prev, [p]: e.target.value }))}
+                    className="w-full min-w-0 px-3 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink"
+                  />
+                ))}
+              </div>
+              <button
+                onClick={handleLinkSubmit}
+                disabled={!allLinksFilled}
+                className={cn(
+                  "w-full py-3 rounded-full font-semibold text-sm border font-rethink",
+                  allLinksFilled
+                    ? "bg-[#FEB604] text-stone-900 border-stone-100"
+                    : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
+                )}
+              >
+                Submit link
+              </button>
+            </div>
+          )}
+
+          {/* The brief */}
+          {(displayCampaign.description || displayCampaign.contentBrief || displayCampaign.keyMessageCta || displayCampaign.whatToAvoid || displayCampaign.contentStyle || displayCampaign.scriptUrl) && (
+            <div className="space-y-6">
+              {(displayCampaign.description || displayCampaign.contentBrief) && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Campaign description</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.description || displayCampaign.contentBrief}
+                  </p>
                 </div>
               )}
 
-              {campaign.whatToAvoid && (
-                <div className="text-xs leading-relaxed text-stone-600 font-medium">
-                  <strong>What to Avoid:</strong> {campaign.whatToAvoid}
+              {displayCampaign.keyMessageCta && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Key message</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.keyMessageCta}
+                  </p>
                 </div>
               )}
 
-              {campaign.contentStyle && (
-                <div className="text-xs leading-relaxed text-stone-600 font-medium">
-                  <strong>Content Style:</strong> {campaign.contentStyle}
+              {displayCampaign.whatToAvoid && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">What to avoid</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.whatToAvoid}
+                  </p>
+                </div>
+              )}
+
+              {displayCampaign.contentStyle && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Content style</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.contentStyle}
+                  </p>
+                </div>
+              )}
+
+              {(displayCampaign.scriptUrl || displayCampaign.scriptFileName) && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Campaign script/brief</h5>
+                  <a
+                    href={displayCampaign.scriptUrl || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-200 rounded-full"
+                  >
+                    <HugeiconsIcon icon={File01Icon} size={14} className="text-stone-900 shrink-0" />
+                    <span className="text-sm font-medium text-stone-900 font-rethink truncate max-w-[200px]">
+                      {displayCampaign.scriptFileName || "Campaign brief"}
+                    </span>
+                    <HugeiconsIcon icon={Download01Icon} size={14} className="text-stone-900 shrink-0" />
+                  </a>
                 </div>
               )}
             </div>
           )}
 
-          <div className="space-y-5">
-            <h4 className="font-rethink font-medium text-sm text-stone-900 text-left">Activity</h4>
-            <div className="space-y-5 border border-stone-200/80 rounded-2xl bg-white p-5">
-              {renderActivity().length > 0 ? (
-                <div className="space-y-5">
-                  {renderActivity()}
+          <div className="border-t border-stone-100" />
+
+          {/* Campaign overview */}
+          <div className="space-y-4">
+            <h4 className="font-rethink font-semibold text-sm text-stone-900">Campaign overview</h4>
+            <div className="space-y-4 pt-2">
+              {displayCampaign.brandName && (
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500">Campaign by</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] font-medium text-stone-600 overflow-hidden shrink-0">
+                      {displayCampaign.brandAvatar ? (
+                        <Image src={displayCampaign.brandAvatar} alt="" width={28} height={28} className="object-cover" unoptimized />
+                      ) : (
+                        displayCampaign.brandName.charAt(0)
+                      )}
+                    </div>
+                    <span className="text-stone-800 font-rethink">{displayCampaign.brandName}</span>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-xs text-stone-400 font-medium text-center py-4">No activity yet. Upload content to start review.</p>
               )}
+
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                <span className="text-stone-500">Target</span>
+                <span className="text-stone-800">
+                  {(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views
+                </span>
+              </div>
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                <span className="text-stone-500">Reward</span>
+                <span className="text-stone-800">₦{displayCampaign.reward.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                <span className="text-stone-500">Platform</span>
+                <span className="text-stone-800">{displayPlatforms.join(", ")}</span>
+              </div>
             </div>
           </div>
 
+          <div className="border-t border-stone-100" />
+
+          {/* Activity */}
+          <div className="space-y-4">
+            <h4 className="font-rethink font-semibold text-sm text-stone-900">Activity</h4>
+            {renderActivity().length > 0 ? (
+              <div className="space-y-5">
+                {renderActivity()}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center py-10 px-6 space-y-3">
+                <Image src={emptyActivityImg} alt="" unoptimized className="w-40 h-auto" />
+                <h5 className="font-rethink font-medium text-sm text-stone-900 tracking-[-0.01em]">No activity yet</h5>
+                <p className="font-rethink text-sm text-stone-500 font-medium max-w-[220px] leading-relaxed tracking-[-0.01em]">
+                  Upload your content to kick off the review and tracking process.
+                </p>
+              </div>
+            )}
+          </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="min-h-dvh bg-[#FAFAF9] flex flex-col">
+        <header
+          className="sticky top-0 z-10 flex items-center gap-3 px-4 h-14 border-b border-stone-200 bg-[#FAFAF9]"
+          data-lenis-prevent
+        >
+          <button
+            onClick={onClose}
+            aria-label="Go back"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200 shrink-0"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <span className="font-rethink font-medium text-sm text-stone-900 truncate">{displayCampaign.title}</span>
+        </header>
+
+        <div className="w-full px-5 pt-6 pb-[env(safe-area-inset-bottom)]">
+          {panelContent}
         </div>
+
+        <CampaignStateSwitcher
+          value={previewStatus ?? campaign.status}
+          onChange={(s) => setPreviewStatus(s === campaign.status ? null : s)}
+        />
+
+        {renderMobileUploadSheet()}
       </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div
+        onClick={onClose}
+        className="w-1/5 bg-stone-900/10 backdrop-blur-md cursor-pointer"
+      >
+      </div>
+
+      <div
+        className="relative w-4/5 h-full bg-[#FAFAF9] rounded-l-[24px] border-l border-stone-200 overflow-y-auto pt-16 pb-12 px-10 animate-in slide-in-from-right duration-300"
+        data-lenis-prevent
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+
+        {panelContent}
+      </div>
+
+      <CampaignStateSwitcher
+        value={previewStatus ?? campaign.status}
+        onChange={(s) => setPreviewStatus(s === campaign.status ? null : s)}
+      />
+
+      {renderMobileUploadSheet()}
     </div>
   );
 }
 
 function StatusDetailsBadge({ status }: { status: CampaignItem["status"] }) {
-  const badges: Record<
-    CampaignItem["status"],
-    { label: string; classes: string; dotClasses: string }
-  > = {
-    needs_content: {
-      label: "3 Days Left",
-      classes: "bg-stone-100 text-stone-600",
-      dotClasses: "bg-stone-400",
-    },
-    changes_requested: {
-      label: "Changes requested",
-      classes: "bg-red-50 text-red-700 border border-red-100",
-      dotClasses: "bg-red-500",
-    },
-    under_review: {
-      label: "Review In Progress",
-      classes: "bg-amber-50 text-[#6E330C] border border-amber-100",
-      dotClasses: "bg-[#FEB604]",
-    },
-    approved_post: {
-      label: "Approved — Ready To Post",
-      classes: "bg-green-50 text-green-700 border border-green-100",
-      dotClasses: "bg-green-500",
-    },
-    live_tracking: {
-      label: "Live · tracking views",
-      classes: "bg-blue-50 text-blue-700 border border-blue-100",
-      dotClasses: "bg-blue-500 animate-pulse",
-    },
-    delivered: {
-      label: "Delivered",
-      classes: "bg-teal-50 text-teal-700 border border-teal-100",
-      dotClasses: "bg-teal-500",
-    },
-  };
-
-  const badge = badges[status];
+  const badge = STATUS_BADGES[status];
+  const dotClasses = `${badge.dot}${status === "live_tracking" ? " animate-pulse" : ""}`;
 
   return (
     <span
-      className={`px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1 ${badge.classes}`}
+      className={`px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1 ${badge.bg} ${badge.text}`}
     >
-      <span className={`w-1 h-1 rounded-full ${badge.dotClasses}`} /> {badge.label}
+      <span className={`w-1 h-1 rounded-full ${dotClasses}`} /> {badge.label}
     </span>
   );
 }

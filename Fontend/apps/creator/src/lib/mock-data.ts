@@ -19,6 +19,7 @@ export const MOCK_PROFILE = {
 export const MOCK_CAMPAIGNS = [
   {
     id: "camp-needs-1",
+    creatorHandle: "alexcreative",
     slotId: "slot-1",
     title: "Summer Vibes Playlist Promotion",
     category: "Music",
@@ -35,6 +36,12 @@ export const MOCK_CAMPAIGNS = [
     targetViews: 5000,
     contentBrief:
       "Create a 30-60 second TikTok/Reel featuring our Summer Vibes playlist. Use trending audio and show yourself vibing to the music. Include a call-to-action to listen on Spotify.",
+    description:
+      "Get your music discovered this summer. We're promoting the Summer Vibes playlist and want creators to show themselves genuinely vibing to the tracks.",
+    brandName: "VibeScout",
+    brandAvatar: null,
+    scriptUrl: "https://example.com/briefs/summer-vibes-brief.pdf",
+    scriptFileName: "Summer_Vibes_Brief.pdf",
     keyMessageCta: "Link in bio to listen to the full playlist",
     whatToAvoid: "No explicit content, no negative reviews of other playlists",
     platforms: ["tiktok", "instagram"],
@@ -46,6 +53,7 @@ export const MOCK_CAMPAIGNS = [
   },
   {
     id: "camp-review-1",
+    creatorHandle: "alexcreative",
     slotId: "slot-2",
     title: "Urban Streetwear Collection",
     category: "Fashion",
@@ -62,17 +70,28 @@ export const MOCK_CAMPAIGNS = [
     targetViews: 8000,
     contentBrief:
       "Showcase the new urban streetwear collection in your own style. Minimum 45-second video showing 3 different outfits.",
+    description:
+      "Fresh drop from the Urban Streetwear Collection. Show off the new fits in your own style and help the collection go viral.",
+    brandName: "UrbanThreads",
+    brandAvatar: null,
+    scriptUrl: "https://example.com/briefs/urban-streetwear-brief.pdf",
+    scriptFileName: "Urban_Streetwear_Brief.pdf",
     keyMessageCta: "Shop the collection at the link in bio",
     whatToAvoid: "No competitor mentions",
     platforms: ["tiktok", "instagram"],
     contentStyle: "Street style, bold, trendy",
     submissionId: "sub-1",
     videoUrl: "https://www.tiktok.com/@alexcreative/video/123456",
+    caption:
+      "New drop from Musta4a is banging!!! This new jam called Pass am is so good #nusound #viral",
+    videoDuration: "0:45",
+    submittedAgo: "23 mins ago",
     postedPlatforms: [],
-    comment: "",
+    comment: "Missed the CTA — please mention the streaming link. Doesn't follow the brief",
   },
   {
     id: "camp-live-1",
+    creatorHandle: "alexcreative",
     slotId: "slot-3",
     title: "Cooking With Spices Campaign",
     category: "Food",
@@ -89,16 +108,27 @@ export const MOCK_CAMPAIGNS = [
     targetViews: 10000,
     contentBrief:
       "Cook a meal using our spice blend and share your honest reaction. Video should be 60 seconds minimum.",
+    description:
+      "Our signature spice blend is the star. Cook with it, taste it, and share your honest reaction with your audience.",
+    brandName: "SpiceHouse",
+    brandAvatar: null,
+    scriptUrl: "https://example.com/briefs/cooking-with-spices-brief.pdf",
+    scriptFileName: "Cooking_With_Spices_Brief.pdf",
     keyMessageCta: "Get 20% off with code ALEX20",
     whatToAvoid: "No negative health claims",
     platforms: ["tiktok"],
     contentStyle: "ASMR cooking, close-up shots, authentic reactions",
     submissionId: "sub-2",
     videoUrl: "https://www.tiktok.com/@alexcreative/video/789012",
-    postedPlatforms: ["tiktok"],
+    caption:
+      "Whipped up this coconut curry with the SpiceHouse blend — honestly shocked how good it is 🔥 Use ALEX20 at checkout!",
+    videoDuration: "1:02",
+    submittedAgo: "2 days ago",
+    postedPlatforms: [{ platform: "tiktok", views: 4500 }],
   },
   {
     id: "camp-delivered-1",
+    creatorHandle: "alexcreative",
     slotId: "slot-4",
     title: "Morning Skincare Routine",
     category: "Beauty",
@@ -115,13 +145,26 @@ export const MOCK_CAMPAIGNS = [
     targetViews: 6000,
     contentBrief:
       "Film your morning skincare routine using our products. Show the before and after.",
+    description:
+      "A clean, effective morning skincare routine featuring our hero products. Show the routine and the results.",
+    brandName: "GlowLab",
+    brandAvatar: null,
+    scriptUrl: "https://example.com/briefs/morning-skincare-brief.pdf",
+    scriptFileName: "Morning_Skincare_Brief.pdf",
     keyMessageCta: "Tag us in your routine for a feature",
     whatToAvoid: "No medical claims about acne treatment",
     platforms: ["instagram", "tiktok"],
     contentStyle: "Clean, aesthetic, step-by-step",
     submissionId: "sub-3",
     videoUrl: "https://www.instagram.com/reel/abcdef",
-    postedPlatforms: ["instagram", "tiktok"],
+    caption:
+      "My 5 minute morning routine with GlowLab — skin literally feels different. Tagging them so you know it's real 💛",
+    videoDuration: "0:58",
+    submittedAgo: "5 days ago",
+    postedPlatforms: [
+      { platform: "instagram", views: 4200 },
+      { platform: "tiktok", views: 3000 },
+    ],
   },
 ];
 

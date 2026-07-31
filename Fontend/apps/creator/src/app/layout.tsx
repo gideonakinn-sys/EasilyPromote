@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Rethink_Sans, Inter, Raleway } from "next/font/google";
+import { Rethink_Sans, Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { LenisProvider } from "../components/lenis-provider";
+import { ToastProvider } from "@ep/ui/components/toast";
 import "./globals.css";
 
 const rethinkSans = Rethink_Sans({
@@ -14,12 +15,6 @@ const inter = Inter({
   subsets: ["latin"],
   weight: ["500"],
   variable: "--font-inter",
-});
-
-const raleway = Raleway({
-  subsets: ["latin"],
-  weight: ["600"],
-  variable: "--font-raleway",
 });
 
 const motterdam = localFont({
@@ -42,8 +37,10 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${rethinkSans.variable} ${inter.variable} ${raleway.variable} ${motterdam.variable} min-h-screen antialiased bg-stone-50 text-stone-900 font-rethink`}>
-        <LenisProvider>{children}</LenisProvider>
+      <body className={`${rethinkSans.variable} ${inter.variable} ${motterdam.variable} min-h-screen antialiased bg-stone-50 text-stone-900 font-rethink`}>
+        <ToastProvider>
+          <LenisProvider>{children}</LenisProvider>
+        </ToastProvider>
       </body>
     </html>
   );

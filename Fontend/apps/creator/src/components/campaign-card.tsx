@@ -9,7 +9,7 @@ interface CampaignCardProps {
   onClick?: () => void;
 }
 
-const STATUS_BADGES: Record<CampaignItem["status"], { label: string; bg: string; text: string; dot: string }> = {
+export const STATUS_BADGES: Record<CampaignItem["status"], { label: string; bg: string; text: string; dot: string }> = {
   needs_content: {
     label: "Needs Content",
     bg: "bg-[#CBF5E5]",
@@ -77,10 +77,10 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
             <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-[-0.01em] text-[10px] font-rethink">
+            <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
               {camp.category}
             </span>
-            <span className={`px-2 py-0.5 rounded-full font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1 ${badge.bg} ${badge.text}`}>
+            <span className={`px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1 ${badge.bg} ${badge.text}`}>
               <span className={`w-1 h-1 rounded-full ${badge.dot}`} /> {badge.label}
             </span>
           </div>

@@ -55,7 +55,7 @@ export function CampaignFeed({
   return (
     <div className="w-full flex flex-col">
       <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-rethink font-normal text-[23px] leading-[28px] text-stone-900 m-0">
+        <h2 className="font-rethink font-medium text-[23px] leading-[28px] text-stone-900 m-0">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
 

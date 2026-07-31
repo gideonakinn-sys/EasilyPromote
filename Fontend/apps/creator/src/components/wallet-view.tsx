@@ -55,7 +55,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
 
       <button
         onClick={() => alert("Payout request submitted. Processing batch window.")}
-        className="w-full py-4 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink"
+        className="w-full py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink"
       >
         Withdraw Funds
       </button>

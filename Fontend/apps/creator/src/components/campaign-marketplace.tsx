@@ -93,11 +93,11 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
                     {camp.title}
                   </h3>
                   <div className="flex gap-1.5 mb-5">
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-[-0.01em] text-[10px] font-rethink">
+                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
                       {camp.category}
                     </span>
                     {camp.platforms.length > 0 && (
-                      <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-[-0.01em] text-[10px] font-rethink">
+                      <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
                         {camp.platforms.join(", ")}
                       </span>
                     )}

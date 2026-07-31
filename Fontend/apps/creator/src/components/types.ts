@@ -29,9 +29,10 @@ export interface CreatorProfile {
 export type ActiveTab = "home" | "campaign" | "wallet";
 
 export interface ProfileForm {
-  displayName: string;
-  bio: string;
-  country: string;
+  name: string;
+  nickname: string;
+  email: string;
+  phone: string;
   avatarUrl: string;
 }
 
@@ -62,13 +63,21 @@ export interface CampaignItem {
   currentViews?: number;
   targetViews?: number;
   videoUrl?: string;
-  postedPlatforms?: string[];
+  caption?: string;
+  videoDuration?: string;
+  postedPlatforms?: Array<{ platform: string; views: number }>;
+  creatorHandle?: string;
   submissionId?: string;
   contentBrief?: string;
+  description?: string;
   keyMessageCta?: string;
   whatToAvoid?: string;
   platforms?: string[];
   contentStyle?: string;
+  brandName?: string;
+  brandAvatar?: string;
+  scriptUrl?: string;
+  scriptFileName?: string;
 }
 
 export interface MarketplaceCampaign {
