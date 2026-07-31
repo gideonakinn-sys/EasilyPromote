@@ -28,6 +28,15 @@ export interface CreatorProfile {
 
 export type ActiveTab = "home" | "campaign" | "wallet";
 
+export interface ProfileForm {
+  displayName: string;
+  bio: string;
+  country: string;
+  avatarUrl: string;
+}
+
+export type ProfileFocusSection = "social" | "niches" | "details";
+
 export interface CampaignItem {
   id: string;
   slotId?: string;

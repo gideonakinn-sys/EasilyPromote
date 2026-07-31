@@ -15,9 +15,10 @@ interface CreatorHeaderProps {
   onTabChange: (tab: ActiveTab) => void;
   profile: CreatorProfile;
   onLogout?: () => void;
+  onOpenProfile?: () => void;
 }
 
-export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: CreatorHeaderProps) {
+export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpenProfile }: CreatorHeaderProps) {
   const isOnboarding = !profile.socialAccounts.length || !profile.niches.length || !profile.country;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -63,20 +64,19 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: Cre
             <span>Home</span>
           </button>
 
-          <button
-            onClick={() => {
-              if (!isOnboarding) onTabChange("campaign");
-            }}
-            disabled={isOnboarding}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
-              activeTab === "campaign"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500 disabled:opacity-40"
-            }`}
-          >
-            <HugeiconsIcon icon={ClipboardIcon} size={14} />
-            <span>Campaign</span>
-          </button>
+          {!isOnboarding && (
+            <button
+              onClick={() => onTabChange("campaign")}
+              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
+                activeTab === "campaign"
+                  ? "bg-white text-stone-950 border border-stone-200"
+                  : "text-stone-500"
+              }`}
+            >
+              <HugeiconsIcon icon={ClipboardIcon} size={14} />
+              <span>Campaign</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -105,27 +105,31 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: Cre
 
         <div className="justify-self-end flex items-center gap-3">
           {/* Rank — desktop: full pill with rank + view count */}
-          <div className="hidden md:flex items-center gap-1.5 bg-stone-50 rounded-full pl-1 pr-3 py-1">
+          {!isOnboarding && (
+            <div className="hidden md:flex items-center gap-1.5 bg-stone-50 rounded-full pl-1 pr-3 py-1">
+              <Image
+                src={rankIllustration}
+                alt="Rank"
+                width={32}
+                height={32}
+              />
+              <div className="flex flex-col gap-[2px]">
+                <span className="text-[11px] font-semibold text-[#6D28D9] leading-[1.2]">Rank {rankLabel}</span>
+                <span className="text-[9px] text-stone-500 font-medium leading-[1.1]">{scoreViews}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Rank — mobile: just illustration */}
+          {!isOnboarding && (
             <Image
               src={rankIllustration}
               alt="Rank"
               width={32}
               height={32}
+              className="md:hidden"
             />
-            <div className="flex flex-col gap-[2px]">
-              <span className="text-[11px] font-semibold text-[#6D28D9] leading-[1.2]">Rank {rankLabel}</span>
-              <span className="text-[9px] text-stone-500 font-medium leading-[1.1]">{scoreViews}</span>
-            </div>
-          </div>
-
-          {/* Rank — mobile: just illustration */}
-          <Image
-            src={rankIllustration}
-            alt="Rank"
-            width={32}
-            height={32}
-            className="md:hidden"
-          />
+          )}
 
           {/* Profile Pill — matches brand's NavBar */}
           <div ref={profileRef} className="relative">
@@ -152,7 +156,10 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: Cre
               {isProfileOpen && (
                 <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
                   <button
-                    onClick={() => setIsProfileOpen(false)}
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onOpenProfile?.();
+                    }}
                     className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-stone-900"
                   >
                     <HugeiconsIcon icon={UserIcon} size={16} />
@@ -193,6 +200,18 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: Cre
                     <p className="text-xs text-stone-500">@{profile.username}</p>
                   </div>
                 </button>
+                {onOpenProfile && (
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      onOpenProfile();
+                    }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+                  >
+                    <HugeiconsIcon icon={UserIcon} size={16} />
+                    <span className="font-medium">View profile</span>
+                  </button>
+                )}
                 {onLogout && (
                   <button
                     onClick={() => {
@@ -226,21 +245,20 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout }: Cre
             <HugeiconsIcon icon={Home01Icon} size={18} />
             Home
           </button>
-          <button
-            onClick={() => {
-              if (!isOnboarding) {
+          {!isOnboarding && (
+            <button
+              onClick={() => {
                 onTabChange("campaign");
                 setIsMenuOpen(false);
-              }
-            }}
-            disabled={isOnboarding}
-            className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "campaign" ? "text-stone-900 bg-stone-100" : "text-stone-600"
-            } disabled:opacity-40`}
-          >
-            <HugeiconsIcon icon={ClipboardIcon} size={18} />
-            Campaign
-          </button>
+              }}
+              className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
+                activeTab === "campaign" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              }`}
+            >
+              <HugeiconsIcon icon={ClipboardIcon} size={18} />
+              Campaign
+            </button>
+          )}
           <button
             onClick={() => {
               if (!isOnboarding) {

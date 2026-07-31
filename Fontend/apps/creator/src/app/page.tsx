@@ -3,18 +3,17 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest, getToken, getUser, DEMO_MODE, saveAuth } from "../lib/api";
-import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData } from "../components/types";
+import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection } from "../components/types";
 import { CreatorHeader } from "../components/creator-header";
 import { OnboardingView } from "../components/onboarding-view";
 import { OnboardingComplete } from "../components/onboarding-complete";
 import { CampaignFeed } from "../components/campaign-feed";
 import { WalletView } from "../components/wallet-view";
 import { CampaignMarketplace } from "../components/campaign-marketplace";
-import { SocialConnectModal } from "../components/modals/social-connect-modal";
-import { NicheModal } from "../components/modals/niche-modal";
-import { ProfileModal } from "../components/modals/profile-modal";
+import { ProfileView } from "../components/profile-view";
 import { CampaignDetailsDrawer } from "../components/campaign-details-drawer";
 import { Skeleton } from "../components/ui/skeleton";
+import { HomeStateSwitcher, type HomePreviewState } from "../components/home-state-switcher";
 import { useReveal } from "../hooks/use-reveal";
 
 function CreatorDashboardContent() {
@@ -37,7 +36,10 @@ function CreatorDashboardContent() {
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("home");
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [homePreview, setHomePreview] = useState<HomePreviewState>("empty");
+  const [showAllSet, setShowAllSet] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileFocus, setProfileFocus] = useState<ProfileFocusSection | null>(null);
   const [campaignsFilter, setCampaignsFilter] = useState<string>("all");
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = useState<MarketplaceCampaign[]>([]);
@@ -46,14 +48,7 @@ function CreatorDashboardContent() {
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [showSocialModal, setShowSocialModal] = useState(false);
-  const [showNicheModal, setShowNicheModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-
-  const [socialPlatform, setSocialPlatform] = useState("TikTok");
-  const [socialHandle, setSocialHandle] = useState("");
-  const [selectedNiches, setSelectedNiches] = useState<string[]>([]);
-  const [profileForm, setProfileForm] = useState({
+  const [profileForm, setProfileForm] = useState<ProfileForm>({
     displayName: "",
     bio: "",
     country: "",
@@ -135,14 +130,6 @@ function CreatorDashboardContent() {
         country: p.country,
         avatarUrl: p.avatar || "",
       });
-
-      const hasSocial = p.socialAccounts.length > 0;
-      const hasNiches = p.niches.length > 0;
-      const hasProfile = p.displayName && p.country;
-
-      if (hasSocial && hasNiches && hasProfile) {
-        setOnboardingComplete(true);
-      }
     } catch {
       console.log("Could not load profile");
     }
@@ -233,11 +220,19 @@ function CreatorDashboardContent() {
     }
   };
 
-  const handleConnectSocial = async () => {
-    if (!socialHandle) return;
+  const markCompleteIfReady = (next: CreatorProfile) => {
+    const complete = next.socialAccounts.length > 0 && next.niches.length > 0 && next.country !== "";
+    if (complete && !profileComplete && !showAllSet) {
+      setShowAllSet(true);
+      setHomePreview("allset");
+    }
+  };
+
+  const handleConnectSocial = async (platform: string, handle: string) => {
+    if (!handle) return;
     const newSocial = {
-      platform: socialPlatform.toLowerCase(),
-      handle: socialHandle.startsWith("@") ? socialHandle : `@${socialHandle}`,
+      platform: platform.toLowerCase(),
+      handle: handle.startsWith("@") ? handle : `@${handle}`,
       verified: true,
     };
 
@@ -245,32 +240,40 @@ function CreatorDashboardContent() {
       ...profile.socialAccounts.filter((s) => s.platform !== newSocial.platform),
       newSocial,
     ];
-    setProfile((prev) => ({ ...prev, socialAccounts: updatedSocials }));
-    setShowSocialModal(false);
-    setSocialHandle("");
+    const next: CreatorProfile = { ...profile, socialAccounts: updatedSocials };
+    setProfile(next);
+    markCompleteIfReady(next);
 
     try {
       await apiRequest("/creators/profile/socials", {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ platform: socialPlatform, handle: newSocial.handle }),
+        body: JSON.stringify({ platform, handle: newSocial.handle }),
       });
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleSaveNiches = async () => {
-    if (selectedNiches.length === 0) return;
+  const handleRemoveSocial = (platform: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      socialAccounts: prev.socialAccounts.filter((s) => s.platform !== platform),
+    }));
+  };
 
-    setProfile((prev) => ({ ...prev, niches: selectedNiches }));
-    setShowNicheModal(false);
+  const handleSaveNiches = async (niches: string[]) => {
+    if (niches.length === 0) return;
+
+    const next: CreatorProfile = { ...profile, niches };
+    setProfile(next);
+    markCompleteIfReady(next);
 
     try {
       await apiRequest("/creators/profile/niches", {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ niches: selectedNiches }),
+        body: JSON.stringify({ niches }),
       });
     } catch (err) {
       console.error(err);
@@ -278,14 +281,15 @@ function CreatorDashboardContent() {
   };
 
   const handleSaveProfile = async () => {
-    setProfile((prev) => ({
-      ...prev,
+    const next: CreatorProfile = {
+      ...profile,
       displayName: profileForm.displayName,
       bio: profileForm.bio,
       country: profileForm.country,
-      avatar: profileForm.avatarUrl || prev.avatar,
-    }));
-    setShowProfileModal(false);
+      avatar: profileForm.avatarUrl || profile.avatar,
+    };
+    setProfile(next);
+    markCompleteIfReady(next);
 
     try {
       await apiRequest("/creators/profile/me", {
@@ -301,8 +305,17 @@ function CreatorDashboardContent() {
     } catch (err) {
       console.error(err);
     }
+  };
 
-    setOnboardingComplete(true);
+  const openProfile = (section: ProfileFocusSection) => {
+    setProfileFocus(section);
+    setShowProfile(true);
+  };
+
+  const handleBrowseCampaigns = () => {
+    setShowAllSet(false);
+    setHomePreview("filled");
+    setActiveTab("campaign");
   };
 
   const handleSubmitContent = async (campaignId: string) => {
@@ -466,10 +479,6 @@ function CreatorDashboardContent() {
     return c.status === campaignsFilter;
   });
 
-  useEffect(() => {
-    setSelectedNiches(profile.niches);
-  }, [profile.niches]);
-
   const handleLogout = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -504,46 +513,90 @@ function CreatorDashboardContent() {
     );
   }
 
-  const isOnboarding = !onboardingComplete && (!profile.socialAccounts.length || !profile.niches.length || !profile.country);
+  const profileComplete = profile.socialAccounts.length > 0 && profile.niches.length > 0 && profile.country !== "";
+
+  const blankProfile: CreatorProfile = {
+    ...profile,
+    socialAccounts: [],
+    niches: [],
+    bio: "",
+    country: "",
+  };
+
+  const renderOnboardingView = (p: CreatorProfile) => (
+    <OnboardingView
+      profile={p}
+      onConnectSocial={() => openProfile("social")}
+      onChooseNiches={() => openProfile("niches")}
+      onCompleteProfile={() => openProfile("details")}
+    />
+  );
+
+  const renderCampaignFeed = () => (
+    <CampaignFeed
+      profile={profile}
+      campaigns={filteredCampaigns}
+      filter={campaignsFilter}
+      onFilterChange={setCampaignsFilter}
+      onSelectCampaign={setSelectedCampaign}
+      onBrowseCampaign={handleBrowseCampaigns}
+    />
+  );
 
   return (
     <div className="min-h-dvh bg-[#F5F5F4] text-[#1C1917] flex flex-col font-rethink">
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        profile={profile}
+        profile={DEMO_MODE && homePreview === "empty" ? blankProfile : profile}
         onLogout={handleLogout}
+        onOpenProfile={() => openProfile("details")}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 md:py-10 flex flex-col items-center">
-        {activeTab === "home" && (
+        {showProfile ? (
+          <ProfileView
+            profile={profile}
+            profileForm={profileForm}
+            onProfileFormChange={setProfileForm}
+            focusSection={profileFocus}
+            onClose={() => setShowProfile(false)}
+            onConnectSocial={handleConnectSocial}
+            onRemoveSocial={handleRemoveSocial}
+            onSaveNiches={handleSaveNiches}
+            onSaveProfile={handleSaveProfile}
+          />
+        ) : (
           <>
-            {isOnboarding && !onboardingComplete && (
-              <OnboardingView
-                profile={profile}
-                onConnectSocial={() => setShowSocialModal(true)}
-                onChooseNiches={() => setShowNicheModal(true)}
-                onCompleteProfile={() => setShowProfileModal(true)}
+            {activeTab === "home" && (
+              <>
+                {DEMO_MODE && homePreview === "empty" ? (
+                  renderOnboardingView(blankProfile)
+                ) : showAllSet || (DEMO_MODE && homePreview === "allset") ? (
+                  <OnboardingComplete
+                    profile={profile}
+                    onBrowseCampaigns={handleBrowseCampaigns}
+                  />
+                ) : DEMO_MODE && homePreview === "filled" ? (
+                  renderCampaignFeed()
+                ) : !profileComplete ? (
+                  renderOnboardingView(profile)
+                ) : (
+                  renderCampaignFeed()
+                )}
+              </>
+            )}
+
+            {activeTab === "campaign" && (
+              <CampaignMarketplace
+                campaigns={marketplaceCampaigns}
+                meta={marketplaceMeta}
+                onClaimSlot={handleClaimSlot}
+                niches={profile.niches}
               />
             )}
 
-            {isOnboarding && onboardingComplete && (
-              <OnboardingComplete
-                profile={profile}
-                onBrowseCampaigns={() => setActiveTab("campaign")}
-              />
-            )}
-
-            {!isOnboarding && (
-              <CampaignFeed
-                profile={profile}
-                campaigns={filteredCampaigns}
-                filter={campaignsFilter}
-                onFilterChange={setCampaignsFilter}
-                onSelectCampaign={setSelectedCampaign}
-                onBrowseCampaign={() => setActiveTab("campaign")}
-              />
-            )}
+            {activeTab === "wallet" && <WalletView profile={profile} walletData={walletData} />}
           </>
         )}
 
@@ -556,44 +609,17 @@ function CreatorDashboardContent() {
             onSubmitPostUrl={handleDetailsSubmitPostUrl}
           />
         )}
-
-        {activeTab === "campaign" && (
-          <CampaignMarketplace
-            campaigns={marketplaceCampaigns}
-            meta={marketplaceMeta}
-            onClaimSlot={handleClaimSlot}
-            niches={profile.niches}
-          />
-        )}
-
-        {activeTab === "wallet" && <WalletView profile={profile} walletData={walletData} />}
       </main>
 
-      <SocialConnectModal
-        isOpen={showSocialModal}
-        onClose={() => setShowSocialModal(false)}
-        onConnect={handleConnectSocial}
-        platform={socialPlatform}
-        onPlatformChange={setSocialPlatform}
-        handle={socialHandle}
-        onHandleChange={setSocialHandle}
-      />
-
-      <NicheModal
-        isOpen={showNicheModal}
-        onClose={() => setShowNicheModal(false)}
-        onSave={handleSaveNiches}
-        selectedNiches={selectedNiches}
-        onNichesChange={setSelectedNiches}
-      />
-
-      <ProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        onSave={handleSaveProfile}
-        profileForm={profileForm}
-        onProfileFormChange={setProfileForm}
-      />
+      {activeTab === "home" && !showProfile && (
+        <HomeStateSwitcher
+          value={homePreview}
+          onChange={(value) => {
+            setHomePreview(value);
+            setShowAllSet(false);
+          }}
+        />
+      )}
     </div>
   );
 }
