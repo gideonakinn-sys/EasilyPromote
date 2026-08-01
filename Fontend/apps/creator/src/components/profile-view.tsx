@@ -72,6 +72,12 @@ export function ProfileView({
   const [customNiche, setCustomNiche] = useState("");
 
   useEffect(() => {
+    if (profile.niches && Array.isArray(profile.niches)) {
+      setNiches(profile.niches);
+    }
+  }, [profile.niches]);
+
+  useEffect(() => {
     fetch(`${API_URL}/niches`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -100,7 +106,7 @@ export function ProfileView({
       ? niches.filter((n) => n !== niche)
       : [...niches, niche];
     setNiches(next);
-    if (next.length > 0) onSaveNiches(next);
+    onSaveNiches(next);
   };
 
   const handleAddCustomNiche = () => {

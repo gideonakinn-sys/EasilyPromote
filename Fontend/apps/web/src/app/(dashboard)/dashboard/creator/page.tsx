@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
+import { useToast } from "@ep/ui/components/toast";
 import { apiRequest, getToken, getUser } from "../../../../lib/api";
 import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection } from "../../../../components/types";
 import { CreatorHeader } from "../../../../components/creator-header";
@@ -19,6 +20,7 @@ import { useReveal } from "../../../../hooks/use-reveal";
 function CreatorDashboardContent() {
   const router = useRouter();
   const isMobile = useIsMobile();
+  const { toast } = useToast();
   useReveal();
 
   const [profile, setProfile] = useState<CreatorProfile>({
@@ -271,8 +273,6 @@ function CreatorDashboardContent() {
   };
 
   const handleSaveNiches = async (niches: string[]) => {
-    if (niches.length === 0) return;
-
     const next: CreatorProfile = { ...profile, niches };
     setProfile(next);
     markCompleteIfReady(next);
@@ -285,6 +285,7 @@ function CreatorDashboardContent() {
       });
     } catch (err) {
       console.error(err);
+      toast("Failed to save niches. Please try again.", "error");
     }
   };
 
