@@ -12,6 +12,7 @@ import inReviewCreatorImg from "@ep/ui/assets/in-review-creator.png";
 import changesFeedbackImg from "@ep/ui/assets/Changes-feedback-creator.png";
 import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
 import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
+import { API_URL, getToken } from "../lib/api";
 import type { CampaignItem } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
 
@@ -60,18 +61,40 @@ export function CampaignDetailsDrawer({
     setUploadProgress(0);
     setVideoUrl("");
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        const next = prev + Math.random() * 28;
-        if (next >= 100) {
-          clearInterval(interval);
-          setUploading(false);
-          setVideoUrl(`https://cloudinary.com/videos/${file.name.toLowerCase().replace(/[^a-z0-9.]+/g, "-")}`);
-          return 100;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/upload/video`);
+    xhr.setRequestHeader("Authorization", `Bearer ${getToken()}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        setUploadProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText) as { url: string };
+          setVideoUrl(data.url);
+          setUploadProgress(100);
+        } catch (err) {
+          console.error("Failed to parse upload response:", err);
+          toast("Upload failed. Please try again.", "error");
         }
-        return next;
-      });
-    }, 250);
+      } else {
+        console.error("Video upload failed:", xhr.status, xhr.responseText);
+        toast("Upload failed. Please try again.", "error");
+      }
+      setUploading(false);
+    };
+    xhr.onerror = () => {
+      console.error("Video upload failed");
+      setUploading(false);
+      setVideoUrl("");
+      toast("Upload failed. Please try again.", "error");
+    };
+    xhr.send(formData);
 
     e.target.value = "";
   };
@@ -114,7 +137,7 @@ export function CampaignDetailsDrawer({
             <div className="h-full bg-blue-600 rounded-full transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
           </div>
         </div>
-      ) : (
+      ) : videoUrl ? (
         <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-2xl p-3">
           <div className="w-8 h-8 rounded-full bg-[#CBF5E5] flex items-center justify-center shrink-0">
             <HugeiconsIcon icon={CheckIcon} size={16} className="text-[#176448]" />
@@ -133,6 +156,15 @@ export function CampaignDetailsDrawer({
             Change
           </button>
         </div>
+      ) : (
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full flex flex-col items-center justify-center gap-2 py-8 bg-white border-2 border-dashed border-stone-200 rounded-2xl font-rethink"
+        >
+          <HugeiconsIcon icon={CloudUploadIcon} size={24} className="text-stone-400" />
+          <span className="text-sm font-medium text-stone-600">Upload failed, try again</span>
+          <span className="text-[10px] font-medium text-stone-400 tracking-[-0.01em]">Select another video</span>
+        </button>
       )}
 
       <div className="space-y-1.5">
