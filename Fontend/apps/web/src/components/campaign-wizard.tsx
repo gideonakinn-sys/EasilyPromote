@@ -620,7 +620,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     )}>
         {/* Mobile Header with back icon */}
         {isMobile && (
-          <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-100 flex-shrink-0">
+          <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-50 flex-shrink-0">
             <button
               onClick={createStep === 1 ? onClose : handleBackStep}
               aria-label="Go back"
@@ -642,7 +642,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         )}
         {/* Mobile Stepper Bar */}
         {isMobile && (
-          <div className="flex items-start justify-center gap-0 px-5 pt-3 pb-5 bg-stone-100">
+          <div className="flex items-start justify-center gap-0 px-5 pt-3 pb-5 bg-stone-50">
             {/* Step 1 */}
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <button
@@ -680,7 +680,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
         {/* Desktop Left Sidebar Progress Indicator */}
         {!isMobile && (
-          <div className="w-80 border-r border-stone-100 bg-stone-100 p-8 flex flex-col justify-between h-full">
+          <div className="w-80 border-r border-stone-100 bg-stone-50 p-8 flex flex-col justify-between h-full">
             <div>
               <button
                 onClick={campaign.name ? handleSaveDraft : onClose}
@@ -968,7 +968,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </div>
             {/* Mobile: sticky bottom bar for Step 1 */}
             {isMobile && (
-              <div className="sticky bottom-0 bg-stone-100 -mx-5 px-5 pb-[env(safe-area-inset-bottom)] z-10 pt-2 space-y-3">
+              <div className="sticky bottom-0 bg-stone-50 -mx-5 px-5 pb-[env(safe-area-inset-bottom)] z-10 pt-2 space-y-3">
                 <div className="flex justify-between items-baseline">
                   <span className="text-xs font-medium text-stone-500">Budget</span>
                   <span className="text-[20px] font-medium text-stone-900 font-rethink tracking-tighter">
@@ -1167,7 +1167,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 </div>
 
               {/* Bottom Navigation */}
-              <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-100 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+              <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-50 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
                   onClick={isMobile ? handleSaveDraft : handleBackStep}
                   disabled={saving}
@@ -1188,8 +1188,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
           {/* Wizard Step 3: Review & Launch */}
           {createStep === 3 && (
-            <div data-reveal className={cn("space-y-8 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
-              {/* Campaign Summary */}
+            <div data-reveal className={cn("space-y-10 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
+              {/* Section 1: image, name, badge */}
               <div className="space-y-4">
                 {/* Image */}
                 <div>
@@ -1211,27 +1211,27 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-200 text-stone-600 text-[11px] font-medium font-rethink">
                   {campaign.category}
                 </span>
+              </div>
 
-                {/* Description */}
-                {campaign.description && (
-                  <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.description}</p>
-                )}
+              {/* Section 2: description */}
+              {campaign.description && (
+                <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.description}</p>
+              )}
 
-                {/* Views & Budget */}
-                <div className="flex items-center gap-6">
-                  <div>
-                    <span className="text-[11px] font-medium text-stone-400 block">Target views</span>
-                    <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">{campaign.views.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] font-medium text-stone-400 block">Budget</span>
-                    <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">₦{campaign.budget.toLocaleString()}</span>
-                  </div>
+              {/* Section 3: views & budget */}
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-[11px] font-medium text-stone-400 block">Target views</span>
+                  <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">{campaign.views.toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] font-medium text-stone-400 block">Budget</span>
+                  <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">₦{campaign.budget.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* Details container */}
-              <div className="bg-stone-100 rounded-[18px] py-4 space-y-6">
+              {/* Section 4: details container */}
+              <div className="bg-stone-50 rounded-[18px] py-4 space-y-6">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Platforms</span>
                   <span className="font-medium text-stone-800">{(campaign.platforms || []).join(", ")}</span>
@@ -1263,7 +1263,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               </div>
 
               {/* Bottom Navigation */}
-              <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-100 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+              <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-50 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
                   onClick={isMobile ? handleSaveDraft : handleBackStep}
                   disabled={saving}
