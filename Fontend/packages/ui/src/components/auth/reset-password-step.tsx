@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon } from "@hugeicons/core-free-icons";
-import { LoaderCircle } from "lucide-react";
+import { Spinner } from "../spinner";
 import type { AuthFormActions } from "./types";
 
 interface ResetPasswordStepProps {
@@ -95,7 +95,7 @@ export function ResetPasswordStep({
           disabled={!newPassword || newPassword !== confirmPassword || loading}
           className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Reset password"}
+          {loading ? <Spinner /> : "Reset password"}
         </button>
       </form>
 

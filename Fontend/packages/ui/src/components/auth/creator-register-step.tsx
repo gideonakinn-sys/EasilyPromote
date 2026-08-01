@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon, ChevronDownIcon, CheckIcon } from "@hugeicons/core-free-icons";
-import { LoaderCircle } from "lucide-react";
+import { Spinner } from "../spinner";
 import Link from "next/link";
 import { cn } from "../../lib/utils";
 import type { AuthFormState, AuthFormActions } from "./types";
@@ -151,7 +151,7 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
             disabled={!form.agreed || loading}
             className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 text-stone-900 disabled:text-stone-400 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
           >
-            {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Continue"}
+            {loading ? <Spinner /> : "Continue"}
           </button>
 
           <p className="text-center text-sm font-medium text-stone-500 font-rethink tracking-[-0.01em]">

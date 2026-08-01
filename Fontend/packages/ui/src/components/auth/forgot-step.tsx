@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { Spinner } from "../spinner";
 import type { AuthFormActions } from "./types";
 
 interface ForgotStepProps {
@@ -45,7 +45,7 @@ export function ForgotStep({ email, setEmail, onSubmit, actions, onBackToLogin, 
           disabled={loading}
           className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Send reset code"}
+          {loading ? <Spinner /> : "Send reset code"}
         </button>
       </form>
 
