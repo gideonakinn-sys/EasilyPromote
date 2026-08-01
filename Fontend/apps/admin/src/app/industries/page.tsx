@@ -9,7 +9,9 @@ interface IndustryItem {
   id: string;
   name: string;
   enabled: boolean;
+  costPerView?: number | null;
   sortOrder: number;
+  creatorCount?: number;
 }
 
 export default function AdminIndustriesPage() {
@@ -18,6 +20,8 @@ export default function AdminIndustriesPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
+  const [costPerView, setCostPerView] = useState("");
+  const [editingRate, setEditingRate] = useState<Record<string, string>>({});
   const [addLoading, setAddLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -53,10 +57,15 @@ export default function AdminIndustriesPage() {
       await apiRequest<{ success: boolean }>("/admin/industries", {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ name: name.trim(), sortOrder }),
+        body: JSON.stringify({
+          name: name.trim(),
+          sortOrder,
+          costPerView: costPerView === "" ? null : Number(costPerView),
+        }),
       });
       setName("");
       setSortOrder(0);
+      setCostPerView("");
       setMessage("Industry added.");
       fetchIndustries();
     } catch (err: unknown) {
@@ -78,6 +87,23 @@ export default function AdminIndustriesPage() {
       fetchIndustries();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update industry");
+    }
+  };
+
+  const handleSaveRate = async (industry: IndustryItem) => {
+    const raw = editingRate[industry.id] ?? "";
+    try {
+      setError("");
+      setMessage("");
+      await apiRequest<{ success: boolean }>(`/admin/industries/${industry.id}`, {
+        method: "PATCH",
+        token: getToken() || undefined,
+        body: JSON.stringify({ costPerView: raw === "" ? null : Number(raw) }),
+      });
+      setMessage(`Rate for "${industry.name}" updated.`);
+      fetchIndustries();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update rate");
     }
   };
 
@@ -137,7 +163,16 @@ export default function AdminIndustriesPage() {
               value={sortOrder}
               onChange={(e) => setSortOrder(Number(e.target.value))}
               placeholder="Order"
-              className="w-28 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+              className="w-24 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+            />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={costPerView}
+              onChange={(e) => setCostPerView(e.target.value)}
+              placeholder="Amount per view (₦)"
+              className="w-40 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
             />
             <button
               onClick={handleAdd}
@@ -156,6 +191,8 @@ export default function AdminIndustriesPage() {
               <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
                 <tr>
                   <th className="px-6 py-4">Industry</th>
+                  <th className="px-6 py-4">Amount per view</th>
+                  <th className="px-6 py-4">Creators</th>
                   <th className="px-6 py-4">Order</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -173,7 +210,7 @@ export default function AdminIndustriesPage() {
                   ))
                 ) : industries.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-stone-400">
+                    <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
                       No industries yet. Add your first industry above.
                     </td>
                   </tr>
@@ -181,6 +218,28 @@ export default function AdminIndustriesPage() {
                   industries.map((i) => (
                     <tr key={i.id} className="hover:bg-stone-50/80 transition-colors">
                       <td className="px-6 py-4 font-bold text-stone-900">{i.name}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editingRate[i.id] ?? (i.costPerView ? String(i.costPerView) : "")}
+                            onChange={(e) =>
+                              setEditingRate((prev) => ({ ...prev, [i.id]: e.target.value }))
+                            }
+                            onBlur={() => handleSaveRate(i)}
+                            placeholder="—"
+                            className="w-24 px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                          />
+                          <span className="text-stone-400 text-[11px]">₦/view</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-stone-600">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 font-semibold">
+                          {i.creatorCount ?? 0} creators
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-stone-500 font-mono">{i.sortOrder}</td>
                       <td className="px-6 py-4">
                         <span

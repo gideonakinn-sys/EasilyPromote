@@ -1,29 +1,79 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import * as React from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
 import { apiRequest, getToken, getUser } from "../lib/api";
-import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection } from "../components/types";
-import { CreatorHeader } from "../components/creator-header";
-import { OnboardingView } from "../components/onboarding-view";
-import { OnboardingComplete } from "../components/onboarding-complete";
-import { CampaignFeed } from "../components/campaign-feed";
-import { WalletView } from "../components/wallet-view";
-import { CampaignMarketplace } from "../components/campaign-marketplace";
-import { ProfileView } from "../components/profile-view";
-import { CampaignDetailsDrawer } from "../components/campaign-details-drawer";
-import { Skeleton } from "../components/ui/skeleton";
-import { useReveal } from "../hooks/use-reveal";
+import type {
+  CreatorProfile,
+  ActiveTab,
+  CampaignItem,
+  MarketplaceCampaign,
+  WalletData,
+  ProfileForm,
+  ProfileFocusSection,
+} from "./types";
 
-function CreatorDashboardContent() {
+interface CreatorDashboardValue {
+  profile: CreatorProfile;
+  profileForm: ProfileForm;
+  setProfileForm: React.Dispatch<React.SetStateAction<ProfileForm>>;
+  loading: boolean;
+  activeTab: ActiveTab;
+  navigateTab: (tab: ActiveTab) => void;
+  isMobile: boolean;
+  showProfile: boolean;
+  profileFocus: ProfileFocusSection | null;
+  openProfile: (section: ProfileFocusSection) => void;
+  closeProfile: () => void;
+  showAllSet: boolean;
+  profileComplete: boolean;
+  filteredCampaigns: CampaignItem[];
+  campaignsFilter: string;
+  setCampaignsFilter: (filter: string) => void;
+  handleSelectCampaign: (camp: CampaignItem) => void;
+  handleBrowseCampaigns: () => void;
+  handleLogout: () => void;
+  marketplaceCampaigns: MarketplaceCampaign[];
+  marketplaceMeta: { activeSlots: number; maxSlots: number; canClaim: boolean };
+  walletData: WalletData | null;
+  selectedCampaign: CampaignItem | null;
+  setSelectedCampaign: (camp: CampaignItem | null) => void;
+  handleClaimSlot: (campaignId: string, views: number) => void;
+  handleConnectSocial: (platform: string, handle: string) => void;
+  handleRemoveSocial: (platform: string) => void;
+  handleSaveNiches: (niches: string[]) => void;
+  handleSaveProfile: () => void;
+  handleSubmitContent: (campaignId: string, videoUrl: string, caption: string) => void;
+  handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
+  handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => void;
+}
+
+const CreatorDashboardContext = React.createContext<CreatorDashboardValue | null>(null);
+
+export function useCreatorDashboard(): CreatorDashboardValue {
+  const ctx = React.useContext(CreatorDashboardContext);
+  if (!ctx) {
+    throw new Error("useCreatorDashboard must be used within a CreatorDashboardProvider");
+  }
+  return ctx;
+}
+
+export function CreatorDashboardProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const isMobile = useIsMobile();
   const { toast } = useToast();
-  useReveal();
 
-  const [profile, setProfile] = useState<CreatorProfile>({
+  const activeTab: ActiveTab =
+    pathname.endsWith("/campaign") || pathname.includes("/campaign/")
+      ? "campaign"
+      : pathname.endsWith("/wallet")
+        ? "wallet"
+        : "home";
+
+  const [profile, setProfile] = React.useState<CreatorProfile>({
     name: "",
     avatar: null,
     displayName: "",
@@ -38,19 +88,18 @@ function CreatorDashboardContent() {
     completionRate: 0,
   });
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("home");
-  const [showAllSet, setShowAllSet] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [profileFocus, setProfileFocus] = useState<ProfileFocusSection | null>(null);
-  const [campaignsFilter, setCampaignsFilter] = useState<string>("all");
-  const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
-  const [marketplaceCampaigns, setMarketplaceCampaigns] = useState<MarketplaceCampaign[]>([]);
-  const [marketplaceMeta, setMarketplaceMeta] = useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
-  const [walletData, setWalletData] = useState<WalletData | null>(null);
-  const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [showAllSet, setShowAllSet] = React.useState(false);
+  const [showProfile, setShowProfile] = React.useState(false);
+  const [profileFocus, setProfileFocus] = React.useState<ProfileFocusSection | null>(null);
+  const [campaignsFilter, setCampaignsFilter] = React.useState<string>("all");
+  const [campaigns, setCampaigns] = React.useState<CampaignItem[]>([]);
+  const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
+  const [marketplaceMeta, setMarketplaceMeta] = React.useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
+  const [walletData, setWalletData] = React.useState<WalletData | null>(null);
+  const [selectedCampaign, setSelectedCampaign] = React.useState<CampaignItem | null>(null);
+  const [loading, setLoading] = React.useState(true);
 
-  const [profileForm, setProfileForm] = useState<ProfileForm>({
+  const [profileForm, setProfileForm] = React.useState<ProfileForm>({
     name: "",
     nickname: "",
     email: "",
@@ -58,9 +107,7 @@ function CreatorDashboardContent() {
     avatarUrl: "",
   });
 
-  const [readyPostUrl, setReadyPostUrl] = useState<Record<string, string>>({});
-
-  useEffect(() => {
+  React.useEffect(() => {
     const token = getToken();
     if (!token) {
       router.push("/login");
@@ -69,7 +116,7 @@ function CreatorDashboardContent() {
 
     const user = getUser();
     if (user?.role === "business") {
-      window.location.href = `${window.location.protocol}//${window.location.hostname}:3002`;
+      router.push("/dashboard/brand");
       return;
     }
     if (user?.role !== "creator") {
@@ -89,6 +136,7 @@ function CreatorDashboardContent() {
     }
 
     fetchAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAllData = async () => {
@@ -233,6 +281,8 @@ function CreatorDashboardContent() {
     }
   };
 
+  const profileComplete = profile.niches.length > 0 && !!profile.avatar;
+
   const markCompleteIfReady = (next: CreatorProfile) => {
     const complete = next.niches.length > 0 && !!next.avatar;
     if (complete && !profileComplete && !showAllSet) {
@@ -320,9 +370,11 @@ function CreatorDashboardContent() {
     setShowProfile(true);
   };
 
+  const closeProfile = () => setShowProfile(false);
+
   const handleBrowseCampaigns = () => {
     setShowAllSet(false);
-    setActiveTab("campaign");
+    navigateTab("campaign");
   };
 
   const handleSubmitContent = async (campaignId: string, videoUrl: string, caption: string) => {
@@ -373,44 +425,6 @@ function CreatorDashboardContent() {
       );
     } catch (err) {
       console.error("Failed to update content:", err);
-    }
-  };
-
-  const handleSubmitPostUrl = async (campaignId: string) => {
-    const url = readyPostUrl[campaignId];
-    if (!url) return;
-
-    try {
-      const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
-      if (submissionId) {
-        await apiRequest(`/submissions/${submissionId}/mark-posted`, {
-          method: "PATCH",
-          token: getToken() || undefined,
-          body: JSON.stringify({ url, platform: "tiktok" }),
-        });
-      }
-
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === campaignId
-            ? {
-                ...c,
-                status: "live_tracking" as const,
-                progress: 0,
-                currentViews: 0,
-                postUrl: url,
-              }
-            : c
-        )
-      );
-
-      setReadyPostUrl((prev) => {
-        const next = { ...prev };
-        delete next[campaignId];
-        return next;
-      });
-    } catch (err) {
-      console.error("Failed to submit post URL:", err);
     }
   };
 
@@ -465,11 +479,20 @@ function CreatorDashboardContent() {
     }
   };
 
-  useEffect(() => {
+  const handleSelectCampaign = (camp: CampaignItem) => {
+    if (isMobile) {
+      router.push(`/dashboard/creator/campaign/${camp.id}`);
+    } else {
+      setSelectedCampaign(camp);
+    }
+  };
+
+  React.useEffect(() => {
     if (selectedCampaign) {
       const updated = campaigns.find((c) => c.id === selectedCampaign.id);
       if (updated) setSelectedCampaign(updated);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaigns]);
 
   const filteredCampaigns = campaigns.filter((c) => {
@@ -477,139 +500,54 @@ function CreatorDashboardContent() {
     return c.status === campaignsFilter;
   });
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = React.useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     router.push("/login");
   }, [router]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center">
-        <div className="space-y-4 w-full max-w-7xl mx-auto px-6">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                </div>
-                <Skeleton className="h-3 w-full" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const navigateTab = (tab: ActiveTab) => {
+    router.push(tab === "home" ? "/dashboard/creator" : `/dashboard/creator/${tab}`);
+  };
 
-  const profileComplete = profile.niches.length > 0 && !!profile.avatar;
-
-  const renderOnboardingView = (p: CreatorProfile) => (
-    <OnboardingView
-      profile={p}
-      onConnectSocial={() => openProfile("social")}
-      onChooseNiches={() => openProfile("niches")}
-      onCompleteProfile={() => openProfile("details")}
-    />
-  );
-
-  const renderCampaignFeed = () => (
-    <CampaignFeed
-      profile={profile}
-      campaigns={filteredCampaigns}
-      filter={campaignsFilter}
-      onFilterChange={setCampaignsFilter}
-      onSelectCampaign={(camp) => {
-        if (isMobile) {
-          router.push(`/campaign/${camp.id}`);
-        } else {
-          setSelectedCampaign(camp);
-        }
-      }}
-      onBrowseCampaign={handleBrowseCampaigns}
-    />
-  );
+  const value: CreatorDashboardValue = {
+    profile,
+    profileForm,
+    setProfileForm,
+    loading,
+    activeTab,
+    navigateTab,
+    isMobile,
+    showProfile,
+    profileFocus,
+    openProfile,
+    closeProfile,
+    showAllSet,
+    profileComplete,
+    filteredCampaigns,
+    campaignsFilter,
+    setCampaignsFilter,
+    handleSelectCampaign,
+    handleBrowseCampaigns,
+    handleLogout,
+    marketplaceCampaigns,
+    marketplaceMeta,
+    walletData,
+    selectedCampaign,
+    setSelectedCampaign,
+    handleClaimSlot,
+    handleConnectSocial,
+    handleRemoveSocial,
+    handleSaveNiches,
+    handleSaveProfile,
+    handleSubmitContent,
+    handleUpdateContent,
+    handleDetailsSubmitPostUrl,
+  };
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F4] text-[#1C1917] flex flex-col font-rethink">
-      <CreatorHeader
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        profile={profile}
-        onLogout={handleLogout}
-        onOpenProfile={() => openProfile("details")}
-      />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 md:py-10 flex flex-col items-center">
-        {showProfile ? (
-          <ProfileView
-            profile={profile}
-            profileForm={profileForm}
-            onProfileFormChange={setProfileForm}
-            focusSection={profileFocus}
-            onClose={() => setShowProfile(false)}
-            onConnectSocial={handleConnectSocial}
-            onRemoveSocial={handleRemoveSocial}
-            onSaveNiches={handleSaveNiches}
-            onSaveProfile={handleSaveProfile}
-          />
-        ) : (
-          <>
-            {activeTab === "home" && (
-              <>
-                {showAllSet ? (
-                  <OnboardingComplete
-                    profile={profile}
-                    onBrowseCampaigns={handleBrowseCampaigns}
-                  />
-                ) : !profileComplete ? (
-                  renderOnboardingView(profile)
-                ) : (
-                  renderCampaignFeed()
-                )}
-              </>
-            )}
-
-            {activeTab === "campaign" && (
-              <CampaignMarketplace
-                campaigns={marketplaceCampaigns}
-                meta={marketplaceMeta}
-                onClaimSlot={handleClaimSlot}
-                niches={profile.niches}
-              />
-            )}
-
-            {activeTab === "wallet" && <WalletView profile={profile} walletData={walletData} />}
-          </>
-        )}
-
-        {selectedCampaign && (
-          <CampaignDetailsDrawer
-            campaign={selectedCampaign}
-            onClose={() => setSelectedCampaign(null)}
-            onSubmitContent={handleSubmitContent}
-            onUpdateContent={handleUpdateContent}
-            onSubmitPostUrl={handleDetailsSubmitPostUrl}
-          />
-        )}
-      </main>
-    </div>
-  );
-}
-
-export default function CreatorDashboard() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
-      <CreatorDashboardContent />
-    </Suspense>
+    <CreatorDashboardContext.Provider value={value}>
+      {children}
+    </CreatorDashboardContext.Provider>
   );
 }

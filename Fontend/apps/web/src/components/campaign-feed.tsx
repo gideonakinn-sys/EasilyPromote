@@ -9,6 +9,7 @@ import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
 import { useReveal } from "../hooks/use-reveal";
 import browseCampaignIllus from "@ep/ui/assets/browse-campaign.png";
+import emptyHomeImg from "@ep/ui/assets/empty_home.png";
 
 interface CampaignFeedProps {
   profile: CreatorProfile;
@@ -134,8 +135,14 @@ export function CampaignFeed({
         ))}
 
         {campaigns.length === 0 && (
-          <div className="col-span-full text-center py-12">
-            <p className="text-stone-500 text-sm font-medium">No campaigns found.</p>
+          <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-6">
+            <Image src={emptyHomeImg} alt="" width={184} height={175} className="mb-6" unoptimized />
+            <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">
+              No campaigns yet
+            </h3>
+            <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
+              You haven&apos;t joined any campaigns. Browse the marketplace to find campaigns matching your niches.
+            </p>
           </div>
         )}
 

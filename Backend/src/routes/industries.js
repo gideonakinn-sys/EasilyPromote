@@ -35,6 +35,7 @@ router.get("/", async (req, res, next) => {
         id: i._id,
         name: i.name,
         enabled: i.enabled,
+        costPerView: i.costPerView ?? null,
         sortOrder: i.sortOrder,
       })),
     });

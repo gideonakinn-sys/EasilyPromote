@@ -12,6 +12,11 @@ const industrySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    costPerView: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
     sortOrder: {
       type: Number,
       default: 0,

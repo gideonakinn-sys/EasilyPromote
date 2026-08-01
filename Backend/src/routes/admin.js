@@ -11,7 +11,7 @@ const Notification = require("../models/Notification");
 const Platform = require("../models/Platform");
 const Industry = require("../models/Industry");
 const { protect, authorizeRoles } = require("../middleware/auth");
-const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -86,7 +86,13 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20, q } = req.query;
     const filter = {};
-    if (status && status !== "all") filter.status = status;
+    if (status && status !== "all") {
+      if (status === "pending_approval") {
+        filter.status = { $in: ["pending_payment", "under_review"] };
+      } else {
+        filter.status = status;
+      }
+    }
     if (q) filter.name = { $regex: q, $options: "i" };
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -99,8 +105,27 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
       Campaign.countDocuments(filter),
     ]);
 
+    const CreatorProfile = require("../models/CreatorProfile");
+    const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
+    const creatorNiches = creatorProfiles.map((p) =>
+      (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
+    );
+
     res.json({
-      campaigns: campaigns.map((c) => ({
+      campaigns: campaigns.map((c) => {
+        const campaignNiches = [
+          ...(Array.isArray(c.niches) ? c.niches : []),
+          c.category,
+        ]
+          .map((n) => (n ? String(n).trim().toLowerCase() : ""))
+          .filter(Boolean);
+
+        const creatorCount =
+          campaignNiches.length > 0
+            ? creatorNiches.filter((pn) => pn.some((n) => campaignNiches.includes(n))).length
+            : 0;
+
+        return {
         id: c._id,
         name: c.name,
         category: c.category,
@@ -111,6 +136,7 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         platformFee: c.platformFee,
         targetViews: c.targetViews,
         viewsDelivered: c.viewsDelivered || 0,
+        creatorCount,
         progressPercent: c.targetViews > 0
           ? Math.min(Math.round(((c.viewsDelivered || 0) / c.targetViews) * 100), 100)
           : 0,
@@ -119,11 +145,13 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         platforms: c.platforms,
         contentStyle: c.contentStyle,
         niches: c.niches,
+        slotCount: c.slotCount || 5,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }
           : null,
-      })),
+        };
+      }),
       total,
       page: Number(page),
       pages: Math.ceil(total / Number(limit)),
@@ -180,7 +208,7 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
 // ─── PATCH /api/admin/campaigns/:id (edit details) ─────────────────────────────
 router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
   try {
-    const { category, platforms, contentStyle, niches } = req.body;
+    const { category, platforms, contentStyle, niches, slotCount } = req.body;
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
@@ -194,11 +222,16 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
     if (niches !== undefined) campaign.niches = niches;
 
     if (category !== undefined) {
-      const { getCostPerView } = require("../config/pricing");
-      campaign.costPerView = getCostPerView(category);
+      const { getEffectiveCostPerView } = require("../config/pricing");
+      campaign.costPerView = await getEffectiveCostPerView(category);
     }
 
     await campaign.save();
+
+    // Rebuild available slots when the slot count is changed (e.g. while live).
+    if (slotCount !== undefined) {
+      await syncCampaignSlots(campaign, slotCount);
+    }
 
     res.json({
       success: true,
@@ -209,6 +242,7 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
         platforms: campaign.platforms,
         contentStyle: campaign.contentStyle,
         niches: campaign.niches,
+        slotCount: campaign.slotCount,
       },
     });
   } catch (err) {
@@ -677,13 +711,26 @@ router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
 router.get("/industries", adminGuard, async (req, res, next) => {
   try {
     const industries = await Industry.find().sort({ sortOrder: 1, name: 1 });
+
+    const CreatorProfile = require("../models/CreatorProfile");
+    const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
+    const creatorNiches = creatorProfiles.map((p) =>
+      (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
+    );
+
     res.json({
-      industries: industries.map((i) => ({
-        id: i._id,
-        name: i.name,
-        enabled: i.enabled,
-        sortOrder: i.sortOrder,
-      })),
+      industries: industries.map((i) => {
+        const name = String(i.name).trim().toLowerCase();
+        const creatorCount = creatorNiches.filter((pn) => pn.includes(name)).length;
+        return {
+          id: i._id,
+          name: i.name,
+          enabled: i.enabled,
+          costPerView: i.costPerView ?? null,
+          sortOrder: i.sortOrder,
+          creatorCount,
+        };
+      }),
     });
   } catch (err) {
     next(err);
@@ -693,7 +740,7 @@ router.get("/industries", adminGuard, async (req, res, next) => {
 // ─── POST /api/admin/industries ─────────────────────────────────────────────────
 router.post("/industries", adminGuard, async (req, res, next) => {
   try {
-    const { name, enabled = true, sortOrder = 0 } = req.body;
+    const { name, enabled = true, sortOrder = 0, costPerView } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: "Industry name is required" });
     }
@@ -706,6 +753,7 @@ router.post("/industries", adminGuard, async (req, res, next) => {
     const industry = await Industry.create({
       name: name.trim(),
       enabled: Boolean(enabled),
+      costPerView: costPerView === undefined || costPerView === "" ? null : Number(costPerView),
       sortOrder: Number(sortOrder) || 0,
     });
 
@@ -715,6 +763,7 @@ router.post("/industries", adminGuard, async (req, res, next) => {
         id: industry._id,
         name: industry.name,
         enabled: industry.enabled,
+        costPerView: industry.costPerView ?? null,
         sortOrder: industry.sortOrder,
       },
     });
@@ -726,13 +775,16 @@ router.post("/industries", adminGuard, async (req, res, next) => {
 // ─── PATCH /api/admin/industries/:id ───────────────────────────────────────────
 router.patch("/industries/:id", adminGuard, async (req, res, next) => {
   try {
-    const { name, enabled, sortOrder } = req.body;
+    const { name, enabled, sortOrder, costPerView } = req.body;
     const industry = await Industry.findById(req.params.id);
     if (!industry) return res.status(404).json({ error: "Industry not found" });
 
     if (name !== undefined && name.trim()) industry.name = name.trim();
     if (enabled !== undefined) industry.enabled = Boolean(enabled);
     if (sortOrder !== undefined) industry.sortOrder = Number(sortOrder) || 0;
+    if (costPerView !== undefined) {
+      industry.costPerView = costPerView === "" || costPerView === null ? null : Number(costPerView);
+    }
 
     await industry.save();
     res.json({
@@ -741,6 +793,7 @@ router.patch("/industries/:id", adminGuard, async (req, res, next) => {
         id: industry._id,
         name: industry.name,
         enabled: industry.enabled,
+        costPerView: industry.costPerView ?? null,
         sortOrder: industry.sortOrder,
       },
     });

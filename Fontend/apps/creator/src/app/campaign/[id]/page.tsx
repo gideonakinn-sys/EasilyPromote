@@ -38,7 +38,7 @@ function toCampaignItem(c: Record<string, unknown>): CampaignItem {
     keyMessageCta: c.keyMessageCta as string,
     whatToAvoid: c.whatToAvoid as string,
     platforms: c.platforms as string[],
-    contentStyle: c.contentStyle as string,
+    contentStyle: c.contentStyle as string[],
     brandName: c.brandName as string | undefined,
     brandAvatar: c.brandAvatar as string | undefined,
     scriptUrl: c.scriptUrl as string | undefined,

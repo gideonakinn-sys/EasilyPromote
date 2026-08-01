@@ -15,10 +15,24 @@ interface MarketplaceDetailsDrawerProps {
   isAtLimit: boolean;
 }
 
-const VIEW_PRESETS = [1000, 3000, 5000, 10000, 20000] as const;
+const VIEW_PRESETS = [1000, 3000, 5000, 10000, 20000, 30000, 50000, 75000, 100000, 150000, 200000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000] as const;
+
+function buildViewPresets(targetViews: number): number[] {
+  const min = Math.ceil(targetViews * 0.2);
+  const max = Math.ceil(targetViews * 0.5);
+  const inRange = VIEW_PRESETS.filter((v) => v >= min && v <= max);
+  const set = new Set<number>(inRange);
+  set.add(min);
+  set.add(max);
+  return Array.from(set).sort((a, b) => a - b);
+}
 
 function formatViews(n: number): string {
-  return n >= 1000 ? `${n / 1000}k` : n.toString();
+  if (n >= 1000000) {
+    return `${(n / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (n >= 1000) return `${n / 1000}k`;
+  return n.toString();
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -54,17 +68,20 @@ function CampaignDrawerContent({
   isMobile: boolean;
   onClose: () => void;
 }) {
-  const firstValid = VIEW_PRESETS.find((v) => v >= campaign.minViews) || VIEW_PRESETS[0];
+  const minViews = Math.ceil(campaign.targetViews * 0.2);
+  const maxViews = Math.ceil(campaign.targetViews * 0.5);
+  const presets = buildViewPresets(campaign.targetViews);
+  const firstValid = presets[0];
   const [selectedViews, setSelectedViews] = useState(firstValid);
 
   const reward = selectedViews * campaign.costPerView;
-  const rewardMin = campaign.minViews * campaign.costPerView;
-  const rewardMax = campaign.targetViews * campaign.costPerView;
+  const rewardMin = minViews * campaign.costPerView;
+  const rewardMax = maxViews * campaign.costPerView;
 
   useEffect(() => {
-    const valid = VIEW_PRESETS.find((v) => v >= campaign.minViews) || VIEW_PRESETS[0];
-    setSelectedViews(valid);
-  }, [campaign.id, campaign.minViews]);
+    setSelectedViews(buildViewPresets(campaign.targetViews)[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign.id, campaign.targetViews]);
 
   return (
     <div className="relative flex flex-col h-full">
@@ -137,20 +154,14 @@ function CampaignDrawerContent({
             <p className="text-xs font-medium text-stone-500">Select how many views you can deliver</p>
 
             <div className="flex flex-wrap gap-2">
-              {VIEW_PRESETS.map((views) => {
-                const isDisabled = views < campaign.minViews;
+              {presets.map((views) => {
                 const isSelected = selectedViews === views;
                 return (
                   <button
                     key={views}
-                    onClick={() => !isDisabled && setSelectedViews(views)}
-                    disabled={isDisabled}
+                    onClick={() => setSelectedViews(views)}
                     className={`px-4 py-2 rounded-full text-xs font-medium font-rethink ${
-                      isSelected
-                        ? "bg-stone-900 text-white"
-                        : isDisabled
-                        ? "bg-stone-50 text-stone-300 cursor-not-allowed"
-                        : "bg-stone-100 text-stone-600"
+                      isSelected ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
                     }`}
                   >
                     {formatViews(views)}

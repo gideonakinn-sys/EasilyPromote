@@ -181,6 +181,12 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
       status: { $in: ["claimed", "submitted", "verifying"] },
     });
 
+    const claimedCampaignIds = await Slot.distinct("campaignId", {
+      creatorId: req.user._id,
+      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+    });
+    const claimedCampaignSet = new Set(claimedCampaignIds.map((id) => id.toString()));
+
     const maxSlots = 3;
     const canClaim = activeSlots < maxSlots;
 
@@ -193,6 +199,10 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
     const marketplace = [];
 
     for (const campaign of campaigns) {
+      if (claimedCampaignSet.has(campaign._id.toString())) {
+        continue;
+      }
+
       const availableSlots = await Slot.find({
         campaignId: campaign._id,
         status: "available",

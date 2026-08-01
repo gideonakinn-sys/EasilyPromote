@@ -22,6 +22,8 @@ interface CampaignItem {
   platforms?: string[];
   contentStyle?: string[];
   niches?: string[];
+  slotCount?: number;
+  creatorCount?: number;
   createdAt: string;
   brand?: { id: string; name: string; email: string };
 }
@@ -74,6 +76,7 @@ export default function AdminCampaignsPage() {
   const [editPlatforms, setEditPlatforms] = useState<string[]>([]);
   const [editContentStyle, setEditContentStyle] = useState<string[]>([]);
   const [editNiches, setEditNiches] = useState<string[]>([]);
+  const [editSlotCount, setEditSlotCount] = useState(5);
   const [customStyleInput, setCustomStyleInput] = useState("");
   const [customNicheInput, setCustomNicheInput] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
@@ -101,6 +104,7 @@ export default function AdminCampaignsPage() {
     setEditPlatforms(selectedCampaign.platforms || []);
     setEditContentStyle(selectedCampaign.contentStyle || []);
     setEditNiches(selectedCampaign.niches || []);
+    setEditSlotCount(selectedCampaign.slotCount ?? 5);
     setCustomStyleInput("");
     setCustomNicheInput("");
     setSavedMessage("");
@@ -167,6 +171,7 @@ export default function AdminCampaignsPage() {
             platforms: editPlatforms,
             contentStyle: editContentStyle,
             niches: editNiches,
+            slotCount: editSlotCount,
           }),
         }
       );
@@ -179,6 +184,7 @@ export default function AdminCampaignsPage() {
               platforms: editPlatforms,
               contentStyle: editContentStyle,
               niches: editNiches,
+              slotCount: editSlotCount,
               costPerView: data.campaign.costPerView ?? prev.costPerView,
             }
           : prev
@@ -218,7 +224,7 @@ export default function AdminCampaignsPage() {
 
         {/* Status Filters */}
         <div className="flex gap-2 overflow-x-auto pb-4 mb-4">
-          {["all", "under_review", "live", "paused", "completed", "cancelled", "draft"].map((st) => (
+          {["all", "pending_approval", "under_review", "live", "paused", "completed", "cancelled", "draft"].map((st) => (
             <button
               key={st}
               onClick={() => setSelectedStatus(st)}
@@ -228,7 +234,7 @@ export default function AdminCampaignsPage() {
                   : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
               }`}
             >
-              {st.replace("_", " ")}
+              {st === "pending_approval" ? "Pending Approval" : st.replace("_", " ")}
             </button>
           ))}
         </div>
@@ -242,6 +248,7 @@ export default function AdminCampaignsPage() {
                   <th className="px-6 py-4">Campaign</th>
                   <th className="px-6 py-4">Brand</th>
                   <th className="px-6 py-4">Budget & Pool</th>
+                  <th className="px-6 py-4">Creators Matched</th>
                   <th className="px-6 py-4">View Progress</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -254,6 +261,7 @@ export default function AdminCampaignsPage() {
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-40" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-28" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-24" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-20" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-32" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-12 ml-auto" /></td>
@@ -261,7 +269,7 @@ export default function AdminCampaignsPage() {
                   ))
                 ) : campaigns.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
+                    <td colSpan={7} className="px-6 py-12 text-center text-stone-400">
                       No campaigns found for this filter.
                     </td>
                   </tr>
@@ -292,6 +300,19 @@ export default function AdminCampaignsPage() {
                       <td className="px-6 py-4">
                         <p className="font-bold text-stone-900">{formatCurrency(c.budget)}</p>
                         <p className="text-[11px] text-stone-500">Creator Pool: {formatCurrency(c.creatorPool)}</p>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            (c.creatorCount ?? 0) > 0
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-stone-100 text-stone-400"
+                          }`}
+                        >
+                          {c.creatorCount ?? 0} creators
+                        </span>
+                        <p className="text-[10px] text-stone-400 mt-1">{c.category || "General"} niche</p>
                       </td>
 
                       <td className="px-6 py-4">
@@ -416,6 +437,25 @@ export default function AdminCampaignsPage() {
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
+                    </div>
+
+                    {/* Number of slots */}
+                    <div>
+                      <label className="font-bold text-stone-700 block mb-1.5">
+                        Number of slots
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={editSlotCount}
+                        onChange={(e) => setEditSlotCount(Number(e.target.value))}
+                        className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
+                      />
+                      <p className="text-xs text-stone-500 mt-1">
+                        Each slot splits target views and creator pool equally. Available slots
+                        are rebuilt to this count on save.
+                      </p>
                     </div>
 
                     {/* Platforms */}

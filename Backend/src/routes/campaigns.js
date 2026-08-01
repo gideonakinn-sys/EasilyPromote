@@ -4,18 +4,27 @@ const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
-const { getCostPerView } = require("../config/pricing");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
 
 const router = express.Router();
 
-router.get("/pricing", (req, res) => {
-  const { COST_PER_VIEW } = require("../config/pricing");
-  res.json({
-    default: COST_PER_VIEW.default,
-    categories: COST_PER_VIEW.categories,
-  });
+router.get("/pricing", async (req, res, next) => {
+  try {
+    const { COST_PER_VIEW } = require("../config/pricing");
+    const Industry = require("../models/Industry");
+    const categories = { ...COST_PER_VIEW.categories };
+    const industries = await Industry.find({ enabled: true, costPerView: { $gt: 0 } });
+    for (const ind of industries) {
+      categories[ind.name] = ind.costPerView;
+    }
+    res.json({
+      default: COST_PER_VIEW.default,
+      categories,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/", protect, async (req, res, next) => {
@@ -72,7 +81,8 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
   try {
     const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
 
-    const costPerView = getCostPerView(category);
+    const { getEffectiveCostPerView } = require("../config/pricing");
+    const costPerView = await getEffectiveCostPerView(category);
     const budget = targetViews * costPerView;
 
     const campaign = await Campaign.create({
@@ -280,7 +290,8 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.endDate !== undefined) updates.endDate = data.endDate;
       if (data.targetViews !== undefined) {
         updates.targetViews = data.targetViews;
-        updates.costPerView = getCostPerView(data.category || campaign.category);
+        const { getEffectiveCostPerView } = require("../config/pricing");
+        updates.costPerView = await getEffectiveCostPerView(data.category || campaign.category);
       }
       if (data.scriptUrl !== undefined) updates.scriptUrl = data.scriptUrl;
       if (data.scriptFileName !== undefined) updates.scriptFileName = data.scriptFileName;

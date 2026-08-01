@@ -19,4 +19,25 @@ function getCostPerView(category) {
   return COST_PER_VIEW.default;
 }
 
-module.exports = { getCostPerView, COST_PER_VIEW };
+/**
+ * Returns the admin-configured rate for an industry if one exists and is
+ * enabled, otherwise falls back to the static category rate.
+ */
+async function getEffectiveCostPerView(category) {
+  if (!category) return COST_PER_VIEW.default;
+  try {
+    const Industry = require("../models/Industry");
+    const industry = await Industry.findOne({
+      name: { $regex: `^${String(category).trim()}$`, $options: "i" },
+      enabled: true,
+    });
+    if (industry && industry.costPerView > 0) {
+      return industry.costPerView;
+    }
+  } catch (err) {
+    // fall through to static pricing
+  }
+  return getCostPerView(category);
+}
+
+module.exports = { getCostPerView, getEffectiveCostPerView, COST_PER_VIEW };

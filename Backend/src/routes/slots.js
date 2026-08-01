@@ -79,12 +79,27 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
       return res.status(400).json({ error: "Slot is not available" });
     }
 
+    const campaign = await Campaign.findById(slot.campaignId);
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+
+    if (committedViews !== undefined && committedViews !== null && committedViews !== "") {
+      const target = campaign.targetViews || 0;
+      const minViews = Math.ceil(target * 0.2);
+      const maxViews = Math.ceil(target * 0.5);
+      const views = Number(committedViews);
+      if (!Number.isFinite(views) || views < minViews || views > maxViews) {
+        return res.status(400).json({
+          error: `Committed views must be between ${minViews} and ${maxViews} (20%–50% of the campaign target)`,
+        });
+      }
+      slot.viewTarget = views;
+    }
+
     slot.creatorId = req.user._id;
     slot.status = "claimed";
     slot.claimedAt = new Date();
-    if (committedViews && committedViews >= 1) {
-      slot.viewTarget = committedViews;
-    }
     await slot.save();
 
     res.json({

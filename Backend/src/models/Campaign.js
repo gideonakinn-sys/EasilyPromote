@@ -107,6 +107,11 @@ const campaignSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    slotCount: {
+      type: Number,
+      default: 5,
+      min: 1,
+    },
   },
   { timestamps: true }
 );

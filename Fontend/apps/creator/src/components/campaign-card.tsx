@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import type { CampaignItem } from "./types";
@@ -70,6 +71,20 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
       onClick={onClick}
       className="bg-stone-50 rounded-3xl border-[0.2px] border-stone-200 md:border md:border-stone-100 p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer"
     >
+      {/* Campaign cover image */}
+      {camp.coverImageUrl && (
+        <div className="relative -mx-4 -mt-4 mb-4 h-32 md:h-36 bg-stone-100">
+          <Image
+            src={camp.coverImageUrl}
+            alt={camp.title}
+            fill
+            className="object-cover"
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+        </div>
+      )}
+
       {/* Top Section: Platform Icon + Category + Status Badge */}
       <div>
         <div className="flex items-start justify-between mb-5">

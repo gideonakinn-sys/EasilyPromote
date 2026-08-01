@@ -2,8 +2,8 @@
 // Usage: node scripts/backfillSlots.js
 require("dotenv").config();
 const mongoose = require("mongoose");
-const Campaign = require("../models/Campaign");
-const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const Campaign = require("../src/models/Campaign");
+const { ensureCampaignSlots } = require("../src/utils/ensureSlots");
 
 async function main() {
   const uri = process.env.MONGO_URI || process.env.MONGODB_URI;

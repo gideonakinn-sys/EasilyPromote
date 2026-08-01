@@ -73,7 +73,7 @@ export interface CampaignItem {
   keyMessageCta?: string;
   whatToAvoid?: string;
   platforms?: string[];
-  contentStyle?: string;
+  contentStyle?: string[];
   brandName?: string;
   brandAvatar?: string;
   scriptUrl?: string;
@@ -95,6 +95,8 @@ export interface MarketplaceCampaign {
   brandName: string;
   brandAvatar?: string;
   minViews: number;
+  maxViews?: number;
+  viewTarget?: number;
   description: string;
 }
 

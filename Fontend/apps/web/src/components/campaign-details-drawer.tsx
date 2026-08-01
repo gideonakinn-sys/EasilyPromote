@@ -550,7 +550,7 @@ export function CampaignDetailsDrawer({
                 <div className="space-y-1.5">
                   <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Content style</h5>
                   <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
-                    {displayCampaign.contentStyle}
+                    {Array.isArray(displayCampaign.contentStyle) ? displayCampaign.contentStyle.join(", ") : displayCampaign.contentStyle}
                   </p>
                 </div>
               )}
