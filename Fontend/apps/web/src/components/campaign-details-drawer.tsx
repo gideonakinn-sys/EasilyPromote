@@ -211,6 +211,7 @@ export function CampaignDetailsDrawer({
     instagram: "Instagram",
     youtube: "YouTube",
     twitter: "X (Twitter)",
+    facebook: "Facebook",
   };
 
   const displayPlatforms = (displayCampaign.platforms || ["tiktok", "instagram"])

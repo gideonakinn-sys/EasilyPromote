@@ -251,7 +251,10 @@ router.patch("/:id", protect, async (req, res, next) => {
     const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
+        updates[field] =
+          field === "contentStyle" && typeof req.body[field] === "string"
+            ? req.body[field].split(",").map((s) => s.trim()).filter(Boolean)
+            : req.body[field];
       }
     }
 

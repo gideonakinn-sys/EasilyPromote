@@ -48,6 +48,14 @@ interface CampaignWizardProps {
 
 const PLATFORM_OPTIONS = ["TikTok", "Facebook", "Instagram", "YouTube", "X (Twitter)"];
 
+const PLATFORM_KEY_MAP: Record<string, string> = {
+  TikTok: "tiktok",
+  Facebook: "facebook",
+  Instagram: "instagram",
+  YouTube: "youtube",
+  "X (Twitter)": "twitter",
+};
+
 const FALLBACK_CATEGORIES = ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"];
 
 const STYLE_PRESETS = ["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"];
@@ -508,9 +516,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     contentBrief: campaign.description,
     keyMessageCta: campaign.keyMessage,
     whatToAvoid: campaign.avoid,
-   platforms: (campaign.platforms || []).map((p) => p.toLowerCase()),
-   contentStyle: (campaign.contentStyle || []).filter(Boolean).join(", "),
-   niches: (campaign.niches || []).filter(Boolean),
+    platforms: (campaign.platforms || []).map((p) => PLATFORM_KEY_MAP[p] || p.toLowerCase()),
+    contentStyle: (campaign.contentStyle || []).filter(Boolean),
+    niches: (campaign.niches || []).filter(Boolean),
     scriptUrl: campaign.scriptUrl || undefined,
     scriptFileName: campaign.scriptFileName || undefined,
     coverImageUrl: campaign.coverImageUrl || undefined,
