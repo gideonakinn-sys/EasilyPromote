@@ -9,7 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
 import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
@@ -50,7 +50,7 @@ export function CampaignFeed({
   return (
     <div className="w-full flex flex-col">
       <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-rethink font-medium text-[23px] leading-[28px] text-stone-900 m-0">
+        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
 
@@ -75,13 +75,13 @@ export function CampaignFeed({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 {FILTER_OPTIONS.map((opt) => (
-                  <DropdownMenuCheckboxItem
+                  <DropdownMenuItem
                     key={opt.value}
-                    checked={filter === opt.value}
                     onSelect={() => onFilterChange(opt.value)}
+                    className={filter === opt.value ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
                   >
                     {opt.label}
-                  </DropdownMenuCheckboxItem>
+                  </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -113,7 +113,7 @@ export function CampaignFeed({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         {campaigns.map((camp) => (
-          <div data-reveal key={camp.id}>
+          <div key={camp.id}>
             <CampaignCard
               campaign={camp}
               onClick={() => onSelectCampaign(camp)}
@@ -124,7 +124,7 @@ export function CampaignFeed({
         {campaigns.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-6">
             <Image src={emptyHomeImg} alt="" width={184} height={175} className="mb-6" unoptimized />
-            <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">
+            <h3 className="font-motterdam font-normal text-[22px] text-stone-900 mb-2 tracking-tighter">
               No campaigns yet
             </h3>
             <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
@@ -133,13 +133,13 @@ export function CampaignFeed({
           </div>
         )}
 
-        <div className="bg-stone-100 border border-stone-200 border-dashed rounded-3xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
+        <div className="bg-white rounded-2xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
           <div className="flex flex-col items-center justify-center">
             <Image src={browseCampaignIllus} alt="Browse campaigns" width={100} height={100} className="w-[100px] h-[100px]" unoptimized />
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onBrowseCampaign?.(); }}
-            className="w-full py-2.5 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold text-xs font-rethink"
+            className="w-full py-3 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold text-sm font-rethink"
           >
             Browse campaign
           </button>

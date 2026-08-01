@@ -38,7 +38,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
     : "#1";
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-stone-100">
+    <header className="sticky top-0 z-40 w-full bg-stone-50">
       <div className="max-w-7xl mx-auto px-6 h-16 grid grid-cols-3 items-center">
         {/* Logo — no text */}
         <div className="justify-self-start flex items-center gap-2.5">
@@ -46,7 +46,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         </div>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="justify-self-center hidden md:flex bg-stone-50 p-1 rounded-full gap-1 items-center">
+        <nav className="justify-self-center hidden md:flex bg-stone-100 p-1 rounded-full gap-1 items-center">
           <button
             onClick={() => onTabChange("home")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
@@ -93,7 +93,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         {/* Mobile Menu Button (same grid cell as nav) */}
         <button
           onClick={() => setIsMenuOpen(true)}
-          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-stone-700 bg-stone-50 border border-stone-200"
+          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-stone-700 bg-white"
         >
           <HugeiconsIcon icon={Menu01Icon} size={14} />
           <span>Menu</span>
@@ -102,7 +102,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         <div className="justify-self-end flex items-center gap-3">
           {/* Rank — desktop: full pill with rank + view count */}
           {!isOnboarding && (
-            <div className="hidden md:flex items-center gap-1.5 bg-stone-50 rounded-full pl-1 pr-3 py-1">
+            <div className="hidden md:flex items-center gap-1.5 bg-white rounded-full pl-1 pr-3 py-1">
               <Image
                 src={rankIllustration}
                 alt="Rank"
@@ -131,7 +131,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
           <div className="hidden md:block">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 bg-stone-50 rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
+                <button className="flex items-center gap-3 bg-white rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
                   <Image
                     src={profile.avatar || avatarSvg}
                     alt={profile.displayName}

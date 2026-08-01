@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import type { CampaignItem } from "./types";
@@ -69,28 +68,22 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-stone-50 rounded-3xl border-[0.2px] border-stone-200 md:border md:border-stone-100 p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer"
+      className="bg-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer"
     >
-      {/* Campaign cover image */}
-      {camp.coverImageUrl && (
-        <div className="relative -mx-4 -mt-4 mb-4 h-32 md:h-36 bg-stone-100">
-          <Image
-            src={camp.coverImageUrl}
-            alt={camp.title}
-            fill
-            className="object-cover"
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 33vw"
-          />
-        </div>
-      )}
-
-      {/* Top Section: Platform Icon + Category + Status Badge */}
+      {/* Top Section: Cover thumbnail + Category + Status Badge */}
       <div>
         <div className="flex items-start justify-between mb-5">
-          <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
-            <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
-          </div>
+          {camp.coverImageUrl ? (
+            <img
+              src={camp.coverImageUrl}
+              alt={camp.title}
+              className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
+            />
+          ) : (
+            <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
+              <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
               {camp.category}

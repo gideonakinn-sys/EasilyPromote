@@ -38,7 +38,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
   } = useCreatorDashboard();
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F4] text-[#1C1917] flex flex-col font-rethink">
+    <div className="min-h-dvh bg-stone-50 text-[#1C1917] flex flex-col font-rethink">
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={navigateTab}

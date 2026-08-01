@@ -80,25 +80,20 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
               <div
                 key={camp.id}
                 onClick={() => setSelectedCampaign(camp)}
-                className="bg-stone-50 rounded-3xl border-[0.2px] border-stone-200 md:border md:border-stone-100 p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer text-left"
+                className="bg-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer text-left"
               >
-                {camp.coverImageUrl && (
-                  <div className="relative -mx-4 -mt-4 mb-4 h-32 md:h-36 bg-stone-100">
-                    <Image
+                <div className="flex items-start justify-between mb-5">
+                  {camp.coverImageUrl ? (
+                    <img
                       src={camp.coverImageUrl}
                       alt={camp.title}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
                     />
-                  </div>
-                )}
-
-                <div className="flex items-start justify-between mb-5">
-                  <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
-                    <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
-                  </div>
+                  ) : (
+                    <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
+                      <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 text-left">
