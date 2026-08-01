@@ -20,8 +20,46 @@ interface CampaignItem {
   coverImageUrl?: string;
   contentBrief?: string;
   platforms?: string[];
+  contentStyle?: string[];
+  niches?: string[];
   createdAt: string;
   brand?: { id: string; name: string; email: string };
+}
+
+const AVAILABLE_NICHES = [
+  "Music",
+  "Lifestyle",
+  "Tech",
+  "Beauty",
+  "Fashion",
+  "Gaming",
+  "Food",
+  "Fitness",
+  "Travel",
+  "Comedy",
+  "Education",
+  "Sports",
+  "Photography",
+  "Art",
+  "Pets",
+  "DIY",
+  "Finance",
+  "Health",
+  "Vlogs",
+  "Dance",
+];
+
+const PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "YouTube"];
+
+const CONTENT_STYLE_PRESETS = ["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"];
+
+const CATEGORY_OPTIONS = ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"];
+
+interface PlatformItem {
+  id: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
 }
 
 export default function AdminCampaignsPage() {
@@ -32,6 +70,41 @@ export default function AdminCampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [editCategory, setEditCategory] = useState("Music");
+  const [editPlatforms, setEditPlatforms] = useState<string[]>([]);
+  const [editContentStyle, setEditContentStyle] = useState<string[]>([]);
+  const [editNiches, setEditNiches] = useState<string[]>([]);
+  const [customStyleInput, setCustomStyleInput] = useState("");
+  const [customNicheInput, setCustomNicheInput] = useState("");
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
+  const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
+
+  const fetchPlatforms = useCallback(async () => {
+    try {
+      const data = await apiRequest<{ platforms: PlatformItem[] }>("/admin/platforms", {
+        token: getToken() || undefined,
+      });
+      const enabled = (data.platforms || [])
+        .filter((p) => p.enabled)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((p) => p.name);
+      if (enabled.length > 0) setPlatformOptions(enabled);
+    } catch {
+      setPlatformOptions(PLATFORM_OPTIONS);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCampaign) return;
+    setEditCategory(selectedCampaign.category || "Music");
+    setEditPlatforms(selectedCampaign.platforms || []);
+    setEditContentStyle(selectedCampaign.contentStyle || []);
+    setEditNiches(selectedCampaign.niches || []);
+    setCustomStyleInput("");
+    setCustomNicheInput("");
+    setSavedMessage("");
+  }, [selectedCampaign]);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -57,7 +130,8 @@ export default function AdminCampaignsPage() {
       return;
     }
     fetchCampaigns();
-  }, [router, fetchCampaigns]);
+    fetchPlatforms();
+  }, [router, fetchCampaigns, fetchPlatforms]);
 
   const handleStatusChange = async (campaignId: string, newStatus: string) => {
     try {
@@ -78,6 +152,47 @@ export default function AdminCampaignsPage() {
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(val);
+
+  const handleSaveEdit = async () => {
+    if (!selectedCampaign) return;
+    try {
+      setSaveLoading(true);
+      const data = await apiRequest<{ success: boolean; campaign: { id: string; category: string; costPerView: number } }>(
+        `/admin/campaigns/${selectedCampaign.id}`,
+        {
+          method: "PATCH",
+          token: getToken() || undefined,
+          body: JSON.stringify({
+            category: editCategory,
+            platforms: editPlatforms,
+            contentStyle: editContentStyle,
+            niches: editNiches,
+          }),
+        }
+      );
+      setSavedMessage("Campaign details updated.");
+      setSelectedCampaign((prev) =>
+        prev
+          ? {
+              ...prev,
+              category: editCategory,
+              platforms: editPlatforms,
+              contentStyle: editContentStyle,
+              niches: editNiches,
+              costPerView: data.campaign.costPerView ?? prev.costPerView,
+            }
+          : prev
+      );
+      fetchCampaigns();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to update campaign details");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const toggleItem = <T,>(list: T[], item: T): T[] =>
+    list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
@@ -281,6 +396,200 @@ export default function AdminCampaignsPage() {
                         {p}
                       </span>
                     ))}
+                  </div>
+                </div>
+
+                {/* Edit Campaign Details */}
+                <div className="pt-4 border-t border-stone-200">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Edit Campaign Details</h4>
+
+                  <div className="space-y-4">
+                    {/* What are you promoting? */}
+                    <div>
+                      <label className="font-bold text-stone-700 block mb-1.5">What are you promoting?</label>
+                      <select
+                        value={editCategory}
+                        onChange={(e) => setEditCategory(e.target.value)}
+                        className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
+                      >
+                        {CATEGORY_OPTIONS.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Platforms */}
+                    <div>
+                      <label className="font-bold text-stone-700 block mb-1.5">Available accounts for linking</label>
+                      <div className="flex flex-wrap gap-2">
+                        {platformOptions.map((platform) => (
+                          <button
+                            key={platform}
+                            type="button"
+                            onClick={() => setEditPlatforms((prev) => toggleItem(prev, platform))}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                              editPlatforms.includes(platform)
+                                ? "bg-stone-900 text-white"
+                                : "bg-stone-100 text-stone-600 border border-stone-200"
+                            }`}
+                          >
+                            {platform}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Content styles */}
+                    <div>
+                      <label className="font-bold text-stone-700 block mb-1.5">Preferred content styles</label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={customStyleInput}
+                          onChange={(e) => setCustomStyleInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && customStyleInput.trim()) {
+                              e.preventDefault();
+                              setEditContentStyle((prev) =>
+                                prev.includes(customStyleInput.trim()) ? prev : [...prev, customStyleInput.trim()]
+                              );
+                              setCustomStyleInput("");
+                            }
+                          }}
+                          placeholder="Add a custom style..."
+                          className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customStyleInput.trim()) {
+                              setEditContentStyle((prev) =>
+                                prev.includes(customStyleInput.trim()) ? prev : [...prev, customStyleInput.trim()]
+                              );
+                              setCustomStyleInput("");
+                            }
+                          }}
+                          className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {CONTENT_STYLE_PRESETS.map((style) => (
+                          <button
+                            key={style}
+                            type="button"
+                            onClick={() => setEditContentStyle((prev) => toggleItem(prev, style))}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                              editContentStyle.includes(style)
+                                ? "bg-stone-900 text-white"
+                                : "bg-stone-100 text-stone-600 border border-stone-200"
+                            }`}
+                          >
+                            {style}
+                          </button>
+                        ))}
+                        {editContentStyle
+                          .filter((s) => !CONTENT_STYLE_PRESETS.includes(s))
+                          .map((style) => (
+                            <span
+                              key={style}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-stone-900 text-white text-xs font-semibold"
+                            >
+                              {style}
+                              <button
+                                type="button"
+                                onClick={() => setEditContentStyle((prev) => prev.filter((s) => s !== style))}
+                                aria-label={`Remove ${style}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Niches */}
+                    <div>
+                      <label className="font-bold text-stone-700 block mb-1.5">Target niches</label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={customNicheInput}
+                          onChange={(e) => setCustomNicheInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && customNicheInput.trim()) {
+                              e.preventDefault();
+                              setEditNiches((prev) =>
+                                prev.includes(customNicheInput.trim()) ? prev : [...prev, customNicheInput.trim()]
+                              );
+                              setCustomNicheInput("");
+                            }
+                          }}
+                          placeholder="Add a custom niche..."
+                          className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customNicheInput.trim()) {
+                              setEditNiches((prev) =>
+                                prev.includes(customNicheInput.trim()) ? prev : [...prev, customNicheInput.trim()]
+                              );
+                              setCustomNicheInput("");
+                            }
+                          }}
+                          className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {AVAILABLE_NICHES.map((niche) => (
+                          <button
+                            key={niche}
+                            type="button"
+                            onClick={() => setEditNiches((prev) => toggleItem(prev, niche))}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                              editNiches.includes(niche)
+                                ? "bg-stone-900 text-white"
+                                : "bg-stone-100 text-stone-600 border border-stone-200"
+                            }`}
+                          >
+                            {niche}
+                          </button>
+                        ))}
+                        {editNiches
+                          .filter((n) => !AVAILABLE_NICHES.includes(n))
+                          .map((niche) => (
+                            <span
+                              key={niche}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-stone-900 text-white text-xs font-semibold"
+                            >
+                              {niche}
+                              <button
+                                type="button"
+                                onClick={() => setEditNiches((prev) => prev.filter((n) => n !== niche))}
+                                aria-label={`Remove ${niche}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+
+                    {savedMessage && (
+                      <p className="text-xs font-bold text-green-700">{savedMessage}</p>
+                    )}
+
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={saveLoading}
+                      className="w-full px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                    >
+                      {saveLoading ? "Saving..." : "Save Campaign Updates"}
+                    </button>
                   </div>
                 </div>
 

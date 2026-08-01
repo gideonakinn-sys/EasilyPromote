@@ -20,7 +20,11 @@ const registerSchema = z.object({
   role: z.enum(["business", "creator"]).default("business"),
   companyName: z.string().optional(),
   username: z.string().optional(),
-}).refine((data) => data.name || data.businessName, {
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  nickname: z.string().optional(),
+  displayName: z.string().optional(),
+}).refine((data) => data.name || data.businessName || data.firstName || data.lastName || data.nickname, {
   message: "Either name or businessName is required",
 });
 
@@ -55,7 +59,7 @@ router.post("/register", async (req, res, next) => {
       return res.status(400).json({ error: "Email already registered" });
     }
 
-    const displayName = data.name || data.businessName;
+    const displayName = data.name || data.businessName || data.displayName || `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.nickname;
 
     const user = await User.create({
       name: displayName,
@@ -72,9 +76,17 @@ router.post("/register", async (req, res, next) => {
         phone: data.phone || undefined,
       });
     } else if (data.role === "creator") {
+      const fullName = `${data.firstName || ""} ${data.lastName || ""}`.trim();
+      const creatorUsername =
+        data.username ||
+        (data.nickname || data.name || fullName || data.email.split("@")[0])
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^a-z0-9_]/g, "");
       await CreatorProfile.create({
         userId: user._id,
-        username: data.username || data.name.toLowerCase().replace(/\s+/g, "_"),
+        username: creatorUsername,
+        displayName: data.nickname || fullName || data.name || displayName,
       });
     }
 
@@ -89,7 +101,7 @@ router.post("/register", async (req, res, next) => {
         role: user.role,
         emailVerified: false,
         ...(data.role === "business" && { industry: data.industry, companyName: data.companyName || data.businessName || displayName, phone: data.phone }),
-        ...(data.role === "creator" && { username: data.username || displayName.toLowerCase().replace(/\s+/g, "_") }),
+        ...(data.role === "creator" && { username: data.username || displayName.toLowerCase().replace(/\s+/g, "_"), displayName: data.nickname || `${data.firstName || ""} ${data.lastName || ""}`.trim() || displayName }),
       },
       token,
       refreshToken,

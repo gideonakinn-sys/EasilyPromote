@@ -4,58 +4,62 @@ import { LoaderIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { AuthFormState, AuthFormActions } from "./types";
 
-interface RegisterStepProps {
-  form: Pick<AuthFormState, "businessName" | "industry" | "email" | "phone" | "password" | "showPassword" | "agreed">;
+interface CreatorRegisterStepProps {
+  form: Pick<AuthFormState, "firstName" | "lastName" | "nickname" | "email" | "phone" | "password" | "showPassword" | "agreed">;
   actions: AuthFormActions;
   onSubmit: (e: React.FormEvent) => void;
   loading?: boolean;
 }
 
-export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepProps) {
+export function CreatorRegisterStep({ form, actions, onSubmit, loading }: CreatorRegisterStepProps) {
   return (
     <div className="w-[350px] space-y-10">
       <div className="space-y-1.5">
         <h1 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
-          Create your business account
+          Create your creator account
         </h1>
         <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-[-0.01em]">
-          Fund campaigns, track delivery, and only pay for results.
+          Claim slots and get paid for real views.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
           <label className="text-xs font-medium text-stone-500 block font-rethink">
-            Business name
+            Full name
           </label>
-          <input
-            type="text"
-            required
-            placeholder="Enter Business name"
-            value={form.businessName}
-            onChange={(e) => actions.setField("businessName", e.target.value)}
-            className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              required
+              placeholder="First name"
+              value={form.firstName}
+              onChange={(e) => actions.setField("firstName", e.target.value)}
+              className="w-1/2 px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+            />
+            <input
+              type="text"
+              required
+              placeholder="Last name"
+              value={form.lastName}
+              onChange={(e) => actions.setField("lastName", e.target.value)}
+              className="w-1/2 px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+            />
+          </div>
         </div>
 
         <div data-reveal className="space-y-1.5">
           <label className="text-xs font-medium text-stone-500 block font-rethink">
-            Industry
+            Nickname / Alias
           </label>
-          <div className="relative">
-            <select
-              value={form.industry}
-              onChange={(e) => actions.setField("industry", e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium text-stone-800 appearance-none focus:outline-none focus:border-stone-400 focus:ring-0 bg-white cursor-pointer transition-colors font-rethink"
-            >
-              <option value="Technology">Technology</option>
-              <option value="Music">Music</option>
-              <option value="Apparel & Fashion">Apparel & Fashion</option>
-              <option value="E-commerce">E-commerce</option>
-              <option value="Food & Beverages">Food & Beverages</option>
-            </select>
-            <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <input
+            type="text"
+            required
+            placeholder="Enter your nickname or alias"
+            value={form.nickname}
+            onChange={(e) => actions.setField("nickname", e.target.value)}
+            className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+          />
         </div>
 
         <div data-reveal className="space-y-1.5">

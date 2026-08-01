@@ -13,7 +13,6 @@ import changesFeedbackImg from "@ep/ui/assets/Changes-feedback-creator.png";
 import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
 import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
 import type { CampaignItem } from "./types";
-import { CampaignStateSwitcher, type CampaignPreviewStatus } from "./campaign-state-switcher";
 import { STATUS_BADGES } from "./campaign-card";
 
 interface CampaignDetailsDrawerProps {
@@ -34,7 +33,6 @@ export function CampaignDetailsDrawer({
   onSubmitPostUrl,
 }: CampaignDetailsDrawerProps) {
   const [linkInputs, setLinkInputs] = useState<Record<string, string>>({});
-  const [previewStatus, setPreviewStatus] = useState<CampaignPreviewStatus | null>(null);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,7 +43,7 @@ export function CampaignDetailsDrawer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const displayCampaign = previewStatus ? { ...campaign, status: previewStatus } : campaign;
+  const displayCampaign = campaign;
 
   const linkPlatforms = displayCampaign.platforms?.length ? displayCampaign.platforms : ["tiktok", "instagram"];
   const allLinksFilled = linkPlatforms.every((p) => (linkInputs[p] || "").trim().length > 0);
@@ -661,11 +659,6 @@ export function CampaignDetailsDrawer({
           {panelContent}
         </div>
 
-        <CampaignStateSwitcher
-          value={previewStatus ?? campaign.status}
-          onChange={(s) => setPreviewStatus(s === campaign.status ? null : s)}
-        />
-
         {renderMobileUploadSheet()}
       </div>
     );
@@ -694,11 +687,6 @@ export function CampaignDetailsDrawer({
 
         {panelContent}
       </div>
-
-      <CampaignStateSwitcher
-        value={previewStatus ?? campaign.status}
-        onChange={(s) => setPreviewStatus(s === campaign.status ? null : s)}
-      />
 
       {renderMobileUploadSheet()}
     </div>

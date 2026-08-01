@@ -53,6 +53,10 @@ const campaignSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    niches: {
+      type: [String],
+      default: [],
+    },
     startDate: {
       type: Date,
     },

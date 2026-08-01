@@ -113,7 +113,7 @@ function IncreaseViewsContent({
             "w-full py-3 rounded-full text-sm font-semibold font-rethink border transition-colors",
             additionalViews > 0
               ? "bg-[#FEB604] text-[#1C1917] border-stone-100"
-              : "bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed"
+              : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
           )}
         >
           {paying ? "Redirecting..." : `Pay ₦${additionalCost.toLocaleString()}`}
@@ -389,7 +389,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   if (error || !campaign) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <span className="text-stone-500 font-rethink text-sm">{error || "Campaign not found"}</span>
+        <span className="text-stone-500 font-rethink text-sm tracking-[-0.01em]">{error || "Campaign not found"}</span>
         {onClose && (
           <button onClick={onClose} className="text-sm font-medium text-stone-900 underline">
             Go back
@@ -506,7 +506,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 )}
               </div>
               <div className="space-y-1.5">
-                <h2 className="font-rethink font-medium text-xl text-stone-900 leading-tight">
+                <h2 className="font-rethink font-medium tracking-tighter text-xl text-stone-900 leading-tight">
                   {campaign.name}
                 </h2>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium text-[10px] font-rethink">
@@ -538,28 +538,28 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Campaign Details Key-Value List */}
             <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center font-rethink text-sm font-medium">
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">Target Views</span>
                 <span className="text-stone-800">{formattedTarget}</span>
               </div>
-              <div className="flex justify-between items-center font-rethink text-sm font-medium">
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">Budget</span>
                 <span className="text-stone-800">{formattedBudget}</span>
               </div>
               {campaign.platforms && campaign.platforms.length > 0 && (
-                <div className="flex justify-between items-center font-rethink text-sm font-medium">
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                   <span className="text-stone-500">Platforms</span>
                   <span className="text-stone-800">{campaign.platforms.join(", ")}</span>
                 </div>
               )}
               {campaign.contentStyle && campaign.contentStyle.length > 0 && (
-                <div className="flex justify-between items-center font-rethink text-sm font-medium">
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                   <span className="text-stone-500">Content style</span>
                   <span className="text-stone-800">{Array.isArray(campaign.contentStyle) ? campaign.contentStyle.join(", ") : campaign.contentStyle}</span>
                 </div>
               )}
               {campaign.scriptUrl && (
-                <div className="flex justify-between items-center font-rethink text-sm font-medium">
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                   <span className="text-stone-500">Script</span>
                   <a
                     href={campaign.scriptUrl}
@@ -722,7 +722,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             ) : (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <Image src={submissionsEmpty} alt="Nothing yet" width={120} height={120} />
-                <h3 className="font-rethink font-semibold tracking-tight md:text-2xl text-xl text-stone-900">Nothing waiting on you</h3>
+                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-stone-900">Nothing waiting on you</h3>
                 <p className="font-rethink text-xs text-stone-500 font-medium">New content will show up here as creators upload on their platforms</p>
               </div>
             )}
@@ -762,7 +762,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {submissions.filter(s => s.payoutStatus).length === 0 && (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <Image src={payoutsEmpty} alt="Nothing yet" width={120} height={120} />
-                <h3 className="font-rethink font-semibold tracking-tight md:text-2xl text-xl text-stone-900">Nothing to show yet</h3>
+                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-stone-900">Nothing to show yet</h3>
                 <p className="font-rethink text-xs text-stone-500 font-medium">Your first transaction will appear here once slots start delivering.</p>
               </div>
             )}

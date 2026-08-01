@@ -1,99 +1,151 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { FilterIcon, ChevronDownIcon } from "@hugeicons/core-free-icons";
+import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
+import { useReveal } from "../hooks/use-reveal";
+import browseCampaignIllus from "@ep/ui/assets/browse-campaign.png";
 
 interface CampaignFeedProps {
   profile: CreatorProfile;
   campaigns: CampaignItem[];
   filter: string;
   onFilterChange: (filter: string) => void;
-  onSubmitContent: (id: string) => void;
-  onUpdateContent: (id: string) => void;
-  onSubmitPostUrl: (id: string) => void;
-  postUrls: Record<string, string>;
-  onPostUrlChange: (id: string, url: string) => void;
   onSelectCampaign: (campaign: CampaignItem) => void;
   onBrowseCampaign?: () => void;
 }
+
+const FILTER_OPTIONS = [
+  { label: "All Campaigns", value: "all" },
+  { label: "Needs Your Content", value: "needs_content" },
+  { label: "Changes Requested", value: "changes_requested" },
+  { label: "Review In Progress", value: "under_review" },
+  { label: "Approved - Ready to Post", value: "approved_post" },
+  { label: "Live · tracking views", value: "live_tracking" },
+  { label: "Delivered", value: "delivered" },
+] as const;
 
 export function CampaignFeed({
   profile,
   campaigns,
   filter,
   onFilterChange,
-  onSubmitContent,
-  onUpdateContent,
-  onSubmitPostUrl,
-  postUrls,
-  onPostUrlChange,
   onSelectCampaign,
   onBrowseCampaign,
 }: CampaignFeedProps) {
+  useReveal();
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isDesktopFilterOpen, setIsDesktopFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setIsDesktopFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="w-full flex flex-col">
-      {/* Header Welcome and Filter */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 w-full border-b border-stone-200 pb-5">
-        <h2 className="font-motterdam text-[42px] leading-tight text-stone-900">
+      <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
+        <h2 className="font-rethink font-medium text-[23px] leading-[28px] text-stone-900 m-0">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
 
-        {/* Filter select menu */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-stone-500">Filter:</span>
-          <div className="relative">
-            <select
-              value={filter}
-              onChange={(e) => onFilterChange(e.target.value)}
-              className="appearance-none bg-white border border-stone-200 rounded-full pl-4 pr-10 py-2 text-xs font-semibold text-stone-900 hover:border-stone-300 focus:outline-none cursor-pointer"
+        <div className="flex items-center gap-3">
+          {/* Mobile filter trigger — opens bottom sheet */}
+          <button
+            onClick={() => setIsMobileFilterOpen(true)}
+            className="flex md:hidden items-center justify-center bg-white border border-stone-200 rounded-full p-3"
+          >
+            <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
+          </button>
+
+          {/* Desktop filter trigger — opens dropdown */}
+          <div ref={filterRef} className="hidden md:relative md:block z-[100]">
+            <button
+              onClick={() => setIsDesktopFilterOpen(!isDesktopFilterOpen)}
+              className="hidden md:flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer"
             >
-              <option value="all">All Campaigns</option>
-              <option value="needs_content">Needs Your Content</option>
-              <option value="changes_requested">Changes Requested</option>
-              <option value="under_review">Review In Progress</option>
-              <option value="approved_post">Approved - Ready to Post</option>
-              <option value="live_tracking">Live · tracking views</option>
-              <option value="delivered">Delivered</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-              <svg className="w-4 h-4 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+              <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
+              <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
+              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+            </button>
+
+            {isDesktopFilterOpen && (
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
+                {FILTER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => {
+                      onFilterChange(opt.value);
+                      setIsDesktopFilterOpen(false);
+                    }}
+                    className={`flex items-center w-full px-4 py-2.5 text-sm text-left ${
+                      filter === opt.value ? "font-semibold text-stone-900" : "font-medium text-stone-700"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Campaigns Grid */}
+      {/* Mobile filter bottom sheet */}
+      <div className="md:hidden">
+        <MobileDrawer open={isMobileFilterOpen} onOpenChange={setIsMobileFilterOpen}>
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onFilterChange(opt.value);
+                setIsMobileFilterOpen(false);
+              }}
+              className={`flex items-center w-full px-4 py-3 text-sm text-left rounded-lg ${
+                filter === opt.value
+                  ? "bg-stone-100 font-semibold text-stone-900"
+                  : "font-medium text-stone-700"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </MobileDrawer>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         {campaigns.map((camp) => (
-          <CampaignCard
-            key={camp.id}
-            campaign={camp}
-            onSubmitContent={onSubmitContent}
-            onUpdateContent={onUpdateContent}
-            onSubmitPostUrl={onSubmitPostUrl}
-            postUrl={postUrls[camp.id] || ""}
-            onPostUrlChange={(url) => onPostUrlChange(camp.id, url)}
-            onClick={() => onSelectCampaign(camp)}
-          />
+          <div data-reveal key={camp.id}>
+            <CampaignCard
+              campaign={camp}
+              onClick={() => onSelectCampaign(camp)}
+            />
+          </div>
         ))}
 
-        {/* Browse campaign block */}
-        <div className="bg-[#F5F5F4]/40 border-2 border-stone-200 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center min-h-[300px]">
-          <div className="mb-4">
-            <svg className="w-12 h-12 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-              />
-            </svg>
+        {campaigns.length === 0 && (
+          <div className="col-span-full text-center py-12">
+            <p className="text-stone-500 text-sm font-medium">No campaigns found.</p>
+          </div>
+        )}
+
+        <div className="bg-stone-100 border border-stone-200 border-dashed rounded-3xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
+          <div className="flex flex-col items-center justify-center">
+            <Image src={browseCampaignIllus} alt="Browse campaigns" width={100} height={100} className="w-[100px] h-[100px]" unoptimized />
           </div>
           <button
-            onClick={() => onBrowseCampaign?.()}
-            className="px-6 py-2.5 bg-white border border-stone-200 hover:bg-stone-50 text-stone-900 rounded-full font-semibold text-xs shadow-sm transition-colors"
+            onClick={(e) => { e.stopPropagation(); onBrowseCampaign?.(); }}
+            className="w-full py-2.5 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold text-xs font-rethink"
           >
             Browse campaign
           </button>

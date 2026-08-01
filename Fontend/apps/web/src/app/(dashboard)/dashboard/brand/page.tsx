@@ -155,7 +155,7 @@ function BrandDashboardContent() {
   }, []);
 
   return (
-    <div className="h-screen bg-[#F5F5F4] text-stone-900 flex flex-col font-rethink">
+    <div className="h-dvh bg-[#F5F5F4] text-stone-900 flex flex-col font-rethink">
       <NavBar
         userName={userName}
         userEmail={userEmail}

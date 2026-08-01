@@ -4,7 +4,7 @@ const postedPlatformSchema = new mongoose.Schema(
   {
     platform: {
       type: String,
-      enum: ["TikTok", "Instagram", "X"],
+      enum: ["TikTok", "Instagram", "X", "Facebook", "YouTube"],
       required: true,
     },
     postUrl: {

@@ -6,6 +6,7 @@ const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
+const Niche = require("../models/Niche");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
@@ -91,6 +92,20 @@ router.post("/profile/niches", protect, async (req, res, next) => {
     profile.niches = niches;
     await profile.save();
 
+    // Upsert any user-added niches into the global niche list so they become
+    // available to all creators.
+    const uniqueNames = [...new Set(niches.map((n) => String(n).trim()).filter(Boolean))];
+    if (uniqueNames.length > 0) {
+      const existing = await Niche.find({
+        name: { $in: uniqueNames.map((n) => new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")) },
+      });
+      const existingLower = new Set(existing.map((e) => e.name.toLowerCase()));
+      const missing = uniqueNames.filter((n) => !existingLower.has(n.toLowerCase()));
+      if (missing.length > 0) {
+        await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })));
+      }
+    }
+
     res.json({
       niches: profile.niches,
     });
@@ -157,6 +172,9 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
   try {
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     const creatorRank = profile ? profile.rank : "rank1";
+    const profileNiches = (profile && Array.isArray(profile.niches) ? profile.niches : [])
+      .map((n) => String(n).trim().toLowerCase())
+      .filter(Boolean);
 
     const activeSlots = await Slot.countDocuments({
       creatorId: req.user._id,
@@ -168,7 +186,9 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
 
     const campaigns = await Campaign.find({
       status: "live",
-    }).sort({ createdAt: -1 });
+    })
+      .populate("businessId", "name avatar")
+      .sort({ createdAt: -1 });
 
     const marketplace = [];
 
@@ -183,10 +203,30 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
           (s) => !s.rankRequired || s.rankRequired === creatorRank
         ) || availableSlots[0];
 
+        const daysLeft = campaign.endDate
+          ? Math.max(Math.ceil((campaign.endDate - Date.now()) / (1000 * 60 * 60 * 24)), 1)
+          : 7;
+        const brand = campaign.businessId;
+
+        const campaignNiches = (Array.isArray(campaign.niches) ? campaign.niches : [])
+          .map((n) => String(n).trim().toLowerCase())
+          .filter(Boolean);
+
+        let matchScore = 0;
+        if (profileNiches.length > 0) {
+          const overlap = campaignNiches.filter((n) => profileNiches.includes(n)).length;
+          matchScore += overlap * 3;
+          if (campaign.category && profileNiches.includes(String(campaign.category).trim().toLowerCase())) {
+            matchScore += 2;
+          }
+          if (campaignNiches.length === 0) matchScore += 1;
+        }
+
         marketplace.push({
           id: campaign._id,
           title: campaign.name,
           category: campaign.category,
+          niches: campaignNiches,
           reward: matchingSlot.reward,
           viewTarget: matchingSlot.viewTarget,
           slotId: matchingSlot._id,
@@ -197,9 +237,24 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
           contentBrief: campaign.contentBrief,
           keyMessageCta: campaign.keyMessageCta,
           platforms: campaign.platforms,
+          description: campaign.contentBrief || "",
+          minViews: 1000,
+          maxViews: matchingSlot.viewTarget,
+          costPerView: campaign.costPerView,
+          daysLeft,
+          brandName: brand ? brand.name || "Brand" : "Brand",
+          brandAvatar: brand ? brand.avatar || null : null,
+          matchScore,
+          recommended: matchScore > 0,
         });
       }
     }
+
+    marketplace.sort((a, b) => {
+      if (b.recommended !== a.recommended) return b.recommended - a.recommended;
+      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+      return b.slotsLeft - a.slotsLeft;
+    });
 
     res.json({
       campaigns: marketplace,
@@ -217,7 +272,8 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
     const slots = await Slot.find({ creatorId: req.user._id })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid platforms contentStyle startDate endDate targetViews viewsDelivered",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid platforms contentStyle startDate endDate targetViews viewsDelivered scriptUrl scriptFileName businessId",
+        populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 });
 
@@ -271,6 +327,9 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           status,
           reward: slot.reward,
           viewTarget: slot.viewTarget,
+          minViews: 1000,
+          maxViews: slot.viewTarget,
+          costPerView: campaign.costPerView,
           submissionId: submission ? submission._id : null,
           comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
           progress: submission && submission.viewsDelivered > 0
@@ -279,12 +338,21 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           currentViews: submission ? submission.viewsDelivered : undefined,
           targetViews: campaign.targetViews,
           videoUrl: submission ? submission.videoUrl : undefined,
+          caption: submission ? submission.caption : undefined,
+          videoDuration: submission && submission.durationSeconds
+            ? `${Math.floor(submission.durationSeconds / 60)}m ${submission.durationSeconds % 60}s`
+            : undefined,
           postedPlatforms: submission ? submission.postedPlatforms : undefined,
           contentBrief: campaign.contentBrief,
+          description: campaign.contentBrief || undefined,
           keyMessageCta: campaign.keyMessageCta,
           whatToAvoid: campaign.whatToAvoid,
           platforms: campaign.platforms,
           contentStyle: campaign.contentStyle,
+          scriptUrl: campaign.scriptUrl,
+          scriptFileName: campaign.scriptFileName,
+          brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
+          brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
           delivery: slot.status === "claimed"
             ? "Claimed"
             : submission && submission.status === "posted"
@@ -307,8 +375,10 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
     const user = await User.findById(req.user._id);
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
 
+    const handle = profile ? profile.username : user.name;
+
     const transactions = await Transaction.find({
-      creatorHandle: { $ne: null },
+      creatorHandle: handle,
     })
       .sort({ date: -1 })
       .limit(50);
@@ -326,6 +396,8 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
       completionRate: profile ? profile.completionRate : 0,
       totalReleased,
       recentTransactions: transactions.map((t) => ({
+        id: t._id,
+        createdAt: t.date,
         date: t.date,
         amount: t.amount,
         type: t.type,

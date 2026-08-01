@@ -35,7 +35,7 @@ export function CampaignSuccess({ onClose, isMobile }: CampaignSuccessProps) {
 
           {/* Header & Subtitle */}
           <div className="space-y-3">
-            <h3 className="font-rethink font-medium tracking-tight md:text-2xl text-xl text-stone-900">Locked in. Let's get you views.</h3>
+            <h3 className="font-rethink font-medium tracking-tighter md:text-2xl text-xl text-stone-900">Locked in. Let's get you views.</h3>
             <p className="font-rethink text-sm text-stone-500 leading-relaxed max-w-md mx-auto">
               Your campaign is funded and waiting for a quick review. We'll notify you the moment it's live and creators can start claiming slots.
             </p>
@@ -51,23 +51,23 @@ export function CampaignSuccess({ onClose, isMobile }: CampaignSuccessProps) {
 
           {/* What happens next box */}
           <div className="bg-stone-100 rounded-[24px] p-4 border border-dashed border-stone-200 text-left w-full space-y-8">
-            <h4 className="font-rethink md:text-[19px] text-lg font-medium tracking-tight text-stone-900">What happens next</h4>
+            <h4 className="font-rethink md:text-[19px] text-lg font-medium tracking-tighter text-stone-900">What happens next</h4>
             <div className="space-y-8">
               <div>
-                <h5 className="text-sm font-medium tracking-tight text-stone-800">Quick review</h5>
-                <p className="text-sm text-stone-500 mt-1">We check your campaign meets our guidelines — usually within a few hours.</p>
+                <h5 className="text-sm font-medium tracking-[-0.01em] text-stone-800 font-rethink">Quick review</h5>
+                <p className="text-sm text-stone-500 mt-1 font-rethink">We check your campaign meets our guidelines — usually within a few hours.</p>
               </div>
               <div>
-                <h5 className="text-sm font-medium tracking-tight text-stone-800">Finding creators</h5>
-                <p className="text-sm text-stone-500 mt-1">Once live, your campaign appears to matching creators instantly.</p>
+                <h5 className="text-sm font-medium tracking-[-0.01em] text-stone-800 font-rethink">Finding creators</h5>
+                <p className="text-sm text-stone-500 mt-1 font-rethink">Once live, your campaign appears to matching creators instantly.</p>
               </div>
               <div>
-                <h5 className="text-sm font-medium tracking-tight text-stone-800">Creators submit content</h5>
-                <p className="text-sm text-stone-500 mt-1">You'll get notified as work starts coming in.</p>
+                <h5 className="text-sm font-medium tracking-[-0.01em] text-stone-800 font-rethink">Creators submit content</h5>
+                <p className="text-sm text-stone-500 mt-1 font-rethink">You'll get notified as work starts coming in.</p>
               </div>
               <div>
-                <h5 className="text-sm font-medium tracking-tight text-stone-800">Review & approve</h5>
-                <p className="text-sm text-stone-500 mt-1">Approve submissions you're happy with — you only pay for what's delivered.</p>
+                <h5 className="text-sm font-medium tracking-[-0.01em] text-stone-800 font-rethink">Review & approve</h5>
+                <p className="text-sm text-stone-500 mt-1 font-rethink">Approve submissions you're happy with — you only pay for what's delivered.</p>
               </div>
             </div>
           </div>

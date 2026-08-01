@@ -29,8 +29,49 @@ router.get("/my", protect, async (req, res, next) => {
 
 router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const { slotId } = req.body;
-    const slot = await Slot.findById(slotId);
+    const { slotId, campaignId, committedViews } = req.body;
+    const CreatorProfile = require("../models/CreatorProfile");
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    const creatorRank = profile ? profile.rank : "rank1";
+
+    const activeSlots = await Slot.countDocuments({
+      creatorId: req.user._id,
+      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+    });
+    if (activeSlots >= 3) {
+      return res.status(400).json({ error: "Slot limit reached — complete active campaigns to claim more" });
+    }
+
+    let slot;
+    if (slotId) {
+      slot = await Slot.findById(slotId);
+    } else if (campaignId) {
+      const campaign = await Campaign.findById(campaignId);
+      if (!campaign || campaign.status !== "live") {
+        return res.status(404).json({ error: "Campaign not found or not live" });
+      }
+
+      const alreadyClaimed = await Slot.findOne({
+        campaignId,
+        creatorId: req.user._id,
+        status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+      });
+      if (alreadyClaimed) {
+        return res.status(400).json({ error: "Campaign already claimed" });
+      }
+
+      const availableSlots = await Slot.find({ campaignId, status: "available" }).sort({ createdAt: 1 });
+      if (availableSlots.length === 0) {
+        return res.status(404).json({ error: "No available slots for this campaign" });
+      }
+      slot = availableSlots.find(
+        (s) => !s.rankRequired || s.rankRequired === creatorRank
+      ) || availableSlots[0];
+    } else {
+      return res.status(400).json({ error: "slotId or campaignId is required" });
+    }
+
     if (!slot) {
       return res.status(404).json({ error: "Slot not found" });
     }
@@ -41,9 +82,18 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
     slot.creatorId = req.user._id;
     slot.status = "claimed";
     slot.claimedAt = new Date();
+    if (committedViews && committedViews >= 1) {
+      slot.viewTarget = committedViews;
+    }
     await slot.save();
 
-    res.json(slot);
+    res.json({
+      id: slot._id,
+      campaignId: slot.campaignId,
+      status: slot.status,
+      viewTarget: slot.viewTarget,
+      reward: slot.reward,
+    });
   } catch (error) {
     next(error);
   }

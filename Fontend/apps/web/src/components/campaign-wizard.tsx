@@ -11,6 +11,7 @@ import { useToast } from "@ep/ui/components/toast";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken, API_URL } from "../lib/api";
 import { Spinner } from "./ui/spinner";
+import { AVAILABLE_NICHES } from "./constants";
 
 // Assets imports
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
@@ -26,6 +27,7 @@ interface CampaignData {
   avoid: string;
   platforms: string[];
   contentStyle: string[];
+  niches: string[];
   scriptUrl: string;
   scriptFileName: string;
   coverImageUrl: string;
@@ -42,6 +44,12 @@ const PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "You
 
 const DRAFT_STORAGE_KEY = "ep-draft-autosave";
 
+interface PlatformOption {
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: CampaignWizardProps) {
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [launching, setLaunching] = useState(false);
@@ -51,9 +59,32 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean }>({ step1: false, step2: false });
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
+  const [nicheOptions, setNicheOptions] = useState<string[]>([...AVAILABLE_NICHES]);
   const isModified = useRef(false);
   const { toast } = useToast();
   useReveal(createStep);
+
+  useEffect(() => {
+    apiRequest<{ platforms: PlatformOption[] }>("/platforms")
+      .then((data) => {
+        const enabled = (data.platforms || [])
+          .filter((p) => p.enabled)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((p) => p.name);
+        if (enabled.length > 0) setPlatformOptions(enabled);
+      })
+      .catch((err: unknown) => console.error("Failed to load platforms:", err));
+  }, []);
+
+  useEffect(() => {
+    apiRequest<{ niches: { name: string }[] }>("/niches")
+      .then((data) => {
+        const names = (data.niches || []).map((n) => n.name).filter(Boolean);
+        if (names.length > 0) setNicheOptions(names);
+      })
+      .catch((err: unknown) => console.error("Failed to load niches:", err));
+  }, []);
 
   useEffect(() => {
     apiRequest<{ default: number; categories: Record<string, number> }>("/campaigns/pricing")
@@ -66,7 +97,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; platforms: string[]; contentStyle: string[] | string; scriptUrl: string; scriptFileName: string; coverImageUrl: string }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -78,6 +109,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           avoid: data.whatToAvoid || "",
           platforms: data.platforms || [],
           contentStyle: data.contentStyle ? (typeof data.contentStyle === "string" ? data.contentStyle.split(",").map((s: string) => s.trim()).filter(Boolean) : data.contentStyle) : [],
+          niches: data.niches || [],
           scriptUrl: data.scriptUrl || "",
           scriptFileName: data.scriptFileName || "",
           coverImageUrl: data.coverImageUrl || "",
@@ -107,6 +139,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     avoid: "",
     platforms: ["TikTok", "Instagram"],
     contentStyle: ["Fun & Energetic"],
+    niches: [],
     scriptUrl: "",
     scriptFileName: "",
     coverImageUrl: "",
@@ -115,6 +148,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
   const [customStyleInput, setCustomStyleInput] = useState("");
+  const [customNicheInput, setCustomNicheInput] = useState("");
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
   const [platformDrawerOpen, setPlatformDrawerOpen] = useState(false);
   const scriptInputRef = useRef<HTMLInputElement>(null);
@@ -308,6 +342,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     whatToAvoid: campaign.avoid,
     platforms: campaign.platforms.map((p) => p.toLowerCase()),
     contentStyle: campaign.contentStyle.filter(Boolean).join(", "),
+    niches: campaign.niches.filter(Boolean),
     scriptUrl: campaign.scriptUrl || undefined,
     scriptFileName: campaign.scriptFileName || undefined,
     coverImageUrl: campaign.coverImageUrl || undefined,
@@ -586,7 +621,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           {/* Header (desktop only) */}
           {!isMobile && (
             <div className="text-center mb-8">
-              <h3 className="font-rethink font-semibold tracking-tight text-lg text-stone-900">{draftId ? "Edit Draft" : "Create a Campaign"}</h3>
+              <h3 className="font-rethink font-semibold tracking-tighter text-lg text-stone-900">{draftId ? "Edit Draft" : "Create a Campaign"}</h3>
             </div>
           )}
 
@@ -644,7 +679,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   value={campaign.name}
                   onChange={(e) => { isModified.current = true; setCampaign({ ...campaign, name: e.target.value }); }}
                   className={cn(
-                    "w-full px-4 py-3 bg-white border rounded-full text-sm font-rethink font-medium tracking-tight placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0",
+                    "w-full px-4 py-3 bg-white border rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0",
                     touchedStep.step1 && !campaign.name ? "border-red-400" : "border-stone-200"
                   )}
                 />
@@ -661,7 +696,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     <button
                       type="button"
                       onClick={() => setCategoryDrawerOpen(true)}
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-tight text-left flex items-center justify-between"
+                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] text-left flex items-center justify-between"
                     >
                       <span>{campaign.category}</span>
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
@@ -694,7 +729,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     <select
                       value={campaign.category}
                       onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-tight appearance-none placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] appearance-none placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
                     >
                       {Object.keys(pricingRates).length > 0
                         ? Object.keys(pricingRates).map((cat) => (
@@ -722,7 +757,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   value={viewsInput}
                   onChange={handleViewsInputChange}
                   onBlur={handleViewsInputBlur}
-                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-tight placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
                 />
                 <div className="flex gap-2">
                   {PRESET_VIEWS.map((preset) => (
@@ -753,7 +788,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               {!isMobile && (
                 <div className="pt-4 border-t border-stone-100 space-y-1">
                   <span className="text-xs font-medium text-stone-500 block">Campaign Budget</span>
-                  <span className="text-[23px] font-medium text-stone-900 font-rethink tracking-tight">
+                  <span className="text-[23px] font-medium text-stone-900 font-rethink tracking-tighter">
                     ₦{campaign.budget.toLocaleString()}
                   </span>
                 </div>
@@ -764,7 +799,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <button
                   onClick={handleNextStep}
                   disabled={!campaign.name || !campaign.coverImageUrl}
-                  className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-300 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
+                  className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
                 >
                   Continue
                 </button>
@@ -775,14 +810,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               <div className="sticky bottom-0 bg-stone-100 -mx-5 px-5 pb-[env(safe-area-inset-bottom)] z-10 pt-2 space-y-3">
                 <div className="flex justify-between items-baseline">
                   <span className="text-xs font-medium text-stone-500">Budget</span>
-                  <span className="text-[20px] font-medium text-stone-900 font-rethink tracking-tight">
+                  <span className="text-[20px] font-medium text-stone-900 font-rethink tracking-tighter">
                     ₦{campaign.budget.toLocaleString()}
                   </span>
                 </div>
                 <button
                   onClick={handleNextStep}
                   disabled={!campaign.name || !campaign.coverImageUrl}
-                  className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-300 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
+                  className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
                 >
                   Continue
                 </button>
@@ -802,7 +837,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   onChange={(e) => { isModified.current = true; setCampaign(prev => ({ ...prev, description: e.target.value })); }}
                   rows={3}
                   className={cn(
-                    "w-full px-4 py-3 bg-white border rounded-2xl text-sm font-rethink font-medium tracking-tight placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[80px]",
+                    "w-full px-4 py-3 bg-white border rounded-xl text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[80px]",
                     touchedStep.step2 && !campaign.description ? "border-red-400" : "border-stone-200"
                   )}
                 />
@@ -856,7 +891,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   value={campaign.keyMessage}
                   onChange={(e) => { isModified.current = true; setCampaign(prev => ({ ...prev, keyMessage: e.target.value })); }}
                   className={cn(
-                    "w-full px-4 py-3 bg-white border rounded-full text-sm font-rethink font-medium tracking-tight placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0",
+                    "w-full px-4 py-3 bg-white border rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0",
                     touchedStep.step2 && !campaign.keyMessage ? "border-red-400" : "border-stone-200"
                   )}
                 />
@@ -873,7 +908,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   placeholder="Anything creators should avoid mentioning?"
                   value={campaign.avoid}
                   onChange={(e) => { isModified.current = true; setCampaign(prev => ({ ...prev, avoid: e.target.value })); }}
-                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-tight placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
                 />
               </div>
 
@@ -885,13 +920,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     <button
                       type="button"
                       onClick={() => setPlatformDrawerOpen(true)}
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-tight text-left flex items-center justify-between"
+                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] text-left flex items-center justify-between"
                     >
                       <span>{campaign.platforms.length === 0 ? "Select platforms" : `${campaign.platforms.length} platform${campaign.platforms.length > 1 ? "s" : ""} selected`}</span>
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
                     <MobileDrawer open={platformDrawerOpen} onOpenChange={setPlatformDrawerOpen}>
-                      {PLATFORM_OPTIONS.map((platform) => (
+                      {platformOptions.map((platform) => (
                         <button
                           key={platform}
                           type="button"
@@ -917,7 +952,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   </>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    {PLATFORM_OPTIONS.map((platform) => (
+                    {platformOptions.map((platform) => (
                       <button
                         key={platform}
                         type="button"
@@ -931,7 +966,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                           }));
                         }}
                         className={cn(
-                          "flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium font-rethink border transition-colors",
+                          "flex items-center justify-between px-4 py-3 rounded-full text-sm font-medium font-rethink border transition-colors",
                           campaign.platforms.includes(platform)
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
@@ -985,7 +1020,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                           setCustomStyleInput("");
                         }
                       }}
-                      className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-rethink font-medium tracking-tight placeholder-stone-400 focus:outline-none focus:border-stone-400 focus:ring-0"
+                      className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-rethink font-medium tracking-[-0.01em] placeholder-stone-400 focus:outline-none focus:border-stone-400 focus:ring-0"
                     />
                     <button
                       onClick={() => {
@@ -999,7 +1034,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                         }
                       }}
                       disabled={!customStyleInput.trim()}
-                      className="px-4 py-2.5 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-300 disabled:cursor-not-allowed text-[#1C1917] text-xs font-semibold font-rethink rounded-full"
+                      className="px-4 py-2.5 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] text-xs font-semibold font-rethink rounded-full"
                     >
                       Add
                     </button>
@@ -1048,6 +1083,91 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   </div>
                 </div>
 
+                {/* Target Niches */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-stone-500 block">Target niches</label>
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Add a custom niche..."
+                      value={customNicheInput}
+                      onChange={(e) => setCustomNicheInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && customNicheInput.trim()) {
+                          e.preventDefault();
+                          if (!campaign.niches.includes(customNicheInput.trim())) {
+                            isModified.current = true;
+                            setCampaign(prev => ({
+                              ...prev,
+                              niches: [...prev.niches, customNicheInput.trim()],
+                            }));
+                          }
+                          setCustomNicheInput("");
+                        }
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-rethink font-medium tracking-[-0.01em] placeholder-stone-400 focus:outline-none focus:border-stone-400 focus:ring-0"
+                    />
+                    <button
+                      onClick={() => {
+                        if (customNicheInput.trim() && !campaign.niches.includes(customNicheInput.trim())) {
+                          isModified.current = true;
+                          setCampaign(prev => ({
+                            ...prev,
+                            niches: [...prev.niches, customNicheInput.trim()],
+                          }));
+                          setCustomNicheInput("");
+                        }
+                      }}
+                      disabled={!customNicheInput.trim()}
+                      className="px-4 py-2.5 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] text-xs font-semibold font-rethink rounded-full"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {nicheOptions.map((niche) => {
+                      const isSelected = campaign.niches.includes(niche);
+                      return (
+                        <button
+                          key={niche}
+                          type="button"
+                          onClick={() => {
+                            isModified.current = true;
+                            setCampaign(prev => ({
+                              ...prev,
+                              niches: isSelected
+                                ? prev.niches.filter(n => n !== niche)
+                                : [...prev.niches, niche],
+                            }));
+                          }}
+                          className={cn(
+                            "px-3 py-1 rounded-full text-xs font-medium font-rethink",
+                            isSelected
+                              ? "bg-stone-900 text-white"
+                              : "bg-stone-100 text-stone-600"
+                          )}
+                        >
+                          {niche}
+                        </button>
+                      );
+                    })}
+                    {campaign.niches.filter(n => !nicheOptions.includes(n)).map((niche) => (
+                      <span key={niche} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
+                        {niche}
+                        <button
+                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, niches: prev.niches.filter(n => n !== niche) })); }}
+                          aria-label={`Remove ${niche}`}
+                          className="ml-0.5"
+                        >
+                          <HugeiconsIcon icon={Cancel01Icon} size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
               {/* Bottom Navigation */}
               <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-100 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
@@ -1059,7 +1179,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <button
                   onClick={handleNextStep}
                   disabled={!campaign.description || !campaign.scriptUrl || !campaign.keyMessage}
-                  className="flex-1 py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-300 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
+                  className="flex-1 py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
                 >
                   Continue
                 </button>
@@ -1086,7 +1206,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 </div>
 
                 {/* Name */}
-                <h4 className="font-rethink font-medium md:text-[22px] text-lg text-stone-900">{campaign.name}</h4>
+                <h4 className="font-rethink font-medium md:text-[22px] text-lg text-stone-900 tracking-tighter">{campaign.name}</h4>
 
                 {/* Category tag */}
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-200 text-stone-600 text-[11px] font-medium font-rethink">
@@ -1102,11 +1222,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <div className="flex items-center gap-6">
                   <div>
                     <span className="text-[11px] font-medium text-stone-400 block">Target views</span>
-                    <span className="text-lg font-medium text-stone-900 font-rethink">{campaign.views.toLocaleString()}</span>
+                    <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">{campaign.views.toLocaleString()}</span>
                   </div>
                   <div>
                     <span className="text-[11px] font-medium text-stone-400 block">Budget</span>
-                    <span className="text-lg font-medium text-stone-900 font-rethink">₦{campaign.budget.toLocaleString()}</span>
+                    <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">₦{campaign.budget.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -1120,6 +1240,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Content style</span>
                   <span className="font-medium text-stone-800">{campaign.contentStyle.join(", ")}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-stone-500">Niches</span>
+                  <span className="font-medium text-stone-800">{campaign.niches.length > 0 ? campaign.niches.join(", ") : "Any"}</span>
                 </div>
                 {campaign.scriptFileName && (
                   <div className="flex justify-between items-center text-xs">
@@ -1150,7 +1274,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <button
                   onClick={handleNextStep}
                   disabled={launching}
-                  className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-300 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed"
                 >
                   {launching ? <span className="flex items-center justify-center gap-2"><Spinner className="size-4" /> Pay and Launch Campaign</span> : "Pay and Launch Campaign"}
                 </button>
@@ -1167,7 +1291,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       {showDeleteConfirm && isMobile && (
         <div className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6">
           <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
-            <h3 className="font-rethink font-semibold text-base text-stone-900 text-center">Delete this draft?</h3>
+            <h3 className="font-rethink font-semibold text-base text-stone-900 text-center tracking-tighter">Delete this draft?</h3>
             <p className="font-rethink text-xs text-stone-500 font-medium text-center">This cannot be undone.</p>
             <div className="flex gap-3 pt-2">
               <button

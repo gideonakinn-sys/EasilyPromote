@@ -28,6 +28,16 @@ export interface CreatorProfile {
 
 export type ActiveTab = "home" | "campaign" | "wallet";
 
+export interface ProfileForm {
+  name: string;
+  nickname: string;
+  email: string;
+  phone: string;
+  avatarUrl: string;
+}
+
+export type ProfileFocusSection = "social" | "niches" | "details";
+
 export interface CampaignItem {
   id: string;
   slotId?: string;
@@ -44,19 +54,30 @@ export interface CampaignItem {
     | "delivered";
   reward: number;
   viewTarget?: number;
+  minViews?: number;
+  maxViews?: number;
+  costPerView?: number;
   submittedAgo?: string;
   comment?: string;
   progress?: number;
   currentViews?: number;
   targetViews?: number;
   videoUrl?: string;
-  postedPlatforms?: string[];
+  caption?: string;
+  videoDuration?: string;
+  postedPlatforms?: Array<{ platform: string; views: number }>;
+  creatorHandle?: string;
   submissionId?: string;
   contentBrief?: string;
+  description?: string;
   keyMessageCta?: string;
   whatToAvoid?: string;
   platforms?: string[];
   contentStyle?: string;
+  brandName?: string;
+  brandAvatar?: string;
+  scriptUrl?: string;
+  scriptFileName?: string;
 }
 
 export interface MarketplaceCampaign {
@@ -71,6 +92,10 @@ export interface MarketplaceCampaign {
   targetViews: number;
   costPerView: number;
   contentBrief?: string;
+  brandName: string;
+  brandAvatar?: string;
+  minViews: number;
+  description: string;
 }
 
 export interface WalletData {

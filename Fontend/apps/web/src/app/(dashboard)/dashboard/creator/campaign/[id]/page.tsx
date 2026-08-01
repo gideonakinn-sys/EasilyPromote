@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
-import { apiRequest, getToken, isAuthenticated } from "../../../lib/api";
-import type { CampaignItem } from "../../../components/types";
-import { CampaignDetailsDrawer } from "../../../components/campaign-details-drawer";
-import { Skeleton } from "../../../components/ui/skeleton";
+import { apiRequest, getToken, isAuthenticated } from "../../../../../../lib/api";
+import type { CampaignItem } from "../../../../../../components/types";
+import { CampaignDetailsDrawer } from "../../../../../../components/campaign-details-drawer";
+import { Skeleton } from "../../../../../../components/ui/skeleton";
 
 function toCampaignItem(c: Record<string, unknown>): CampaignItem {
   return {
@@ -86,12 +86,12 @@ function CampaignDetailsContent() {
 
   useEffect(() => {
     history.pushState(null, "", location.href);
-    const handlePopState = () => router.push("/");
+    const handlePopState = () => router.push("/dashboard/creator");
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [router]);
 
-  const handleClose = () => router.push("/");
+  const handleClose = () => router.push("/dashboard/creator");
 
   const handleSubmitContent = async (id: string, videoUrl: string, caption: string) => {
     if (!videoUrl) return;

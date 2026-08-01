@@ -15,6 +15,8 @@ const payoutRoutes = require("./routes/payouts");
 const notificationRoutes = require("./routes/notifications");
 const webhookRoutes = require("./routes/webhooks");
 const adminRoutes = require("./routes/admin");
+const platformRoutes = require("./routes/platforms");
+const nicheRoutes = require("./routes/niches");
 
 const app = express();
 
@@ -58,6 +60,8 @@ app.use("/api/submissions", submissionRoutes);
 app.use("/api/payouts", payoutRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/platforms", platformRoutes);
+app.use("/api/niches", nicheRoutes);
 
 app.use(errorHandler);
 

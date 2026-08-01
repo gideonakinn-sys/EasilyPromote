@@ -56,6 +56,40 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
   }
 });
 
+router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { videoUrl, caption } = req.body;
+
+    const submission = await Submission.findById(req.params.id);
+    if (!submission) {
+      return res.status(404).json({ error: "Submission not found" });
+    }
+    if (submission.creatorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    if (!["new", "rejected"].includes(submission.status)) {
+      return res.status(400).json({ error: "Content can only be updated before approval" });
+    }
+
+    if (videoUrl !== undefined) submission.videoUrl = videoUrl;
+    if (caption !== undefined) submission.caption = caption;
+    if (submission.status === "rejected") {
+      submission.status = "new";
+      submission.rejectionReason = null;
+    }
+    await submission.save();
+
+    res.json({
+      id: submission._id,
+      status: submission.status,
+      videoUrl: submission.videoUrl,
+      caption: submission.caption,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/campaign/:campaignId", protect, async (req, res, next) => {
   try {
     const { status } = req.query;
@@ -195,7 +229,7 @@ router.patch("/:id/reject", protect, async (req, res, next) => {
 
 router.patch("/:id/mark-posted", protect, async (req, res, next) => {
   try {
-    const { posts } = req.body;
+    const { posts, url, platform } = req.body;
 
     const submission = await Submission.findById(req.params.id);
     if (!submission) {
@@ -208,15 +242,38 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       return res.status(400).json({ error: "Submission must be awaiting_post before marking as posted" });
     }
 
+    const normalizePlatform = (p) => {
+      if (!p) return null;
+      const value = p.trim();
+      if (value.toLowerCase() === "x") return "X";
+      return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+    };
+
+    const newPosts = Array.isArray(posts)
+      ? posts
+      : [{ platform, postUrl: url }];
+
+    const postedPlatforms = submission.postedPlatforms || [];
+    for (const post of newPosts) {
+      const normalized = normalizePlatform(post.platform);
+      if (!normalized) continue;
+      const entry = postedPlatforms.find((e) => e.platform === normalized);
+      if (entry) {
+        if (post.postUrl !== undefined) entry.postUrl = post.postUrl;
+      } else {
+        postedPlatforms.push({
+          platform: normalized,
+          postUrl: post.postUrl || "",
+          views: 0,
+          likes: 0,
+          comments: 0,
+        });
+      }
+    }
+
     submission.status = "posted";
     submission.postedAt = new Date();
-    submission.postedPlatforms = posts.map((p) => ({
-      platform: p.platform,
-      postUrl: p.postUrl,
-      views: 0,
-      likes: 0,
-      comments: 0,
-    }));
+    submission.postedPlatforms = postedPlatforms;
     await submission.save();
 
     const campaign = await Campaign.findById(submission.campaignId);
@@ -230,7 +287,11 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       });
     }
 
-    res.json({ id: submission._id, status: submission.status });
+    res.json({
+      id: submission._id,
+      status: submission.status,
+      postedPlatforms: submission.postedPlatforms,
+    });
   } catch (error) {
     next(error);
   }

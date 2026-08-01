@@ -33,6 +33,9 @@ export default function CreateAccountPage() {
   const [form, setForm] = useState<AuthFormState>({
     businessName: "",
     industry: "Technology",
+    firstName: "",
+    lastName: "",
+    nickname: "",
     email: "",
     phone: "",
     password: "",

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LeftPanel } from "@ep/ui/components/auth/left-panel";
 import { RoleSelectStep } from "@ep/ui/components/auth/role-select-step";
 import { RegisterStep } from "@ep/ui/components/auth/register-step";
+import { CreatorRegisterStep } from "@ep/ui/components/auth/creator-register-step";
 import { OtpStep } from "@ep/ui/components/auth/otp-step";
 import { LoginStep } from "@ep/ui/components/auth/login-step";
 import { ForgotStep } from "@ep/ui/components/auth/forgot-step";
@@ -78,13 +79,31 @@ export default function LoginPage() {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.businessName || form.email.split("@")[0],
-          email: form.email,
-          password: form.password,
-          role,
-          username: form.email.split("@")[0],
-        }),
+        body: JSON.stringify(
+          role === "creator"
+            ? {
+                name: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
+                displayName: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
+                firstName: form.firstName,
+                lastName: form.lastName,
+                nickname: form.nickname,
+                email: form.email,
+                phone: form.phone,
+                password: form.password,
+                role: "creator",
+                username: (form.nickname || form.email.split("@")[0]).toLowerCase().replace(/\s+/g, "_"),
+              }
+            : {
+                name: form.businessName || form.email.split("@")[0],
+                businessName: form.businessName,
+                email: form.email,
+                phone: form.phone,
+                industry: form.industry,
+                password: form.password,
+                role: "business",
+                username: form.email.split("@")[0],
+              }
+        ),
       });
 
       const data = await res.json();
@@ -241,7 +260,7 @@ export default function LoginPage() {
 
       <div className="col-span-1 md:col-span-7 flex items-center justify-center p-8 md:p-16 overflow-y-auto h-screen bg-white">
         {error && (
-          <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3 z-50">
+          <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
         )}
@@ -251,7 +270,11 @@ export default function LoginPage() {
         )}
 
         {step === "register" && (
-          <RegisterStep form={form} actions={actions} onSubmit={handleRegister} />
+          role === "creator" ? (
+            <CreatorRegisterStep form={form} actions={actions} onSubmit={handleRegister} />
+          ) : (
+            <RegisterStep form={form} actions={actions} onSubmit={handleRegister} />
+          )
         )}
 
         {step === "otp" && (

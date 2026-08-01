@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LeftPanel } from "@ep/ui/components/auth/left-panel";
 import { RoleSelectStep } from "@ep/ui/components/auth/role-select-step";
 import { RegisterStep } from "@ep/ui/components/auth/register-step";
+import { CreatorRegisterStep } from "@ep/ui/components/auth/creator-register-step";
 import { OtpStep } from "@ep/ui/components/auth/otp-step";
 import type { UserRole, AuthFormState } from "@ep/ui/components/auth/types";
 import { apiRequest, saveAuth } from "../../../lib/api";
@@ -69,15 +70,29 @@ export default function CreateAccountPage() {
     try {
       await apiRequest("/auth/register", {
         method: "POST",
-        body: JSON.stringify({
-          name: form.businessName,
-          businessName: form.businessName,
-          email: form.email,
-          phone: form.phone,
-          industry: form.industry,
-          password: form.password,
-          role,
-        }),
+        body: JSON.stringify(
+          role === "creator"
+            ? {
+                name: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
+                displayName: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
+                firstName: form.firstName,
+                lastName: form.lastName,
+                nickname: form.nickname,
+                email: form.email,
+                phone: form.phone,
+                password: form.password,
+                role: "creator",
+              }
+            : {
+                name: form.businessName,
+                businessName: form.businessName,
+                email: form.email,
+                phone: form.phone,
+                industry: form.industry,
+                password: form.password,
+                role: "business",
+              }
+        ),
       });
 
       await apiRequest("/auth/send-otp", {
@@ -130,7 +145,7 @@ export default function CreateAccountPage() {
 
       <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 h-screen overflow-y-auto bg-stone-100">
         {error && (
-          <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3 z-50">
+          <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
         )}
@@ -140,7 +155,11 @@ export default function CreateAccountPage() {
         )}
 
         {step === "register" && (
-          <RegisterStep form={form} actions={actions} onSubmit={handleRegister} loading={loading} />
+          role === "creator" ? (
+            <CreatorRegisterStep form={form} actions={actions} onSubmit={handleRegister} loading={loading} />
+          ) : (
+            <RegisterStep form={form} actions={actions} onSubmit={handleRegister} loading={loading} />
+          )
         )}
 
         {step === "otp" && (

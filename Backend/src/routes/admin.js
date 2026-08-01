@@ -8,6 +8,7 @@ const BusinessProfile = require("../models/BusinessProfile");
 const Slot = require("../models/Slot");
 const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
+const Platform = require("../models/Platform");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
@@ -114,6 +115,8 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         coverImageUrl: c.coverImageUrl,
         contentBrief: c.contentBrief,
         platforms: c.platforms,
+        contentStyle: c.contentStyle,
+        niches: c.niches,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }
@@ -150,6 +153,8 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         coverImageUrl: campaign.coverImageUrl,
         scriptUrl: campaign.scriptUrl,
         platforms: campaign.platforms,
+        contentStyle: campaign.contentStyle,
+        niches: campaign.niches,
         targetViews: campaign.targetViews,
         costPerView: campaign.costPerView,
         budget: campaign.budget,
@@ -164,6 +169,45 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
       },
       slots,
       submissions,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PATCH /api/admin/campaigns/:id (edit details) ─────────────────────────────
+router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
+  try {
+    const { category, platforms, contentStyle, niches } = req.body;
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+    if (category !== undefined) campaign.category = category;
+    if (platforms !== undefined) campaign.platforms = platforms;
+    if (contentStyle !== undefined) {
+      campaign.contentStyle = Array.isArray(contentStyle)
+        ? contentStyle
+        : contentStyle.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    if (niches !== undefined) campaign.niches = niches;
+
+    if (category !== undefined) {
+      const { getCostPerView } = require("../config/pricing");
+      campaign.costPerView = getCostPerView(category);
+    }
+
+    await campaign.save();
+
+    res.json({
+      success: true,
+      campaign: {
+        id: campaign._id,
+        category: campaign.category,
+        costPerView: campaign.costPerView,
+        platforms: campaign.platforms,
+        contentStyle: campaign.contentStyle,
+        niches: campaign.niches,
+      },
     });
   } catch (err) {
     next(err);
@@ -482,6 +526,93 @@ router.post("/create-admin", [protect, authorizeRoles("super_admin")], async (re
         role: newAdmin.role,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/admin/platforms ─────────────────────────────────────────────────
+router.get("/platforms", adminGuard, async (req, res, next) => {
+  try {
+    const platforms = await Platform.find().sort({ sortOrder: 1, name: 1 });
+    res.json({
+      platforms: platforms.map((p) => ({
+        id: p._id,
+        name: p.name,
+        enabled: p.enabled,
+        sortOrder: p.sortOrder,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/platforms ─────────────────────────────────────────────────
+router.post("/platforms", adminGuard, async (req, res, next) => {
+  try {
+    const { name, enabled = true, sortOrder = 0 } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Platform name is required" });
+    }
+
+    const existing = await Platform.findOne({ name: { $regex: `^${name.trim()}$`, $options: "i" } });
+    if (existing) {
+      return res.status(400).json({ error: "Platform already exists" });
+    }
+
+    const platform = await Platform.create({
+      name: name.trim(),
+      enabled: Boolean(enabled),
+      sortOrder: Number(sortOrder) || 0,
+    });
+
+    res.status(201).json({
+      success: true,
+      platform: {
+        id: platform._id,
+        name: platform.name,
+        enabled: platform.enabled,
+        sortOrder: platform.sortOrder,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PATCH /api/admin/platforms/:id ────────────────────────────────────────────
+router.patch("/platforms/:id", adminGuard, async (req, res, next) => {
+  try {
+    const { name, enabled, sortOrder } = req.body;
+    const platform = await Platform.findById(req.params.id);
+    if (!platform) return res.status(404).json({ error: "Platform not found" });
+
+    if (name !== undefined && name.trim()) platform.name = name.trim();
+    if (enabled !== undefined) platform.enabled = Boolean(enabled);
+    if (sortOrder !== undefined) platform.sortOrder = Number(sortOrder) || 0;
+
+    await platform.save();
+    res.json({
+      success: true,
+      platform: {
+        id: platform._id,
+        name: platform.name,
+        enabled: platform.enabled,
+        sortOrder: platform.sortOrder,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /api/admin/platforms/:id ───────────────────────────────────────────
+router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
+  try {
+    const platform = await Platform.findByIdAndDelete(req.params.id);
+    if (!platform) return res.status(404).json({ error: "Platform not found" });
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

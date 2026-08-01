@@ -69,7 +69,7 @@ router.get("/", protect, async (req, res, next) => {
 
 router.post("/", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
-    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, platforms, contentStyle, scriptUrl, scriptFileName } = req.body;
+    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
 
     const costPerView = getCostPerView(category);
     const budget = targetViews * costPerView;
@@ -87,6 +87,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       whatToAvoid: whatToAvoid || null,
       platforms: platforms || [],
       contentStyle: contentStyle ? (Array.isArray(contentStyle) ? contentStyle : contentStyle.split(",").map(s => s.trim()).filter(Boolean)) : [],
+      niches: niches || [],
       scriptUrl: scriptUrl || null,
       scriptFileName: scriptFileName || null,
       status: "draft",
@@ -232,6 +233,7 @@ router.patch("/:id", protect, async (req, res, next) => {
       "scriptFileName",
       "platforms",
       "contentStyle",
+      "niches",
     ];
     const updates = {};
     for (const field of allowedFields) {
@@ -285,6 +287,7 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.whatToAvoid !== undefined) updates.whatToAvoid = data.whatToAvoid;
       if (data.platforms !== undefined) updates.platforms = data.platforms;
       if (data.contentStyle !== undefined) updates.contentStyle = data.contentStyle;
+      if (data.niches !== undefined) updates.niches = data.niches;
     }
 
     const updated = await Campaign.findByIdAndUpdate(req.params.id, updates, {
@@ -600,6 +603,7 @@ router.get("/:id", protect, async (req, res, next) => {
       scriptFileName: campaign.scriptFileName,
       platforms: campaign.platforms,
       contentStyle: campaign.contentStyle,
+      niches: campaign.niches,
       platformFeePercent: campaign.platformFeePercent,
       platformFee: campaign.platformFee,
       creatorPool: campaign.creatorPool,

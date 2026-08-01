@@ -77,6 +77,17 @@ function BrandDashboardContent() {
       return;
     }
 
+    const user = getUser();
+    if (user?.role === "creator") {
+      window.location.href = `${window.location.protocol}//${window.location.hostname}:3001`;
+      return;
+    }
+    if (user?.role !== "business") {
+      clearAuth();
+      router.push("/login");
+      return;
+    }
+
     const reference = searchParams.get("reference") || searchParams.get("trxref");
     const payment = searchParams.get("payment");
     if (reference || payment === "success") {
@@ -84,7 +95,6 @@ function BrandDashboardContent() {
       return;
     }
 
-    const user = getUser();
     if (user?.name) setUserName(user.name);
     if (user?.email) setUserEmail(user.email);
     if (user?.avatarUrl) setUserAvatarUrl(user.avatarUrl);

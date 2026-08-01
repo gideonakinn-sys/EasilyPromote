@@ -141,7 +141,7 @@ export function ViewsSlider({
               type="button"
               onClick={() => onChange(step)}
               className={cn(
-                "text-[10px] font-medium font-rethink tracking-tight",
+                "text-[10px] font-medium font-rethink tracking-[-0.01em]",
                 isClosest ? "text-stone-900" : "text-stone-400"
               )}
               style={{ width: `${100 / steps.length}%` }}

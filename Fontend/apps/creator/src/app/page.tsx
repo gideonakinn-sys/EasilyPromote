@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
-import { apiRequest, getToken, getUser, DEMO_MODE, saveAuth } from "../lib/api";
+import { apiRequest, getToken, getUser } from "../lib/api";
 import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection } from "../components/types";
 import { CreatorHeader } from "../components/creator-header";
 import { OnboardingView } from "../components/onboarding-view";
@@ -14,9 +14,7 @@ import { CampaignMarketplace } from "../components/campaign-marketplace";
 import { ProfileView } from "../components/profile-view";
 import { CampaignDetailsDrawer } from "../components/campaign-details-drawer";
 import { Skeleton } from "../components/ui/skeleton";
-import { HomeStateSwitcher, type HomePreviewState } from "../components/home-state-switcher";
 import { useReveal } from "../hooks/use-reveal";
-import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 
 function CreatorDashboardContent() {
   const router = useRouter();
@@ -39,7 +37,6 @@ function CreatorDashboardContent() {
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("home");
-  const [homePreview, setHomePreview] = useState<HomePreviewState>("empty");
   const [showAllSet, setShowAllSet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [profileFocus, setProfileFocus] = useState<ProfileFocusSection | null>(null);
@@ -62,20 +59,6 @@ function CreatorDashboardContent() {
   const [readyPostUrl, setReadyPostUrl] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (DEMO_MODE) {
-      if (!getToken()) {
-        saveAuth("demo-token", {
-          id: "demo-user",
-          name: "Alex Creative",
-          email: "alex@demo.com",
-          role: "creator",
-          emailVerified: true,
-        });
-      }
-      fetchAllData();
-      return;
-    }
-
     const token = getToken();
     if (!token) {
       router.push("/login");
@@ -83,6 +66,17 @@ function CreatorDashboardContent() {
     }
 
     const user = getUser();
+    if (user?.role === "business") {
+      window.location.href = `${window.location.protocol}//${window.location.hostname}:3002`;
+      return;
+    }
+    if (user?.role !== "creator") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      router.push("/login");
+      return;
+    }
+
     if (user) {
       setProfile((prev) => ({
         ...prev,
@@ -239,7 +233,6 @@ function CreatorDashboardContent() {
     const complete = next.socialAccounts.length > 0 && next.niches.length > 0 && !!next.avatar;
     if (complete && !profileComplete && !showAllSet) {
       setShowAllSet(true);
-      setHomePreview("allset");
     }
   };
 
@@ -326,7 +319,6 @@ function CreatorDashboardContent() {
 
   const handleBrowseCampaigns = () => {
     setShowAllSet(false);
-    setHomePreview("filled");
     setActiveTab("campaign");
   };
 
@@ -515,22 +507,6 @@ function CreatorDashboardContent() {
 
   const profileComplete = profile.socialAccounts.length > 0 && profile.niches.length > 0 && !!profile.avatar;
 
-  const blankProfile: CreatorProfile = {
-    ...profile,
-    socialAccounts: [],
-    niches: [],
-    avatar: null,
-    bio: "",
-    country: "",
-  };
-
-  const allSetProfile: CreatorProfile = {
-    ...profile,
-    socialAccounts: profile.socialAccounts.length > 0 ? profile.socialAccounts : [{ platform: "tiktok", handle: "@alexcreative", verified: true }],
-    niches: profile.niches.length > 0 ? profile.niches : ["Music", "Lifestyle"],
-    avatar: profile.avatar || avatarSvg,
-  };
-
   const renderOnboardingView = (p: CreatorProfile) => (
     <OnboardingView
       profile={p}
@@ -562,13 +538,7 @@ function CreatorDashboardContent() {
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        profile={
-          DEMO_MODE
-            ? homePreview === "empty"
-              ? blankProfile
-              : allSetProfile
-            : profile
-        }
+        profile={profile}
         onLogout={handleLogout}
         onOpenProfile={() => openProfile("details")}
       />
@@ -590,15 +560,11 @@ function CreatorDashboardContent() {
           <>
             {activeTab === "home" && (
               <>
-                {DEMO_MODE && homePreview === "empty" ? (
-                  renderOnboardingView(blankProfile)
-                ) : showAllSet || (DEMO_MODE && homePreview === "allset") ? (
+                {showAllSet ? (
                   <OnboardingComplete
                     profile={profile}
                     onBrowseCampaigns={handleBrowseCampaigns}
                   />
-                ) : DEMO_MODE && homePreview === "filled" ? (
-                  renderCampaignFeed()
                 ) : !profileComplete ? (
                   renderOnboardingView(profile)
                 ) : (
@@ -630,16 +596,6 @@ function CreatorDashboardContent() {
           />
         )}
       </main>
-
-      {activeTab === "home" && !showProfile && (
-        <HomeStateSwitcher
-          value={homePreview}
-          onChange={(value) => {
-            setHomePreview(value);
-            setShowAllSet(false);
-          }}
-        />
-      )}
     </div>
   );
 }
