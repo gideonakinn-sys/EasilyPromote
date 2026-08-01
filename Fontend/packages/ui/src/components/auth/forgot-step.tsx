@@ -1,4 +1,4 @@
-import { LoaderIcon } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { AuthFormActions } from "./types";
 
 interface ForgotStepProps {
@@ -16,17 +16,17 @@ export function ForgotStep({ email, setEmail, onSubmit, actions, onBackToLogin, 
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-2 text-center">
-        <h2 data-reveal className="text-2xl font-semibold font-rethink text-stone-900 tracking-tighter">
+        <h2 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Reset your password
         </h2>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-tight">
+        <p data-reveal className="text-xs text-stone-500 font-medium font-rethink tracking-[-0.01em]">
           Enter the email on your account and we&apos;ll send you a code.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Email address
           </label>
           <input
@@ -43,9 +43,9 @@ export function ForgotStep({ email, setEmail, onSubmit, actions, onBackToLogin, 
           data-reveal
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-[#FEB604] text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Send reset code"}
+          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Send reset code"}
         </button>
       </form>
 

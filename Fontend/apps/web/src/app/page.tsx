@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
 import { getUser, isAuthenticated, clearAuth } from "../lib/auth";
 
 export default function HomePage() {
@@ -30,7 +31,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-      <span className="text-sm font-semibold text-stone-500">Redirecting...</span>
+      <LoaderCircle className="size-6 animate-spin text-stone-400" aria-hidden="true" />
     </div>
   );
 }

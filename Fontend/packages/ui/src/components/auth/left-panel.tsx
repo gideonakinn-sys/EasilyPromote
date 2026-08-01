@@ -40,7 +40,7 @@ export function LeftPanel({
         <h2 className="text-4xl font-medium text-stone-900 font-rethink leading-tight tracking-tighter">
           {title}
         </h2>
-        <p className="text-sm font-medium text-stone-900/80 leading-relaxed font-rethink tracking-tight">
+        <p className="text-sm font-medium text-stone-900/80 leading-relaxed font-rethink tracking-[-0.01em]">
           {description}
         </p>
       </div>

@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon } from "@hugeicons/core-free-icons";
-import { LoaderIcon } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { AuthFormActions } from "./types";
 
 interface ResetPasswordStepProps {
@@ -31,17 +31,17 @@ export function ResetPasswordStep({
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-2 text-center">
-        <h2 data-reveal className="text-2xl font-semibold font-rethink text-stone-900 tracking-tighter">
+        <h2 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Choose a new password
         </h2>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-tight">
+        <p data-reveal className="text-xs text-stone-500 font-medium font-rethink tracking-[-0.01em]">
           Enter a new password for your account.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             New password
           </label>
           <div className="relative">
@@ -67,7 +67,7 @@ export function ResetPasswordStep({
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Confirm new password
           </label>
           <div className="relative">
@@ -93,9 +93,9 @@ export function ResetPasswordStep({
           data-reveal
           type="submit"
           disabled={!newPassword || newPassword !== confirmPassword || loading}
-          className="w-full py-4 bg-[#FEB604] disabled:bg-stone-100 disabled:text-stone-300 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:cursor-not-allowed flex items-center justify-center"
+          className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Reset password"}
+          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Reset password"}
         </button>
       </form>
 

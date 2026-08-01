@@ -352,7 +352,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
               <Skeleton className="h-5 w-40 rounded-lg" />
             </div>
-            <div className="p-5 space-y-6 overflow-y-auto flex-1">
+            <div className="p-5 space-y-6 overflow-y-auto flex-1" data-lenis-prevent>
               <div className="flex gap-3">
                 <Skeleton className="h-9 w-20 rounded-xl" />
                 <Skeleton className="h-9 w-24 rounded-xl" />

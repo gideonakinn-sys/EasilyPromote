@@ -23,7 +23,7 @@ export function CampaignSuccess({ onClose, isMobile }: CampaignSuccessProps) {
       <div className={cn(
         "flex-1 overflow-y-auto flex flex-col items-center justify-center",
         isMobile ? "p-5 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]" : "p-12"
-      )}>
+      )} data-lenis-prevent>
         <div className={cn(
           "text-center space-y-8 py-8 flex flex-col items-center",
           isMobile ? "w-full" : "w-[350px]"

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { LoaderIcon } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 
 interface OtpStepProps {
   email: string;
@@ -46,10 +46,10 @@ export function OtpStep({ email, otpValues, onOtpChange, onSubmit, onResend, loa
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-2 text-center">
-        <h2 data-reveal className="text-2xl font-semibold font-rethink text-stone-900 tracking-tighter">
+        <h2 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Check your inbox
         </h2>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-tight">
+        <p data-reveal className="text-xs text-stone-500 font-medium font-rethink tracking-[-0.01em]">
           Enter the code we sent to {email || "name@business.com"}
         </p>
       </div>
@@ -87,9 +87,9 @@ export function OtpStep({ email, otpValues, onOtpChange, onSubmit, onResend, loa
           data-reveal
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-[#FEB604] text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Verify"}
+          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Verify"}
         </button>
       </form>
     </div>

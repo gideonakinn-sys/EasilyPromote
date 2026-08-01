@@ -73,7 +73,7 @@ function CampaignDrawerContent({
         <CloseButton onClick={onClose} />
       </div>
 
-      <div className={`flex-1 overflow-y-auto ${isMobile ? "p-5 pb-[env(safe-area-inset-bottom)]" : "pt-16 pb-12 px-10"}`}>
+      <div className={`flex-1 overflow-y-auto ${isMobile ? "p-5 pb-[env(safe-area-inset-bottom)]" : "pt-16 pb-12 px-10"}`} data-lenis-prevent>
         <div className={`space-y-8 ${isMobile ? "w-full" : "w-[350px] mx-auto"}`}>
 
           {/* Header — matches brand's campaign details header */}

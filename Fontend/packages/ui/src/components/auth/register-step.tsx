@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon, ChevronDownIcon, CheckIcon } from "@hugeicons/core-free-icons";
-import { LoaderIcon } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "../../lib/utils";
@@ -37,7 +37,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
   }, []);
 
   return (
-    <div className="w-[350px] space-y-10">
+    <div className="w-[350px] space-y-8">
       <div className="space-y-1.5">
         <h1 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Create your business account
@@ -49,7 +49,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Business name
           </label>
           <input
@@ -63,7 +63,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Industry
           </label>
           <div className="relative">
@@ -84,7 +84,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Email address
           </label>
           <input
@@ -98,7 +98,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Phone number
           </label>
           <div className="flex gap-2">
@@ -122,7 +122,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Password
           </label>
           <div className="relative">
@@ -171,7 +171,7 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
             disabled={!form.agreed || loading}
             className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 text-stone-900 disabled:text-stone-400 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
           >
-            {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Continue"}
+            {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Continue"}
           </button>
 
           <p className="text-center text-sm font-medium text-stone-500 font-rethink tracking-[-0.01em]">

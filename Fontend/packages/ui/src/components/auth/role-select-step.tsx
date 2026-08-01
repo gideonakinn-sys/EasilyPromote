@@ -14,7 +14,7 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
   return (
     <div className="w-full max-w-[480px] space-y-8">
       <div className="text-center">
-        <h1 data-reveal className="text-2xl font-semibold font-rethink text-stone-900 tracking-tighter">
+        <h1 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           How do you want to<br />use EasilyPromote?
         </h1>
       </div>
@@ -23,7 +23,7 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
         <button
           onClick={() => onSelectRole("business")}
           className={cn(
-            "p-4 rounded-3xl border text-left space-y-4 transition-all duration-200 outline-none flex flex-col justify-between",
+            "p-4 rounded-2xl border text-left space-y-4 transition-all duration-200 outline-none flex flex-col justify-between",
             role === "business"
               ? "border-[#FEB604] bg-white"
               : "border-transparent bg-white"
@@ -33,8 +33,8 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
             <Image src={illustration5} alt="I'm a business" width={110} height={110} />
           </div>
           <div className="space-y-1.5 mt-auto">
-            <h3 className="font-semibold text-lg text-stone-900 font-rethink tracking-tight">I&apos;m a business</h3>
-            <p className="text-base text-stone-500 font-medium leading-normal font-rethink tracking-tight">
+            <h3 className="font-medium text-lg text-stone-900 font-rethink tracking-tighter">I&apos;m a business</h3>
+            <p className="text-base text-stone-500 font-medium leading-normal font-rethink tracking-[-0.01em]">
               Create and fund campaigns, get verified views
             </p>
           </div>
@@ -43,7 +43,7 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
         <button
           onClick={() => onSelectRole("creator")}
           className={cn(
-            "p-4 rounded-3xl border text-left space-y-4 transition-all duration-200 outline-none flex flex-col justify-between",
+            "p-4 rounded-2xl border text-left space-y-4 transition-all duration-200 outline-none flex flex-col justify-between",
             role === "creator"
               ? "border-[#FEB604] bg-white"
               : "border-transparent bg-white"
@@ -53,8 +53,8 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
             <Image src={illustration6} alt="I'm a creator" width={110} height={110} />
           </div>
           <div className="space-y-1.5 mt-auto">
-            <h3 className="font-semibold text-lg text-stone-900 font-rethink tracking-tight">I&apos;m a creator</h3>
-            <p className="text-base text-stone-500 font-medium leading-normal font-rethink tracking-tight">
+            <h3 className="font-medium text-lg text-stone-900 font-rethink tracking-tighter">I&apos;m a creator</h3>
+            <p className="text-base text-stone-500 font-medium leading-normal font-rethink tracking-[-0.01em]">
               Claim slots and get paid<br />for real views
             </p>
           </div>
@@ -64,7 +64,7 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
       <div data-reveal className="flex justify-center">
         <button
           onClick={onContinue}
-          className="w-[300px] max-w-full py-4 bg-[#FEB604] text-stone-900 font-semibold text-sm rounded-full font-rethink"
+          className="w-[300px] max-w-full py-3 bg-[#FEB604] text-stone-900 font-semibold text-sm rounded-full font-rethink"
         >
           Continue
         </button>

@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon } from "@hugeicons/core-free-icons";
-import { LoaderIcon } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { AuthFormState, AuthFormActions } from "./types";
 
 interface LoginStepProps {
@@ -19,17 +19,17 @@ export function LoginStep({ form, actions, onSubmit, onForgotPassword, onCreateA
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-2 text-center">
-        <h2 data-reveal className="text-2xl font-semibold font-rethink text-stone-900 tracking-tighter">
+        <h2 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
           Welcome back
         </h2>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-tight">
+        <p data-reveal className="text-xs text-stone-500 font-medium font-rethink tracking-[-0.01em]">
           Sign in to manage your campaigns.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink">
+          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
             Email address
           </label>
           <input
@@ -44,7 +44,7 @@ export function LoginStep({ form, actions, onSubmit, onForgotPassword, onCreateA
 
         <div data-reveal className="space-y-1.5">
           <div className="flex justify-between items-center">
-            <label className="text-xs font-medium text-stone-500 block font-rethink">
+            <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
               Password
             </label>
           </div>
@@ -78,9 +78,9 @@ export function LoginStep({ form, actions, onSubmit, onForgotPassword, onCreateA
           data-reveal
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-[#FEB604] text-stone-900 font-semibold text-sm rounded-full font-rethink mt-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+          className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
-          {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Sign in"}
+          {loading ? <LoaderCircle role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Sign in"}
         </button>
       </form>
 
