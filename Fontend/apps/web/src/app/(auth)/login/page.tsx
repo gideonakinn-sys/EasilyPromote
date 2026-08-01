@@ -3,24 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LeftPanel } from "@ep/ui/components/auth/left-panel";
-import { RoleSelectStep } from "@ep/ui/components/auth/role-select-step";
-import { RegisterStep } from "@ep/ui/components/auth/register-step";
-import { CreatorRegisterStep } from "@ep/ui/components/auth/creator-register-step";
 import { OtpStep } from "@ep/ui/components/auth/otp-step";
 import { LoginStep } from "@ep/ui/components/auth/login-step";
-import { ForgotStep } from "@ep/ui/components/auth/forgot-step";
-import { ResetPasswordStep } from "@ep/ui/components/auth/reset-password-step";
-import type { OnboardingStep, UserRole, AuthFormState } from "@ep/ui/components/auth/types";
+import type { AuthFormState } from "@ep/ui/components/auth/types";
 import { useReveal } from "../../../hooks/use-reveal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
+type LoginPageStep = "login" | "otp";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardingStep>("login");
+  const [step, setStep] = useState<LoginPageStep>("login");
   useReveal(step);
-  const [role, setRole] = useState<UserRole>("creator");
-  const [postOtpTarget, setPostOtpTarget] = useState<"dashboard" | "reset-password">("dashboard");
 
   const [form, setForm] = useState<AuthFormState>({
     businessName: "",
@@ -36,8 +31,6 @@ export default function LoginPage() {
     otpValues: ["", "", "", "", "", ""],
   });
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -65,101 +58,6 @@ export default function LoginPage() {
     setField("otpValues", newOtp);
   };
 
-  const handleRoleContinue = () => {
-    setStep("register");
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.agreed) return;
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch(`${API_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          role === "creator"
-            ? {
-                name: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
-                displayName: form.nickname || `${form.firstName} ${form.lastName}`.trim(),
-                firstName: form.firstName,
-                lastName: form.lastName,
-                nickname: form.nickname,
-                email: form.email,
-                phone: form.phone,
-                password: form.password,
-                role: "creator",
-                username: (form.nickname || form.email.split("@")[0]).toLowerCase().replace(/\s+/g, "_"),
-              }
-            : {
-                name: form.businessName || form.email.split("@")[0],
-                businessName: form.businessName,
-                email: form.email,
-                phone: form.phone,
-                industry: form.industry,
-                password: form.password,
-                role: "business",
-                username: form.email.split("@")[0],
-              }
-        ),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Registration failed");
-
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-
-      await fetch(`${API_URL}/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, purpose: "registration" }),
-      });
-
-      setPostOtpTarget("dashboard");
-      setStep("otp");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const code = form.otpValues.join("");
-      if (code.length !== 6) throw new Error("Enter all 6 digits");
-
-      const res = await fetch(`${API_URL}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, otp: code, purpose: postOtpTarget === "reset-password" ? "forgot_password" : "registration" }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "OTP verification failed");
-
-      if (postOtpTarget === "reset-password") {
-        sessionStorage.setItem("resetToken", data.resetToken);
-        setStep("reset-password");
-      } else {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        routeAfterAuth(data.user);
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -184,7 +82,6 @@ export default function LoginPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: form.email, purpose: "registration" }),
         });
-        setPostOtpTarget("dashboard");
         setStep("otp");
         return;
       }
@@ -197,23 +94,27 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password`, {
+      const code = form.otpValues.join("");
+      if (code.length !== 6) throw new Error("Enter all 6 digits");
+
+      const res = await fetch(`${API_URL}/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email }),
+        body: JSON.stringify({ email: form.email, otp: code, purpose: "registration" }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to send reset code");
+      if (!res.ok) throw new Error(data.error || "OTP verification failed");
 
-      setPostOtpTarget("reset-password");
-      setStep("otp");
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      routeAfterAuth(data.user);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -221,35 +122,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) return;
-    setError("");
-    setLoading(true);
-
-    try {
-      const resetToken = sessionStorage.getItem("resetToken");
-      if (!resetToken) throw new Error("Session expired. Please try again.");
-
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email, token: resetToken, newPassword }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Password reset failed");
-
-      sessionStorage.removeItem("resetToken");
-      setStep("login");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const actions = { setField, goToStep: setStep };
+  const actions = { setField, goToStep: () => {} };
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
@@ -263,18 +136,6 @@ export default function LoginPage() {
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
-        )}
-
-        {step === "role-select" && (
-          <RoleSelectStep role={role} onSelectRole={setRole} onContinue={handleRoleContinue} />
-        )}
-
-        {step === "register" && (
-          role === "creator" ? (
-            <CreatorRegisterStep form={form} actions={actions} onSubmit={handleRegister} />
-          ) : (
-            <RegisterStep form={form} actions={actions} onSubmit={handleRegister} />
-          )
         )}
 
         {step === "otp" && (
@@ -296,28 +157,13 @@ export default function LoginPage() {
         )}
 
         {step === "login" && (
-          <LoginStep form={form} actions={actions} onSubmit={handleLogin} />
-        )}
-
-        {step === "forgot" && (
-          <ForgotStep
-            email={form.email}
-            setEmail={(v) => setField("email", v)}
-            onSubmit={handleForgotPassword}
+          <LoginStep
+            form={form}
             actions={actions}
-          />
-        )}
-
-        {step === "reset-password" && (
-          <ResetPasswordStep
-            newPassword={newPassword}
-            confirmPassword={confirmPassword}
-            showPassword={form.showPassword}
-            setNewPassword={setNewPassword}
-            setConfirmPassword={setConfirmPassword}
-            setShowPassword={(v) => setField("showPassword", v)}
-            onSubmit={handleResetPassword}
-            actions={actions}
+            onSubmit={handleLogin}
+            onForgotPassword={() => router.push("/forgot-password")}
+            onCreateAccount={() => router.push("/create-account")}
+            loading={loading}
           />
         )}
 
