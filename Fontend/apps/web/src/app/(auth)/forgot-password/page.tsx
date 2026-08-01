@@ -100,16 +100,17 @@ export default function ForgotPasswordPage() {
   const actions = { setField: () => {}, goToStep: () => {} };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-stone-50">
       <LeftPanel />
-      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 overflow-y-auto h-screen bg-stone-100">
+      <div className="col-span-1 md:col-span-7 h-screen overflow-y-auto bg-stone-50 p-10">
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
         )}
 
-        {step === "forgot" && (
+        <div className="flex min-h-full items-center justify-center">
+          {step === "forgot" && (
           <ForgotStep email={email} setEmail={setEmail} onSubmit={handleSendCode} actions={actions} onBackToLogin={() => router.push("/login")} loading={loading} />
         )}
         {step === "otp" && (
@@ -143,6 +144,7 @@ export default function ForgotPasswordPage() {
             loading={loading}
           />
         )}
+        </div>
       </div>
     </div>
   );

@@ -125,20 +125,21 @@ export default function LoginPage() {
   const actions = { setField, goToStep: () => {} };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-stone-50">
       <LeftPanel
         title="Claim campaign slots and earn from real views"
         description="EasilyPromote connects creators with brands. Claim slots, deliver content, and get paid for verified views."
       />
 
-      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-8 md:p-16 overflow-y-auto h-screen bg-white">
+      <div className="col-span-1 md:col-span-7 h-screen overflow-y-auto bg-stone-50 p-8 md:p-16">
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
         )}
 
-        {step === "otp" && (
+        <div className="flex min-h-full items-center justify-center">
+          {step === "otp" && (
           <OtpStep
             email={form.email}
             otpValues={form.otpValues}
@@ -172,6 +173,7 @@ export default function LoginPage() {
             <span className="text-sm font-semibold text-stone-500">Loading...</span>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

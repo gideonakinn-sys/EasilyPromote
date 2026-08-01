@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon, ChevronDownIcon, CheckIcon } from "@hugeicons/core-free-icons";
 import { LoaderIcon } from "lucide-react";
+import Link from "next/link";
 import { cn } from "../../lib/utils";
 import type { AuthFormState, AuthFormActions } from "./types";
 
@@ -152,6 +153,13 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
           >
             {loading ? <LoaderIcon role="status" aria-label="Loading" className="size-4 animate-spin" /> : "Continue"}
           </button>
+
+          <p className="text-center text-sm font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+            Already have an account?{" "}
+            <Link href="/login" className="text-stone-900 font-semibold">
+              Login
+            </Link>
+          </p>
         </div>
       </form>
     </div>

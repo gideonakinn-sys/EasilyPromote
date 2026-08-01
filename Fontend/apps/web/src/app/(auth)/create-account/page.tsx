@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { LeftPanel } from "@ep/ui/components/auth/left-panel";
 import { RoleSelectStep } from "@ep/ui/components/auth/role-select-step";
 import { RegisterStep } from "@ep/ui/components/auth/register-step";
@@ -140,17 +139,18 @@ export default function CreateAccountPage() {
   const actions = { setField, goToStep: () => {} };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-stone-50">
       <LeftPanel />
 
-      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 h-screen overflow-y-auto bg-stone-100">
+      <div className="col-span-1 md:col-span-7 h-screen overflow-y-auto bg-stone-50 p-10">
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
           </div>
         )}
 
-        {step === "role-select" && (
+        <div className="flex min-h-full items-center justify-center">
+          {step === "role-select" && (
           <RoleSelectStep role={role} onSelectRole={setRole} onContinue={handleRoleContinue} />
         )}
 
@@ -179,17 +179,7 @@ export default function CreateAccountPage() {
             }}
           />
         )}
-
-        {step !== "otp" && (
-          <div className="absolute bottom-8 left-0 right-0 text-center md:hidden">
-            <span className="text-sm font-semibold text-stone-400 font-rethink">
-              Already have an account?{" "}
-              <Link href="/login" className="text-stone-900 font-medium">
-                Sign in
-              </Link>
-            </span>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
