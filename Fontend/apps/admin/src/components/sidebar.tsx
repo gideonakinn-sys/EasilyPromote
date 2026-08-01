@@ -63,6 +63,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: "Industries",
+    href: "/industries",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18" />
+        <path d="M5 21V7l8-4v18" />
+        <path d="M19 21V11l-6-4" />
+      </svg>
+    ),
+  },
+  {
     label: "Payouts & Escrow",
     href: "/payouts",
     icon: (

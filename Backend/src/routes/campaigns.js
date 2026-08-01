@@ -6,6 +6,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { getCostPerView } = require("../config/pricing");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
+const { ensureCampaignSlots } = require("../utils/ensureSlots");
 
 const router = express.Router();
 
@@ -167,12 +168,14 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
       if (transaction) {
         campaign.status = "live";
         await campaign.save();
+        await ensureCampaignSlots(campaign);
       } else if (campaign.paymentReference) {
         try {
           const paystackData = await verifyTransaction(campaign.paymentReference);
           if (paystackData.status === "success") {
             campaign.status = "live";
             await campaign.save();
+            await ensureCampaignSlots(campaign);
 
             await Transaction.create({
               campaignId: campaign._id,
@@ -351,6 +354,7 @@ router.post("/:id/launch", protect, async (req, res, next) => {
 
     campaign.status = "live";
     await campaign.save();
+    await ensureCampaignSlots(campaign);
 
     await Transaction.create({
       campaignId: campaign._id,
@@ -511,6 +515,7 @@ router.patch("/:id/resume", protect, async (req, res, next) => {
 
     campaign.status = "live";
     await campaign.save();
+    await ensureCampaignSlots(campaign);
 
     res.json({ id: campaign._id, status: campaign.status });
   } catch (error) {

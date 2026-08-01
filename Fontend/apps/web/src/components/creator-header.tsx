@@ -19,7 +19,7 @@ interface CreatorHeaderProps {
 }
 
 export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpenProfile }: CreatorHeaderProps) {
-  const isOnboarding = !profile.socialAccounts.length || !profile.niches.length || !profile.avatar;
+  const isOnboarding = !profile.niches.length || !profile.avatar;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);

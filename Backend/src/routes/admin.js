@@ -9,7 +9,9 @@ const Slot = require("../models/Slot");
 const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
 const Platform = require("../models/Platform");
+const Industry = require("../models/Industry");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const { ensureCampaignSlots } = require("../utils/ensureSlots");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -229,6 +231,10 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     const prevStatus = campaign.status;
     campaign.status = status;
     await campaign.save();
+
+    if (status === "live") {
+      await ensureCampaignSlots(campaign);
+    }
 
     await Notification.create({
       businessId: campaign.businessId,
@@ -467,6 +473,55 @@ router.patch("/users/:id/status", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── DELETE /api/admin/users/:id (cascade delete account) ────────────────────
+router.delete("/users/:id", adminGuard, async (req, res, next) => {
+  try {
+    const targetId = req.params.id;
+
+    if (String(targetId) === String(req.user._id)) {
+      return res.status(400).json({ error: "You cannot delete your own account" });
+    }
+
+    const user = await User.findById(targetId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (user.role === "super_admin") {
+      return res.status(400).json({ error: "Super admin accounts cannot be deleted" });
+    }
+
+    const userId = user._id;
+
+    if (user.role === "business") {
+      const campaignIds = await Campaign.find({ businessId: userId }).distinct("_id");
+      if (campaignIds.length > 0) {
+        await Promise.all([
+          Slot.deleteMany({ campaignId: { $in: campaignIds } }),
+          Submission.deleteMany({ campaignId: { $in: campaignIds } }),
+          Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
+          Notification.deleteMany({ campaignId: { $in: campaignIds } }),
+        ]);
+      }
+      await Campaign.deleteMany({ businessId: userId });
+      await BusinessProfile.deleteMany({ userId });
+    } else if (user.role === "creator") {
+      const campaignIds = await Submission.find({ creatorId: userId }).distinct("campaignId");
+      await Promise.all([
+        Slot.deleteMany({ creatorId: userId }),
+        Submission.deleteMany({ creatorId: userId }),
+        Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
+        CreatorProfile.deleteMany({ userId }),
+      ]);
+    }
+
+    await Notification.deleteMany({ $or: [{ businessId: userId }, { creatorId: userId }] });
+    await User.findByIdAndDelete(userId);
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── PATCH /api/admin/users/:id/rank ─────────────────────────────────────────
 router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
   try {
@@ -612,6 +667,93 @@ router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
   try {
     const platform = await Platform.findByIdAndDelete(req.params.id);
     if (!platform) return res.status(404).json({ error: "Platform not found" });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/admin/industries ─────────────────────────────────────────────────
+router.get("/industries", adminGuard, async (req, res, next) => {
+  try {
+    const industries = await Industry.find().sort({ sortOrder: 1, name: 1 });
+    res.json({
+      industries: industries.map((i) => ({
+        id: i._id,
+        name: i.name,
+        enabled: i.enabled,
+        sortOrder: i.sortOrder,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/industries ─────────────────────────────────────────────────
+router.post("/industries", adminGuard, async (req, res, next) => {
+  try {
+    const { name, enabled = true, sortOrder = 0 } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Industry name is required" });
+    }
+
+    const existing = await Industry.findOne({ name: { $regex: `^${name.trim()}$`, $options: "i" } });
+    if (existing) {
+      return res.status(400).json({ error: "Industry already exists" });
+    }
+
+    const industry = await Industry.create({
+      name: name.trim(),
+      enabled: Boolean(enabled),
+      sortOrder: Number(sortOrder) || 0,
+    });
+
+    res.status(201).json({
+      success: true,
+      industry: {
+        id: industry._id,
+        name: industry.name,
+        enabled: industry.enabled,
+        sortOrder: industry.sortOrder,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PATCH /api/admin/industries/:id ───────────────────────────────────────────
+router.patch("/industries/:id", adminGuard, async (req, res, next) => {
+  try {
+    const { name, enabled, sortOrder } = req.body;
+    const industry = await Industry.findById(req.params.id);
+    if (!industry) return res.status(404).json({ error: "Industry not found" });
+
+    if (name !== undefined && name.trim()) industry.name = name.trim();
+    if (enabled !== undefined) industry.enabled = Boolean(enabled);
+    if (sortOrder !== undefined) industry.sortOrder = Number(sortOrder) || 0;
+
+    await industry.save();
+    res.json({
+      success: true,
+      industry: {
+        id: industry._id,
+        name: industry.name,
+        enabled: industry.enabled,
+        sortOrder: industry.sortOrder,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /api/admin/industries/:id ──────────────────────────────────────────
+router.delete("/industries/:id", adminGuard, async (req, res, next) => {
+  try {
+    const industry = await Industry.findByIdAndDelete(req.params.id);
+    if (!industry) return res.status(404).json({ error: "Industry not found" });
     res.json({ success: true });
   } catch (err) {
     next(err);

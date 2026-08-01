@@ -2,6 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { EyeIcon, EyeOffIcon, ChevronDownIcon, CheckIcon } from "@hugeicons/core-free-icons";
 import { LoaderIcon } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { cn } from "../../lib/utils";
 import type { AuthFormState, AuthFormActions } from "./types";
 
@@ -12,7 +13,29 @@ interface RegisterStepProps {
   loading?: boolean;
 }
 
+const FALLBACK_INDUSTRIES = [
+  "Technology",
+  "Music",
+  "Apparel & Fashion",
+  "E-commerce",
+  "Food & Beverages",
+];
+
 export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepProps) {
+  const [industries, setIndustries] = useState<string[]>(FALLBACK_INDUSTRIES);
+
+  useEffect(() => {
+    const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
+    fetch(`${api}/industries`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.industries) && data.industries.length > 0) {
+          setIndustries(data.industries.map((i: { name: string }) => i.name));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="w-[350px] space-y-10">
       <div className="space-y-1.5">
@@ -49,11 +72,12 @@ export function RegisterStep({ form, actions, onSubmit, loading }: RegisterStepP
               onChange={(e) => actions.setField("industry", e.target.value)}
               className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium text-stone-800 appearance-none focus:outline-none focus:border-stone-400 focus:ring-0 bg-white cursor-pointer transition-colors font-rethink"
             >
-              <option value="Technology">Technology</option>
-              <option value="Music">Music</option>
-              <option value="Apparel & Fashion">Apparel & Fashion</option>
-              <option value="E-commerce">E-commerce</option>
-              <option value="Food & Beverages">Food & Beverages</option>
+              {!industries.includes(form.industry) && (
+                <option value={form.industry}>{form.industry}</option>
+              )}
+              {industries.map((industry) => (
+                <option key={industry} value={industry}>{industry}</option>
+              ))}
             </select>
             <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>

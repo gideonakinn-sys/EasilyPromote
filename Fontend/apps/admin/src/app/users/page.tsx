@@ -78,6 +78,22 @@ export default function AdminUsersPage() {
     }
   };
 
+  const deleteUser = async (user: UserItem) => {
+    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, slots, transactions, and notifications. This cannot be undone.`)) return;
+    try {
+      setActionLoading(true);
+      await apiRequest(`/admin/users/${user.id}`, {
+        method: "DELETE",
+        token: getToken() || undefined,
+      });
+      fetchUsers();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleSaveRank = async () => {
     if (!selectedUser) return;
     try {
@@ -249,6 +265,15 @@ export default function AdminUsersPage() {
                         >
                           {u.isActive ? "Deactivate" : "Activate"}
                         </button>
+                        {u.role !== "admin" && u.role !== "super_admin" && (
+                          <button
+                            onClick={() => deleteUser(u)}
+                            disabled={actionLoading}
+                            className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

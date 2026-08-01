@@ -232,7 +232,7 @@ function CreatorDashboardContent() {
   };
 
   const markCompleteIfReady = (next: CreatorProfile) => {
-    const complete = next.socialAccounts.length > 0 && next.niches.length > 0 && !!next.avatar;
+    const complete = next.niches.length > 0 && !!next.avatar;
     if (complete && !profileComplete && !showAllSet) {
       setShowAllSet(true);
     }
@@ -506,7 +506,7 @@ function CreatorDashboardContent() {
     );
   }
 
-  const profileComplete = profile.socialAccounts.length > 0 && profile.niches.length > 0 && !!profile.avatar;
+  const profileComplete = profile.niches.length > 0 && !!profile.avatar;
 
   const renderOnboardingView = (p: CreatorProfile) => (
     <OnboardingView

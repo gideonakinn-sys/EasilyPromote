@@ -5,6 +5,7 @@ const Submission = require("../models/Submission");
 const Notification = require("../models/Notification");
 const { verifyWebhookSignature } = require("../services/paystack");
 const { emitToUser } = require("../config/socket");
+const { ensureCampaignSlots } = require("../utils/ensureSlots");
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
         if (campaign && campaign.status === "pending_payment") {
           campaign.status = "live";
           await campaign.save();
+          await ensureCampaignSlots(campaign);
 
           await Transaction.create({
             campaignId: campaign._id,
