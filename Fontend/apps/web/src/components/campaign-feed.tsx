@@ -58,7 +58,7 @@ export function CampaignFeed({
           {/* Mobile filter trigger — opens bottom sheet */}
           <button
             onClick={() => setIsMobileFilterOpen(true)}
-            className="flex md:hidden items-center justify-center bg-white border border-stone-200 rounded-full p-3"
+            className="flex md:hidden items-center justify-center bg-white rounded-full p-3"
           >
             <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
           </button>
@@ -67,7 +67,7 @@ export function CampaignFeed({
           <div className="hidden md:block">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer">
+                <button className="flex items-center justify-center gap-2 bg-white rounded-full px-4 py-2.5 cursor-pointer">
                   <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
                   <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
                   <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />

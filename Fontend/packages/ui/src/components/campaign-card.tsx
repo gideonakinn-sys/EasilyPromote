@@ -65,7 +65,7 @@ export function CampaignCard({
     <div
       onClick={onClick}
       className={cn(
-        "bg-white rounded-2xl border border-stone-200 p-4 flex flex-col justify-between relative overflow-hidden",
+        "bg-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden",
         onClick && "cursor-pointer",
         className
       )}

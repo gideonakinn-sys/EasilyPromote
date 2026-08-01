@@ -10,8 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
 import { cn } from "@ep/ui/lib/utils";
 import { useReveal } from "../hooks/use-reveal";
@@ -87,7 +86,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           {/* Mobile filter trigger — opens bottom sheet */}
           <button
             onClick={() => setIsMobileFilterOpen(true)}
-            className="flex md:hidden items-center justify-center bg-white border border-stone-200 rounded-full p-3"
+            className="flex md:hidden items-center justify-center bg-white rounded-full p-3"
           >
             <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
           </button>
@@ -96,20 +95,22 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           <div className="hidden md:block">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer">
+                <button className="flex items-center justify-center gap-2 bg-white rounded-full px-4 py-2.5 cursor-pointer">
                   <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
                   <span className="text-sm font-medium text-stone-900">{selectedFilter}</span>
                   <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuRadioGroup value={selectedFilter} onValueChange={setSelectedFilter}>
-                  {FILTER_OPTIONS.map((option) => (
-                    <DropdownMenuRadioItem key={option} value={option}>
-                      {option}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
+                {FILTER_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option}
+                    onSelect={() => setSelectedFilter(option)}
+                    className={selectedFilter === option ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                  >
+                    {option}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -150,7 +151,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCampaigns.map((camp) => (
-          <div data-reveal key={camp.id}>
+          <div key={camp.id}>
             <CampaignCard
               title={camp.name}
               status={mapStatus(camp.status)}

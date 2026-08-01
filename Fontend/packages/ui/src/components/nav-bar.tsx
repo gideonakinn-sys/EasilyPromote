@@ -65,7 +65,7 @@ export function NavBar({
         <div className="hidden md:block">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 bg-white border border-stone-200 rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
+              <button className="flex items-center gap-3 bg-white rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
                 <Image
                   src={userAvatarUrl || avatarSvg}
                   alt={userName}
@@ -95,7 +95,7 @@ export function NavBar({
           </DropdownMenu>
         </div>
 
-        {/* Mobile Profile Trigger */}
+        {/* Mobile Profile Trigger + Drawer */}
         <div className="md:hidden">
           <button
             onClick={() => setIsProfileOpen(true)}
@@ -110,10 +110,6 @@ export function NavBar({
               unoptimized
             />
           </button>
-        </div>
-
-        {/* Mobile Drawer */}
-        <div className="md:hidden">
           <MobileDrawer open={isProfileOpen} onOpenChange={(open) => setIsProfileOpen(open)}>
             <button
               onClick={handleAvatarClick}

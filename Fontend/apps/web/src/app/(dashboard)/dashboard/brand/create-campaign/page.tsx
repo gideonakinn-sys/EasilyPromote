@@ -77,7 +77,7 @@ function CreateCampaignContent() {
 
   if (isMobile) {
     return (
-      <div className="h-screen bg-stone-100 text-stone-900 flex flex-col font-rethink">
+      <div className="h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
         <div className="flex-1 overflow-y-auto" data-lenis-prevent>
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} isMobile />
         </div>
@@ -87,8 +87,8 @@ function CreateCampaignContent() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
-      <Drawer open={true} onOpenChange={(open) => { if (!open) handleClose(); }}>
-        <DrawerContent className="overflow-hidden bg-stone-100">
+      <Drawer open={true} dismissible={false} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <DrawerContent className="overflow-hidden bg-stone-50">
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
         </DrawerContent>
       </Drawer>

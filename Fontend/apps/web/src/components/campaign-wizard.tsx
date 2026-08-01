@@ -6,8 +6,14 @@ import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ChevronDownIcon, CheckIcon, Cancel01Icon, CloudUploadIcon, File01Icon, Delete01Icon, CircleDashedIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
-import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { useToast } from "@ep/ui/components/toast";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@ep/ui/components/dropdown-menu";
+import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken, API_URL } from "../lib/api";
 import { Spinner } from "./ui/spinner";
@@ -40,14 +46,100 @@ interface CampaignWizardProps {
   draftId?: string;
 }
 
-const PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "YouTube"];
+const PLATFORM_OPTIONS = ["TikTok", "Facebook", "Instagram", "YouTube", "X (Twitter)"];
+
+const FALLBACK_CATEGORIES = ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"];
+
+const STYLE_PRESETS = ["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"];
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const DRAFT_STORAGE_KEY = "ep-draft-autosave";
 
-interface PlatformOption {
-  name: string;
-  enabled: boolean;
-  sortOrder: number;
+interface ComboboxProps {
+  options: string[];
+  selected: string[];
+  inputValue: string;
+  setInputValue: (value: string) => void;
+  onSelect: (value: string) => void;
+  onAddCustom: (value: string) => void;
+  placeholder: string;
+}
+
+function Combobox({ options, selected, inputValue, setInputValue, onSelect, onAddCustom, placeholder }: ComboboxProps) {
+  const [open, setOpen] = React.useState(false);
+  const trimmed = inputValue.trim();
+  const filtered = options.filter((o) => o.toLowerCase().includes(trimmed.toLowerCase()));
+  const isExact = options.some((o) => o.toLowerCase() === trimmed.toLowerCase());
+  const canAdd = trimmed.length > 0 && !isExact;
+
+  return (
+    <div className="relative">
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={inputValue}
+            placeholder={placeholder}
+            onChange={(e) => { setInputValue(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+          />
+          <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+        </div>
+        <button
+          type="button"
+          onClick={() => { if (canAdd) { onAddCustom(trimmed); setInputValue(""); setOpen(false); } }}
+          disabled={!canAdd}
+          className={cn(
+            "shrink-0 px-5 py-3 rounded-full text-sm font-semibold font-rethink transition-colors",
+            canAdd ? "bg-[#FEB604] text-[#1C1917]" : "bg-stone-200 text-stone-400 cursor-not-allowed"
+          )}
+        >
+          Add
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute z-30 top-full left-0 right-0 mt-2 max-h-48 overflow-y-auto bg-white border border-stone-200 rounded-xl py-1 font-rethink" data-lenis-prevent>
+          {filtered.length > 0 ? (
+            filtered.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onSelect(opt); setInputValue(""); setOpen(false); }}
+                className={cn(
+                  "flex items-center w-full px-4 py-2.5 text-sm text-left",
+                  selected.includes(opt) ? "font-semibold text-stone-900" : "font-medium text-stone-700"
+                )}
+              >
+                {opt}
+              </button>
+            ))
+          ) : (
+            <p className="px-4 py-2.5 text-sm text-stone-400 font-medium">No matches — click Add to include it.</p>
+          )}
+        </div>
+      )}
+
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selected.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onSelect(s)}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-medium font-rethink"
+            >
+              {s}
+              <HugeiconsIcon icon={Cancel01Icon} size={12} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: CampaignWizardProps) {
@@ -59,23 +151,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean }>({ step1: false, step2: false });
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
   const [nicheOptions, setNicheOptions] = useState<string[]>([...AVAILABLE_NICHES]);
   const isModified = useRef(false);
   const { toast } = useToast();
   useReveal(createStep);
-
-  useEffect(() => {
-    apiRequest<{ platforms: PlatformOption[] }>("/platforms")
-      .then((data) => {
-        const enabled = (data.platforms || [])
-          .filter((p) => p.enabled)
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((p) => p.name);
-        if (enabled.length > 0) setPlatformOptions(enabled);
-      })
-      .catch((err: unknown) => console.error("Failed to load platforms:", err));
-  }, []);
 
   useEffect(() => {
     apiRequest<{ niches: { name: string }[] }>("/niches")
@@ -147,10 +226,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
+  const [uploadingScript, setUploadingScript] = useState(false);
+  const [scriptProgress, setScriptProgress] = useState(0);
   const [customStyleInput, setCustomStyleInput] = useState("");
   const [customNicheInput, setCustomNicheInput] = useState("");
-  const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
-  const [platformDrawerOpen, setPlatformDrawerOpen] = useState(false);
   const scriptInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -277,29 +356,92 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     }));
   };
 
+  const categoryOptions = Object.keys(pricingRates).length > 0 ? Object.keys(pricingRates) : FALLBACK_CATEGORIES;
+
+  const toggleStyle = (style: string) => {
+    isModified.current = true;
+    setCampaign(prev => ({
+      ...prev,
+      contentStyle: (prev.contentStyle || []).includes(style)
+        ? (prev.contentStyle || []).filter(s => s !== style)
+        : [...(prev.contentStyle || []), style],
+    }));
+  };
+
+  const addStyle = (style: string) => {
+    if (!(campaign.contentStyle || []).includes(style)) {
+      isModified.current = true;
+      setCampaign(prev => ({ ...prev, contentStyle: [...(prev.contentStyle || []), style] }));
+    }
+  };
+
+  const toggleNiche = (niche: string) => {
+    isModified.current = true;
+    setCampaign(prev => ({
+      ...prev,
+      niches: (prev.niches || []).includes(niche)
+        ? (prev.niches || []).filter(n => n !== niche)
+        : [...(prev.niches || []), niche],
+    }));
+  };
+
+  const addNiche = (niche: string) => {
+    if (!(campaign.niches || []).includes(niche)) {
+      isModified.current = true;
+      setCampaign(prev => ({ ...prev, niches: [...(prev.niches || []), niche] }));
+    }
+  };
+
   const handleScriptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.type && file.type !== "application/pdf") {
+      toast("Only PDF files are supported.", "error");
+      if (scriptInputRef.current) scriptInputRef.current.value = "";
+      return;
+    }
+    setUploadingScript(true);
+    setScriptProgress(0);
     try {
       const formData = new FormData();
       formData.append("file", file);
       const token = getToken();
-      const res = await fetch(`${API_URL}/upload/document`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
+      const url = `${API_URL}/upload/document`;
+      const data = await new Promise<{ url: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url);
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setScriptProgress(Math.round((e.loaded / e.total) * 90));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            let msg = "Upload failed";
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              if (parsed?.error) msg = parsed.error;
+            } catch {
+              // ignore
+            }
+            reject(new Error(msg));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(formData);
       });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
       isModified.current = true;
       setCampaign(prev => ({
         ...prev,
         scriptUrl: data.url,
         scriptFileName: file.name,
       }));
-    } catch {
-      toast("Failed to upload document. Please try again.", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to upload document. Please try again.", "error");
     } finally {
+      setUploadingScript(false);
+      setScriptProgress(0);
       if (scriptInputRef.current) scriptInputRef.current.value = "";
     }
   };
@@ -312,6 +454,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast("Image exceeds 10MB. Please upload a smaller file.", "error");
+      if (coverInputRef.current) coverInputRef.current.value = "";
+      return;
+    }
     setUploadingImage(true);
     setImageProgress(0);
     try {
@@ -330,16 +477,23 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(JSON.parse(xhr.responseText));
           } else {
-            reject(new Error("Upload failed"));
+            let msg = "Upload failed";
+            try {
+              const parsed = JSON.parse(xhr.responseText);
+              if (parsed?.error) msg = parsed.error;
+            } catch {
+              // ignore
+            }
+            reject(new Error(msg));
           }
         };
-        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.onerror = () => reject(new Error("Network error"));
         xhr.send(formData);
       });
       isModified.current = true;
       setCampaign(prev => ({ ...prev, coverImageUrl: data.url }));
-    } catch {
-      toast("Failed to upload image. Please try again.", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to upload image. Please try again.", "error");
     } finally {
       setUploadingImage(false);
       setImageProgress(0);
@@ -409,6 +563,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   };
 
   const handleSaveDraft = async () => {
+    if (saving) return;
     if (!campaign.name) {
       toast("Please enter a campaign name before saving.", "error");
       return;
@@ -521,9 +676,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <div>
               <button
                 onClick={campaign.name ? handleSaveDraft : onClose}
-                className="text-stone-500 text-xs font-medium font-rethink mb-10 block"
+                disabled={saving}
+                className="text-stone-500 text-xs font-medium font-rethink mb-10 block disabled:opacity-50"
               >
-                Save and Close
+                {saving ? "Saving..." : "Save and Close"}
               </button>
 
               <div className="space-y-8">
@@ -652,7 +808,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   )}
                 </div>
                 <div className="flex-1 space-y-1">
-                  <h4 className="text-xs font-medium text-stone-900">Campaign cover</h4>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs font-medium text-stone-900">Campaign cover</h4>
+                    <InfoTooltip text="The image creators see as the campaign thumbnail." />
+                  </div>
                   <input
                     ref={coverInputRef}
                     type="file"
@@ -678,6 +837,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       {campaign.coverImageUrl ? "Change image" : "Upload image"}
                     </button>
                   )}
+                  <span className="text-[10px] font-medium text-stone-400 font-rethink">Max file size: 10MB</span>
                   {touchedStep.step1 && !campaign.coverImageUrl && (
                     <p className="text-[10px] text-red-500 font-medium font-rethink">Please upload a cover image</p>
                   )}
@@ -686,7 +846,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* Campaign Name */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">Campaign name</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Campaign name</label>
+                  <InfoTooltip text="The public name creators will see for this campaign" />
+                </div>
                 <input
                   type="text"
                   placeholder="Campaign name"
@@ -704,59 +867,32 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* Promotion category */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">What are you promoting?</label>
-                {isMobile ? (
-                  <>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Industry</label>
+                  <InfoTooltip text="The industry your campaign belongs to — this sets your per-view rate" />
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => setCategoryDrawerOpen(true)}
                       className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] text-left flex items-center justify-between"
                     >
                       <span>{campaign.category}</span>
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
-                    <MobileDrawer open={categoryDrawerOpen} onOpenChange={setCategoryDrawerOpen}>
-                      {(Object.keys(pricingRates).length > 0
-                        ? Object.keys(pricingRates)
-                        : ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"]
-                      ).map((cat) => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => {
-                            handleCategoryChange(cat);
-                            setCategoryDrawerOpen(false);
-                          }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium font-rethink",
-                            campaign.category === cat ? "bg-stone-100 text-stone-900" : "text-stone-600"
-                          )}
-                        >
-                          <span>{cat}</span>
-                          {campaign.category === cat && <HugeiconsIcon icon={CheckIcon} size={16} className="text-stone-900" />}
-                        </button>
-                      ))}
-                    </MobileDrawer>
-                  </>
-                ) : (
-                  <div className="relative">
-                    <select
-                      value={campaign.category}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] appearance-none placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
-                    >
-                      {Object.keys(pricingRates).length > 0
-                        ? Object.keys(pricingRates).map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))
-                        : ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"].map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))
-                      }
-                    </select>
-                    <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
+                    {categoryOptions.map((cat) => (
+                      <DropdownMenuItem
+                        key={cat}
+                        onSelect={() => handleCategoryChange(cat)}
+                        className={campaign.category === cat ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                      >
+                        {cat}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <span className="text-[10px] text-stone-400 font-medium">
                   ₦{getRate(campaign.category).toFixed(3)} per view — Budget calculated automatically
                 </span>
@@ -764,7 +900,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* Campaign Views Input */}
               <div className="space-y-4">
-                <label className="text-xs font-medium text-stone-500 block">How many views do you want?</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">How many views do you want?</label>
+                  <InfoTooltip text="The total number of verified views you want to buy" />
+                </div>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -844,7 +983,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <div data-reveal className={cn("space-y-8 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
               {/* Campaign Description */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">Campaign description</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Campaign description</label>
+                  <InfoTooltip text="What creators see to understand your product and goals" />
+                </div>
                 <textarea
                   placeholder="Describe your campaign..."
                   value={campaign.description}
@@ -860,13 +1002,19 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 )}
               </div>
 
-              {/* Upload brief */}
+              {/* Campaign brief */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">Upload brief</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Campaign brief</label>
+                  <InfoTooltip text="The full document creators read before producing their content" />
+                </div>
+                <p className="text-[10px] text-stone-400 font-medium font-rethink leading-relaxed">
+                  The full detail creators read to know exactly what to produce in their videos.
+                </p>
                 <input
                   ref={scriptInputRef}
                   type="file"
-                  accept=".doc,.docx,.pdf"
+                  accept=".pdf"
                   onChange={handleScriptUpload}
                   className="hidden"
                 />
@@ -878,6 +1026,16 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <HugeiconsIcon icon={Delete01Icon} size={12} />
                     </button>
                   </div>
+                ) : uploadingScript ? (
+                  <div className="w-full space-y-1.5 bg-white border-2 border-dashed border-stone-300 rounded-2xl p-5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-stone-500 font-rethink">Uploading brief...</span>
+                      <span className="text-[10px] font-medium text-stone-500 font-rethink">{scriptProgress}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-stone-900 rounded-full transition-all duration-150" style={{ width: `${scriptProgress}%` }} />
+                    </div>
+                  </div>
                 ) : (
                   <button
                     type="button"
@@ -888,7 +1046,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     )}
                   >
                     <HugeiconsIcon icon={CloudUploadIcon} size={24} className="text-stone-400" />
-                    <span>Attach brief (PDF, DOC, DOCX)</span>
+                    <span>Attach brief (PDF only)</span>
                   </button>
                 )}
                 {touchedStep.step2 && !campaign.scriptUrl && (
@@ -898,7 +1056,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* Key Message / CTA */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">Key message / CTA</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Key message / CTA</label>
+                  <InfoTooltip text="The exact message or call-to-action creators must include" />
+                </div>
                 <input
                   type="text"
                   placeholder="What's the main message or call to action?"
@@ -916,7 +1077,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* What to Avoid */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">What to avoid</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">What to avoid</label>
+                  <InfoTooltip text="Anything creators should not do or say in their content" />
+                </div>
                 <input
                   type="text"
                   placeholder="Anything creators should avoid mentioning?"
@@ -928,45 +1092,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
               {/* Platform Selection */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-500 block">Social Platforms</label>
-                {isMobile ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setPlatformDrawerOpen(true)}
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] text-left flex items-center justify-between"
-                    >
-                      <span>{(campaign.platforms || []).length === 0 ? "Select platforms" : `${(campaign.platforms || []).length} platform${(campaign.platforms || []).length > 1 ? "s" : ""} selected`}</span>
-                      <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
-                    </button>
-                    <MobileDrawer open={platformDrawerOpen} onOpenChange={setPlatformDrawerOpen}>
-                      {platformOptions.map((platform) => (
-                        <button
-                          key={platform}
-                          type="button"
-                          onClick={() => {
-                            isModified.current = true;
-                            setCampaign(prev => ({
-                              ...prev,
-                              platforms: (prev.platforms || []).includes(platform)
-                                ? (prev.platforms || []).filter(p => p !== platform)
-                                : [...(prev.platforms || []), platform],
-                            }));
-                          }}
-                          className={cn(
-                            "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium font-rethink",
-                            (campaign.platforms || []).includes(platform) ? "bg-stone-100 text-stone-900" : "text-stone-600"
-                          )}
-                        >
-                          <span>{platform}</span>
-                          {(campaign.platforms || []).includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} className="text-stone-900" />}
-                        </button>
-                      ))}
-                    </MobileDrawer>
-                  </>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {platformOptions.map((platform) => (
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Social Platforms</label>
+                  <InfoTooltip text="Where you want creators to post their content" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {PLATFORM_OPTIONS.map((platform) => {
+                    const selected = (campaign.platforms || []).includes(platform);
+                    return (
                       <button
                         key={platform}
                         type="button"
@@ -980,213 +1113,57 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                           }));
                         }}
                         className={cn(
-                          "flex items-center justify-between px-4 py-3 rounded-full text-sm font-medium font-rethink border transition-colors",
-                          (campaign.platforms || []).includes(platform)
-                            ? "bg-stone-900 text-white border-stone-900"
-                            : "bg-white text-stone-600 border-stone-200"
+                          "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors",
+                          selected ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
                         )}
                       >
-                        <span>{platform}</span>
-                        {(campaign.platforms || []).includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} />}
+                        {platform}
                       </button>
-                    ))}
-                  </div>
-                )}
-                {(campaign.platforms || []).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {(campaign.platforms || []).map((p) => (
-                      <span key={p} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
-                        {p}
-                        <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, platforms: (prev.platforms || []).filter(pl => pl !== p) })); }}
-                          aria-label={`Remove ${p}`}
-                          className="ml-0.5"
-                          >
-                            <HugeiconsIcon icon={Cancel01Icon} size={12} />
-                          </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
               </div>
 
                 {/* Preferred Content Style */}
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-stone-500 block">Preferred content style</label>
-
-                  {/* Custom style input */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add a custom style..."
-                      value={customStyleInput}
-                      onChange={(e) => setCustomStyleInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && customStyleInput.trim()) {
-                          e.preventDefault();
-                          if (!(campaign.contentStyle || []).includes(customStyleInput.trim())) {
-                            isModified.current = true;
-                            setCampaign(prev => ({
-                              ...prev,
-                              contentStyle: [...(prev.contentStyle || []), customStyleInput.trim()],
-                            }));
-                          }
-                          setCustomStyleInput("");
-                        }
-                      }}
-                      className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-rethink font-medium tracking-[-0.01em] placeholder-stone-400 focus:outline-none focus:border-stone-400 focus:ring-0"
-                    />
-                    <button
-                      onClick={() => {
-                        if (customStyleInput.trim() && !(campaign.contentStyle || []).includes(customStyleInput.trim())) {
-                          isModified.current = true;
-                          setCampaign(prev => ({
-                            ...prev,
-                            contentStyle: [...(prev.contentStyle || []), customStyleInput.trim()],
-                          }));
-                          setCustomStyleInput("");
-                        }
-                      }}
-                      disabled={!customStyleInput.trim()}
-                      className="px-4 py-2.5 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] text-xs font-semibold font-rethink rounded-full"
-                    >
-                      Add
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs font-medium text-stone-500">Preferred content style</label>
+                    <InfoTooltip text="The tone or format your content should follow" />
                   </div>
-
-                  {/* All style chips — presets + custom */}
-                  <div className="flex flex-wrap gap-2">
-                    {["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"].map((style) => {
-                      const isSelected = (campaign.contentStyle || []).includes(style);
-                      return (
-                        <button
-                          key={style}
-                          type="button"
-                          onClick={() => {
-                            isModified.current = true;
-                            setCampaign(prev => ({
-                              ...prev,
-                              contentStyle: isSelected
-                                ? (prev.contentStyle || []).filter(s => s !== style)
-                                : [...(prev.contentStyle || []), style],
-                            }));
-                          }}
-                          className={cn(
-                            "px-3 py-1 rounded-full text-xs font-medium font-rethink",
-                            isSelected
-                              ? "bg-stone-900 text-white"
-                              : "bg-stone-100 text-stone-600"
-                          )}
-                        >
-                          {style}
-                        </button>
-                      );
-                    })}
-                    {(campaign.contentStyle || []).filter(s => !["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"].includes(s)).map((style) => (
-                      <span key={style} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
-                        {style}
-                        <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, contentStyle: (prev.contentStyle || []).filter(s => s !== style) })); }}
-                          aria-label={`Remove ${style}`}
-                          className="ml-0.5"
-                        >
-                          <HugeiconsIcon icon={Cancel01Icon} size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                  <Combobox
+                    options={Array.from(new Set([...STYLE_PRESETS, ...(campaign.contentStyle || [])]))}
+                    selected={campaign.contentStyle || []}
+                    inputValue={customStyleInput}
+                    setInputValue={setCustomStyleInput}
+                    onSelect={toggleStyle}
+                    onAddCustom={addStyle}
+                    placeholder="Type to search or add a style"
+                  />
                 </div>
 
                 {/* Target Niches */}
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-stone-500 block">Target niches</label>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Add a custom niche..."
-                      value={customNicheInput}
-                      onChange={(e) => setCustomNicheInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && customNicheInput.trim()) {
-                          e.preventDefault();
-                          if (!(campaign.niches || []).includes(customNicheInput.trim())) {
-                            isModified.current = true;
-                            setCampaign(prev => ({
-                              ...prev,
-                              niches: [...(prev.niches || []), customNicheInput.trim()],
-                            }));
-                          }
-                          setCustomNicheInput("");
-                        }
-                      }}
-                      className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-rethink font-medium tracking-[-0.01em] placeholder-stone-400 focus:outline-none focus:border-stone-400 focus:ring-0"
-                    />
-                    <button
-                      onClick={() => {
-                        if (customNicheInput.trim() && !(campaign.niches || []).includes(customNicheInput.trim())) {
-                          isModified.current = true;
-                          setCampaign(prev => ({
-                            ...prev,
-                            niches: [...(prev.niches || []), customNicheInput.trim()],
-                          }));
-                          setCustomNicheInput("");
-                        }
-                      }}
-                      disabled={!customNicheInput.trim()}
-                      className="px-4 py-2.5 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] text-xs font-semibold font-rethink rounded-full"
-                    >
-                      Add
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs font-medium text-stone-500">Target niches</label>
+                    <InfoTooltip text="The audience categories your creators should appeal to" />
                   </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {nicheOptions.map((niche) => {
-                      const isSelected = (campaign.niches || []).includes(niche);
-                      return (
-                        <button
-                          key={niche}
-                          type="button"
-                          onClick={() => {
-                            isModified.current = true;
-                            setCampaign(prev => ({
-                              ...prev,
-                              niches: isSelected
-                                ? (prev.niches || []).filter(n => n !== niche)
-                                : [...(prev.niches || []), niche],
-                            }));
-                          }}
-                          className={cn(
-                            "px-3 py-1 rounded-full text-xs font-medium font-rethink",
-                            isSelected
-                              ? "bg-stone-900 text-white"
-                              : "bg-stone-100 text-stone-600"
-                          )}
-                        >
-                          {niche}
-                        </button>
-                      );
-                    })}
-                    {(campaign.niches || []).filter(n => !nicheOptions.includes(n)).map((niche) => (
-                      <span key={niche} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
-                        {niche}
-                        <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, niches: (prev.niches || []).filter(n => n !== niche) })); }}
-                          aria-label={`Remove ${niche}`}
-                          className="ml-0.5"
-                        >
-                          <HugeiconsIcon icon={Cancel01Icon} size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
+                  <Combobox
+                    options={nicheOptions}
+                    selected={campaign.niches || []}
+                    inputValue={customNicheInput}
+                    setInputValue={setCustomNicheInput}
+                    onSelect={toggleNiche}
+                    onAddCustom={addNiche}
+                    placeholder="Type to search or add a niche"
+                  />
                 </div>
 
               {/* Bottom Navigation */}
               <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-100 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
                   onClick={isMobile ? handleSaveDraft : handleBackStep}
-                  className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink"
+                  disabled={saving}
+                  className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
                 >
                   {isMobile ? (saving ? "Saving..." : "Save and Close") : "Back"}
                 </button>
@@ -1203,7 +1180,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
           {/* Wizard Step 3: Review & Launch */}
           {createStep === 3 && (
-            <div data-reveal className={cn("space-y-6 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
+            <div data-reveal className={cn("space-y-8 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
               {/* Campaign Summary */}
               <div className="space-y-4">
                 {/* Image */}
@@ -1229,7 +1206,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
                 {/* Description */}
                 {campaign.description && (
-                  <p className="font-rethink text-xs text-stone-500 leading-relaxed">{campaign.description}</p>
+                  <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.description}</p>
                 )}
 
                 {/* Views & Budget */}
@@ -1281,7 +1258,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-100 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
                   onClick={isMobile ? handleSaveDraft : handleBackStep}
-                  className="flex-1 py-3 bg-white text-stone-900 font-semibold text-sm rounded-full border border-stone-200 font-rethink"
+                  disabled={saving}
+                  className="flex-1 py-3 bg-white text-stone-900 font-semibold text-sm rounded-full border border-stone-200 font-rethink disabled:opacity-50"
                 >
                   {isMobile ? (saving ? "Saving..." : "Save and Close") : "Back"}
                 </button>
@@ -1290,7 +1268,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   disabled={launching}
                   className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed"
                 >
-                  {launching ? <span className="flex items-center justify-center gap-2"><Spinner className="size-4" /> Pay and Launch Campaign</span> : "Pay and Launch Campaign"}
+                  {launching ? <Spinner className="size-4" /> : "Pay and Launch Campaign"}
                 </button>
               </div>
               {launchError && (
