@@ -289,7 +289,11 @@ router.get("/submissions", adminGuard, async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const filter = {};
-    if (status && status !== "all") filter.status = status;
+    if (status && status !== "all") {
+      const statuses = String(status).split(",").map((s) => s.trim()).filter(Boolean);
+      if (statuses.length === 1) filter.status = statuses[0];
+      else if (statuses.length > 1) filter.status = { $in: statuses };
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
     const [submissions, total] = await Promise.all([
@@ -377,7 +381,7 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
     if (decision === "approve") {
-      submission.status = "approved";
+      submission.status = "awaiting_post";
       submission.adminNotes = notes || "Appeal approved by Admin";
     } else {
       submission.status = "rejected";
@@ -710,6 +714,9 @@ router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
 // ─── GET /api/admin/industries ─────────────────────────────────────────────────
 router.get("/industries", adminGuard, async (req, res, next) => {
   try {
+    const { seedIndustries } = require("../utils/seedIndustries");
+    await seedIndustries();
+
     const industries = await Industry.find().sort({ sortOrder: 1, name: 1 });
 
     const CreatorProfile = require("../models/CreatorProfile");

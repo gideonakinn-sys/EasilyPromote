@@ -33,6 +33,7 @@ export default function AdminVerificationsPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const fetchSubmissions = useCallback(async () => {
     try {
@@ -40,7 +41,7 @@ export default function AdminVerificationsPage() {
       let statusParam = "all";
       if (activeTab === "pending") statusParam = "new";
       else if (activeTab === "appeals") statusParam = "appealed";
-      else if (activeTab === "approved") statusParam = "approved";
+      else if (activeTab === "approved") statusParam = "awaiting_post,approved";
       else if (activeTab === "rejected") statusParam = "rejected";
 
       const data = await apiRequest<{ submissions: SubmissionItem[] }>(`/admin/submissions?status=${statusParam}`, {
@@ -178,14 +179,12 @@ export default function AdminVerificationsPage() {
 
                     <td className="px-6 py-4">
                       {sub.videoUrl || sub.postedPlatforms?.[0]?.postUrl ? (
-                        <a
-                          href={sub.videoUrl || sub.postedPlatforms?.[0]?.postUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          onClick={() => setPreviewUrl(sub.videoUrl || sub.postedPlatforms?.[0]?.postUrl || null)}
                           className="inline-flex items-center gap-1.5 text-blue-600 hover:underline font-semibold"
                         >
-                          <span>🔗 View Submission Link</span>
-                        </a>
+                          <span>▶ View Submission Link</span>
+                        </button>
                       ) : (
                         <span className="text-stone-400 italic">No link provided</span>
                       )}
@@ -207,7 +206,7 @@ export default function AdminVerificationsPage() {
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${
                         sub.status === "appealed"
                           ? "bg-red-100 text-red-800 animate-bounce"
-                          : sub.status === "approved" || sub.status === "posted"
+                          : sub.status === "approved" || sub.status === "posted" || sub.status === "awaiting_post"
                           ? "bg-green-100 text-green-800"
                           : sub.status === "rejected"
                           ? "bg-stone-200 text-stone-700"
@@ -324,6 +323,37 @@ export default function AdminVerificationsPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Video Preview Modal */}
+        {previewUrl && (
+          <div
+            className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink"
+            onClick={() => setPreviewUrl(null)}
+          >
+            <div
+              className="bg-stone-950 rounded-2xl border border-stone-800 max-w-3xl w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-stone-800">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Submission Preview
+                </span>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-300 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+              <video
+                src={previewUrl}
+                controls
+                autoPlay
+                playsInline
+                className="w-full max-h-[70vh] bg-black"
+              />
             </div>
           </div>
         )}

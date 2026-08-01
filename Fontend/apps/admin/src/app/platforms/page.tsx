@@ -17,10 +17,11 @@ export default function AdminPlatformsPage() {
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
-  const [sortOrder, setSortOrder] = useState(0);
   const [addLoading, setAddLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const fetchPlatforms = useCallback(async () => {
     try {
@@ -53,10 +54,9 @@ export default function AdminPlatformsPage() {
       await apiRequest<{ success: boolean }>("/admin/platforms", {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ name: name.trim(), sortOrder }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       setName("");
-      setSortOrder(0);
       setMessage("Platform added.");
       fetchPlatforms();
     } catch (err: unknown) {
@@ -97,6 +97,28 @@ export default function AdminPlatformsPage() {
     }
   };
 
+  const handleSaveEdit = async (platform: PlatformItem) => {
+    const nextName = editName.trim();
+    if (!nextName || nextName === platform.name) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      setError("");
+      setMessage("");
+      await apiRequest<{ success: boolean }>(`/admin/platforms/${platform.id}`, {
+        method: "PATCH",
+        token: getToken() || undefined,
+        body: JSON.stringify({ name: nextName }),
+      });
+      setEditingId(null);
+      setMessage(`Platform renamed to "${nextName}".`);
+      fetchPlatforms();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update platform");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
       <Sidebar />
@@ -132,13 +154,6 @@ export default function AdminPlatformsPage() {
               placeholder="Platform name (e.g. TikTok, Instagram, YouTube)"
               className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
             />
-            <input
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-              placeholder="Order"
-              className="w-28 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
-            />
             <button
               onClick={handleAdd}
               disabled={addLoading || !name.trim()}
@@ -156,7 +171,6 @@ export default function AdminPlatformsPage() {
               <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
                 <tr>
                   <th className="px-6 py-4">Platform</th>
-                  <th className="px-6 py-4">Order</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -166,22 +180,36 @@ export default function AdminPlatformsPage() {
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-40" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-12" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
                       <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-24 ml-auto" /></td>
                     </tr>
                   ))
                 ) : platforms.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-stone-400">
-                      No platforms yet. Add your first platform above.
-                    </td>
-                  </tr>
+                    <tr>
+                      <td colSpan={3} className="px-6 py-12 text-center text-stone-400">
+                        No platforms yet. Add your first platform above.
+                      </td>
+                    </tr>
                 ) : (
                   platforms.map((p) => (
                     <tr key={p.id} className="hover:bg-stone-50/80 transition-colors">
-                      <td className="px-6 py-4 font-bold text-stone-900">{p.name}</td>
-                      <td className="px-6 py-4 text-stone-500 font-mono">{p.sortOrder}</td>
+                      <td className="px-6 py-4 font-bold text-stone-900">
+                        {editingId === p.id ? (
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveEdit(p);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            autoFocus
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                          />
+                        ) : (
+                          p.name
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider font-mono ${
@@ -193,22 +221,50 @@ export default function AdminPlatformsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleToggle(p)}
-                            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
-                              p.enabled
-                                ? "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                                : "bg-stone-900 text-white hover:bg-stone-800"
-                            }`}
-                          >
-                            {p.enabled ? "Disable" : "Enable"}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(p)}
-                            className="px-3.5 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
-                          >
-                            Delete
-                          </button>
+                          {editingId === p.id ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveEdit(p)}
+                                className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="px-3.5 py-1.5 bg-stone-100 text-stone-600 rounded-lg text-xs font-semibold transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingId(p.id);
+                                  setEditName(p.name);
+                                }}
+                                className="px-3.5 py-1.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleToggle(p)}
+                                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
+                                  p.enabled
+                                    ? "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                    : "bg-stone-900 text-white hover:bg-stone-800"
+                                }`}
+                              >
+                                {p.enabled ? "Disable" : "Enable"}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(p)}
+                                className="px-3.5 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

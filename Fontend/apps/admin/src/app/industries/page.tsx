@@ -19,12 +19,13 @@ export default function AdminIndustriesPage() {
   const [industries, setIndustries] = useState<IndustryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
-  const [sortOrder, setSortOrder] = useState(0);
   const [costPerView, setCostPerView] = useState("");
   const [editingRate, setEditingRate] = useState<Record<string, string>>({});
   const [addLoading, setAddLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const fetchIndustries = useCallback(async () => {
     try {
@@ -59,12 +60,10 @@ export default function AdminIndustriesPage() {
         token: getToken() || undefined,
         body: JSON.stringify({
           name: name.trim(),
-          sortOrder,
           costPerView: costPerView === "" ? null : Number(costPerView),
         }),
       });
       setName("");
-      setSortOrder(0);
       setCostPerView("");
       setMessage("Industry added.");
       fetchIndustries();
@@ -123,6 +122,28 @@ export default function AdminIndustriesPage() {
     }
   };
 
+  const handleSaveEdit = async (industry: IndustryItem) => {
+    const nextName = editName.trim();
+    if (!nextName || nextName === industry.name) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      setError("");
+      setMessage("");
+      await apiRequest<{ success: boolean }>(`/admin/industries/${industry.id}`, {
+        method: "PATCH",
+        token: getToken() || undefined,
+        body: JSON.stringify({ name: nextName }),
+      });
+      setEditingId(null);
+      setMessage(`Industry renamed to "${nextName}".`);
+      fetchIndustries();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update industry");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
       <Sidebar />
@@ -160,13 +181,6 @@ export default function AdminIndustriesPage() {
             />
             <input
               type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-              placeholder="Order"
-              className="w-24 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
-            />
-            <input
-              type="number"
               step="0.01"
               min="0"
               value={costPerView}
@@ -193,7 +207,6 @@ export default function AdminIndustriesPage() {
                   <th className="px-6 py-4">Industry</th>
                   <th className="px-6 py-4">Amount per view</th>
                   <th className="px-6 py-4">Creators</th>
-                  <th className="px-6 py-4">Order</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -209,15 +222,31 @@ export default function AdminIndustriesPage() {
                     </tr>
                   ))
                 ) : industries.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
-                      No industries yet. Add your first industry above.
-                    </td>
-                  </tr>
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-stone-400">
+                        No industries yet. Add your first industry above.
+                      </td>
+                    </tr>
                 ) : (
                   industries.map((i) => (
                     <tr key={i.id} className="hover:bg-stone-50/80 transition-colors">
-                      <td className="px-6 py-4 font-bold text-stone-900">{i.name}</td>
+                      <td className="px-6 py-4 font-bold text-stone-900">
+                        {editingId === i.id ? (
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveEdit(i);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            autoFocus
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                          />
+                        ) : (
+                          i.name
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <input
@@ -240,7 +269,6 @@ export default function AdminIndustriesPage() {
                           {i.creatorCount ?? 0} creators
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-stone-500 font-mono">{i.sortOrder}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider font-mono ${
@@ -252,22 +280,50 @@ export default function AdminIndustriesPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleToggle(i)}
-                            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
-                              i.enabled
-                                ? "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                                : "bg-stone-900 text-white hover:bg-stone-800"
-                            }`}
-                          >
-                            {i.enabled ? "Disable" : "Enable"}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(i)}
-                            className="px-3.5 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
-                          >
-                            Delete
-                          </button>
+                          {editingId === i.id ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveEdit(i)}
+                                className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="px-3.5 py-1.5 bg-stone-100 text-stone-600 rounded-lg text-xs font-semibold transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingId(i.id);
+                                  setEditName(i.name);
+                                }}
+                                className="px-3.5 py-1.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleToggle(i)}
+                                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
+                                  i.enabled
+                                    ? "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                    : "bg-stone-900 text-white hover:bg-stone-800"
+                                }`}
+                              >
+                                {i.enabled ? "Disable" : "Enable"}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(i)}
+                                className="px-3.5 py-1.5 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

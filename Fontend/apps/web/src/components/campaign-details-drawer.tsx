@@ -7,6 +7,7 @@ import { TiktokIcon, File01Icon, Download01Icon, CloudUploadIcon, CheckIcon } fr
 import { cn } from "@ep/ui/lib/utils";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { useToast } from "@ep/ui/components/toast";
+import { usePlatforms } from "@ep/ui/hooks/use-platforms";
 import emptyActivityImg from "@ep/ui/assets/empty-activity.png";
 import inReviewCreatorImg from "@ep/ui/assets/in-review-creator.png";
 import changesFeedbackImg from "@ep/ui/assets/Changes-feedback-creator.png";
@@ -41,10 +42,15 @@ export function CampaignDetailsDrawer({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoUrl, setVideoUrl] = useState("");
   const [caption, setCaption] = useState("");
+  const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const displayCampaign = campaign;
+
+  const videoThumbUrl = displayCampaign.videoUrl
+    ? displayCampaign.videoUrl.replace(/\.(mp4|mov|webm|avi)$/i, ".jpg")
+    : undefined;
 
   const linkPlatforms = displayCampaign.platforms?.length ? displayCampaign.platforms : ["tiktok", "instagram"];
   const allLinksFilled = linkPlatforms.every((p) => (linkInputs[p] || "").trim().length > 0);
@@ -206,12 +212,14 @@ export function CampaignDetailsDrawer({
     </MobileDrawer>
   );
 
+  const { platforms } = usePlatforms();
   const platformLabels: Record<string, string> = {
     tiktok: "TikTok",
     instagram: "Instagram",
     youtube: "YouTube",
     twitter: "X (Twitter)",
     facebook: "Facebook",
+    ...Object.fromEntries(platforms.map((p) => [p.name.toLowerCase(), p.name])),
   };
 
   const displayPlatforms = (displayCampaign.platforms || ["tiktok", "instagram"])
@@ -235,14 +243,28 @@ export function CampaignDetailsDrawer({
     const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string) => (
       <div className={cn("bg-stone-100 rounded-[16px] p-2", review && "space-y-2")}>
         <div className="flex gap-3">
-          <div className="w-20 h-28 rounded-xl bg-stone-200 relative flex items-center justify-center overflow-hidden shrink-0">
-            <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center text-stone-900 z-10">
+          <button
+            onClick={() => displayCampaign.videoUrl && setPreviewVideoUrl(displayCampaign.videoUrl)}
+            disabled={!displayCampaign.videoUrl}
+            className="w-20 h-28 rounded-xl bg-stone-200 relative flex items-center justify-center overflow-hidden shrink-0 cursor-pointer"
+          >
+            {videoThumbUrl && (
+              <Image
+                src={videoThumbUrl}
+                alt=""
+                fill
+                sizes="80px"
+                unoptimized
+                className="object-cover"
+              />
+            )}
+            <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-stone-900 z-10">
               <svg className="w-2.5 h-2.5 translate-x-[1px]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-tr from-purple-200 to-indigo-100 opacity-60"></div>
-          </div>
+            <div className="absolute inset-0 bg-gradient-to-tr from-purple-200 to-indigo-100 opacity-40"></div>
+          </button>
           <div className="flex-1 min-w-0 space-y-2">
             <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
               &quot;{displayCampaign.caption || "New drop from Musta4a is banging!!! This new jam called Pass am is so good #nusound #viral"}&quot;
@@ -669,6 +691,27 @@ export function CampaignDetailsDrawer({
     </div>
   );
 
+  const renderVideoPreview = () =>
+    previewVideoUrl ? (
+      <div className="fixed inset-0 z-[60] bg-stone-950/70 backdrop-blur-sm flex items-center justify-center p-6 font-rethink">
+        <button
+          onClick={() => setPreviewVideoUrl(null)}
+          aria-label="Close preview"
+          className="absolute top-5 right-5 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 text-white hover:bg-white/20"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+        <video
+          src={previewVideoUrl}
+          controls
+          autoPlay
+          className="max-w-full max-h-[80vh] rounded-2xl bg-black"
+        />
+      </div>
+    ) : null;
+
   if (isMobile) {
     return (
       <div className="min-h-dvh bg-[#FAFAF9] flex flex-col">
@@ -693,6 +736,7 @@ export function CampaignDetailsDrawer({
         </div>
 
         {renderMobileUploadSheet()}
+        {renderVideoPreview()}
       </div>
     );
   }
@@ -721,9 +765,10 @@ export function CampaignDetailsDrawer({
         {panelContent}
       </div>
 
-      {renderMobileUploadSheet()}
-    </div>
-  );
+        {renderMobileUploadSheet()}
+        {renderVideoPreview()}
+      </div>
+    );
 }
 
 function StatusDetailsBadge({ status }: { status: CampaignItem["status"] }) {

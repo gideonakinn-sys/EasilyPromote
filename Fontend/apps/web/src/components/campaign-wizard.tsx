@@ -46,6 +46,12 @@ interface CampaignWizardProps {
   draftId?: string;
 }
 
+interface PlatformOption {
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 const PLATFORM_OPTIONS = ["TikTok", "Facebook", "Instagram", "YouTube", "X (Twitter)"];
 
 const PLATFORM_KEY_MAP: Record<string, string> = {
@@ -160,9 +166,34 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [nicheOptions, setNicheOptions] = useState<string[]>([...AVAILABLE_NICHES]);
+  const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(FALLBACK_CATEGORIES);
   const isModified = useRef(false);
   const { toast } = useToast();
   useReveal(createStep);
+
+  useEffect(() => {
+    apiRequest<{ industries: { name: string; enabled: boolean }[] }>("/industries")
+      .then((data) => {
+        const enabled = (data.industries || [])
+          .filter((i) => i.enabled)
+          .map((i) => i.name);
+        if (enabled.length > 0) setCategoryOptions(enabled);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    apiRequest<{ platforms: PlatformOption[] }>("/platforms")
+      .then((data) => {
+        const enabled = (data.platforms || [])
+          .filter((p) => p.enabled)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((p) => p.name);
+        if (enabled.length > 0) setPlatformOptions(enabled);
+      })
+      .catch((err: unknown) => console.error("Failed to load platforms:", err));
+  }, []);
 
   useEffect(() => {
     apiRequest<{ niches: { name: string }[] }>("/niches")
@@ -363,8 +394,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       budget: newBudget,
     }));
   };
-
-  const categoryOptions = Object.keys(pricingRates).length > 0 ? Object.keys(pricingRates) : FALLBACK_CATEGORIES;
 
   const toggleStyle = (style: string) => {
     isModified.current = true;
@@ -888,19 +917,19 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <span>{campaign.category}</span>
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
-                    {categoryOptions.map((cat) => (
-                      <DropdownMenuItem
-                        key={cat}
-                        onSelect={() => handleCategoryChange(cat)}
-                        className={campaign.category === cat ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
-                      >
-                        {cat}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
+                      {categoryOptions.map((cat) => (
+                        <DropdownMenuItem
+                          key={cat}
+                          onSelect={() => handleCategoryChange(cat)}
+                          className={campaign.category === cat ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                        >
+                          {cat}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 <span className="text-[10px] text-stone-400 font-medium">
                   ₦{getRate(campaign.category).toFixed(3)} per view — Budget calculated automatically
                 </span>
@@ -1105,7 +1134,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <InfoTooltip text="Where you want creators to post their content" />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {PLATFORM_OPTIONS.map((platform) => {
+                  {platformOptions.map((platform) => {
                     const selected = (campaign.platforms || []).includes(platform);
                     return (
                       <button

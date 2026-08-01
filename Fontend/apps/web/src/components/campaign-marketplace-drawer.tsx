@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
+import { usePlatforms } from "@ep/ui/hooks/use-platforms";
 import Image from "next/image";
 import { Drawer, DrawerContent } from "@ep/ui/components/drawer";
 import * as DrawerPrimitive from "vaul";
@@ -35,13 +36,6 @@ function formatViews(n: number): string {
   return n.toString();
 }
 
-const PLATFORM_LABELS: Record<string, string> = {
-  tiktok: "TikTok",
-  instagram: "Instagram",
-  youtube: "YouTube",
-  twitter: "X",
-};
-
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -68,6 +62,14 @@ function CampaignDrawerContent({
   isMobile: boolean;
   onClose: () => void;
 }) {
+  const { platforms } = usePlatforms();
+  const platformLabels: Record<string, string> = {
+    tiktok: "TikTok",
+    instagram: "Instagram",
+    youtube: "YouTube",
+    twitter: "X",
+    ...Object.fromEntries(platforms.map((p) => [p.name.toLowerCase(), p.name])),
+  };
   const minViews = Math.ceil(campaign.targetViews * 0.2);
   const maxViews = Math.ceil(campaign.targetViews * 0.5);
   const presets = buildViewPresets(campaign.targetViews);
@@ -144,7 +146,7 @@ function CampaignDrawerContent({
             </div>
             <div className="flex justify-between items-center font-rethink text-sm font-medium">
               <span className="text-stone-500">Platform</span>
-              <span className="text-stone-800">{campaign.platforms.map((p) => PLATFORM_LABELS[p] || p).join(", ")}</span>
+              <span className="text-stone-800">{campaign.platforms.map((p) => platformLabels[p] || p).join(", ")}</span>
             </div>
           </div>
 

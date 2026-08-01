@@ -12,6 +12,7 @@ import {
   YoutubeIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
+import { usePlatforms } from "@ep/ui/hooks/use-platforms";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
 import type { CreatorProfile, ProfileFocusSection, ProfileForm } from "./types";
@@ -30,12 +31,6 @@ interface ProfileViewProps {
   onSaveProfile: () => void;
 }
 
-const PLATFORM_LABELS: Record<string, string> = {
-  tiktok: "TikTok",
-  instagram: "Instagram",
-  youtube: "YouTube",
-};
-
 const PLATFORM_STYLES: Record<string, { icon: typeof TiktokIcon; iconBg: string; iconColor: string }> = {
   tiktok: { icon: TiktokIcon, iconBg: "bg-purple-100 border-purple-200", iconColor: "text-purple-600" },
   instagram: { icon: InstagramIcon, iconBg: "bg-pink-100 border-pink-200", iconColor: "text-pink-600" },
@@ -43,8 +38,6 @@ const PLATFORM_STYLES: Record<string, { icon: typeof TiktokIcon; iconBg: string;
 };
 
 const DEFAULT_PLATFORM_STYLE = { icon: TiktokIcon, iconBg: "bg-purple-100 border-purple-200", iconColor: "text-purple-600" };
-
-const SOCIAL_PLATFORMS = ["TikTok", "Instagram", "YouTube"];
 
 export function ProfileView({
   profile,
@@ -66,6 +59,14 @@ export function ProfileView({
 
   const [addPlatform, setAddPlatform] = useState("TikTok");
   const [addHandle, setAddHandle] = useState("");
+  const { platforms } = usePlatforms();
+  const socialPlatforms = platforms.map((p) => p.name);
+  const platformLabels: Record<string, string> = {
+    tiktok: "TikTok",
+    instagram: "Instagram",
+    youtube: "YouTube",
+    ...Object.fromEntries(platforms.map((p) => [p.name.toLowerCase(), p.name])),
+  };
 
   const [niches, setNiches] = useState<string[]>([]);
   const [nicheOptions, setNicheOptions] = useState<string[]>([...AVAILABLE_NICHES]);
@@ -303,7 +304,7 @@ export function ProfileView({
 
           <div className="space-y-3 mb-5">
             <div className="grid grid-cols-3 gap-2">
-              {SOCIAL_PLATFORMS.map((p) => (
+              {socialPlatforms.map((p) => (
                 <button
                   key={p}
                   onClick={() => setAddPlatform(p)}
@@ -349,7 +350,7 @@ export function ProfileView({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-stone-900 flex items-center gap-1.5">
-                        {PLATFORM_LABELS[acct.platform] ?? acct.platform}
+                        {platformLabels[acct.platform] ?? acct.platform}
                         {acct.verified && (
                           <HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} className="text-blue-600" />
                         )}

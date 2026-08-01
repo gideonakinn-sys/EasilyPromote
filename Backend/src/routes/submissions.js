@@ -238,15 +238,17 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
-    if (submission.status !== "awaiting_post") {
+    if (!["awaiting_post", "approved"].includes(submission.status)) {
       return res.status(400).json({ error: "Submission must be awaiting_post before marking as posted" });
     }
 
     const normalizePlatform = (p) => {
       if (!p) return null;
-      const value = p.trim();
-      if (value.toLowerCase() === "x") return "X";
-      return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+      const value = p.trim().toLowerCase();
+      if (!value) return null;
+      if (value === "twitter" || value === "x (twitter)" || value === "x") return "x";
+      if (value === "youtube" || value === "youtube shorts") return "youtube";
+      return value;
     };
 
     const newPosts = Array.isArray(posts)
@@ -299,7 +301,8 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
 
 router.post("/:id/sync-stats", protect, async (req, res, next) => {
   try {
-    const { platform, views, likes, comments } = req.body;
+    const { platform: rawPlatform, views, likes, comments } = req.body;
+    const platform = rawPlatform ? rawPlatform.trim().toLowerCase() : "";
 
     const submission = await Submission.findById(req.params.id);
     if (!submission) {

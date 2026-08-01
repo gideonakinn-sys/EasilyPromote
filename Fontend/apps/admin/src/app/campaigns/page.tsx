@@ -55,13 +55,17 @@ const PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "You
 
 const CONTENT_STYLE_PRESETS = ["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"];
 
-const CATEGORY_OPTIONS = ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"];
-
 interface PlatformItem {
   id: string;
   name: string;
   enabled: boolean;
   sortOrder: number;
+}
+
+interface IndustryItem {
+  id: string;
+  name: string;
+  enabled: boolean;
 }
 
 export default function AdminCampaignsPage() {
@@ -82,6 +86,7 @@ export default function AdminCampaignsPage() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
   const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
+  const [industryOptions, setIndustryOptions] = useState<string[]>([]);
 
   const fetchPlatforms = useCallback(async () => {
     try {
@@ -98,9 +103,24 @@ export default function AdminCampaignsPage() {
     }
   }, []);
 
+  const fetchIndustries = useCallback(async () => {
+    try {
+      const data = await apiRequest<{ industries: IndustryItem[] }>("/admin/industries", {
+        token: getToken() || undefined,
+      });
+      const enabled = (data.industries || [])
+        .filter((i) => i.enabled)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((i) => i.name);
+      if (enabled.length > 0) setIndustryOptions(enabled);
+    } catch {
+      setIndustryOptions([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!selectedCampaign) return;
-    setEditCategory(selectedCampaign.category || "Music");
+    setEditCategory(selectedCampaign.category || industryOptions[0] || "Music");
     setEditPlatforms(selectedCampaign.platforms || []);
     setEditContentStyle(selectedCampaign.contentStyle || []);
     setEditNiches(selectedCampaign.niches || []);
@@ -135,7 +155,8 @@ export default function AdminCampaignsPage() {
     }
     fetchCampaigns();
     fetchPlatforms();
-  }, [router, fetchCampaigns, fetchPlatforms]);
+    fetchIndustries();
+  }, [router, fetchCampaigns, fetchPlatforms, fetchIndustries]);
 
   const handleStatusChange = async (campaignId: string, newStatus: string) => {
     try {
@@ -433,8 +454,8 @@ export default function AdminCampaignsPage() {
                         onChange={(e) => setEditCategory(e.target.value)}
                         className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
                       >
-                        {CATEGORY_OPTIONS.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
+                        {industryOptions.map((ind) => (
+                          <option key={ind} value={ind}>{ind}</option>
                         ))}
                       </select>
                     </div>

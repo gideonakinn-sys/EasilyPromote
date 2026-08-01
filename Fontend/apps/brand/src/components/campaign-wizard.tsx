@@ -38,7 +38,7 @@ interface CampaignWizardProps {
   draftId?: string;
 }
 
-const PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "YouTube"];
+const DEFAULT_PLATFORM_OPTIONS = ["TikTok", "Instagram", "X (Twitter)", "Facebook", "YouTube"];
 
 const DRAFT_STORAGE_KEY = "ep-draft-autosave";
 
@@ -51,9 +51,34 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean }>({ step1: false, step2: false });
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [platformOptions, setPlatformOptions] = useState<string[]>(DEFAULT_PLATFORM_OPTIONS);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"]);
   const isModified = useRef(false);
   const { toast } = useToast();
   useReveal(createStep);
+
+  useEffect(() => {
+    apiRequest<{ platforms: { name: string; enabled: boolean; sortOrder: number }[] }>("/platforms")
+      .then((data) => {
+        const enabled = (data.platforms || [])
+          .filter((p) => p.enabled)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((p) => p.name);
+        if (enabled.length > 0) setPlatformOptions(enabled);
+      })
+      .catch((err: unknown) => console.error("Failed to load platforms:", err));
+  }, []);
+
+  useEffect(() => {
+    apiRequest<{ industries: { name: string; enabled: boolean }[] }>("/industries")
+      .then((data) => {
+        const enabled = (data.industries || [])
+          .filter((i) => i.enabled)
+          .map((i) => i.name);
+        if (enabled.length > 0) setCategoryOptions(enabled);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     apiRequest<{ default: number; categories: Record<string, number> }>("/campaigns/pricing")
@@ -667,10 +692,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
                     <MobileDrawer open={categoryDrawerOpen} onOpenChange={setCategoryDrawerOpen}>
-                      {(Object.keys(pricingRates).length > 0
-                        ? Object.keys(pricingRates)
-                        : ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"]
-                      ).map((cat) => (
+                      {categoryOptions.map((cat) => (
                         <button
                           key={cat}
                           type="button"
@@ -696,14 +718,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       onChange={(e) => handleCategoryChange(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] appearance-none placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
                     >
-                      {Object.keys(pricingRates).length > 0
-                        ? Object.keys(pricingRates).map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))
-                        : ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"].map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))
-                      }
+                      {categoryOptions.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                     </select>
                     <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
@@ -891,7 +908,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
                     <MobileDrawer open={platformDrawerOpen} onOpenChange={setPlatformDrawerOpen}>
-                      {PLATFORM_OPTIONS.map((platform) => (
+                      {platformOptions.map((platform) => (
                         <button
                           key={platform}
                           type="button"
@@ -917,7 +934,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   </>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
-                    {PLATFORM_OPTIONS.map((platform) => (
+                    {platformOptions.map((platform) => (
                       <button
                         key={platform}
                         type="button"

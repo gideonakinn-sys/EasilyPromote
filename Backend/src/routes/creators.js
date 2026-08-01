@@ -309,6 +309,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
               status = "under_review";
               break;
             case "awaiting_post":
+            case "approved":
               status = "approved_post";
               break;
             case "posted":
@@ -367,7 +368,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
             ? "Claimed"
             : submission && submission.status === "posted"
             ? "Live"
-            : submission && submission.status === "awaiting_post"
+            : submission && (submission.status === "awaiting_post" || submission.status === "approved")
             ? "Awaiting Post"
             : "Submitted",
           submittedAgo: submission ? submission.submittedAt : undefined,
