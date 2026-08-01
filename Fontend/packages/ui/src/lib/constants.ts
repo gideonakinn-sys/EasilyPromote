@@ -40,7 +40,7 @@ export const TYPOGRAPHY = {
   welcomeHeader: "font-motterdam font-normal text-[33px] leading-[42.67px] text-stone-900",
   
   // "Let's create a campaign that gets real results." - Rethink Sans 500 14px 20px #1C1917
-  welcomeSubtitle: "font-rethink font-medium text-sm leading-[20px] text-stone-900",
+  welcomeSubtitle: "font-rethink font-medium text-sm leading-[20px] text-stone-900 tracking-[-0.01em]",
   
   // "Create Campaign" - Rethink Sans 600 14px 20px #1C1917
   createCampaignButton: "font-rethink font-semibold text-sm leading-[20px] text-stone-900",

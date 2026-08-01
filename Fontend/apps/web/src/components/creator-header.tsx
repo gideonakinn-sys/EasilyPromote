@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "./ui/dropdown-menu";
+} from "@ep/ui/components/dropdown-menu";
 import logoPrimary from "@ep/ui/assets/logo-primary.svg";
 import rankIllustration from "@ep/ui/assets/Rank illustration.svg";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";

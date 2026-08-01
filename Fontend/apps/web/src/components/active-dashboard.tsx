@@ -10,8 +10,9 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-} from "./ui/dropdown-menu";
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@ep/ui/components/dropdown-menu";
 import { cn } from "@ep/ui/lib/utils";
 import { useReveal } from "../hooks/use-reveal";
 
@@ -65,11 +66,13 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
     }
   };
 
+  const normalizeStatus = (s: string) => s.toLowerCase().replace(/[_\s]+/g, " ").trim();
+
   const filteredCampaigns = campaigns.filter((c) => {
     if (selectedFilter === "All Campaigns") return true;
     if (selectedFilter === "Draft") return c.status === "draft" || c.status === "pending_payment";
     if (selectedFilter === "Delivered") return c.status === "completed";
-    return c.status.toLowerCase() === selectedFilter.toLowerCase();
+    return normalizeStatus(c.status) === normalizeStatus(selectedFilter);
   });
 
   return (
@@ -100,15 +103,13 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {FILTER_OPTIONS.map((option) => (
-                  <DropdownMenuCheckboxItem
-                    key={option}
-                    checked={selectedFilter === option}
-                    onSelect={() => setSelectedFilter(option)}
-                  >
-                    {option}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                <DropdownMenuRadioGroup value={selectedFilter} onValueChange={setSelectedFilter}>
+                  {FILTER_OPTIONS.map((option) => (
+                    <DropdownMenuRadioItem key={option} value={option}>
+                      {option}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -116,7 +117,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           {/* Create campaign button */}
           <button
             onClick={onCreateCampaign}
-            className="flex items-center justify-center p-3 md:px-6 md:py-2.5 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100"
+            className="flex items-center justify-center p-3 md:px-6 md:py-3 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100"
           >
             <HugeiconsIcon icon={Add01Icon} size={20} className="md:hidden" />
             <span className="hidden md:inline">Create Campaign</span>
@@ -167,7 +168,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
 
         {filteredCampaigns.length === 0 && (
           <div className="col-span-full text-center py-12">
-            <p className="text-stone-500 text-sm font-medium">No campaigns found.</p>
+            <p className="text-stone-500 text-sm font-medium tracking-[-0.01em]">No campaigns found.</p>
           </div>
         )}
       </div>

@@ -31,34 +31,28 @@ export function CampaignCard({
   // Determine badge colors and labels
   const getBadges = () => {
     switch (status) {
-      case "review_needed":
-        return (
-          <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-[#176448]" /> Live Campaigns
-          </span>
-        );
       case "live":
         return (
-          <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-[#176448]" /> Live Campaigns
+          <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-[#176448]" /> Live
           </span>
         );
       case "draft":
       case "pending_payment":
         return (
-          <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1">
+          <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
             <span className="w-1 h-1 rounded-full bg-stone-500" /> Draft
           </span>
         );
       case "under_review":
         return (
-          <span className="px-2 py-0.5 rounded-full bg-[#FBDFB1] text-[#693D11] font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1">
+          <span className="px-2 py-0.5 rounded-full bg-[#FBDFB1] text-[#693D11] font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
             <span className="w-1 h-1 rounded-full bg-[#693D11]" /> Under Review
           </span>
         );
       case "completed":
         return (
-          <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-[-0.01em] text-[10px] font-rethink flex items-center gap-1">
+          <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
             <span className="w-1 h-1 rounded-full bg-[#176448]" /> Completed
           </span>
         );
@@ -71,7 +65,7 @@ export function CampaignCard({
     <div
       onClick={onClick}
       className={cn(
-        "bg-white rounded-3xl border-[0.2px] border-stone-200 md:border md:border-stone-100 p-4 flex flex-col justify-between relative overflow-hidden",
+        "bg-white rounded-2xl border border-stone-200 p-4 flex flex-col justify-between relative overflow-hidden",
         onClick && "cursor-pointer",
         className
       )}
@@ -94,7 +88,7 @@ export function CampaignCard({
           )}
           <div className="flex items-center gap-1.5">
             {status !== "draft" && category && (
-              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-[-0.01em] text-[10px] font-rethink">
+              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
                 {category}
               </span>
             )}
@@ -107,7 +101,7 @@ export function CampaignCard({
           {title}
         </h3>
         {description && (
-          <p className="font-rethink text-xs text-stone-500 truncate mt-1 mb-5">{description}</p>
+          <p className="font-rethink text-xs text-stone-500 font-medium truncate mt-1 mb-5 tracking-[-0.01em]">{description}</p>
         )}
       </div>
 
@@ -118,7 +112,7 @@ export function CampaignCard({
             e.stopPropagation();
             if (onResume) onResume();
           }}
-          className="w-full mt-auto h-12 bg-white border border-stone-100 text-stone-900 rounded-full font-rethink font-semibold tracking-[-0.01em] text-sm"
+          className="w-full py-3 bg-white border border-stone-200 text-stone-900 rounded-full font-rethink font-semibold tracking-[-0.01em] text-sm"
         >
           Resume
         </button>

@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
-} from "./ui/dropdown-menu";
+} from "@ep/ui/components/dropdown-menu";
 import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
 import { useReveal } from "../hooks/use-reveal";
