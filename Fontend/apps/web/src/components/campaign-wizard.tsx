@@ -176,7 +176,21 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.campaign) {
-          setCampaign(parsed.campaign);
+          setCampaign({
+            name: parsed.campaign.name || "",
+            category: parsed.campaign.category || "Music",
+            views: parsed.campaign.views || 1000000,
+            budget: parsed.campaign.budget || 0,
+            description: parsed.campaign.description || "",
+            keyMessage: parsed.campaign.keyMessage || "",
+            avoid: parsed.campaign.avoid || "",
+            platforms: Array.isArray(parsed.campaign.platforms) ? parsed.campaign.platforms : [],
+            contentStyle: Array.isArray(parsed.campaign.contentStyle) ? parsed.campaign.contentStyle : [],
+            niches: Array.isArray(parsed.campaign.niches) ? parsed.campaign.niches : [],
+            scriptUrl: parsed.campaign.scriptUrl || "",
+            scriptFileName: parsed.campaign.scriptFileName || "",
+            coverImageUrl: parsed.campaign.coverImageUrl || "",
+          });
           if (parsed.createStep) setCreateStep(parsed.createStep);
           if (parsed.viewsInput) setViewsInput(parsed.viewsInput);
           toast("Draft restored from previous session", "success");
@@ -340,9 +354,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     contentBrief: campaign.description,
     keyMessageCta: campaign.keyMessage,
     whatToAvoid: campaign.avoid,
-    platforms: campaign.platforms.map((p) => p.toLowerCase()),
-    contentStyle: campaign.contentStyle.filter(Boolean).join(", "),
-    niches: campaign.niches.filter(Boolean),
+   platforms: (campaign.platforms || []).map((p) => p.toLowerCase()),
+   contentStyle: (campaign.contentStyle || []).filter(Boolean).join(", "),
+   niches: (campaign.niches || []).filter(Boolean),
     scriptUrl: campaign.scriptUrl || undefined,
     scriptFileName: campaign.scriptFileName || undefined,
     coverImageUrl: campaign.coverImageUrl || undefined,
@@ -922,7 +936,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       onClick={() => setPlatformDrawerOpen(true)}
                       className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] text-left flex items-center justify-between"
                     >
-                      <span>{campaign.platforms.length === 0 ? "Select platforms" : `${campaign.platforms.length} platform${campaign.platforms.length > 1 ? "s" : ""} selected`}</span>
+                      <span>{(campaign.platforms || []).length === 0 ? "Select platforms" : `${(campaign.platforms || []).length} platform${(campaign.platforms || []).length > 1 ? "s" : ""} selected`}</span>
                       <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
                     </button>
                     <MobileDrawer open={platformDrawerOpen} onOpenChange={setPlatformDrawerOpen}>
@@ -934,18 +948,18 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                             isModified.current = true;
                             setCampaign(prev => ({
                               ...prev,
-                              platforms: prev.platforms.includes(platform)
-                                ? prev.platforms.filter(p => p !== platform)
-                                : [...prev.platforms, platform],
+                              platforms: (prev.platforms || []).includes(platform)
+                                ? (prev.platforms || []).filter(p => p !== platform)
+                                : [...(prev.platforms || []), platform],
                             }));
                           }}
                           className={cn(
                             "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium font-rethink",
-                            campaign.platforms.includes(platform) ? "bg-stone-100 text-stone-900" : "text-stone-600"
+                            (campaign.platforms || []).includes(platform) ? "bg-stone-100 text-stone-900" : "text-stone-600"
                           )}
                         >
                           <span>{platform}</span>
-                          {campaign.platforms.includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} className="text-stone-900" />}
+                          {(campaign.platforms || []).includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} className="text-stone-900" />}
                         </button>
                       ))}
                     </MobileDrawer>
@@ -960,31 +974,31 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                           isModified.current = true;
                           setCampaign(prev => ({
                             ...prev,
-                            platforms: prev.platforms.includes(platform)
-                              ? prev.platforms.filter(p => p !== platform)
-                              : [...prev.platforms, platform],
+                            platforms: (prev.platforms || []).includes(platform)
+                              ? (prev.platforms || []).filter(p => p !== platform)
+                              : [...(prev.platforms || []), platform],
                           }));
                         }}
                         className={cn(
                           "flex items-center justify-between px-4 py-3 rounded-full text-sm font-medium font-rethink border transition-colors",
-                          campaign.platforms.includes(platform)
+                          (campaign.platforms || []).includes(platform)
                             ? "bg-stone-900 text-white border-stone-900"
                             : "bg-white text-stone-600 border-stone-200"
                         )}
                       >
                         <span>{platform}</span>
-                        {campaign.platforms.includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} />}
+                        {(campaign.platforms || []).includes(platform) && <HugeiconsIcon icon={CheckIcon} size={16} />}
                       </button>
                     ))}
                   </div>
                 )}
-                {campaign.platforms.length > 0 && (
+                {(campaign.platforms || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {campaign.platforms.map((p) => (
+                    {(campaign.platforms || []).map((p) => (
                       <span key={p} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
                         {p}
                         <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, platforms: prev.platforms.filter(pl => pl !== p) })); }}
+                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, platforms: (prev.platforms || []).filter(pl => pl !== p) })); }}
                           aria-label={`Remove ${p}`}
                           className="ml-0.5"
                           >
@@ -1010,11 +1024,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && customStyleInput.trim()) {
                           e.preventDefault();
-                          if (!campaign.contentStyle.includes(customStyleInput.trim())) {
+                          if (!(campaign.contentStyle || []).includes(customStyleInput.trim())) {
                             isModified.current = true;
                             setCampaign(prev => ({
                               ...prev,
-                              contentStyle: [...prev.contentStyle, customStyleInput.trim()],
+                              contentStyle: [...(prev.contentStyle || []), customStyleInput.trim()],
                             }));
                           }
                           setCustomStyleInput("");
@@ -1024,11 +1038,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     />
                     <button
                       onClick={() => {
-                        if (customStyleInput.trim() && !campaign.contentStyle.includes(customStyleInput.trim())) {
+                        if (customStyleInput.trim() && !(campaign.contentStyle || []).includes(customStyleInput.trim())) {
                           isModified.current = true;
                           setCampaign(prev => ({
                             ...prev,
-                            contentStyle: [...prev.contentStyle, customStyleInput.trim()],
+                            contentStyle: [...(prev.contentStyle || []), customStyleInput.trim()],
                           }));
                           setCustomStyleInput("");
                         }
@@ -1043,7 +1057,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   {/* All style chips — presets + custom */}
                   <div className="flex flex-wrap gap-2">
                     {["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"].map((style) => {
-                      const isSelected = campaign.contentStyle.includes(style);
+                      const isSelected = (campaign.contentStyle || []).includes(style);
                       return (
                         <button
                           key={style}
@@ -1053,8 +1067,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                             setCampaign(prev => ({
                               ...prev,
                               contentStyle: isSelected
-                                ? prev.contentStyle.filter(s => s !== style)
-                                : [...prev.contentStyle, style],
+                                ? (prev.contentStyle || []).filter(s => s !== style)
+                                : [...(prev.contentStyle || []), style],
                             }));
                           }}
                           className={cn(
@@ -1068,11 +1082,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                         </button>
                       );
                     })}
-                    {campaign.contentStyle.filter(s => !["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"].includes(s)).map((style) => (
+                    {(campaign.contentStyle || []).filter(s => !["Fun & Energetic", "Lifestyle", "Comedy", "Trend/Challenge"].includes(s)).map((style) => (
                       <span key={style} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
                         {style}
                         <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, contentStyle: prev.contentStyle.filter(s => s !== style) })); }}
+                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, contentStyle: (prev.contentStyle || []).filter(s => s !== style) })); }}
                           aria-label={`Remove ${style}`}
                           className="ml-0.5"
                         >
@@ -1096,11 +1110,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && customNicheInput.trim()) {
                           e.preventDefault();
-                          if (!campaign.niches.includes(customNicheInput.trim())) {
+                          if (!(campaign.niches || []).includes(customNicheInput.trim())) {
                             isModified.current = true;
                             setCampaign(prev => ({
                               ...prev,
-                              niches: [...prev.niches, customNicheInput.trim()],
+                              niches: [...(prev.niches || []), customNicheInput.trim()],
                             }));
                           }
                           setCustomNicheInput("");
@@ -1110,11 +1124,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     />
                     <button
                       onClick={() => {
-                        if (customNicheInput.trim() && !campaign.niches.includes(customNicheInput.trim())) {
+                        if (customNicheInput.trim() && !(campaign.niches || []).includes(customNicheInput.trim())) {
                           isModified.current = true;
                           setCampaign(prev => ({
                             ...prev,
-                            niches: [...prev.niches, customNicheInput.trim()],
+                            niches: [...(prev.niches || []), customNicheInput.trim()],
                           }));
                           setCustomNicheInput("");
                         }
@@ -1128,7 +1142,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
                   <div className="flex flex-wrap gap-2">
                     {nicheOptions.map((niche) => {
-                      const isSelected = campaign.niches.includes(niche);
+                      const isSelected = (campaign.niches || []).includes(niche);
                       return (
                         <button
                           key={niche}
@@ -1138,8 +1152,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                             setCampaign(prev => ({
                               ...prev,
                               niches: isSelected
-                                ? prev.niches.filter(n => n !== niche)
-                                : [...prev.niches, niche],
+                                ? (prev.niches || []).filter(n => n !== niche)
+                                : [...(prev.niches || []), niche],
                             }));
                           }}
                           className={cn(
@@ -1153,11 +1167,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                         </button>
                       );
                     })}
-                    {campaign.niches.filter(n => !nicheOptions.includes(n)).map((niche) => (
+                    {(campaign.niches || []).filter(n => !nicheOptions.includes(n)).map((niche) => (
                       <span key={niche} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-[11px] font-medium font-rethink">
                         {niche}
                         <button
-                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, niches: prev.niches.filter(n => n !== niche) })); }}
+                          onClick={() => { isModified.current = true; setCampaign(prev => ({ ...prev, niches: (prev.niches || []).filter(n => n !== niche) })); }}
                           aria-label={`Remove ${niche}`}
                           className="ml-0.5"
                         >
@@ -1235,15 +1249,15 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               <div className="bg-stone-100 rounded-[18px] py-4 space-y-6">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Platforms</span>
-                  <span className="font-medium text-stone-800">{campaign.platforms.join(", ")}</span>
+                  <span className="font-medium text-stone-800">{(campaign.platforms || []).join(", ")}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Content style</span>
-                  <span className="font-medium text-stone-800">{campaign.contentStyle.join(", ")}</span>
+                  <span className="font-medium text-stone-800">{(campaign.contentStyle || []).join(", ")}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Niches</span>
-                  <span className="font-medium text-stone-800">{campaign.niches.length > 0 ? campaign.niches.join(", ") : "Any"}</span>
+                  <span className="font-medium text-stone-800">{(campaign.niches || []).length > 0 ? (campaign.niches || []).join(", ") : "Any"}</span>
                 </div>
                 {campaign.scriptFileName && (
                   <div className="flex justify-between items-center text-xs">
