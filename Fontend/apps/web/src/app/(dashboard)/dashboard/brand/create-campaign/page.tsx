@@ -7,6 +7,7 @@ import { CampaignWizard } from "../../../../../components/campaign-wizard";
 import { CampaignSuccess } from "../../../../../components/campaign-success";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { Drawer, DrawerContent } from "../../../../../components/ui/drawer";
+import { Skeleton } from "../../../../../components/ui/skeleton";
 import { isAuthenticated, apiRequest, getToken } from "../../../../../lib/api";
 
 function CreateCampaignContent() {
@@ -52,8 +53,18 @@ function CreateCampaignContent() {
 
   if (verifying) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center font-rethink text-stone-500">
-        Verifying payment...
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center p-10">
+        <div className="w-full max-w-[520px] bg-white border border-stone-200 rounded-3xl p-8 space-y-6">
+          <div className="space-y-3">
+            <Skeleton className="h-7 w-1/2" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+          <Skeleton className="h-12 w-full rounded-full" />
+          <Skeleton className="h-12 w-full rounded-full" />
+          <Skeleton className="h-12 w-full rounded-full" />
+          <Skeleton className="h-12 w-full rounded-full" />
+          <Skeleton className="h-11 w-full rounded-full" />
+        </div>
       </div>
     );
   }
@@ -87,7 +98,7 @@ function CreateCampaignContent() {
 
 export default function CreateCampaignPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center font-rethink text-stone-500">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <CreateCampaignContent />
     </Suspense>
   );

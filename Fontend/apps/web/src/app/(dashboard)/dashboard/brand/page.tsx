@@ -129,6 +129,7 @@ function BrandDashboardContent() {
   }, [fetchCampaigns]);
 
   const handleCreateCampaign = useCallback(() => {
+    localStorage.removeItem("ep-draft-autosave");
     router.push("/dashboard/brand/create-campaign");
   }, [router]);
 
@@ -155,7 +156,7 @@ function BrandDashboardContent() {
   }, []);
 
   return (
-    <div className="h-dvh bg-[#F5F5F4] text-stone-900 flex flex-col font-rethink">
+    <div className="h-dvh bg-stone-50 text-stone-900 flex flex-col font-rethink">
       <NavBar
         userName={userName}
         userEmail={userEmail}
@@ -229,7 +230,7 @@ function BrandDashboardContent() {
 
 export default function BrandDashboard() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <BrandDashboardContent />
     </Suspense>
   );

@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FilterIcon, ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+} from "./ui/dropdown-menu";
 import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
 import { useReveal } from "../hooks/use-reveal";
@@ -40,18 +46,6 @@ export function CampaignFeed({
 }: CampaignFeedProps) {
   useReveal();
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  const [isDesktopFilterOpen, setIsDesktopFilterOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setIsDesktopFilterOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   return (
     <div className="w-full flex flex-col">
@@ -70,34 +64,27 @@ export function CampaignFeed({
           </button>
 
           {/* Desktop filter trigger — opens dropdown */}
-          <div ref={filterRef} className="hidden md:relative md:block z-[100]">
-            <button
-              onClick={() => setIsDesktopFilterOpen(!isDesktopFilterOpen)}
-              className="hidden md:flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer"
-            >
-              <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-              <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
-              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
-            </button>
-
-            {isDesktopFilterOpen && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
+          <div className="hidden md:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer">
+                  <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
+                  <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
+                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
                 {FILTER_OPTIONS.map((opt) => (
-                  <button
+                  <DropdownMenuCheckboxItem
                     key={opt.value}
-                    onClick={() => {
-                      onFilterChange(opt.value);
-                      setIsDesktopFilterOpen(false);
-                    }}
-                    className={`flex items-center w-full px-4 py-2.5 text-sm text-left ${
-                      filter === opt.value ? "font-semibold text-stone-900" : "font-medium text-stone-700"
-                    }`}
+                    checked={filter === opt.value}
+                    onSelect={() => onFilterChange(opt.value)}
                   >
                     {opt.label}
-                  </button>
+                  </DropdownMenuCheckboxItem>
                 ))}
-              </div>
-            )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Home01Icon, ClipboardIcon, Wallet03Icon, Menu01Icon, ChevronDownIcon, UserIcon, Logout01Icon } from "@hugeicons/core-free-icons";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 import logoPrimary from "@ep/ui/assets/logo-primary.svg";
 import rankIllustration from "@ep/ui/assets/Rank illustration.svg";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
@@ -22,17 +28,6 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
   const isOnboarding = !profile.niches.length || !profile.avatar;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setIsProfileOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const scoreViews = profile.creatorScore
     ? `${profile.creatorScore.toLocaleString()} / 10,000 views`
@@ -132,11 +127,45 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             />
           )}
 
-          {/* Profile Pill — matches brand's NavBar */}
-          <div ref={profileRef} className="relative">
+          {/* Desktop Profile Dropdown */}
+          <div className="hidden md:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 bg-stone-50 rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
+                  <Image
+                    src={profile.avatar || avatarSvg}
+                    alt={profile.displayName}
+                    width={32}
+                    height={32}
+                    className="rounded-full object-cover"
+                    unoptimized
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-stone-900">{profile.displayName}</span>
+                    <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onSelect={() => onOpenProfile?.()}>
+                  <HugeiconsIcon icon={UserIcon} size={16} />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                {onLogout && (
+                  <DropdownMenuItem variant="destructive" onSelect={() => onLogout()}>
+                    <HugeiconsIcon icon={Logout01Icon} size={16} />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Mobile Profile Trigger */}
+          <div className="md:hidden">
             <button
-              onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-3 md:bg-stone-50 md:rounded-full md:pl-2 md:pr-4 md:py-1.5 cursor-pointer"
+              onClick={() => setIsProfileOpen(true)}
+              className="flex items-center gap-3 cursor-pointer"
             >
               <Image
                 src={profile.avatar || avatarSvg}
@@ -146,41 +175,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                 className="rounded-full object-cover"
                 unoptimized
               />
-              <div className="hidden sm:flex items-center gap-1.5">
-                <span className="text-sm font-medium text-stone-900">{profile.displayName}</span>
-                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
-              </div>
             </button>
-
-            {/* Desktop Dropdown */}
-            <div className="hidden md:block">
-              {isProfileOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
-                  <button
-                    onClick={() => {
-                      setIsProfileOpen(false);
-                      onOpenProfile?.();
-                    }}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-stone-900"
-                  >
-                    <HugeiconsIcon icon={UserIcon} size={16} />
-                    <span className="font-medium">Profile</span>
-                  </button>
-                  {onLogout && (
-                    <button
-                      onClick={() => {
-                        setIsProfileOpen(false);
-                        onLogout();
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-stone-900"
-                    >
-                      <HugeiconsIcon icon={Logout01Icon} size={16} />
-                      <span className="font-medium">Log out</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+          </div>
 
             {/* Mobile Drawer */}
             <div className="md:hidden">
@@ -219,7 +215,6 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                 )}
               </MobileDrawer>
             </div>
-          </div>
         </div>
       </div>
 

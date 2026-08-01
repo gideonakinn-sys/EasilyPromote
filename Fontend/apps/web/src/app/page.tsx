@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { LoaderCircle } from "lucide-react";
+import { Spinner } from "../components/ui/spinner";
 import { getUser, isAuthenticated, clearAuth } from "../lib/auth";
 
 export default function HomePage() {
@@ -31,7 +31,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-      <LoaderCircle className="size-6 animate-spin text-stone-400" aria-hidden="true" />
+      <Spinner className="size-6 text-stone-400" aria-hidden="true" />
     </div>
   );
 }
