@@ -330,17 +330,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     }
   }, [draftId]);
 
-  // beforeunload warning
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isModified.current) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
-
   const formatViewsString = (val: number) => val.toLocaleString();
 
   const parseViewsInput = (raw: string): number | null => {

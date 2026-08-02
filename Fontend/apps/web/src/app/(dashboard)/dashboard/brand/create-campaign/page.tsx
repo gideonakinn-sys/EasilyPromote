@@ -87,7 +87,7 @@ function CreateCampaignContent() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
-      <Drawer open={true} dismissible={false} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <Drawer open={true} dismissible={false}>
         <DrawerContent className="overflow-hidden bg-stone-50">
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
         </DrawerContent>
