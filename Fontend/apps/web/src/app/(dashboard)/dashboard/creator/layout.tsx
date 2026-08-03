@@ -37,6 +37,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
     handleSubmitContent,
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
+    refreshCampaigns,
   } = useCreatorDashboard();
 
   return (
@@ -97,6 +98,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
             onSubmitContent={handleSubmitContent}
             onUpdateContent={handleUpdateContent}
             onSubmitPostUrl={handleDetailsSubmitPostUrl}
+            onRefresh={refreshCampaigns}
           />
         )}
       </main>

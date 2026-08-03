@@ -51,6 +51,7 @@ interface CreatorDashboardValue {
   handleSubmitContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => void;
+  refreshCampaigns: () => Promise<void>;
 }
 
 const CreatorDashboardContext = React.createContext<CreatorDashboardValue | null>(null);
@@ -507,6 +508,18 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
+  const refreshCampaigns = async () => {
+    try {
+      await apiRequest("/tiktok/sync", {
+        method: "POST",
+        token: getToken() || undefined,
+      });
+    } catch {
+      // sync is best-effort
+    }
+    await fetchCampaigns();
+  };
+
   const handleClaimSlot = async (campaignId: string, views: number) => {
     try {
       await apiRequest("/slots/claim", {
@@ -516,8 +529,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       });
 
       toast("Slot claimed! Check Home for your campaign.", "success");
-      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
-    } catch (err) {
+      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);    } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to claim slot";
       toast(message, "error");
       await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
@@ -590,6 +602,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleSubmitContent,
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
+    refreshCampaigns,
   };
 
   return (

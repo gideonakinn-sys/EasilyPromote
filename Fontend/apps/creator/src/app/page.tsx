@@ -486,6 +486,18 @@ function CreatorDashboardContent() {
     }
   };
 
+  const refreshCampaigns = async () => {
+    try {
+      await apiRequest("/tiktok/sync", {
+        method: "POST",
+        token: getToken() || undefined,
+      });
+    } catch {
+      // sync is best-effort
+    }
+    await fetchCampaigns();
+  };
+
   const handleClaimSlot = async (campaignId: string, views: number) => {
     try {
       await apiRequest("/slots/claim", {
@@ -639,6 +651,7 @@ function CreatorDashboardContent() {
             onSubmitContent={handleSubmitContent}
             onUpdateContent={handleUpdateContent}
             onSubmitPostUrl={handleDetailsSubmitPostUrl}
+            onRefresh={refreshCampaigns}
           />
         )}
       </main>

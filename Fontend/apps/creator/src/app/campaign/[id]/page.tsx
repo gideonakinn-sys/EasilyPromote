@@ -93,6 +93,28 @@ function CampaignDetailsContent() {
 
   const handleClose = () => router.push("/");
 
+  const handleRefresh = async () => {
+    try {
+      await apiRequest("/tiktok/sync", {
+        method: "POST",
+        token: getToken() || undefined,
+      });
+    } catch {
+      // sync is best-effort
+    }
+
+    try {
+      const data = await apiRequest<{ campaigns: Array<Record<string, unknown>> }>(
+        "/creators/slots/mine",
+        { token: getToken() || undefined }
+      );
+      const found = (data.campaigns || []).find((c) => (c.id as string) === campaignId);
+      setCampaign(found ? toCampaignItem(found) : null);
+    } catch (err) {
+      console.error("Failed to refresh campaign:", err);
+    }
+  };
+
   const handleSubmitContent = async (id: string, videoUrl: string, caption: string) => {
     if (!videoUrl) return;
 
@@ -212,6 +234,7 @@ function CampaignDetailsContent() {
         onSubmitContent={handleSubmitContent}
         onUpdateContent={handleUpdateContent}
         onSubmitPostUrl={handleSubmitPostUrl}
+        onRefresh={handleRefresh}
       />
     </div>
   );

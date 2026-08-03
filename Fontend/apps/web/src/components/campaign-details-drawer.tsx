@@ -3,7 +3,7 @@
 import { useState, useRef, type ChangeEvent } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { TiktokIcon, File01Icon, Download01Icon, CloudUploadIcon, CheckIcon } from "@hugeicons/core-free-icons";
+import { TiktokIcon, File01Icon, Download01Icon, CloudUploadIcon, CheckIcon, RefreshIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { useToast } from "@ep/ui/components/toast";
@@ -23,6 +23,7 @@ interface CampaignDetailsDrawerProps {
   onSubmitContent: (id: string, videoUrl: string, caption: string) => void;
   onUpdateContent: (id: string, videoUrl: string, caption: string) => void;
   onSubmitPostUrl: (id: string, urls: Record<string, string>) => void;
+  onRefresh?: () => Promise<void>;
   isMobile?: boolean;
 }
 
@@ -33,6 +34,7 @@ export function CampaignDetailsDrawer({
   onSubmitContent,
   onUpdateContent,
   onSubmitPostUrl,
+  onRefresh,
 }: CampaignDetailsDrawerProps) {
   const [linkInputs, setLinkInputs] = useState<Record<string, string>>({});
 
@@ -43,6 +45,7 @@ export function CampaignDetailsDrawer({
   const [videoUrl, setVideoUrl] = useState("");
   const [caption, setCaption] = useState("");
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -57,6 +60,20 @@ export function CampaignDetailsDrawer({
 
   const handleLinkSubmit = () => {
     onSubmitPostUrl(displayCampaign.id, linkInputs);
+  };
+
+  const handleRefresh = async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+      toast("Views refreshed!", "success");
+    } catch (err) {
+      console.error("Failed to refresh views:", err);
+      toast("Could not refresh views. Try again.", "error");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -422,12 +439,27 @@ export function CampaignDetailsDrawer({
 
           {/* Live CTA */}
           {displayCampaign.status === "live_tracking" && (
-            <button
-              onClick={() => setUploadOpen(true)}
-              className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
-            >
-              Upload more contents
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="flex-1 py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+              >
+                Upload more contents
+              </button>
+              {onRefresh && (
+                <button
+                  onClick={handleRefresh}
+                  aria-label="Refresh views"
+                  className="w-11 h-11 flex-shrink-0 flex items-center justify-center bg-white text-stone-600 border border-stone-200 rounded-full font-rethink"
+                >
+                  <HugeiconsIcon
+                    icon={RefreshIcon}
+                    size={18}
+                    className={cn("text-stone-600", refreshing && "animate-spin")}
+                  />
+                </button>
+              )}
+            </div>
           )}
           {uploadOpen && !isMobile && displayCampaign.status === "live_tracking" && renderInlineUploadPanel()}
 
