@@ -282,7 +282,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
     const slots = await Slot.find({ creatorId: req.user._id })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered scriptUrl scriptFileName businessId",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId",
         populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 });
