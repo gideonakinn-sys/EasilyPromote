@@ -12,6 +12,11 @@ const VIDEO_QUERY_URL = "https://open.tiktokapis.com/v2/video/query/";
 const REFRESH_BEFORE_MS = 5 * 60 * 1000;
 const QUERY_BATCH_SIZE = 20;
 
+function hasTikTokError(json) {
+  const code = json?.error?.code;
+  return Boolean(code) && code !== "ok" && code !== 0;
+}
+
 function getConfig() {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
   const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
@@ -130,7 +135,7 @@ async function getUserInfo(accessToken, fields) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.error?.code) {
+  if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] user/info FAILED", res.status, JSON.stringify(json));
     throw new Error(json.error?.message || `TikTok API error ${res.status}`);
   }
@@ -151,7 +156,7 @@ async function listVideos(accessToken, { cursor = 0, maxCount = 20 } = {}) {
     body: JSON.stringify({ max_count: maxCount, cursor }),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.error?.code) {
+  if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] video/list FAILED", res.status, JSON.stringify(json));
     throw new Error(json.error?.message || `TikTok API error ${res.status}`);
   }
@@ -180,7 +185,7 @@ async function queryVideos(accessToken, videoIds, fields) {
     body: JSON.stringify({ filters: { video_ids: videoIds.slice(0, QUERY_BATCH_SIZE) } }),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.error?.code) {
+  if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] video/query FAILED", res.status, JSON.stringify(json));
     throw new Error(json.error?.message || `TikTok API error ${res.status}`);
   }
