@@ -46,6 +46,12 @@ export const STATUS_BADGES: Record<CampaignItem["status"], { label: string; bg: 
     text: "text-[#176448]",
     dot: "bg-[#176448]",
   },
+  cancelled: {
+    label: "Cancelled",
+    bg: "bg-[#F8C9D2]",
+    text: "text-[#710E21]",
+    dot: "bg-[#710E21]",
+  },
 };
 
 export function CampaignCard({ campaign, onClick }: CampaignCardProps) {

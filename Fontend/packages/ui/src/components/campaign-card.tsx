@@ -56,6 +56,12 @@ export function CampaignCard({
             <span className="w-1 h-1 rounded-full bg-[#176448]" /> Completed
           </span>
         );
+      case "cancelled":
+        return (
+          <span className="px-2 py-0.5 rounded-full bg-[#F8C9D2] text-[#710E21] font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-[#710E21]" /> Cancelled
+          </span>
+        );
       default:
         return null;
     }

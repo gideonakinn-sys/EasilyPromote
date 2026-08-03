@@ -51,7 +51,8 @@ export interface CampaignItem {
     | "under_review"
     | "approved_post"
     | "live_tracking"
-    | "delivered";
+    | "delivered"
+    | "cancelled";
   reward: number;
   viewTarget?: number;
   minViews?: number;

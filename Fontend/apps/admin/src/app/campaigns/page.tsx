@@ -175,6 +175,24 @@ export default function AdminCampaignsPage() {
     }
   };
 
+  const handleDeleteCampaign = async () => {
+    if (!selectedCampaign) return;
+    if (!window.confirm(`Delete "${selectedCampaign.name}"? This cannot be undone.`)) return;
+    try {
+      setActionLoading(true);
+      await apiRequest(`/admin/campaigns/${selectedCampaign.id}`, {
+        method: "DELETE",
+        token: getToken() || undefined,
+      });
+      setSelectedCampaign(null);
+      fetchCampaigns();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to delete campaign");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(val);
 
@@ -685,6 +703,16 @@ export default function AdminCampaignsPage() {
                         className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
                         Cancel Campaign
+                      </button>
+                    )}
+
+                    {["draft", "pending_payment", "cancelled"].includes(selectedCampaign.status) && (
+                      <button
+                        onClick={handleDeleteCampaign}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                      >
+                        Delete Campaign
                       </button>
                     )}
                   </div>

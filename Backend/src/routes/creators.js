@@ -329,6 +329,8 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           status = "needs_content";
         }
 
+        if (campaign.status === "cancelled") status = "cancelled";
+
         return {
           id: campaign._id,
           slotId: slot._id,

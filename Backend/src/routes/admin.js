@@ -284,6 +284,27 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── DELETE /api/admin/campaigns/:id ──────────────────────────────────────────
+router.delete("/campaigns/:id", adminGuard, async (req, res, next) => {
+  try {
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+    const deletable = ["draft", "pending_payment", "cancelled"];
+    if (!deletable.includes(campaign.status)) {
+      return res.status(400).json({ error: "Only draft, pending payment, or cancelled campaigns can be deleted" });
+    }
+
+    await Slot.deleteMany({ campaignId: campaign._id });
+    await Submission.deleteMany({ campaignId: campaign._id });
+    await campaign.deleteOne();
+
+    res.json({ success: true, message: "Campaign deleted" });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/admin/submissions ───────────────────────────────────────────────
 router.get("/submissions", adminGuard, async (req, res, next) => {
   try {
