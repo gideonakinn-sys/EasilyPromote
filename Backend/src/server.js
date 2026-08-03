@@ -5,6 +5,7 @@ const connectDB = require("./config/db");
 const { initSocket } = require("./config/socket");
 const seedDefaultAdmin = require("./utils/seedAdmin");
 const { startCancelledCleanup } = require("./utils/cleanupCancelled");
+const { startTikTokSync } = require("./utils/syncTiktokViews");
 
 const PORT = process.env.PORT || 5000;
 
@@ -12,6 +13,7 @@ const start = async () => {
   await connectDB();
   await seedDefaultAdmin();
   startCancelledCleanup();
+  startTikTokSync();
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, () => {

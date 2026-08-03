@@ -80,6 +80,10 @@ const submissionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    tiktokVideoId: {
+      type: String,
+      default: null,
+    },
     payoutAmount: {
       type: Number,
       default: 0,

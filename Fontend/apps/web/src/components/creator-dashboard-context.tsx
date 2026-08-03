@@ -13,6 +13,7 @@ import type {
   WalletData,
   ProfileForm,
   ProfileFocusSection,
+  TikTokStatus,
 } from "./types";
 
 interface CreatorDashboardValue {
@@ -41,10 +42,12 @@ interface CreatorDashboardValue {
   selectedCampaign: CampaignItem | null;
   setSelectedCampaign: (camp: CampaignItem | null) => void;
   handleClaimSlot: (campaignId: string, views: number) => void;
-  handleConnectSocial: (platform: string, handle: string) => void;
   handleRemoveSocial: (platform: string) => void;
   handleSaveNiches: (niches: string[]) => void;
   handleSaveProfile: () => void;
+  tiktokStatus: TikTokStatus;
+  handleConnectTikTok: () => void;
+  handleDisconnectTikTok: () => void;
   handleSubmitContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => void;
@@ -96,6 +99,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
   const [marketplaceMeta, setMarketplaceMeta] = React.useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
   const [walletData, setWalletData] = React.useState<WalletData | null>(null);
+  const [tiktokStatus, setTiktokStatus] = React.useState<TikTokStatus>({ connected: false });
   const [selectedCampaign, setSelectedCampaign] = React.useState<CampaignItem | null>(null);
   const [loading, setLoading] = React.useState(true);
 
@@ -136,6 +140,21 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
 
     fetchAllData();
+
+    const params = new URLSearchParams(window.location.search);
+    const tiktokResult = params.get("tiktok");
+    if (tiktokResult) {
+      if (tiktokResult === "connected") {
+        toast("TikTok connected", "success");
+        fetchTikTokStatus();
+        fetchProfile();
+      } else if (tiktokResult === "error") {
+        toast("TikTok connection failed. Please try again.", "error");
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tiktok");
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -146,8 +165,20 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       fetchCampaigns(),
       fetchMarketplace(),
       fetchWallet(),
+      fetchTikTokStatus(),
     ]);
     setLoading(false);
+  };
+
+  const fetchTikTokStatus = async () => {
+    try {
+      const data = await apiRequest<TikTokStatus>("/tiktok/status", {
+        token: getToken() || undefined,
+      });
+      setTiktokStatus(data);
+    } catch {
+      setTiktokStatus({ connected: false });
+    }
   };
 
   const fetchProfile = async () => {
@@ -294,38 +325,48 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
-  const handleConnectSocial = async (platform: string, handle: string) => {
-    if (!handle) return;
-    const newSocial = {
-      platform: platform.toLowerCase(),
-      handle: handle.startsWith("@") ? handle : `@${handle}`,
-      verified: true,
-    };
-
-    const updatedSocials = [
-      ...profile.socialAccounts.filter((s) => s.platform !== newSocial.platform),
-      newSocial,
-    ];
-    const next: CreatorProfile = { ...profile, socialAccounts: updatedSocials };
-    setProfile(next);
-    markCompleteIfReady(next);
-
-    try {
-      await apiRequest("/creators/profile/socials", {
-        method: "POST",
-        token: getToken() || undefined,
-        body: JSON.stringify({ platform, handle: newSocial.handle }),
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleRemoveSocial = (platform: string) => {
+    if (platform === "tiktok") {
+      handleDisconnectTikTok();
+      return;
+    }
     setProfile((prev) => ({
       ...prev,
       socialAccounts: prev.socialAccounts.filter((s) => s.platform !== platform),
     }));
+  };
+
+  const handleConnectTikTok = async () => {
+    try {
+      const data = await apiRequest<{ url: string }>("/tiktok/connect", {
+        method: "POST",
+        token: getToken() || undefined,
+        body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
+      });
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Failed to start TikTok connect:", err);
+      toast("Could not connect TikTok. Please try again.", "error");
+    }
+  };
+
+  const handleDisconnectTikTok = async () => {
+    try {
+      await apiRequest("/tiktok/disconnect", {
+        method: "POST",
+        token: getToken() || undefined,
+      });
+    } catch (err) {
+      console.error("Failed to disconnect TikTok:", err);
+    }
+    setTiktokStatus({ connected: false });
+    setProfile((prev) => ({
+      ...prev,
+      socialAccounts: prev.socialAccounts.filter((s) => s.platform !== "tiktok"),
+    }));
+    toast("TikTok disconnected", "success");
   };
 
   const handleSaveNiches = async (niches: string[]) => {
@@ -540,10 +581,12 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     selectedCampaign,
     setSelectedCampaign,
     handleClaimSlot,
-    handleConnectSocial,
     handleRemoveSocial,
     handleSaveNiches,
     handleSaveProfile,
+    tiktokStatus,
+    handleConnectTikTok,
+    handleDisconnectTikTok,
     handleSubmitContent,
     handleUpdateContent,
     handleDetailsSubmitPostUrl,

@@ -18,6 +18,7 @@ const adminRoutes = require("./routes/admin");
 const platformRoutes = require("./routes/platforms");
 const nicheRoutes = require("./routes/niches");
 const industryRoutes = require("./routes/industries");
+const tiktokRoutes = require("./routes/tiktok");
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/platforms", platformRoutes);
 app.use("/api/niches", nicheRoutes);
 app.use("/api/industries", industryRoutes);
+app.use("/api/tiktok", tiktokRoutes);
 
 app.use(errorHandler);
 

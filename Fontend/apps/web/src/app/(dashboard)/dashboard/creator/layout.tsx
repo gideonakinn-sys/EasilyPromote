@@ -28,10 +28,12 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
     selectedCampaign,
     setSelectedCampaign,
     handleLogout,
-    handleConnectSocial,
     handleRemoveSocial,
     handleSaveNiches,
     handleSaveProfile,
+    tiktokStatus,
+    handleConnectTikTok,
+    handleDisconnectTikTok,
     handleSubmitContent,
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
@@ -77,10 +79,12 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
             onProfileFormChange={setProfileForm}
             focusSection={profileFocus}
             onClose={closeProfile}
-            onConnectSocial={handleConnectSocial}
             onRemoveSocial={handleRemoveSocial}
             onSaveNiches={handleSaveNiches}
             onSaveProfile={handleSaveProfile}
+            tiktokStatus={tiktokStatus}
+            onConnectTikTok={handleConnectTikTok}
+            onDisconnectTikTok={handleDisconnectTikTok}
           />
         ) : (
           children

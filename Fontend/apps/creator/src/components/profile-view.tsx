@@ -12,10 +12,9 @@ import {
   YoutubeIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
-import { usePlatforms } from "@ep/ui/hooks/use-platforms";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
-import type { CreatorProfile, ProfileFocusSection, ProfileForm } from "./types";
+import type { CreatorProfile, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
 import { API_URL, getToken } from "../lib/api";
 import { useReveal } from "../hooks/use-reveal";
 
@@ -25,10 +24,12 @@ interface ProfileViewProps {
   onProfileFormChange: (form: ProfileForm) => void;
   focusSection: ProfileFocusSection | null;
   onClose: () => void;
-  onConnectSocial: (platform: string, handle: string) => void;
   onRemoveSocial: (platform: string) => void;
   onSaveNiches: (niches: string[]) => void;
   onSaveProfile: () => void;
+  tiktokStatus: TikTokStatus;
+  onConnectTikTok: () => void;
+  onDisconnectTikTok: () => void;
 }
 
 const PLATFORM_STYLES: Record<string, { icon: typeof TiktokIcon; iconBg: string; iconColor: string }> = {
@@ -45,27 +46,27 @@ export function ProfileView({
   onProfileFormChange,
   focusSection,
   onClose,
-  onConnectSocial,
   onRemoveSocial,
   onSaveNiches,
   onSaveProfile,
+  tiktokStatus,
+  onConnectTikTok,
+  onDisconnectTikTok,
 }: ProfileViewProps) {
   useReveal();
+
+  const tiktokConnected = !!tiktokStatus && tiktokStatus.connected;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
   const nichesRef = useRef<HTMLDivElement>(null);
   const socialRef = useRef<HTMLDivElement>(null);
 
-  const [addPlatform, setAddPlatform] = useState("TikTok");
-  const [addHandle, setAddHandle] = useState("");
-  const { platforms } = usePlatforms();
-  const socialPlatforms = platforms.map((p) => p.name);
   const platformLabels: Record<string, string> = {
     tiktok: "TikTok",
     instagram: "Instagram",
     youtube: "YouTube",
-    ...Object.fromEntries(platforms.map((p) => [p.name.toLowerCase(), p.name])),
+    twitter: "Twitter",
   };
 
   const [niches, setNiches] = useState<string[]>([]);
@@ -95,12 +96,6 @@ export function ProfileView({
       focusSection === "details" ? detailsRef : focusSection === "niches" ? nichesRef : socialRef;
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focusSection]);
-
-  const handleAddSocial = () => {
-    if (!addHandle.trim()) return;
-    onConnectSocial(addPlatform, addHandle.trim());
-    setAddHandle("");
-  };
 
   const handleToggleNiche = (niche: string) => {
     const next = niches.includes(niche)
@@ -303,40 +298,37 @@ export function ProfileView({
           </div>
 
           <div className="space-y-3 mb-5">
-            <div className="grid grid-cols-3 gap-2">
-              {socialPlatforms.map((p) => (
+            {tiktokConnected ? (
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
+                    <HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} className="text-emerald-600" />
+                    Connected
+                  </p>
+                  <p className="text-xs font-medium text-emerald-700">
+                    @{tiktokStatus.username || tiktokStatus.displayName || "TikTok"}
+                  </p>
+                </div>
                 <button
-                  key={p}
-                  onClick={() => setAddPlatform(p)}
-                  className={cn(
-                    "py-2 rounded-full text-xs font-medium border font-rethink",
-                    addPlatform === p
-                      ? "bg-stone-950 text-white border-stone-950"
-                      : "bg-white text-stone-600 border-stone-200"
-                  )}
+                  onClick={onDisconnectTikTok}
+                  className="px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-full font-semibold text-xs font-rethink"
                 >
-                  {p}
+                  Disconnect
                 </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="@yourhandle"
-                value={addHandle}
-                onChange={(e) => setAddHandle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAddSocial();
-                }}
-                className="flex-1 min-w-0 px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink"
-              />
-              <button
-                onClick={handleAddSocial}
-                className="px-5 py-2.5 bg-stone-950 text-white rounded-full font-semibold text-xs font-rethink"
-              >
-                Connect
-              </button>
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <button
+                  onClick={onConnectTikTok}
+                  className="w-full py-2.5 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+                >
+                  Connect with TikTok
+                </button>
+                <p className="text-[11px] font-medium text-stone-500 tracking-[-0.01em]">
+                  Opens TikTok to securely link your account and verify views.
+                </p>
+              </div>
+            )}
           </div>
 
           {profile.socialAccounts.length > 0 && (

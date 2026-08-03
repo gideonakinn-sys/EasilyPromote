@@ -11,6 +11,13 @@ export interface SocialAccount {
   verified: boolean;
 }
 
+export interface TikTokStatus {
+  connected: boolean;
+  username?: string;
+  displayName?: string;
+  avatarUrl?: string;
+}
+
 export interface CreatorProfile {
   name: string;
   avatar: string | null;
