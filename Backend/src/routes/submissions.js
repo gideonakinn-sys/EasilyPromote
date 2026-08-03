@@ -271,7 +271,7 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
           comments: 0,
         });
       }
-      if (normalized === "tiktok" && post.postUrl) {
+      if (post.postUrl && /tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(String(post.postUrl))) {
         const longMatch = String(post.postUrl).match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
         if (longMatch) submission.tiktokVideoId = longMatch[1];
       }

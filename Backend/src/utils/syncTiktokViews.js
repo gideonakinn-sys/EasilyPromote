@@ -29,12 +29,18 @@ async function extractTikTokVideoId(url) {
 
 async function getSubmissionVideoId(submission) {
   if (submission.tiktokVideoId) return submission.tiktokVideoId;
-  const tiktokPost = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
-  const id = await extractTikTokVideoId(tiktokPost && tiktokPost.postUrl);
-  if (!id) {
-    console.warn("[TikTok Sync] No video id for submission", submission._id, "| postUrl=", tiktokPost && tiktokPost.postUrl);
+
+  const tiktokPosts = (submission.postedPlatforms || []).filter((p) => {
+    return p.postUrl && /tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(String(p.postUrl));
+  });
+  for (const post of tiktokPosts) {
+    const id = await extractTikTokVideoId(post.postUrl);
+    if (id) return id;
   }
-  return id;
+
+  console.warn("[TikTok Sync] No video id for submission", submission._id, "| postUrl=",
+    (submission.postedPlatforms || []).map((p) => p.postUrl).join(","));
+  return null;
 }
 
 async function updateCampaignFromSubmission(submission) {
@@ -113,7 +119,13 @@ async function syncTiktokViews() {
           }
           const metrics = videoMap.get(videoId);
 
-          const entry = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
+          let entry = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
+          if (!entry) {
+            entry = (submission.postedPlatforms || []).find((p) =>
+              p.postUrl && /tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(String(p.postUrl))
+            );
+            if (entry) entry.platform = "tiktok";
+          }
           if (entry) {
             entry.views = metrics.view_count || 0;
             entry.likes = metrics.like_count || 0;
