@@ -150,6 +150,7 @@ interface CampaignData {
   platformFeePercent?: number;
   platformFee?: number;
   creatorPool?: number;
+  creatorCount?: number;
   submissionsReceived: number;
   submissionsApproved: number;
   submissionsAwaitingReview: number;
@@ -414,6 +415,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const pendingEscrow = Math.max(0, creatorPool - releasedTotal);
 
   const uniqueCreatorCount = new Set(submissions.map(s => s.creatorId)).size;
+  const creatorsOnCampaign = campaign.creatorCount ?? uniqueCreatorCount;
 
   return (
     <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex")}>
@@ -538,6 +540,20 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {/* Campaign Description */}
             {campaign.contentBrief && (
               <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{campaign.contentBrief}</p>
+            )}
+
+            {campaign.keyMessageCta && (
+              <div className="space-y-1.5">
+                <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Key message</h5>
+                <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.keyMessageCta}</p>
+              </div>
+            )}
+
+            {campaign.whatToAvoid && (
+              <div className="space-y-1.5">
+                <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">What to avoid</h5>
+                <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.whatToAvoid}</p>
+              </div>
             )}
 
             {/* Campaign Details Key-Value List */}
@@ -704,7 +720,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               <div className="space-y-1">
                 <span className="text-xs font-medium text-stone-500 block">Creators on campaign</span>
                 <span className="text-base font-medium text-stone-900 block font-rethink">
-                  {uniqueCreatorCount} creator{uniqueCreatorCount !== 1 ? "s" : ""}
+                  {creatorsOnCampaign} creator{creatorsOnCampaign !== 1 ? "s" : ""}
                 </span>
               </div>
             </div>

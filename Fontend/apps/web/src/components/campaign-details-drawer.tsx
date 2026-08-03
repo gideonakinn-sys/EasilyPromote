@@ -396,7 +396,16 @@ export function CampaignDetailsDrawer({
           {/* Identity header */}
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200 flex-shrink-0 overflow-hidden">
-              <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
+              {displayCampaign.coverImageUrl ? (
+                <img
+                  src={displayCampaign.coverImageUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
+              )}
             </div>
             <div className="space-y-1.5">
               <h2 className="font-rethink font-medium tracking-tighter text-xl text-stone-900 leading-tight">

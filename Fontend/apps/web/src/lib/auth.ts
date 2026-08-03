@@ -6,6 +6,7 @@ export interface User {
   emailVerified?: boolean;
   industry?: string;
   phone?: string;
+  avatar?: string;
   avatarUrl?: string;
 }
 

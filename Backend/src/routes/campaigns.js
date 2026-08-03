@@ -1,5 +1,6 @@
 const express = require("express");
 const Campaign = require("../models/Campaign");
+const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
@@ -610,6 +611,11 @@ router.get("/:id", protect, async (req, res, next) => {
       status: "new",
     });
 
+    const creatorCount = await Slot.distinct("creatorId", {
+      campaignId: campaign._id,
+      status: { $ne: "available" },
+    }).then((ids) => ids.length);
+
     res.json({
       id: campaign._id,
       name: campaign.name,
@@ -641,6 +647,7 @@ router.get("/:id", protect, async (req, res, next) => {
       submissionsReceived,
       submissionsApproved,
       submissionsAwaitingReview,
+      creatorCount,
     });
   } catch (error) {
     next(error);

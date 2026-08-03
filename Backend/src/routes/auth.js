@@ -99,6 +99,7 @@ router.post("/register", async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        avatar: user.avatar,
         emailVerified: false,
         ...(data.role === "business" && { industry: data.industry, companyName: data.companyName || data.businessName || displayName, phone: data.phone }),
         ...(data.role === "creator" && { username: data.username || displayName.toLowerCase().replace(/\s+/g, "_"), displayName: data.nickname || `${data.firstName || ""} ${data.lastName || ""}`.trim() || displayName }),
@@ -144,6 +145,7 @@ router.post("/login", async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        avatar: user.avatar,
         emailVerified: user.emailVerified,
         ...(profile && user.role === "business" && {
           industry: profile.industry,
@@ -219,6 +221,7 @@ router.post("/verify-otp", async (req, res, next) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          avatar: user.avatar,
           emailVerified: true,
         },
       });
@@ -366,6 +369,31 @@ router.get("/me", protect, async (req, res, next) => {
         completionRate: profile.completionRate,
         socialAccounts: profile.socialAccounts,
       }),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/me", protect, async (req, res, next) => {
+  try {
+    const { avatar, name } = req.body;
+    const updates = {};
+    if (avatar !== undefined) updates.avatar = avatar;
+    if (name !== undefined && typeof name === "string" && name.trim()) updates.name = name.trim();
+
+    const user = await User.findByIdAndUpdate(req.user._id, { $set: updates }, { new: true });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+      },
     });
   } catch (error) {
     next(error);

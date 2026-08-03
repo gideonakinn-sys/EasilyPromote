@@ -7,7 +7,7 @@ import { EmptyState } from "../../../../components/empty-state";
 import { ActiveDashboard, type BrandCampaign } from "../../../../components/active-dashboard";
 import { DraftAlertBanner } from "../../../../components/draft-alert-banner";
 import { Skeleton } from "../../../../components/ui/skeleton";
-import { apiRequest, getUser, clearAuth, isAuthenticated, getToken } from "../../../../lib/api";
+import { apiRequest, getUser, clearAuth, isAuthenticated, getToken, saveAuth } from "../../../../lib/api";
 import { useSocket } from "../../../../lib/socket";
 
 function BrandDashboardContent() {
@@ -98,7 +98,7 @@ function BrandDashboardContent() {
     const u = getUser();
     if (u?.name) setUserName(u.name);
     if (u?.email) setUserEmail(u.email);
-    if (u?.avatarUrl) setUserAvatarUrl(u.avatarUrl);
+    if (u?.avatar || u?.avatarUrl) setUserAvatarUrl((u.avatar || u.avatarUrl) ?? "");
 
     apiRequest<{ emailVerified: boolean }>("/auth/me", { token: getToken() || undefined })
       .then((me) => {
@@ -149,7 +149,20 @@ function BrandDashboardContent() {
         { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData }
       );
       const data = await res.json();
-      if (data.url) setUserAvatarUrl(data.url);
+      if (data.url) {
+        try {
+          await apiRequest("/auth/me", {
+            method: "PATCH",
+            token,
+            body: JSON.stringify({ avatar: data.url }),
+          });
+          const currentUser = getUser();
+          if (currentUser && token) saveAuth(token, { ...currentUser, avatar: data.url });
+        } catch (err) {
+          console.error("Failed to save avatar:", err);
+        }
+        setUserAvatarUrl(data.url);
+      }
     } catch (err) {
       console.error("Avatar upload failed:", err);
     }
