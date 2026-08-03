@@ -126,7 +126,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
             <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{formatProgress(camp.progress)}</span>
             <span className="w-1 h-1 rounded-full bg-stone-300" />
             <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">
-              {camp.currentViews?.toLocaleString()} / {camp.targetViews?.toLocaleString()} views
+              {camp.currentViews?.toLocaleString()} / {(camp.viewTarget || camp.targetViews)?.toLocaleString()} views
             </span>
           </div>
         ) : (

@@ -346,7 +346,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           submissionId: submission ? submission._id : null,
           comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
           progress: submission && submission.viewsDelivered > 0
-            ? Math.min(Number(((submission.viewsDelivered / campaign.targetViews) * 100).toFixed(3)), 100)
+            ? Math.min(Number(((submission.viewsDelivered / (slot.viewTarget || campaign.targetViews)) * 100).toFixed(3)), 100)
             : 0,
           currentViews: submission ? submission.viewsDelivered : undefined,
           targetViews: campaign.targetViews,

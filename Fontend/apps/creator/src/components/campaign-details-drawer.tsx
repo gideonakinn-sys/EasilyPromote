@@ -472,7 +472,7 @@ export function CampaignDetailsDrawer({
                     {Number((displayCampaign.progress || 0).toFixed(3))}%
                   </span>
                   <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
-                    / {(displayCampaign.targetViews || displayCampaign.viewTarget || 0).toLocaleString()} target
+                    / {(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} target
                   </span>
                 </div>
               </div>
