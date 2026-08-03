@@ -271,12 +271,23 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
           comments: 0,
         });
       }
+      if (normalized === "tiktok" && post.postUrl) {
+        const match = String(post.postUrl).match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
+        if (match) submission.tiktokVideoId = match[1];
+      }
     }
 
     submission.status = "posted";
     submission.postedAt = new Date();
     submission.postedPlatforms = postedPlatforms;
     await submission.save();
+
+    const { syncTiktokViews } = require("../utils/syncTiktokViews");
+    try {
+      await syncTiktokViews();
+    } catch (err) {
+      console.error("[TikTok Sync] Immediate sync after post failed:", err.message);
+    }
 
     const campaign = await Campaign.findById(submission.campaignId);
     if (campaign) {

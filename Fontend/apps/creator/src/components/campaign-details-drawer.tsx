@@ -447,7 +447,9 @@ export function CampaignDetailsDrawer({
                 <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Views breakdown</span>
                 <div className="space-y-3">
                   {(displayCampaign.platforms || ["tiktok", "instagram"]).map((platform) => {
-                    const entry = (displayCampaign.postedPlatforms || []).find((p) => p.platform === platform);
+                    const entry = (displayCampaign.postedPlatforms || []).find(
+                      (p) => String(p.platform).toLowerCase() === String(platform).toLowerCase()
+                    );
                     return (
                       <div key={platform} className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                         <span className="text-stone-500">{platformLabels[platform] || platform}</span>

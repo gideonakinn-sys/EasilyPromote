@@ -87,6 +87,19 @@ export default function AdminCampaignsPage() {
   const [savedMessage, setSavedMessage] = useState("");
   const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
   const [industryOptions, setIndustryOptions] = useState<string[]>([]);
+  const [campaignDetail, setCampaignDetail] = useState<{
+    submissions: Array<{
+      id: string;
+      creatorHandle: string;
+      creatorId?: { name?: string; email?: string };
+      status: string;
+      viewsDelivered: number;
+      postedPlatforms?: Array<{ platform: string; postUrl?: string; views?: number; likes?: number; comments?: number }>;
+      videoUrl?: string;
+      postedAt?: string;
+      submittedAt?: string;
+    }>;
+  } | null>(null);
 
   const fetchPlatforms = useCallback(async () => {
     try {
@@ -174,6 +187,35 @@ export default function AdminCampaignsPage() {
       setActionLoading(false);
     }
   };
+
+  const fetchCampaignDetail = useCallback(async (campaignId: string) => {
+    try {
+      const data = await apiRequest<{
+        submissions: Array<{
+          id: string;
+          creatorHandle: string;
+          creatorId?: { name?: string; email?: string };
+          status: string;
+          viewsDelivered: number;
+          postedPlatforms?: Array<{
+            platform: string;
+            postUrl?: string;
+            views?: number;
+            likes?: number;
+            comments?: number;
+          }>;
+          videoUrl?: string;
+          postedAt?: string;
+          submittedAt?: string;
+        }>;
+      }>(`/admin/campaigns/${campaignId}`, {
+        token: getToken() || undefined,
+      });
+      setCampaignDetail(data);
+    } catch {
+      setCampaignDetail(null);
+    }
+  }, []);
 
   const handleDeleteCampaign = async () => {
     if (!selectedCampaign) return;
@@ -391,7 +433,10 @@ export default function AdminCampaignsPage() {
 
                       <td className="px-6 py-4 text-right">
                         <button
-                          onClick={() => setSelectedCampaign(c)}
+                          onClick={() => {
+                            setSelectedCampaign(c);
+                            fetchCampaignDetail(c.id);
+                          }}
                           className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
                         >
                           Inspect & Manage
@@ -415,7 +460,10 @@ export default function AdminCampaignsPage() {
                   <p className="text-xs text-stone-500">Brand: {selectedCampaign.brand?.name} ({selectedCampaign.brand?.email})</p>
                 </div>
                 <button
-                  onClick={() => setSelectedCampaign(null)}
+                  onClick={() => {
+                    setSelectedCampaign(null);
+                    setCampaignDetail(null);
+                  }}
                   className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 font-bold"
                 >
                   ✕
@@ -447,16 +495,125 @@ export default function AdminCampaignsPage() {
                   </p>
                 </div>
 
+                {/* Platform Metrics per Creator */}
+                <div className="pt-4 border-t border-stone-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">Platform Metrics</h4>
+                    <span className="text-[11px] text-stone-400">
+                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {selectedCampaign.targetViews.toLocaleString()} views
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden mb-4">
+                    <div
+                      className="bg-[#FEB604] h-1.5 rounded-full transition-all"
+                      style={{ width: `${selectedCampaign.progressPercent || 0}%` }}
+                    />
+                  </div>
+
+                  {campaignDetail && campaignDetail.submissions.length > 0 ? (
+                    <div className="space-y-3">
+                      {campaignDetail.submissions.map((sub) => {
+                        const postedPlatforms = sub.postedPlatforms || [];
+                        return (
+                          <div key={sub.id} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="text-sm font-bold text-stone-900">
+                                  {sub.creatorId?.name || sub.creatorHandle || "Creator"}
+                                </p>
+                                <p className="text-[11px] text-stone-400">@{sub.creatorHandle} · {sub.status}</p>
+                              </div>
+                              <span className="text-sm font-bold text-stone-900">
+                                {sub.viewsDelivered.toLocaleString()} views
+                              </span>
+                            </div>
+
+                            {postedPlatforms.length === 0 ? (
+                              <p className="text-[11px] text-stone-400">No platform links yet.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {postedPlatforms.map((pp) => (
+                                  <div
+                                    key={pp.platform}
+                                    className="bg-white border border-stone-200 rounded-lg px-3 py-2"
+                                  >
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-1">
+                                      {pp.platform}
+                                    </p>
+                                    <div className="flex gap-3 text-xs font-semibold text-stone-700">
+                                      <span>{pp.views || 0} views</span>
+                                      <span>{pp.likes || 0} likes</span>
+                                      <span>{pp.comments || 0} comments</span>
+                                    </div>
+                                    {pp.postUrl && (
+                                      <a
+                                        href={pp.postUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[11px] text-blue-600 hover:underline mt-1 block truncate"
+                                      >
+                                        {pp.postUrl}
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-stone-400">
+                      {campaignDetail ? "No submissions yet." : "Loading submissions..."}
+                    </p>
+                  )}
+                </div>
+
                 {/* Target Platforms */}
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Platforms</h4>
-                  <div className="flex gap-2">
-                    {(selectedCampaign.platforms || ["TikTok", "Instagram"]).map((p) => (
-                      <span key={p} className="px-3 py-1 bg-stone-100 border border-stone-200 rounded-full font-semibold text-stone-700">
+                  <div className="flex gap-2 flex-wrap">
+                    {(editPlatforms.length > 0 ? editPlatforms : selectedCampaign.platforms || ["TikTok", "Instagram"]).map((p) => (
+                      <span
+                        key={p}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 border border-stone-200 rounded-full font-semibold text-stone-700"
+                      >
                         {p}
+                        <button
+                          type="button"
+                          onClick={() => setEditPlatforms((prev) => prev.filter((x) => x !== p))}
+                          aria-label={`Remove ${p}`}
+                          className="text-stone-400 hover:text-red-500"
+                        >
+                          ✕
+                        </button>
                       </span>
                     ))}
+                    <div className="flex items-center gap-1">
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value && !editPlatforms.includes(e.target.value)) {
+                            setEditPlatforms((prev) => [...prev, e.target.value]);
+                          }
+                          e.target.value = "";
+                        }}
+                        className="px-3 py-1 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-600 focus:outline-none"
+                      >
+                        <option value="">+ Add platform</option>
+                        {platformOptions
+                          .filter((opt) => !editPlatforms.includes(opt))
+                          .map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
+                  <p className="text-[11px] text-stone-400 mt-2">
+                    Removing a platform here also removes it from the campaign target platforms. Click "Save Campaign Updates" to persist.
+                  </p>
                 </div>
 
                 {/* Edit Campaign Details */}
@@ -495,27 +652,6 @@ export default function AdminCampaignsPage() {
                         Each slot splits target views and creator pool equally. Available slots
                         are rebuilt to this count on save.
                       </p>
-                    </div>
-
-                    {/* Platforms */}
-                    <div>
-                      <label className="font-bold text-stone-700 block mb-1.5">Available accounts for linking</label>
-                      <div className="flex flex-wrap gap-2">
-                        {platformOptions.map((platform) => (
-                          <button
-                            key={platform}
-                            type="button"
-                            onClick={() => setEditPlatforms((prev) => toggleItem(prev, platform))}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                              editPlatforms.includes(platform)
-                                ? "bg-stone-900 text-white"
-                                : "bg-stone-100 text-stone-600 border border-stone-200"
-                            }`}
-                          >
-                            {platform}
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
                     {/* Content styles */}
