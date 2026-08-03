@@ -282,7 +282,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
     const slots = await Slot.find({ creatorId: req.user._id })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid platforms contentStyle startDate endDate targetViews viewsDelivered scriptUrl scriptFileName businessId",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered scriptUrl scriptFileName businessId",
         populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 });
@@ -360,6 +360,10 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           description: campaign.contentBrief || undefined,
           keyMessageCta: campaign.keyMessageCta,
           whatToAvoid: campaign.whatToAvoid,
+          goal: campaign.goal,
+          competitors: campaign.competitors,
+          uniqueSellingPoint: campaign.uniqueSellingPoint,
+          funFact: campaign.funFact,
           platforms: campaign.platforms,
           contentStyle: campaign.contentStyle,
           scriptUrl: campaign.scriptUrl,

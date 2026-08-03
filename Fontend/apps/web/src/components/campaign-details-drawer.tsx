@@ -572,7 +572,7 @@ export function CampaignDetailsDrawer({
           )}
 
           {/* The brief */}
-          {(displayCampaign.description || displayCampaign.contentBrief || displayCampaign.keyMessageCta || displayCampaign.whatToAvoid || displayCampaign.contentStyle || displayCampaign.scriptUrl) && (
+          {(displayCampaign.description || displayCampaign.contentBrief || displayCampaign.keyMessageCta || displayCampaign.whatToAvoid || displayCampaign.contentStyle || displayCampaign.goal || displayCampaign.competitors || displayCampaign.uniqueSellingPoint || displayCampaign.funFact || displayCampaign.scriptUrl) && (
             <div className="space-y-6">
               {(displayCampaign.description || displayCampaign.contentBrief) && (
                 <div className="space-y-1.5">
@@ -606,6 +606,42 @@ export function CampaignDetailsDrawer({
                   <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Content style</h5>
                   <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
                     {Array.isArray(displayCampaign.contentStyle) ? displayCampaign.contentStyle.join(", ") : displayCampaign.contentStyle}
+                  </p>
+                </div>
+              )}
+
+              {displayCampaign.goal && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Campaign goal</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.goal}
+                  </p>
+                </div>
+              )}
+
+              {displayCampaign.competitors && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Competitors</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.competitors}
+                  </p>
+                </div>
+              )}
+
+              {displayCampaign.uniqueSellingPoint && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Unique selling point</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.uniqueSellingPoint}
+                  </p>
+                </div>
+              )}
+
+              {displayCampaign.funFact && (
+                <div className="space-y-1.5">
+                  <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Fun fact</h5>
+                  <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+                    {displayCampaign.funFact}
                   </p>
                 </div>
               )}

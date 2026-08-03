@@ -79,7 +79,7 @@ router.get("/", protect, async (req, res, next) => {
 
 router.post("/", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
-    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
+    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
 
     const { getEffectiveCostPerView } = require("../config/pricing");
     const costPerView = await getEffectiveCostPerView(category);
@@ -96,6 +96,10 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       contentBrief: contentBrief || null,
       keyMessageCta: keyMessageCta || null,
       whatToAvoid: whatToAvoid || null,
+      goal: goal || null,
+      competitors: competitors || null,
+      uniqueSellingPoint: uniqueSellingPoint || null,
+      funFact: funFact || null,
       platforms: platforms || [],
       contentStyle: contentStyle ? (Array.isArray(contentStyle) ? contentStyle : contentStyle.split(",").map(s => s.trim()).filter(Boolean)) : [],
       niches: niches || [],
@@ -242,6 +246,10 @@ router.patch("/:id", protect, async (req, res, next) => {
       "contentBrief",
       "keyMessageCta",
       "whatToAvoid",
+      "goal",
+      "competitors",
+      "uniqueSellingPoint",
+      "funFact",
       "scriptUrl",
       "scriptFileName",
       "platforms",

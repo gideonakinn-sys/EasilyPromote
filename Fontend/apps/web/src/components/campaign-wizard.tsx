@@ -31,6 +31,10 @@ interface CampaignData {
   description: string;
   keyMessage: string;
   avoid: string;
+  goal: string;
+  competitors: string;
+  uniqueSellingPoint: string;
+  funFact: string;
   platforms: string[];
   contentStyle: string[];
   niches: string[];
@@ -215,7 +219,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -225,6 +229,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           description: data.contentBrief || "",
           keyMessage: data.keyMessageCta || "",
           avoid: data.whatToAvoid || "",
+          goal: data.goal || "",
+          competitors: data.competitors || "",
+          uniqueSellingPoint: data.uniqueSellingPoint || "",
+          funFact: data.funFact || "",
           platforms: data.platforms || [],
           contentStyle: data.contentStyle ? (typeof data.contentStyle === "string" ? data.contentStyle.split(",").map((s: string) => s.trim()).filter(Boolean) : data.contentStyle) : [],
           niches: data.niches || [],
@@ -255,6 +263,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     description: "",
     keyMessage: "",
     avoid: "",
+    goal: "",
+    competitors: "",
+    uniqueSellingPoint: "",
+    funFact: "",
     platforms: ["TikTok", "Instagram"],
     contentStyle: ["Fun & Energetic"],
     niches: [],
@@ -302,6 +314,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             description: parsed.campaign.description || "",
             keyMessage: parsed.campaign.keyMessage || "",
             avoid: parsed.campaign.avoid || "",
+            goal: parsed.campaign.goal || "",
+            competitors: parsed.campaign.competitors || "",
+            uniqueSellingPoint: parsed.campaign.uniqueSellingPoint || "",
+            funFact: parsed.campaign.funFact || "",
             platforms: Array.isArray(parsed.campaign.platforms) ? parsed.campaign.platforms : [],
             contentStyle: Array.isArray(parsed.campaign.contentStyle) ? parsed.campaign.contentStyle : [],
             niches: Array.isArray(parsed.campaign.niches) ? parsed.campaign.niches : [],
@@ -534,6 +550,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     contentBrief: campaign.description,
     keyMessageCta: campaign.keyMessage,
     whatToAvoid: campaign.avoid,
+    goal: campaign.goal,
+    competitors: campaign.competitors,
+    uniqueSellingPoint: campaign.uniqueSellingPoint,
+    funFact: campaign.funFact,
     platforms: (campaign.platforms || []).map((p) => PLATFORM_KEY_MAP[p] || p.toLowerCase()),
     contentStyle: (campaign.contentStyle || []).filter(Boolean),
     niches: (campaign.niches || []).filter(Boolean),
@@ -826,7 +846,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <div data-reveal className={cn("space-y-10 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
               {/* Campaign Cover */}
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 bg-stone-200 rounded-xl overflow-hidden flex items-center justify-center">
+                <div className="w-20 h-20 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center">
                   {campaign.coverImageUrl ? (
                     <img src={campaign.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
                   ) : (
@@ -845,25 +865,27 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     onChange={handleCoverUpload}
                     className="hidden"
                   />
-                  {uploadingImage ? (
-                    <div className="w-full space-y-1">
-                      <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-stone-900 rounded-full transition-all duration-150"
-                          style={{ width: `${imageProgress}%` }}
-                        />
+                  <div className="space-y-2">
+                    {uploadingImage ? (
+                      <div className="w-full space-y-1">
+                        <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-stone-900 rounded-full transition-all duration-150"
+                            style={{ width: `${imageProgress}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] font-medium text-stone-500 font-rethink">{imageProgress}%</span>
                       </div>
-                      <span className="text-[10px] font-medium text-stone-500 font-rethink">{imageProgress}%</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => coverInputRef.current?.click()}
-                      className="px-4 py-1.5 bg-white rounded-full text-xs font-medium text-stone-600 font-rethink"
-                    >
-                      {campaign.coverImageUrl ? "Change image" : "Upload image"}
-                    </button>
-                  )}
-                  <span className="text-[10px] font-medium text-stone-400 font-rethink">Max file size: 10MB</span>
+                    ) : (
+                      <button
+                        onClick={() => coverInputRef.current?.click()}
+                        className="px-4 py-1.5 bg-white rounded-full text-xs font-medium text-stone-900 font-rethink"
+                      >
+                        {campaign.coverImageUrl ? "Change image" : "Upload image"}
+                      </button>
+                    )}
+                    <span className="block text-[10px] font-medium text-stone-400 font-rethink">Max file size: 10MB</span>
+                  </div>
                   {touchedStep.step1 && !campaign.coverImageUrl && (
                     <p className="text-[10px] text-red-500 font-medium font-rethink">Please upload a cover image</p>
                   )}
@@ -922,6 +944,64 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <span className="text-[10px] text-stone-400 font-medium">
                   ₦{getRate(campaign.category).toFixed(3)} per view — Budget calculated automatically
                 </span>
+              </div>
+
+              {/* Campaign goal */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Campaign goal</label>
+                  <InfoTooltip text="The main outcome you're after — e.g. brand awareness, a product launch, or driving sales." />
+                </div>
+                <textarea
+                  placeholder="What are you hoping to achieve?"
+                  value={campaign.goal}
+                  onChange={(e) => { isModified.current = true; setCampaign({ ...campaign, goal: e.target.value }); }}
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[88px]"
+                />
+              </div>
+
+              {/* Competitors */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Competitors</label>
+                  <InfoTooltip text="The brands or creators you're up against. Helps creators craft content that stands out." />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Who are you competing with?"
+                  value={campaign.competitors}
+                  onChange={(e) => { isModified.current = true; setCampaign({ ...campaign, competitors: e.target.value }); }}
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                />
+              </div>
+
+              {/* Unique selling point */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Unique selling point</label>
+                  <InfoTooltip text="What makes your product different from the competition — the thing creators should highlight." />
+                </div>
+                <textarea
+                  placeholder="What makes your product different?"
+                  value={campaign.uniqueSellingPoint}
+                  onChange={(e) => { isModified.current = true; setCampaign({ ...campaign, uniqueSellingPoint: e.target.value }); }}
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[88px]"
+                />
+              </div>
+
+              {/* Fun fact */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-medium text-stone-500">Fun fact</label>
+                  <InfoTooltip text="A memorable detail about your product creators can weave into their videos." />
+                </div>
+                <input
+                  type="text"
+                  placeholder="A fun fact creators should know"
+                  value={campaign.funFact}
+                  onChange={(e) => { isModified.current = true; setCampaign({ ...campaign, funFact: e.target.value }); }}
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                />
               </div>
 
               {/* Campaign Views Input */}
@@ -1231,12 +1311,47 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 </span>
               </div>
 
-              {/* Section 2: description */}
-              {campaign.description && (
-                <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.description}</p>
-              )}
+              {/* Brief stack: label → content */}
+              <div className="space-y-6">
+                {campaign.description && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Description</h5>
+                    <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.description}</p>
+                  </div>
+                )}
+                {campaign.goal && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Campaign goal</h5>
+                    <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.goal}</p>
+                  </div>
+                )}
+                {campaign.competitors && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Competitors</h5>
+                    <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.competitors}</p>
+                  </div>
+                )}
+                {campaign.uniqueSellingPoint && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Unique selling point</h5>
+                    <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.uniqueSellingPoint}</p>
+                  </div>
+                )}
+                {campaign.funFact && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Fun fact</h5>
+                    <p className="font-rethink text-sm text-stone-900 leading-relaxed tracking-[-0.01em]">{campaign.funFact}</p>
+                  </div>
+                )}
+                {campaign.scriptFileName && (
+                  <div className="space-y-1.5">
+                    <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Script</h5>
+                    <p className="font-rethink text-sm text-stone-900 tracking-[-0.01em]">{campaign.scriptFileName}</p>
+                  </div>
+                )}
+              </div>
 
-              {/* Section 3: views & budget */}
+              {/* Views & budget */}
               <div className="flex items-center gap-6">
                 <div>
                   <span className="text-[11px] font-medium text-stone-400 block">Target views</span>
@@ -1248,7 +1363,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 </div>
               </div>
 
-              {/* Section 4: details container */}
+              {/* Details container */}
               <div className="bg-stone-50 rounded-[18px] py-4 space-y-6">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Platforms</span>
@@ -1262,12 +1377,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <span className="font-medium text-stone-500">Niches</span>
                   <span className="font-medium text-stone-800">{(campaign.niches || []).length > 0 ? (campaign.niches || []).join(", ") : "Any"}</span>
                 </div>
-                {campaign.scriptFileName && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-medium text-stone-500">Script</span>
-                    <span className="font-medium text-stone-800 truncate ml-4">{campaign.scriptFileName}</span>
-                  </div>
-                )}
               </div>
 
               {/* Warning Info Box */}

@@ -33,6 +33,22 @@ const campaignSchema = new mongoose.Schema(
       type: String,
       maxlength: 500,
     },
+    goal: {
+      type: String,
+      maxlength: 1000,
+    },
+    competitors: {
+      type: String,
+      maxlength: 500,
+    },
+    uniqueSellingPoint: {
+      type: String,
+      maxlength: 1000,
+    },
+    funFact: {
+      type: String,
+      maxlength: 500,
+    },
     scriptUrl: {
       type: String,
       default: null,
