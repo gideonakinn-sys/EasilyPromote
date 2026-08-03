@@ -14,7 +14,6 @@ import {
 import type { CampaignItem, CreatorProfile } from "./types";
 import { CampaignCard } from "./campaign-card";
 import { useReveal } from "../hooks/use-reveal";
-import browseCampaignIllus from "@ep/ui/assets/browse-campaign.png";
 import emptyHomeImg from "@ep/ui/assets/empty_home.png";
 
 interface CampaignFeedProps {
@@ -122,28 +121,22 @@ export function CampaignFeed({
         ))}
 
         {campaigns.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-6">
+          <div className="col-span-full flex flex-col items-center text-center pt-8 md:pt-24 px-6">
             <Image src={emptyHomeImg} alt="" width={184} height={175} className="mb-6" unoptimized />
             <h3 className="font-motterdam font-normal text-[22px] text-stone-900 mb-2 tracking-tighter">
               No campaigns yet
             </h3>
-            <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
+            <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed mb-8">
               You haven&apos;t joined any campaigns. Browse the marketplace to find campaigns matching your niches.
             </p>
+            <button
+              onClick={() => onBrowseCampaign?.()}
+              className="w-full max-w-[300px] py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+            >
+              Browse Campaign
+            </button>
           </div>
         )}
-
-        <div className="bg-white rounded-2xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
-          <div className="flex flex-col items-center justify-center">
-            <Image src={browseCampaignIllus} alt="Browse campaigns" width={100} height={100} className="w-[100px] h-[100px]" unoptimized />
-          </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onBrowseCampaign?.(); }}
-            className="w-full py-3 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold text-sm font-rethink"
-          >
-            Browse campaign
-          </button>
-        </div>
       </div>
     </div>
   );

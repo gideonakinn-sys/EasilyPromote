@@ -2,7 +2,6 @@ import * as React from "react";
 import Image from "next/image";
 import { TYPOGRAPHY } from "@ep/ui/lib/constants";
 import emptyHomeImg from "@ep/ui/assets/empty_home.png";
-import footerImg from "@ep/ui/assets/Footer Compressedd.webp";
 import { useReveal } from "../hooks/use-reveal";
 
 interface EmptyStateProps {
@@ -46,16 +45,6 @@ export function EmptyState({ onCreateCampaign, userName = "User" }: EmptyStatePr
         >
           Create Campaign
         </button>
-      </div>
-
-      {/* Bottom Polaroid Collage Image */}
-      <div data-reveal className="w-full mt-auto pb-0 flex justify-center -mx-6 md:-mx-[100px] hidden md:flex">
-        <Image
-          src={footerImg}
-          alt="Creator Showcase"
-          className="w-[70%] object-contain opacity-95"
-          priority
-        />
       </div>
     </main>
   );
