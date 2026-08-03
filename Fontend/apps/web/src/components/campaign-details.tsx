@@ -4,7 +4,7 @@ import * as React from "react";
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FolderOpenIcon, File02Icon, MoneyReceiveFlow02Icon } from "@hugeicons/core-free-icons";
+import { FolderOpenIcon, File02Icon, File01Icon, Download01Icon, MoneyReceiveFlow02Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { Skeleton } from "./ui/skeleton";
@@ -139,6 +139,10 @@ interface CampaignData {
   contentBrief?: string;
   keyMessageCta?: string;
   whatToAvoid?: string;
+  goal?: string;
+  competitors?: string;
+  uniqueSellingPoint?: string;
+  funFact?: string;
   scriptUrl?: string;
   scriptFileName?: string;
   platforms?: string[];
@@ -558,6 +562,30 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   <span className="text-stone-800">{Array.isArray(campaign.contentStyle) ? campaign.contentStyle.join(", ") : campaign.contentStyle}</span>
                 </div>
               )}
+              {campaign.goal && (
+                <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500 shrink-0 mr-4">Campaign goal</span>
+                  <span className="text-stone-800 text-right">{campaign.goal}</span>
+                </div>
+              )}
+              {campaign.competitors && (
+                <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500 shrink-0 mr-4">Competitors</span>
+                  <span className="text-stone-800 text-right">{campaign.competitors}</span>
+                </div>
+              )}
+              {campaign.uniqueSellingPoint && (
+                <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500 shrink-0 mr-4">Unique selling point</span>
+                  <span className="text-stone-800 text-right">{campaign.uniqueSellingPoint}</span>
+                </div>
+              )}
+              {campaign.funFact && (
+                <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500 shrink-0 mr-4">Fun fact</span>
+                  <span className="text-stone-800 text-right">{campaign.funFact}</span>
+                </div>
+              )}
               {campaign.scriptUrl && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                   <span className="text-stone-500">Script</span>
@@ -565,9 +593,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     href={campaign.scriptUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-stone-800 underline"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-200 rounded-full"
                   >
-                    {campaign.scriptFileName || "View document"}
+                    <HugeiconsIcon icon={File01Icon} size={14} className="text-stone-900 shrink-0" />
+                    <span className="text-sm font-medium text-stone-900">{campaign.scriptFileName || "Download brief"}</span>
+                    <HugeiconsIcon icon={Download01Icon} size={14} className="text-stone-900 shrink-0" />
                   </a>
                 </div>
               )}
