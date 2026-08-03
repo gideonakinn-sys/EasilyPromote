@@ -63,7 +63,10 @@ async function updateCampaignFromSubmission(submission) {
 
 async function syncTiktokViews() {
   const connections = await TikTokConnection.find().select("+accessTokenEnc +refreshTokenEnc");
-  if (connections.length === 0) return;
+  if (connections.length === 0) {
+    console.log("[TikTok Sync] Skipped — no TikTok connections");
+    return;
+  }
 
   const userIds = connections.map((c) => c.userId);
 
@@ -71,6 +74,7 @@ async function syncTiktokViews() {
     creatorId: { $in: userIds },
     status: { $in: ["posted", "verifying"] },
   });
+  console.log(`[TikTok Sync] connections=${connections.length} postedSubmissions=${submissions.length}`);
 
   const byUser = {};
   for (const submission of submissions) {
@@ -80,6 +84,7 @@ async function syncTiktokViews() {
     if (!byUser[userId]) byUser[userId] = { connection: null, videos: [] };
     byUser[userId].videos.push({ submission, videoId });
   }
+  console.log(`[TikTok Sync] submissionsWithVideoId=${Object.values(byUser).reduce((s, d) => s + d.videos.length, 0)}`);
 
   const connectionByUser = {};
   for (const c of connections) {

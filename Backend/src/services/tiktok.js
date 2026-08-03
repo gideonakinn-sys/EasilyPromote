@@ -189,8 +189,18 @@ async function queryVideos(accessToken, videoIds, fields) {
     console.error("[TikTok API] video/query FAILED", res.status, JSON.stringify(json));
     throw new Error(json.error?.message || `TikTok API error ${res.status}`);
   }
-  console.log("[TikTok API] video/query OK", res.status, "videos=", json.data?.videos?.length || 0);
-  return json.data.videos || [];
+  const videos = json.data?.videos || [];
+  console.log(
+    "[TikTok API] video/query OK",
+    res.status,
+    "requested=",
+    videoIds.slice(0, QUERY_BATCH_SIZE).length,
+    "returned=",
+    videos.length,
+    "views=",
+    videos.map((v) => (v.id ? `${v.id}:${v.view_count}` : "?")).join(",")
+  );
+  return videos;
 }
 
 async function getConnection(userId) {
@@ -223,6 +233,7 @@ async function getValidAccessToken(userId) {
   const refreshToken = decrypt(connection.refreshTokenEnc);
 
   if (connection.expiresAt && connection.expiresAt.getTime() > Date.now() + REFRESH_BEFORE_MS && accessToken) {
+    console.log("[TikTok] Using cached access token | expiresInMs=", connection.expiresAt.getTime() - Date.now());
     return accessToken;
   }
 
@@ -230,8 +241,11 @@ async function getValidAccessToken(userId) {
     throw new Error("TikTok refresh token is missing");
   }
 
+  console.log("[TikTok] Access token expired — refreshing | refreshExpiresInMs=",
+    connection.refreshExpiresAt ? connection.refreshExpiresAt.getTime() - Date.now() : "n/a");
   const refreshed = await refreshAccessToken(refreshToken);
   await saveTokens(connection, refreshed);
+  console.log("[TikTok] Token refreshed OK | newExpiresInMs=", connection.expiresAt.getTime() - Date.now());
   return decrypt(connection.accessTokenEnc);
 }
 

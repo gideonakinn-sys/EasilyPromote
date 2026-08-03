@@ -197,9 +197,11 @@ router.post("/disconnect", protect, authorizeRoles("creator"), async (req, res, 
 
 router.get("/videos", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
+    console.log("[TikTok] GET /videos for user", req.user._id);
     const accessToken = await tiktok.getValidAccessToken(req.user._id);
     const cursor = parseInt(req.query.cursor || "0", 10);
     const data = await tiktok.listVideos(accessToken, { cursor });
+    console.log("[TikTok] GET /videos OK | videos=", data.videos?.length || 0);
     res.json(data);
   } catch (error) {
     next(error);
@@ -208,6 +210,7 @@ router.get("/videos", protect, authorizeRoles("creator"), async (req, res, next)
 
 router.get("/videos/:videoId/metrics", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
+    console.log("[TikTok] GET /videos/:id/metrics for user", req.user._id, "| videoId=", req.params.videoId);
     const accessToken = await tiktok.getValidAccessToken(req.user._id);
     const videos = await tiktok.queryVideos(accessToken, [req.params.videoId]);
     const video = videos.find((v) => String(v.id) === String(req.params.videoId)) || null;
@@ -215,6 +218,16 @@ router.get("/videos/:videoId/metrics", protect, authorizeRoles("creator"), async
       return res.status(404).json({ error: "Video not found or not owned by this user" });
     }
     res.json(video);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/sync", protect, authorizeRoles("admin", "super_admin", "creator"), async (req, res, next) => {
+  try {
+    const { syncTiktokViews } = require("../utils/syncTiktokViews");
+    await syncTiktokViews();
+    res.json({ success: true, message: "TikTok sync completed" });
   } catch (error) {
     next(error);
   }
