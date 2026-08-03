@@ -479,6 +479,9 @@ export function CampaignDetailsDrawer({
                     />
                   </div>
                   <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
+                    {Number((displayCampaign.progress || 0).toFixed(3))}%
+                  </span>
+                  <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
                     / {(displayCampaign.targetViews || displayCampaign.viewTarget || 0).toLocaleString()} target
                   </span>
                 </div>
@@ -492,10 +495,17 @@ export function CampaignDetailsDrawer({
                     const entry = (displayCampaign.postedPlatforms || []).find(
                       (p) => String(p.platform).toLowerCase() === String(platform).toLowerCase()
                     );
+                    const platformViews = entry?.views || 0;
+                    const earned = platformViews * (displayCampaign.costPerView || 0);
                     return (
                       <div key={platform} className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                         <span className="text-stone-500">{platformLabels[platform] || platform}</span>
-                        <span className="text-stone-900">{(entry?.views || 0).toLocaleString()} views</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-stone-900">{platformViews.toLocaleString()} views</span>
+                          {earned > 0 && (
+                            <span className="text-[11px] text-stone-400">₦{earned.toLocaleString()}</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -735,6 +745,12 @@ export function CampaignDetailsDrawer({
                 <span className="text-stone-500">Target</span>
                 <span className="text-stone-800">
                   {(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views
+                </span>
+              </div>
+              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                <span className="text-stone-500">Current views</span>
+                <span className="text-stone-800">
+                  {(displayCampaign.currentViews || 0).toLocaleString()} views
                 </span>
               </div>
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">

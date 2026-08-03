@@ -4,6 +4,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import type { CampaignItem } from "./types";
 
+function formatProgress(value: number | undefined): string {
+  const v = value ?? 0;
+  return `${Number(v.toFixed(3))}%`;
+}
+
 interface CampaignCardProps {
   campaign: CampaignItem;
   onClick?: () => void;
@@ -117,7 +122,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
                 style={{ width: `${camp.progress}%` }}
               />
             </div>
-            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{camp.progress}%</span>
+            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{formatProgress(camp.progress)}</span>
             <span className="w-1 h-1 rounded-full bg-stone-300" />
             <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">
               {camp.currentViews?.toLocaleString()} / {camp.targetViews?.toLocaleString()} views
