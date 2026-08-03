@@ -5,6 +5,7 @@ import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FilterIcon, ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
+import { TYPOGRAPHY } from "@ep/ui/lib/constants";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -48,7 +49,7 @@ export function CampaignFeed({
 
   return (
     <div className="w-full flex flex-col">
-      <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
+      <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-14">
         <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
@@ -121,9 +122,9 @@ export function CampaignFeed({
         ))}
 
         {campaigns.length === 0 && (
-          <div className="col-span-full flex flex-col items-center text-center pt-8 md:pt-24 px-6">
+          <div className="col-span-full flex flex-col items-center text-center pt-6 md:pt-0 px-6">
             <Image src={emptyHomeImg} alt="" width={184} height={175} className="mb-6" unoptimized />
-            <h3 className="font-motterdam font-normal text-[22px] text-stone-900 mb-2 tracking-tighter">
+            <h3 className={`${TYPOGRAPHY.welcomeHeader} mb-2`}>
               No campaigns yet
             </h3>
             <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed mb-8">
