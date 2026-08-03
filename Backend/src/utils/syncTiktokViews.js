@@ -6,16 +6,35 @@ const tiktok = require("../services/tiktok");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
-function extractTikTokVideoId(url) {
+async function extractTikTokVideoId(url) {
   if (!url) return null;
-  const match = String(url).match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
-  return match ? match[1] : null;
+  const str = String(url);
+  const match = str.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
+  if (match) return match[1];
+
+  const shortMatch = str.match(/vm\.tiktok\.com\/([A-Za-z0-9_-]+)/i) || str.match(/vt\.tiktok\.com\/([A-Za-z0-9_-]+)/i);
+  if (shortMatch) {
+    try {
+      const shortUrl = `https://www.${str.match(/vm|vt/i)[0]}.tiktok.com/${shortMatch[1]}`;
+      const resp = await fetch(shortUrl, { method: "HEAD", redirect: "follow" });
+      const finalUrl = resp.url || str;
+      const longMatch = String(finalUrl).match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
+      if (longMatch) return longMatch[1];
+    } catch (error) {
+      console.error("[TikTok Sync] Failed to resolve short link", url, error.message);
+    }
+  }
+  return null;
 }
 
-function getSubmissionVideoId(submission) {
+async function getSubmissionVideoId(submission) {
   if (submission.tiktokVideoId) return submission.tiktokVideoId;
   const tiktokPost = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
-  return extractTikTokVideoId(tiktokPost && tiktokPost.postUrl);
+  const id = await extractTikTokVideoId(tiktokPost && tiktokPost.postUrl);
+  if (!id) {
+    console.warn("[TikTok Sync] No video id for submission", submission._id, "| postUrl=", tiktokPost && tiktokPost.postUrl);
+  }
+  return id;
 }
 
 async function updateCampaignFromSubmission(submission) {
@@ -55,7 +74,7 @@ async function syncTiktokViews() {
 
   const byUser = {};
   for (const submission of submissions) {
-    const videoId = getSubmissionVideoId(submission);
+    const videoId = await getSubmissionVideoId(submission);
     if (!videoId) continue;
     const userId = submission.creatorId.toString();
     if (!byUser[userId]) byUser[userId] = { connection: null, videos: [] };
@@ -80,9 +99,13 @@ async function syncTiktokViews() {
         const videos = await tiktok.queryVideos(accessToken, batch);
 
         const videoMap = new Map(videos.map((v) => [String(v.id), v]));
+        console.log(`[TikTok Sync] user=${userId} queried=${batch.length} returned=${videos.length} views=${videos.map((v) => v.view_count).join(",")}`);
 
         for (const { submission, videoId } of data.videos) {
-          if (!videoMap.has(videoId)) continue;
+          if (!videoMap.has(videoId)) {
+            console.warn(`[TikTok Sync] video ${videoId} not returned for submission ${submission._id}`);
+            continue;
+          }
           const metrics = videoMap.get(videoId);
 
           const entry = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
