@@ -114,6 +114,15 @@ export interface MarketplaceCampaign {
 
 export interface WalletData {
   balance: number;
+  withdrawableBalance: number;
+  pendingBalance: number;
+  pendingByCampaign: Array<{
+    id: string;
+    title: string;
+    views: number;
+    viewTarget: number;
+    earned: number;
+  }>;
   lifetimeEarnings: number;
   completionRate: number;
   totalReleased: number;

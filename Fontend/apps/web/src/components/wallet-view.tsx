@@ -11,7 +11,9 @@ interface WalletViewProps {
 export function WalletView({ profile, walletData }: WalletViewProps) {
   useReveal();
 
-  const balance = walletData?.balance ?? profile.lifetimeEarnings;
+  const withdrawable = walletData?.withdrawableBalance ?? walletData?.balance ?? 0;
+  const pending = walletData?.pendingBalance ?? 0;
+  const pendingByCampaign = walletData?.pendingByCampaign ?? [];
   const lifetimeEarnings = walletData?.lifetimeEarnings ?? profile.lifetimeEarnings;
   const completionRate = walletData?.completionRate ?? profile.completionRate;
   const totalReleased = walletData?.totalReleased ?? 0;
@@ -25,13 +27,13 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
 
       <div className="bg-[#FAFAF9] border border-stone-200 rounded-2xl p-6 mb-6">
         <div className="text-xs font-medium text-stone-500 mb-1">
-          Available Balance
+          Withdrawable Balance
         </div>
         <div className="font-rethink text-3xl font-medium text-stone-900 mb-2">
-          ₦{balance.toLocaleString()}.00
+          ₦{withdrawable.toLocaleString()}.00
         </div>
         <span className="text-[10px] font-medium px-2.5 py-1 bg-green-50 text-green-700 border border-green-100 rounded-full">
-          Ledger Reconciled
+          Available to withdraw
         </span>
       </div>
 
@@ -46,6 +48,28 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         </div>
       </div>
 
+      {pendingByCampaign.length > 0 && (
+        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium text-stone-500">Pending Balance (non-withdrawable)</span>
+            <span className="font-rethink text-sm font-medium text-stone-900">₦{pending.toLocaleString()}</span>
+          </div>
+          <div className="space-y-2.5">
+            {pendingByCampaign.map((c) => (
+              <div key={c.id} className="flex items-center justify-between text-sm">
+                <div className="min-w-0">
+                  <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
+                  <p className="font-rethink text-xs text-stone-500">
+                    {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views
+                  </p>
+                </div>
+                <span className="font-rethink font-medium text-stone-900">₦{c.earned.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {totalReleased > 0 && (
         <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left">
           <span className="text-[10px] font-medium text-stone-500">Total Released</span>
@@ -55,7 +79,8 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
 
       <button
         onClick={() => alert("Payout request submitted. Processing batch window.")}
-        className="w-full py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink"
+        disabled={withdrawable <= 0}
+        className="w-full py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink disabled:bg-stone-200 disabled:text-stone-400"
       >
         Withdraw Funds
       </button>

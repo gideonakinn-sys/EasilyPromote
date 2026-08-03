@@ -407,8 +407,50 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
 
     const totalReleased = myTransactions.reduce((sum, s) => sum + (s.payoutAmount || 0), 0);
 
+    const slots = await Slot.find({ creatorId: req.user._id }).populate({
+      path: "campaignId",
+      select: "name status targetViews costPerView viewsDelivered",
+    });
+    const submissions = await Submission.find({ creatorId: req.user._id });
+
+    const submissionMap = {};
+    for (const sub of submissions) {
+      submissionMap[sub.campaignId.toString()] = sub;
+    }
+
+    let withdrawableBalance = 0;
+    const pendingByCampaign = [];
+
+    for (const slot of slots) {
+      const campaign = slot.campaignId;
+      if (!campaign) continue;
+      const submission = submissionMap[campaign._id.toString()];
+      if (!submission) continue;
+
+      const views = submission.viewsDelivered || 0;
+      const costPerView = campaign.costPerView || 0;
+      const earned = views * costPerView;
+
+      if (campaign.status === "completed") {
+        withdrawableBalance += earned;
+      } else if (["live", "paused", "under_review"].includes(campaign.status)) {
+        pendingByCampaign.push({
+          id: campaign._id,
+          title: campaign.name,
+          views,
+          viewTarget: slot.viewTarget,
+          earned,
+        });
+      }
+    }
+
+    const pendingBalance = pendingByCampaign.reduce((sum, c) => sum + c.earned, 0);
+
     res.json({
-      balance: user.walletBalance,
+      balance: withdrawableBalance,
+      withdrawableBalance,
+      pendingBalance,
+      pendingByCampaign,
       lifetimeEarnings: profile ? profile.lifetimeEarnings : 0,
       completionRate: profile ? profile.completionRate : 0,
       totalReleased,
