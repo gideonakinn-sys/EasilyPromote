@@ -89,7 +89,8 @@ export default function AdminCampaignsPage() {
   const [industryOptions, setIndustryOptions] = useState<string[]>([]);
   const [campaignDetail, setCampaignDetail] = useState<{
     submissions: Array<{
-      id: string;
+      _id?: string;
+      id?: string;
       creatorHandle: string;
       creatorId?: { name?: string; email?: string };
       status: string;
@@ -192,7 +193,8 @@ export default function AdminCampaignsPage() {
     try {
       const data = await apiRequest<{
         submissions: Array<{
-          id: string;
+          _id?: string;
+          id?: string;
           creatorHandle: string;
           creatorId?: { name?: string; email?: string };
           status: string;
@@ -516,7 +518,7 @@ export default function AdminCampaignsPage() {
                       {campaignDetail.submissions.map((sub) => {
                         const postedPlatforms = sub.postedPlatforms || [];
                         return (
-                          <div key={sub.id} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                          <div key={sub.id || sub._id || sub.creatorHandle} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div>
                                 <p className="text-sm font-bold text-stone-900">
