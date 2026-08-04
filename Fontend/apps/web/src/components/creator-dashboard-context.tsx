@@ -286,6 +286,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         daysLeft: c.daysLeft as number,
         targetViews: c.targetViews as number,
         costPerView: c.costPerView as number,
+        creatorPool: c.creatorPool as number | undefined,
         contentBrief: c.contentBrief as string,
         brandName: (c.brandName as string) || "Brand",
         brandAvatar: c.brandAvatar as string | undefined,

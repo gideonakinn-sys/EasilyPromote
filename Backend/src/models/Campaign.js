@@ -133,8 +133,10 @@ const campaignSchema = new mongoose.Schema(
 );
 
 campaignSchema.pre("save", function (next) {
-  if (this.isModified("targetViews") || this.isModified("costPerView")) {
-    this.budget = this.targetViews * this.costPerView;
+  if (this.isModified("targetViews")) {
+    const { getPriceForViews } = require("../config/pricing");
+    this.budget = getPriceForViews(this.targetViews);
+    this.costPerView = Math.round((this.budget / this.targetViews) * 1000) / 1000;
   }
   if (this.isModified("budget") || this.isModified("platformFeePercent")) {
     this.platformFee = this.budget * (this.platformFeePercent / 100);

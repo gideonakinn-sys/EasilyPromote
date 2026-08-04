@@ -103,6 +103,7 @@ export interface MarketplaceCampaign {
   daysLeft: number;
   targetViews: number;
   costPerView: number;
+  creatorPool?: number;
   contentBrief?: string;
   brandName: string;
   brandAvatar?: string;

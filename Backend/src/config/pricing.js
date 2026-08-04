@@ -40,4 +40,43 @@ async function getEffectiveCostPerView(category) {
   return getCostPerView(category);
 }
 
-module.exports = { getCostPerView, getEffectiveCostPerView, COST_PER_VIEW };
+// Tiered universal pricing (volume discount). budget = f(views).
+const TIER_PRICING = [
+  { views: 100000, price: 430000 },
+  { views: 200000, price: 780000 },
+  { views: 500000, price: 1830000 },
+  { views: 1000000, price: 3330000 },
+  { views: 2000000, price: 6405000 },
+  { views: 5000000, price: 15000000 },
+  { views: 10000000, price: 28500000 },
+  { views: 20000000, price: 54000000 },
+  { views: 40000000, price: 100000000 },
+];
+
+function getPriceForViews(views) {
+  const count = Number(views) || 0;
+  if (count <= TIER_PRICING[0].views) return TIER_PRICING[0].price;
+
+  for (let i = 1; i < TIER_PRICING.length; i++) {
+    const prev = TIER_PRICING[i - 1];
+    const curr = TIER_PRICING[i];
+    if (count <= curr.views) {
+      const t = (count - prev.views) / (curr.views - prev.views);
+      return Math.round(prev.price + (curr.price - prev.price) * t);
+    }
+  }
+
+  // Above the last tier: extrapolate using the last segment slope
+  const prev = TIER_PRICING[TIER_PRICING.length - 2];
+  const last = TIER_PRICING[TIER_PRICING.length - 1];
+  const slope = (last.price - prev.price) / (last.views - prev.views);
+  return Math.round(last.price + (count - last.views) * slope);
+}
+
+module.exports = {
+  getCostPerView,
+  getEffectiveCostPerView,
+  getPriceForViews,
+  COST_PER_VIEW,
+  TIER_PRICING,
+};

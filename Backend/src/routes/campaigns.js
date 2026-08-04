@@ -12,7 +12,7 @@ const router = express.Router();
 
 router.get("/pricing", async (req, res, next) => {
   try {
-    const { COST_PER_VIEW } = require("../config/pricing");
+    const { COST_PER_VIEW, TIER_PRICING } = require("../config/pricing");
     const Industry = require("../models/Industry");
     const categories = { ...COST_PER_VIEW.categories };
     const industries = await Industry.find({ enabled: true, costPerView: { $gt: 0 } });
@@ -22,6 +22,7 @@ router.get("/pricing", async (req, res, next) => {
     res.json({
       default: COST_PER_VIEW.default,
       categories,
+      tiers: TIER_PRICING,
     });
   } catch (err) {
     next(err);
@@ -82,9 +83,9 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
   try {
     const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
 
-    const { getEffectiveCostPerView } = require("../config/pricing");
-    const costPerView = await getEffectiveCostPerView(category);
-    const budget = targetViews * costPerView;
+    const { getPriceForViews } = require("../config/pricing");
+    const budget = getPriceForViews(targetViews);
+    const costPerView = Math.round((budget / targetViews) * 1000) / 1000;
 
     const campaign = await Campaign.create({
       businessId: req.user._id,
@@ -267,6 +268,12 @@ router.patch("/:id", protect, async (req, res, next) => {
       }
     }
 
+    if (req.body.targetViews !== undefined) {
+      const { getPriceForViews } = require("../config/pricing");
+      updates.budget = getPriceForViews(req.body.targetViews);
+      updates.costPerView = Math.round((updates.budget / req.body.targetViews) * 1000) / 1000;
+    }
+
     const updated = await Campaign.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
@@ -302,8 +309,9 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.endDate !== undefined) updates.endDate = data.endDate;
       if (data.targetViews !== undefined) {
         updates.targetViews = data.targetViews;
-        const { getEffectiveCostPerView } = require("../config/pricing");
-        updates.costPerView = await getEffectiveCostPerView(data.category || campaign.category);
+        const { getPriceForViews } = require("../config/pricing");
+        updates.budget = getPriceForViews(data.targetViews);
+        updates.costPerView = Math.round((updates.budget / data.targetViews) * 1000) / 1000;
       }
       if (data.scriptUrl !== undefined) updates.scriptUrl = data.scriptUrl;
       if (data.scriptFileName !== undefined) updates.scriptFileName = data.scriptFileName;
@@ -477,11 +485,8 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
       }
     }
 
-    campaign.targetViews += Math.round(amount / campaign.costPerView);
-    campaign.budget += amount;
-    const platformFeePercent = campaign.platformFeePercent || 0.3;
-    campaign.platformFee = Math.round(campaign.budget * platformFeePercent);
-    campaign.creatorPool = campaign.budget - campaign.platformFee;
+    const effectiveRate = campaign.costPerView || (campaign.budget > 0 && campaign.targetViews > 0 ? campaign.budget / campaign.targetViews : 0);
+    campaign.targetViews += effectiveRate > 0 ? Math.round(amount / effectiveRate) : 0;
     await campaign.save();
 
     await Transaction.create({

@@ -10,6 +10,7 @@ import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
+import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
@@ -17,7 +18,7 @@ import payoutsEmpty from "@ep/ui/assets/Payouts empty.png";
 
 type TabType = "Overview" | "Submission" | "Payouts";
 
-const PRESET_VIEWS = [100000, 500000, 1000000, 2000000, 3000000] as const;
+const PRESET_VIEWS = [100000, 1000000, 5000000, 10000000, 20000000] as const;
 
 function formatCompact(value: number): string {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
@@ -209,8 +210,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const [showIncreaseViews, setShowIncreaseViews] = useState(false);
   const [additionalViews, setAdditionalViews] = useState(0);
   const [viewsInput, setViewsInput] = useState("");
-  const [pricingRates, setPricingRates] = useState<Record<string, number>>({});
-  const [defaultRate, setDefaultRate] = useState(1.085);
+  const [tiers, setTiers] = useState<TierPoint[]>(DEFAULT_TIERS);
   const [paying, setPaying] = useState(false);
   const [topupSuccess, setTopupSuccess] = useState(false);
   const [topupError, setTopupError] = useState("");
@@ -252,10 +252,9 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   }, [fetchCampaign, fetchSubmissions]);
 
   useEffect(() => {
-    apiRequest<{ default: number; categories: Record<string, number> }>("/campaigns/pricing")
+    apiRequest<{ tiers: TierPoint[] }>("/campaigns/pricing")
       .then((data) => {
-        setPricingRates(data.categories || {});
-        setDefaultRate(data.default || 1.085);
+        if (data.tiers && data.tiers.length > 0) setTiers(data.tiers);
       })
       .catch(() => {});
   }, []);
@@ -304,7 +303,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     }
   };
 
-  const getRate = useCallback((category: string) => pricingRates[category] || defaultRate, [pricingRates, defaultRate]);
+  const getPriceForViews = useCallback((views: number) => computePriceForViews(tiers, views), [tiers]);
 
   const handleViewsInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -330,7 +329,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     setAdditionalViews(preset);
   }, []);
 
-  const additionalCost = additionalViews > 0 ? Math.round(additionalViews * getRate(campaign?.category || "")) : 0;
+  const additionalCost =
+    additionalViews > 0
+      ? getPriceForViews((campaign?.targetViews || 0) + additionalViews) - getPriceForViews(campaign?.targetViews || 0)
+      : 0;
 
   const handlePayTopup = useCallback(async () => {
     if (additionalViews === 0) return;
@@ -626,7 +628,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   viewsInput={viewsInput}
                   additionalViews={additionalViews}
                   additionalCost={additionalCost}
-                  rate={getRate(campaign.category)}
+                  rate={additionalViews > 0 ? additionalCost / additionalViews : 0}
                   paying={paying}
                   onViewsInputChange={handleViewsInputChange}
                   onViewsInputBlur={handleViewsInputBlur}
@@ -822,7 +824,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
           viewsInput={viewsInput}
           additionalViews={additionalViews}
           additionalCost={additionalCost}
-          rate={getRate(campaign.category)}
+          rate={additionalViews > 0 ? additionalCost / additionalViews : 0}
           paying={paying}
           onViewsInputChange={handleViewsInputChange}
           onViewsInputBlur={handleViewsInputBlur}

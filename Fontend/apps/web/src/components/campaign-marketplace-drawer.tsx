@@ -76,9 +76,10 @@ function CampaignDrawerContent({
   const firstValid = presets[0];
   const [selectedViews, setSelectedViews] = useState(firstValid);
 
-  const reward = selectedViews * campaign.costPerView;
-  const rewardMin = minViews * campaign.costPerView;
-  const rewardMax = maxViews * campaign.costPerView;
+  const creatorPool = campaign.creatorPool ?? 0;
+  const reward = Math.floor((creatorPool * selectedViews) / campaign.targetViews);
+  const rewardMin = Math.floor((creatorPool * minViews) / campaign.targetViews);
+  const rewardMax = Math.floor((creatorPool * maxViews) / campaign.targetViews);
 
   useEffect(() => {
     setSelectedViews(buildViewPresets(campaign.targetViews)[0]);

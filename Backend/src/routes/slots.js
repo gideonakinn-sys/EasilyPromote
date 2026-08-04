@@ -95,6 +95,7 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
         });
       }
       slot.viewTarget = views;
+      slot.reward = Math.max(1, Math.floor(((campaign.creatorPool || 0) * views) / (campaign.targetViews || 1)));
     }
 
     slot.creatorId = req.user._id;

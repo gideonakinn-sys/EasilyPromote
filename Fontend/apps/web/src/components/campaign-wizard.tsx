@@ -23,6 +23,8 @@ import { AVAILABLE_NICHES } from "./constants";
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
 import launchCampaign from "@ep/ui/assets/Lauch campaign.png";
 
+import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
+
 interface CampaignData {
   name: string;
   category: string;
@@ -164,8 +166,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState("");
-  const [pricingRates, setPricingRates] = useState<Record<string, number>>({});
-  const [defaultRate, setDefaultRate] = useState(1.085);
+  const [tiers, setTiers] = useState<TierPoint[]>(DEFAULT_TIERS);
   const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean }>({ step1: false, step2: false });
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -209,10 +210,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   }, []);
 
   useEffect(() => {
-    apiRequest<{ default: number; categories: Record<string, number> }>("/campaigns/pricing")
+    apiRequest<{ tiers: TierPoint[] }>("/campaigns/pricing")
       .then((data) => {
-        setPricingRates(data.categories || {});
-        setDefaultRate(data.default || 1.085);
+        if (data.tiers && data.tiers.length > 0) setTiers(data.tiers);
       })
       .catch((err: unknown) => console.error("Failed to load pricing:", err));
   }, []);
@@ -252,14 +252,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       });
   }, [draftId]);
 
-  const getRate = useCallback((category: string) => pricingRates[category] || defaultRate, [pricingRates, defaultRate]);
+  const getPriceForViews = useCallback((views: number) => computePriceForViews(tiers, views), [tiers]);
 
   // Campaign Form State
   const [campaign, setCampaign] = useState<CampaignData>({
     name: "",
     category: "Music",
     views: 1000000,
-    budget: 1085000,
+    budget: 3330000,
     description: "",
     keyMessage: "",
     avoid: "",
@@ -372,7 +372,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     setViewsInput(formatViewsString(campaign.views));
   };
 
-  const PRESET_VIEWS = [100000, 500000, 1000000, 2000000, 3000000] as const;
+  const PRESET_VIEWS = [100000, 1000000, 5000000, 10000000, 20000000] as const;
 
   const formatCompact = (value: number): string => {
     if (value >= 1000000) return `${(value / 1000000).toFixed(1).replace(/\.0$/, "")}M`;
@@ -380,8 +380,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   };
 
   const handleViewsChange = (val: number) => {
-    const rate = getRate(campaign.category);
-    const newBudget = Math.round(val * rate);
+    const newBudget = getPriceForViews(val);
     setCampaign(prev => ({
       ...prev,
       views: val,
@@ -391,12 +390,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const handleCategoryChange = (category: string) => {
     isModified.current = true;
-    const rate = getRate(category);
-    const newBudget = Math.round(campaign.views * rate);
     setCampaign(prev => ({
       ...prev,
       category,
-      budget: newBudget,
     }));
   };
 
@@ -942,7 +938,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     </DropdownMenuContent>
                   </DropdownMenu>
                 <span className="text-[10px] text-stone-400 font-medium">
-                  ₦{getRate(campaign.category).toFixed(3)} per view — Budget calculated automatically
+                  ₦{(campaign.views > 0 ? campaign.budget / campaign.views : 0).toFixed(2)} per view — Budget calculated automatically
                 </span>
               </div>
 

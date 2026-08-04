@@ -67,14 +67,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   const targetViews = camp.maxViews ?? camp.viewTarget;
   const targetLabel = targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
 
-  const minReward = camp.minViews && camp.costPerView
-    ? camp.minViews * camp.costPerView
-    : null;
-  const maxReward = camp.reward;
-
-  const rewardLabel = minReward && minReward !== maxReward
-    ? `₦${minReward.toLocaleString()} - ₦${maxReward.toLocaleString()}`
-    : `₦${maxReward.toLocaleString()}`;
+  const rewardLabel = `₦${camp.reward.toLocaleString()}`;
 
   return (
     <div

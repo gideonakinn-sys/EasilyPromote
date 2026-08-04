@@ -221,11 +221,6 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
     }
     if (niches !== undefined) campaign.niches = niches;
 
-    if (category !== undefined) {
-      const { getEffectiveCostPerView } = require("../config/pricing");
-      campaign.costPerView = await getEffectiveCostPerView(category);
-    }
-
     await campaign.save();
 
     // Rebuild available slots when the slot count is changed (e.g. while live).
