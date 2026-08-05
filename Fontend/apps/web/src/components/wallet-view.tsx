@@ -12,26 +12,11 @@ interface WalletViewProps {
   walletData: WalletData | null;
 }
 
-const BANKS: Array<{ code: string; name: string }> = [
-  { code: "044", name: "Access Bank" },
-  { code: "050", name: "Ecobank" },
-  { code: "070", name: "Fidelity Bank" },
-  { code: "011", name: "First Bank" },
-  { code: "214", name: "FCMB" },
-  { code: "058", name: "GTBank" },
-  { code: "030", name: "Heritage Bank" },
-  { code: "50211", name: "Kuda" },
-  { code: "076", name: "Polaris Bank" },
-  { code: "101", name: "Providus Bank" },
-  { code: "221", name: "Stanbic IBTC" },
-  { code: "232", name: "Sterling Bank" },
-  { code: "100", name: "SunTrust" },
-  { code: "032", name: "Union Bank" },
-  { code: "033", name: "UBA" },
-  { code: "215", name: "Unity Bank" },
-  { code: "035", name: "Wema Bank" },
-  { code: "057", name: "Zenith Bank" },
-];
+interface BankOption {
+  name: string;
+  code: string;
+  slug?: string | null;
+}
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
@@ -60,6 +45,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   const bankDisplay = `${localBank?.bankName || walletData?.bankName || "Bank"} · ${localBank?.maskedAccountNumber || walletData?.maskedAccountNumber || ""}`;
 
   const [showBankForm, setShowBankForm] = React.useState(false);
+  const [banks, setBanks] = React.useState<BankOption[]>([]);
   const [accountNumber, setAccountNumber] = React.useState("");
   const [bankCode, setBankCode] = React.useState("");
   const [savingBank, setSavingBank] = React.useState(false);
@@ -70,7 +56,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   const [submitting, setSubmitting] = React.useState(false);
   const [withdrawals, setWithdrawals] = React.useState<WithdrawalItem[]>([]);
 
-  const eligibleCampaigns = pendingByCampaign.filter((c) => c.earned > 0);
+  const eligibleCampaigns = pendingByCampaign.filter((c) => c.earned > 0 && c.status !== "under_review");
   const selectedCampaign = pendingByCampaign.find((c) => c.id === withdrawCampaignId);
 
   const fetchWithdrawals = React.useCallback(async () => {
@@ -84,9 +70,27 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
     }
   }, []);
 
+  const fetchBanks = React.useCallback(async () => {
+    try {
+      const data = await apiRequest<{ banks: BankOption[] }>("/creators/banks", {
+        token: getToken() || undefined,
+      });
+      const seen = new Set<string>();
+      const unique = (data.banks || []).filter((b) => {
+        if (seen.has(b.code)) return false;
+        seen.add(b.code);
+        return true;
+      });
+      setBanks(unique);
+    } catch {
+      // best-effort
+    }
+  }, []);
+
   React.useEffect(() => {
     fetchWithdrawals();
-  }, [fetchWithdrawals]);
+    fetchBanks();
+  }, [fetchWithdrawals, fetchBanks]);
 
   const handleSaveBank = async () => {
     if (!/^\d{10}$/.test(accountNumber)) {
@@ -99,7 +103,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
     }
     setSavingBank(true);
     try {
-      const bankName = BANKS.find((b) => b.code === bankCode)?.name || null;
+      const bankName = banks.find((b) => b.code === bankCode)?.name || null;
       const data = await apiRequest<{ hasBankAccount: boolean; accountName: string; bankName: string | null; maskedAccountNumber: string }>(
         "/creators/bank-account",
         {
@@ -121,6 +125,20 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       toast(err instanceof Error ? err.message : "Could not save bank account", "error");
     } finally {
       setSavingBank(false);
+    }
+  };
+
+  const handleRemoveBank = async () => {
+    try {
+      await apiRequest<{ success: boolean; hasBankAccount: boolean }>("/creators/bank-account", {
+        method: "DELETE",
+        token: getToken() || undefined,
+      });
+      setLocalBank(null);
+      setShowBankForm(false);
+      toast("Bank account removed", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove bank account", "error");
     }
   };
 
@@ -191,9 +209,14 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] font-medium text-stone-500">Bank Account</span>
           {hasBankAccount && (
-            <button onClick={() => setShowBankForm(true)} className="text-[11px] font-medium text-stone-500 underline">
-              Change
-            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowBankForm(true)} className="text-[11px] font-medium text-stone-500 underline">
+                Change
+              </button>
+              <button onClick={handleRemoveBank} className="text-[11px] font-medium text-red-500 underline">
+                Remove
+              </button>
+            </div>
           )}
         </div>
         {hasBankAccount ? (
@@ -216,7 +239,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
               className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 outline-none focus:border-stone-400"
             >
               <option value="">Select your bank</option>
-              {BANKS.map((b) => (
+              {banks.map((b) => (
                 <option key={b.code} value={b.code}>
                   {b.name}
                 </option>

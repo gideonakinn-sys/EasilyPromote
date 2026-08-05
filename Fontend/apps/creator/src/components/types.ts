@@ -117,6 +117,7 @@ export interface WalletData {
     views: number;
     viewTarget: number;
     earned: number;
+    status: string;
   }>;
   hasBankAccount: boolean;
   bankName?: string | null;

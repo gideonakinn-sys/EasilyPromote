@@ -58,8 +58,7 @@ export interface CampaignItem {
     | "under_review"
     | "approved_post"
     | "live_tracking"
-    | "delivered"
-    | "cancelled";
+    | "delivered";
   reward: number;
   viewTarget?: number;
   minViews?: number;
@@ -80,10 +79,6 @@ export interface CampaignItem {
   description?: string;
   keyMessageCta?: string;
   whatToAvoid?: string;
-  goal?: string;
-  competitors?: string;
-  uniqueSellingPoint?: string;
-  funFact?: string;
   platforms?: string[];
   contentStyle?: string[];
   brandName?: string;
@@ -103,7 +98,6 @@ export interface MarketplaceCampaign {
   daysLeft: number;
   targetViews: number;
   costPerView: number;
-  creatorPool?: number;
   contentBrief?: string;
   brandName: string;
   brandAvatar?: string;
@@ -123,6 +117,7 @@ export interface WalletData {
     views: number;
     viewTarget: number;
     earned: number;
+    status: string;
   }>;
   hasBankAccount: boolean;
   bankName?: string | null;

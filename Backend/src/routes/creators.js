@@ -443,6 +443,7 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
           views,
           viewTarget: slot.viewTarget,
           earned,
+          status: campaign.status,
         });
       }
     }
@@ -472,6 +473,34 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
         type: t.type,
         status: t.status,
         views: t.views,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── GET /creators/banks ─────────────────────────────────────────────────────
+router.get("/banks", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const banks = await paystack.listBanks();
+    const seen = new Set();
+    const nigerian = banks
+      .filter((b) => {
+        if (b.country && b.country.toLowerCase() !== "nigeria") return false;
+        if (b.active === false) return false;
+        const code = b.code;
+        if (seen.has(code)) return false;
+        seen.add(code);
+        return true;
+      })
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+    res.json({
+      banks: nigerian.map((b) => ({
+        name: b.name,
+        code: b.code,
+        slug: b.slug || null,
       })),
     });
   } catch (error) {
@@ -512,23 +541,27 @@ router.post("/bank-account", protect, authorizeRoles("creator"), async (req, res
     }
 
     let recipientCode = null;
+    let resolvedName = accountName || null;
+    let resolvedBankName = bankName || null;
     try {
       const recipient = await paystack.createRecipient({
-        name: accountName || req.user.name || "Creator",
+        name: resolvedName || req.user.name || "Creator",
         account_number: String(accountNumber),
         bank_code: String(bankCode),
       });
       recipientCode = recipient.recipient_code || null;
+      resolvedName = (recipient.details && recipient.details.account_name) || resolvedName;
+      resolvedBankName = (recipient.details && recipient.details.bank_name) || resolvedBankName;
     } catch (err) {
       console.error("[Bank Account] Paystack recipient creation failed:", err.message);
       return res.status(422).json({ error: "Could not validate this bank account. Check the details and try again." });
     }
 
     profile.payoutAccount = {
-      accountName: accountName || req.user.name,
+      accountName: resolvedName || req.user.name,
       accountNumber: String(accountNumber),
       bankCode: String(bankCode),
-      bankName: bankName || null,
+      bankName: resolvedBankName,
       paystackRecipientCode: recipientCode,
     };
     await profile.save();
@@ -539,6 +572,21 @@ router.post("/bank-account", protect, authorizeRoles("creator"), async (req, res
       bankName: profile.payoutAccount.bankName,
       maskedAccountNumber: `****${String(accountNumber).slice(-4)}`,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── DELETE /creators/bank-account ───────────────────────────────────────────
+router.delete("/bank-account", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+    profile.payoutAccount = undefined;
+    await profile.save();
+    res.json({ success: true, hasBankAccount: false });
   } catch (error) {
     next(error);
   }
