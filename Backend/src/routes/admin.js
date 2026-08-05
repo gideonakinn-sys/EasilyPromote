@@ -12,6 +12,7 @@ const Platform = require("../models/Platform");
 const Industry = require("../models/Industry");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
+const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -379,6 +380,8 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
         : `Your submission for "${campaign?.name || "Campaign"}" was rejected by Admin.${rejectionReason ? ` Reason: ${rejectionReason}` : ""}`,
     });
 
+    emitCampaignUpdate(submission);
+
     res.json({ success: true, submission });
   } catch (err) {
     next(err);
@@ -404,6 +407,8 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
       submission.adminNotes = notes || "Appeal rejected by Admin";
     }
     await submission.save();
+
+    emitCampaignUpdate(submission);
 
     res.json({ success: true, submission });
   } catch (err) {

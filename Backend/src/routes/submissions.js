@@ -6,6 +6,7 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 
 const router = express.Router();
 
@@ -51,6 +52,8 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
       status: submission.status,
       campaignId: submission.campaignId,
     });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }
@@ -85,6 +88,8 @@ router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) =>
       videoUrl: submission.videoUrl,
       caption: submission.caption,
     });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }
@@ -182,6 +187,8 @@ router.patch("/:id/approve", protect, async (req, res, next) => {
     });
 
     res.json({ id: submission._id, status: submission.status });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }
@@ -222,6 +229,8 @@ router.patch("/:id/reject", protect, async (req, res, next) => {
       status: submission.status,
       rejectionReason: submission.rejectionReason,
     });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }
@@ -305,6 +314,8 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       status: submission.status,
       postedPlatforms: submission.postedPlatforms,
     });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }
@@ -386,6 +397,8 @@ router.post("/:id/sync-stats", protect, async (req, res, next) => {
       payoutAmount,
       payoutStatus: submission.payoutStatus,
     });
+
+    emitCampaignUpdate(submission);
   } catch (error) {
     next(error);
   }

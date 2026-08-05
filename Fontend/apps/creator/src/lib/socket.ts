@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { getToken } from "./api";
 
@@ -37,8 +37,8 @@ export interface CampaignUpdate {
 }
 
 export function useCampaignUpdates(onUpdate?: (data: CampaignUpdate) => void) {
-  const updateRef = useRef(onUpdate);
-  updateRef.current = onUpdate;
+  const callbackRef = useRef(onUpdate);
+  callbackRef.current = onUpdate;
 
   useEffect(() => {
     const token = getToken();
@@ -61,63 +61,13 @@ export function useCampaignUpdates(onUpdate?: (data: CampaignUpdate) => void) {
 
     const handleUpdate = (data: CampaignUpdate) => {
       console.log("[Socket] Campaign update:", data);
-      updateRef.current?.(data);
+      callbackRef.current?.(data);
     };
 
     socket.on("campaign-update", handleUpdate);
 
     return () => {
       socket?.off("campaign-update", handleUpdate);
-    };
-  }, []);
-
-  return socket;
-}
-
-export function useSocket(
-  onPaymentSuccess?: (data: { campaignId: string; status: string }) => void,
-  onCampaignStatus?: (data: { campaignId: string; status: string; viewsDelivered?: number; targetViews?: number }) => void
-) {
-  const paymentRef = useRef(onPaymentSuccess);
-  paymentRef.current = onPaymentSuccess;
-  const statusRef = useRef(onCampaignStatus);
-  statusRef.current = onCampaignStatus;
-
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
-    if (!socket) {
-      socket = io(SOCKET_URL, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-      });
-
-      socket.on("connect", () => {
-        console.log("[Socket] Connected");
-      });
-
-      socket.on("disconnect", () => {
-        console.log("[Socket] Disconnected");
-      });
-    }
-
-    const handlePayment = (data: { campaignId: string; status: string }) => {
-      console.log("[Socket] Payment success:", data);
-      paymentRef.current?.(data);
-    };
-
-    const handleCampaignStatus = (data: { campaignId: string; status: string; viewsDelivered?: number; targetViews?: number }) => {
-      console.log("[Socket] Campaign status:", data);
-      statusRef.current?.(data);
-    };
-
-    socket.on("payment-success", handlePayment);
-    socket.on("campaign-status", handleCampaignStatus);
-
-    return () => {
-      socket?.off("payment-success", handlePayment);
-      socket?.off("campaign-status", handleCampaignStatus);
     };
   }, []);
 

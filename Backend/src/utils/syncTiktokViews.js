@@ -3,6 +3,7 @@ const Campaign = require("../models/Campaign");
 const Notification = require("../models/Notification");
 const TikTokConnection = require("../models/TikTokConnection");
 const tiktok = require("../services/tiktok");
+const { emitCampaignUpdate } = require("./campaignUpdates");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -143,6 +144,7 @@ async function syncTiktokViews() {
           submission.viewsDelivered = submission.postedPlatforms.reduce((sum, p) => sum + (p.views || 0), 0);
           await submission.save();
           await updateCampaignFromSubmission(submission);
+          emitCampaignUpdate(submission);
         }
       }
 

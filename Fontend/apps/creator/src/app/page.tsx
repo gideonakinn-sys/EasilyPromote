@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
 import { apiRequest, getToken, getUser } from "../lib/api";
+import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection, TikTokStatus } from "../components/types";
 import { CreatorHeader } from "../components/creator-header";
 import { OnboardingView } from "../components/onboarding-view";
@@ -60,6 +61,43 @@ function CreatorDashboardContent() {
   });
 
   const [readyPostUrl, setReadyPostUrl] = useState<Record<string, string>>({});
+
+  const handleCampaignUpdate = (data: CampaignUpdate) => {
+    const exists = campaigns.some((c) => c.id === data.campaignId);
+    if (!exists) {
+      fetchCampaigns();
+      return;
+    }
+
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.id !== data.campaignId) return c;
+        return {
+          ...c,
+          status: (data.status as CampaignItem["status"]) || c.status,
+          progress: data.progress ?? c.progress,
+          currentViews: data.currentViews ?? c.currentViews,
+          viewTarget: data.viewTarget ?? c.viewTarget,
+          targetViews: data.targetViews ?? c.targetViews,
+          reward: data.reward ?? c.reward,
+          costPerView: data.costPerView ?? c.costPerView,
+          submissionId: data.submissionId ?? c.submissionId,
+          comment: data.comment,
+          delivery: data.delivery ?? c.delivery,
+          postedPlatforms: data.postedPlatforms ?? c.postedPlatforms,
+        };
+      })
+    );
+    if (data.status === "delivered") {
+      toast("Campaign delivered — you hit your view target!", "success");
+      fetchWallet();
+    } else if (data.status === "cancelled") {
+      toast("Campaign cancelled", "error");
+      fetchWallet();
+    }
+  };
+
+  useCampaignUpdates(handleCampaignUpdate);
 
   useEffect(() => {
     const token = getToken();

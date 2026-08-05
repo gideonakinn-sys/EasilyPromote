@@ -7,6 +7,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { emitCampaignStatus } = require("../utils/campaignUpdates");
 
 const router = express.Router();
 
@@ -522,6 +523,8 @@ router.patch("/:id/pause", protect, async (req, res, next) => {
     campaign.status = "paused";
     await campaign.save();
 
+    emitCampaignStatus(campaign);
+
     res.json({ id: campaign._id, status: campaign.status });
   } catch (error) {
     next(error);
@@ -545,6 +548,8 @@ router.patch("/:id/resume", protect, async (req, res, next) => {
     await campaign.save();
     await ensureCampaignSlots(campaign);
 
+    emitCampaignStatus(campaign);
+
     res.json({ id: campaign._id, status: campaign.status });
   } catch (error) {
     next(error);
@@ -566,6 +571,8 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
 
     campaign.status = "cancelled";
     await campaign.save();
+
+    emitCampaignStatus(campaign);
 
     const unreleased = await Transaction.aggregate([
       { $match: { campaignId: campaign._id, status: "escrow_deposit" } },

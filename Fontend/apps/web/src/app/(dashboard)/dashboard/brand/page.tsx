@@ -63,13 +63,28 @@ function BrandDashboardContent() {
     }
   }, []);
 
-  useSocket((data) => {
-    setCampaigns((prev) =>
-      prev.map((c) =>
-        c.id === data.campaignId ? { ...c, status: data.status } : c
-      )
-    );
-  });
+  useSocket(
+    (data) => {
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === data.campaignId ? { ...c, status: data.status } : c
+        )
+      );
+    },
+    (data) => {
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c.id === data.campaignId
+            ? {
+                ...c,
+                status: data.status,
+                viewsDelivered: data.viewsDelivered ?? c.viewsDelivered,
+              }
+            : c
+        )
+      );
+    }
+  );
 
   useEffect(() => {
     if (!isAuthenticated()) {
