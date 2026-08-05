@@ -58,7 +58,8 @@ export interface CampaignItem {
     | "under_review"
     | "approved_post"
     | "live_tracking"
-    | "delivered";
+    | "delivered"
+    | "cancelled";
   reward: number;
   viewTarget?: number;
   minViews?: number;
@@ -79,6 +80,10 @@ export interface CampaignItem {
   description?: string;
   keyMessageCta?: string;
   whatToAvoid?: string;
+  goal?: string;
+  competitors?: string;
+  uniqueSellingPoint?: string;
+  funFact?: string;
   platforms?: string[];
   contentStyle?: string[];
   brandName?: string;
@@ -104,6 +109,7 @@ export interface MarketplaceCampaign {
   minViews: number;
   maxViews?: number;
   viewTarget?: number;
+  creatorPool?: number;
   description: string;
 }
 
