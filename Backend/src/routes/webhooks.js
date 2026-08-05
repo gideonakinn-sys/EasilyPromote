@@ -3,6 +3,8 @@ const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
 const Submission = require("../models/Submission");
 const Notification = require("../models/Notification");
+const Withdrawal = require("../models/Withdrawal");
+const CreatorProfile = require("../models/CreatorProfile");
 const { verifyWebhookSignature } = require("../services/paystack");
 const { emitToUser } = require("../config/socket");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
@@ -62,6 +64,7 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
       const transaction = await Transaction.findOne({
         type: "release",
         status: "escrow_deposit",
+        reference,
       }).sort({ createdAt: -1 });
 
       if (transaction) {
@@ -73,6 +76,19 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
           if (submission) {
             submission.payoutStatus = "released";
             await submission.save();
+
+            const withdrawal = await Withdrawal.findOne({ submissionId: submission._id });
+            if (withdrawal) {
+              withdrawal.status = "released";
+              withdrawal.releasedAt = new Date();
+              await withdrawal.save();
+            }
+
+            const profile = await CreatorProfile.findOne({ userId: submission.creatorId });
+            if (profile) {
+              profile.lifetimeEarnings = (profile.lifetimeEarnings || 0) + (transaction.amount || 0);
+              await profile.save();
+            }
           }
         }
       }

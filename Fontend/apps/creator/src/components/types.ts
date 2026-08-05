@@ -118,6 +118,10 @@ export interface WalletData {
     viewTarget: number;
     earned: number;
   }>;
+  hasBankAccount: boolean;
+  bankName?: string | null;
+  accountName?: string | null;
+  maskedAccountNumber?: string | null;
   lifetimeEarnings: number;
   completionRate: number;
   totalReleased: number;
@@ -128,4 +132,16 @@ export interface WalletData {
     status: string;
     createdAt: string;
   }>;
+}
+
+export interface WithdrawalItem {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  amount: number;
+  status: "pending" | "rejected" | "released";
+  adminNotes?: string | null;
+  requestedAt: string;
+  reviewedAt?: string | null;
+  releasedAt?: string | null;
 }

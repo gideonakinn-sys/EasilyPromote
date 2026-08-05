@@ -7,6 +7,8 @@ const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Niche = require("../models/Niche");
+const Withdrawal = require("../models/Withdrawal");
+const paystack = require("../services/paystack");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
@@ -452,6 +454,13 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
       withdrawableBalance,
       pendingBalance,
       pendingByCampaign,
+      hasBankAccount: !!(profile && profile.payoutAccount && profile.payoutAccount.paystackRecipientCode),
+      bankName: profile && profile.payoutAccount ? profile.payoutAccount.bankName : null,
+      accountName: profile && profile.payoutAccount ? profile.payoutAccount.accountName : null,
+      maskedAccountNumber:
+        profile && profile.payoutAccount && profile.payoutAccount.accountNumber
+          ? `****${profile.payoutAccount.accountNumber.slice(-4)}`
+          : null,
       lifetimeEarnings: profile ? profile.lifetimeEarnings : 0,
       completionRate: profile ? profile.completionRate : 0,
       totalReleased,
@@ -463,6 +472,163 @@ router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next)
         type: t.type,
         status: t.status,
         views: t.views,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── GET /creators/bank-account ──────────────────────────────────────────────
+router.get("/bank-account", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    const acc = profile && profile.payoutAccount;
+    res.json({
+      hasBankAccount: !!(acc && acc.paystackRecipientCode && acc.accountNumber),
+      accountName: acc ? acc.accountName : null,
+      bankName: acc ? acc.bankName : null,
+      maskedAccountNumber: acc && acc.accountNumber ? `****${acc.accountNumber.slice(-4)}` : null,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── POST /creators/bank-account ─────────────────────────────────────────────
+router.post("/bank-account", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { accountNumber, bankCode, bankName, accountName } = req.body || {};
+    if (!accountNumber || !bankCode) {
+      return res.status(400).json({ error: "Account number and bank code are required" });
+    }
+    if (!/^\d{10}$/.test(String(accountNumber))) {
+      return res.status(400).json({ error: "Account number must be 10 digits" });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    let recipientCode = null;
+    try {
+      const recipient = await paystack.createRecipient({
+        name: accountName || req.user.name || "Creator",
+        account_number: String(accountNumber),
+        bank_code: String(bankCode),
+      });
+      recipientCode = recipient.recipient_code || null;
+    } catch (err) {
+      console.error("[Bank Account] Paystack recipient creation failed:", err.message);
+      return res.status(422).json({ error: "Could not validate this bank account. Check the details and try again." });
+    }
+
+    profile.payoutAccount = {
+      accountName: accountName || req.user.name,
+      accountNumber: String(accountNumber),
+      bankCode: String(bankCode),
+      bankName: bankName || null,
+      paystackRecipientCode: recipientCode,
+    };
+    await profile.save();
+
+    res.json({
+      hasBankAccount: true,
+      accountName: profile.payoutAccount.accountName,
+      bankName: profile.payoutAccount.bankName,
+      maskedAccountNumber: `****${String(accountNumber).slice(-4)}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── POST /creators/withdrawals ──────────────────────────────────────────────
+router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { campaignId, amount } = req.body || {};
+    if (!campaignId || !amount) {
+      return res.status(400).json({ error: "campaignId and amount are required" });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile || !(profile.payoutAccount && profile.payoutAccount.paystackRecipientCode)) {
+      return res.status(400).json({ error: "Add your bank account first" });
+    }
+
+    const slot = await Slot.findOne({ campaignId, creatorId: req.user._id }).populate({
+      path: "campaignId",
+      select: "name status targetViews costPerView viewsDelivered creatorPool businessId",
+    });
+    if (!slot || !slot.campaignId) {
+      return res.status(404).json({ error: "Campaign not found for this creator" });
+    }
+    const campaign = slot.campaignId;
+
+    if (!["completed", "live", "paused"].includes(campaign.status)) {
+      return res.status(400).json({ error: "This campaign is not eligible for withdrawal yet" });
+    }
+
+    const submission = await Submission.findOne({ campaignId, creatorId: req.user._id });
+    const views = submission ? submission.viewsDelivered || 0 : 0;
+    const earned = Math.min(views * (campaign.costPerView || 0), campaign.creatorPool || 0);
+
+    if (amount > earned) {
+      return res.status(400).json({ error: `You can only withdraw up to ₦${earned.toLocaleString()} for this campaign` });
+    }
+    if (amount <= 0) {
+      return res.status(400).json({ error: "Amount must be greater than zero" });
+    }
+
+    const existing = await Withdrawal.findOne({
+      campaignId,
+      creatorId: req.user._id,
+      status: "pending",
+    });
+    if (existing) {
+      return res.status(409).json({ error: "You already have a pending withdrawal for this campaign" });
+    }
+
+    const withdrawal = await Withdrawal.create({
+      creatorId: req.user._id,
+      campaignId,
+      businessId: campaign.businessId,
+      submissionId: submission ? submission._id : null,
+      amount,
+      status: "pending",
+      requestedAt: new Date(),
+    });
+
+    res.status(201).json({
+      id: withdrawal._id,
+      amount: withdrawal.amount,
+      status: withdrawal.status,
+      message: "Withdrawal request received. It is under review — we'll get back to you within 24 hours.",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── GET /creators/withdrawals ───────────────────────────────────────────────
+router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const withdrawals = await Withdrawal.find({ creatorId: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate("campaignId", "name targetViews");
+
+    res.json({
+      withdrawals: withdrawals.map((w) => ({
+        id: w._id,
+        campaignId: w.campaignId,
+        campaignName: w.campaignId ? w.campaignId.name : "Campaign",
+        amount: w.amount,
+        status: w.status,
+        adminNotes: w.adminNotes,
+        requestedAt: w.requestedAt,
+        reviewedAt: w.reviewedAt,
+        releasedAt: w.releasedAt,
       })),
     });
   } catch (error) {

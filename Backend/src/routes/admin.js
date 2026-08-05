@@ -13,6 +13,8 @@ const Industry = require("../models/Industry");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
+const Withdrawal = require("../models/Withdrawal");
+const paystack = require("../services/paystack");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -841,7 +843,7 @@ router.delete("/industries/:id", adminGuard, async (req, res, next) => {
   }
 });
 
-// ─── GET /api/admin/payouts ───────────────────────────────────────────────────
+module.exports = router;
 router.get("/payouts", adminGuard, async (req, res, next) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -882,6 +884,169 @@ router.get("/payouts", adminGuard, async (req, res, next) => {
       page: Number(page),
       pages: Math.ceil(total / Number(limit)),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/admin/withdrawals ──────────────────────────────────────────────
+router.get("/withdrawals", adminGuard, async (req, res, next) => {
+  try {
+    const { status, page = 1, limit = 20 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const filter = {};
+    if (status && ["pending", "rejected", "released"].includes(status)) {
+      filter.status = status;
+    }
+
+    const [withdrawals, total, pendingCount] = await Promise.all([
+      Withdrawal.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .populate("businessId", "name")
+        .populate("creatorId", "name")
+        .populate("campaignId", "name targetViews viewsDelivered creatorPool costPerView status")
+        .populate("submissionId", "viewsDelivered"),
+      Withdrawal.countDocuments(filter),
+      Withdrawal.countDocuments({ status: "pending" }),
+    ]);
+
+    async function campaignEscrowBalance(campaignId) {
+      const txs = await Transaction.find({ campaignId });
+      const deposited = txs
+        .filter((t) => t.status === "escrow_deposit" && t.type === "escrow_deposit")
+        .reduce((s, t) => s + t.amount, 0);
+      const released = txs.filter((t) => t.status === "released").reduce((s, t) => s + t.amount, 0);
+      return Math.max(deposited - released, 0);
+    }
+
+    const list = [];
+    for (const w of withdrawals) {
+      list.push({
+        id: w._id,
+        campaignId: w.campaignId,
+        campaignName: w.campaignId ? w.campaignId.name : "Campaign",
+        campaignStatus: w.campaignId ? w.campaignId.status : null,
+        brandName: w.businessId ? w.businessId.name : "Brand",
+        creatorId: w.creatorId,
+        creatorName: w.creatorId ? w.creatorId.name : "Creator",
+        amount: w.amount,
+        status: w.status,
+        adminNotes: w.adminNotes,
+        targetViews: w.campaignId ? w.campaignId.targetViews : null,
+        viewsDelivered: w.submissionId
+          ? w.submissionId.viewsDelivered
+          : w.campaignId
+            ? w.campaignId.viewsDelivered
+            : 0,
+        escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId) : 0,
+        requestedAt: w.requestedAt,
+        reviewedAt: w.reviewedAt,
+        releasedAt: w.releasedAt,
+      });
+    }
+
+    res.json({ withdrawals: list, total, pendingCount, page: Number(page), pages: Math.ceil(total / Number(limit)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/withdrawals/:id/review ──────────────────────────────────
+router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
+  try {
+    const { approve, note } = req.body || {};
+    const withdrawal = await Withdrawal.findById(req.params.id)
+      .populate("campaignId")
+      .populate("submissionId");
+    if (!withdrawal) {
+      return res.status(404).json({ error: "Withdrawal not found" });
+    }
+    if (withdrawal.status !== "pending") {
+      return res.status(409).json({ error: "This withdrawal has already been reviewed" });
+    }
+
+    if (approve === true) {
+      const campaign = withdrawal.campaignId;
+      if (!campaign) {
+        return res.status(400).json({ error: "Campaign not found" });
+      }
+
+      const txs = await Transaction.find({ campaignId: campaign._id });
+      const deposited = txs
+        .filter((t) => t.status === "escrow_deposit" && t.type === "escrow_deposit")
+        .reduce((s, t) => s + t.amount, 0);
+      const released = txs.filter((t) => t.status === "released").reduce((s, t) => s + t.amount, 0);
+      const pendingInEscrow = deposited - released;
+
+      if (withdrawal.amount > pendingInEscrow) {
+        return res.status(400).json({
+          error: `Insufficient funds in this campaign's escrow. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
+        });
+      }
+
+      const profile = await CreatorProfile.findOne({ userId: withdrawal.creatorId });
+      if (!profile || !(profile.payoutAccount && profile.payoutAccount.paystackRecipientCode)) {
+        return res.status(400).json({ error: "Creator has no bank account on file" });
+      }
+      const recipient = profile.payoutAccount.paystackRecipientCode;
+      const reference = `WD-${withdrawal._id.toString()}-${Date.now()}`;
+
+      let transfer = null;
+      try {
+        transfer = await paystack.initiateTransfer({
+          amount: withdrawal.amount,
+          recipient,
+          reference,
+          reason: `Creator payout for ${campaign.name || "campaign"}`,
+        });
+      } catch (err) {
+        console.error("[Admin Withdrawals] Transfer failed:", err.message);
+        return res.status(502).json({ error: "Payout transfer failed. Check Paystack configuration." });
+      }
+
+      await Transaction.create({
+        campaignId: campaign._id,
+        submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
+        creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
+        type: "release",
+        amount: withdrawal.amount,
+        reference,
+        status: "escrow_deposit",
+        date: new Date(),
+      });
+
+      await Submission.updateOne(
+        { _id: withdrawal.submissionId ? withdrawal.submissionId._id : null },
+        { payoutStatus: "escrow_deposit" }
+      );
+
+      withdrawal.status = "released";
+      withdrawal.reference = reference;
+      withdrawal.adminNotes = note || withdrawal.adminNotes || null;
+      withdrawal.reviewedAt = new Date();
+      withdrawal.releasedAt = new Date();
+      await withdrawal.save();
+
+      await Notification.create({
+        businessId: withdrawal.businessId,
+        campaignId: campaign._id,
+        type: "payout",
+        title: "Payout released",
+        body: `Creators have been paid ₦${withdrawal.amount.toLocaleString()} for this campaign.`,
+      });
+
+      res.json({ success: true, withdrawal, transfer });
+    } else {
+      withdrawal.status = "rejected";
+      withdrawal.adminNotes = note || null;
+      withdrawal.reviewedAt = new Date();
+      await withdrawal.save();
+
+      res.json({ success: true, withdrawal });
+    }
   } catch (err) {
     next(err);
   }

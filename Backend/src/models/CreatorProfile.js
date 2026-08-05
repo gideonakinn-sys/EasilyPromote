@@ -61,6 +61,13 @@ const creatorProfileSchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+    payoutAccount: {
+      accountName: { type: String, trim: true },
+      accountNumber: { type: String, trim: true },
+      bankCode: { type: String, trim: true },
+      bankName: { type: String, trim: true },
+      paystackRecipientCode: { type: String, trim: true },
+    },
   },
   { timestamps: true }
 );
