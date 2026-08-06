@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const errorHandler = require("./middleware/errorHandler");
@@ -30,18 +29,32 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000,http://
 const isDev = process.env.NODE_ENV === "development";
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: isDev ? true : (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-  })
-);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (isDev || !origin) {
+    if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    return next();
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    return next();
+  }
+
+  console.error(`[CORS] Blocked origin: ${origin} (allowed: ${allowedOrigins.join(", ")})`);
+  return res.status(403).json({ error: `Origin "${origin}" is not allowed by CORS` });
+});
 app.use(morgan("dev"));
 
 app.use("/api/webhooks", webhookRoutes);
