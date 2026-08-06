@@ -79,4 +79,37 @@ function otpEmail(otp, purpose) {
   };
 }
 
-module.exports = { sendEmail, otpEmail };
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
+
+function waitlistEmail(name) {
+  const firstName = escapeHtml((name || "").trim().split(/\s+/)[0] || "there");
+
+  const logoTag = logoDataUri
+    ? `<img src="${logoDataUri}" alt="EasilyPromote" width="48" height="48" style="display:block;width:48px;height:48px;margin-bottom:16px;" />`
+    : `<div style="font-size:20px;font-weight:bold;color:#FEB604;margin-bottom:16px;">EasilyPromote</div>`;
+
+  return {
+    subject: "You're on the EasilyPromote waitlist",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+        ${logoTag}
+        <h2 style="color:#111;margin-top:0;">You're on the list, ${firstName}</h2>
+        <p style="color:#333;font-size:15px;">Thanks for joining the EasilyPromote waitlist.</p>
+        <p style="color:#333;font-size:15px;">We'll let you know as soon as we go live so you can be among the first to match with creators.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+        <p style="color:#999;font-size:12px;">EasilyPromote — Connect brands with creators.</p>
+      </div>
+    `,
+    text: `You're on the EasilyPromote waitlist, ${firstName}.\n\nWe'll let you know as soon as we're ready.`,
+  };
+}
+
+module.exports = { sendEmail, otpEmail, waitlistEmail };

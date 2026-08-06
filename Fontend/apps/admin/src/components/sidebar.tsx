@@ -74,6 +74,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: "Waitlist",
+    href: "/waitlist",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <polyline points="8 3 8 7 16 7 16 3" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     label: "Withdrawal Requests",
     href: "/withdrawals",
     icon: (
