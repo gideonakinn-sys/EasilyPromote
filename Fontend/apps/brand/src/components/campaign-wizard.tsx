@@ -9,7 +9,8 @@ import { cn } from "@ep/ui/lib/utils";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { useToast } from "@ep/ui/components/toast";
 import { useReveal } from "../hooks/use-reveal";
-import { apiRequest, getToken, API_URL } from "../lib/api";
+import { apiRequest, getToken } from "../lib/api";
+import { uploadFile } from "@ep/ui/lib/upload";
 import { Spinner } from "./ui/spinner";
 
 // Assets imports
@@ -258,20 +259,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const token = getToken();
-      const res = await fetch(`${API_URL}/upload/document`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
+      const url = await uploadFile(file, "document", { token: getToken() });
       isModified.current = true;
       setCampaign(prev => ({
         ...prev,
-        scriptUrl: data.url,
+        scriptUrl: url,
         scriptFileName: file.name,
       }));
     } catch {
@@ -292,29 +284,12 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     setUploadingImage(true);
     setImageProgress(0);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const token = getToken();
-      const url = `${API_URL}/upload/image`;
-      const data = await new Promise<{ url: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url);
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setImageProgress(Math.round((e.loaded / e.total) * 90));
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            reject(new Error("Upload failed"));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.send(formData);
+      const url = await uploadFile(file, "image", {
+        token: getToken(),
+        onProgress: (p) => setImageProgress(p * 0.9),
       });
       isModified.current = true;
-      setCampaign(prev => ({ ...prev, coverImageUrl: data.url }));
+      setCampaign(prev => ({ ...prev, coverImageUrl: url }));
     } catch {
       toast("Failed to upload image. Please try again.", "error");
     } finally {

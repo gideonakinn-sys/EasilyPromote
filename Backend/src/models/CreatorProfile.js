@@ -30,7 +30,7 @@ const creatorProfileSchema = new mongoose.Schema(
       {
         platform: {
           type: String,
-          enum: ["instagram", "tiktok", "youtube", "twitter"],
+          enum: ["instagram", "tiktok", "youtube", "twitter", "facebook"],
         },
         handle: String,
         verified: { type: Boolean, default: false },

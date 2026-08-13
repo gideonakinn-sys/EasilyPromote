@@ -6,7 +6,7 @@ import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
 import { apiRequest, getToken, getUser } from "../lib/api";
 import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
-import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection, TikTokStatus } from "../components/types";
+import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection, TikTokStatus, MetaStatus, MetaProvider } from "../components/types";
 import { CreatorHeader } from "../components/creator-header";
 import { OnboardingView } from "../components/onboarding-view";
 import { OnboardingComplete } from "../components/onboarding-complete";
@@ -49,6 +49,7 @@ function CreatorDashboardContent() {
   const [marketplaceMeta, setMarketplaceMeta] = useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [tiktokStatus, setTiktokStatus] = useState<TikTokStatus>({ connected: false });
+  const [metaStatus, setMetaStatus] = useState<MetaStatus>({ instagram: { connected: false }, facebook: { connected: false } });
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -143,6 +144,23 @@ function CreatorDashboardContent() {
       url.searchParams.delete("tiktok");
       router.replace(url.pathname + url.search, { scroll: false });
     }
+
+    const metaResult = params.get("meta");
+    if (metaResult) {
+      const providerParam = params.get("meta_provider");
+      const label = providerParam === "facebook" ? "Facebook" : providerParam === "instagram" ? "Instagram" : "Meta";
+      if (metaResult === "connected") {
+        toast(`${label} connected`, "success");
+        fetchMetaStatus();
+        fetchProfile();
+      } else if (metaResult === "error") {
+        toast(`${label} connection failed. Please try again.`, "error");
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("meta");
+      url.searchParams.delete("meta_provider");
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
   }, []);
 
   const fetchAllData = async () => {
@@ -153,6 +171,7 @@ function CreatorDashboardContent() {
       fetchMarketplace(),
       fetchWallet(),
       fetchTikTokStatus(),
+      fetchMetaStatus(),
     ]);
     setLoading(false);
   };
@@ -165,6 +184,17 @@ function CreatorDashboardContent() {
       setTiktokStatus(data);
     } catch {
       setTiktokStatus({ connected: false });
+    }
+  };
+
+  const fetchMetaStatus = async () => {
+    try {
+      const data = await apiRequest<MetaStatus>("/meta/status", {
+        token: getToken() || undefined,
+      });
+      setMetaStatus(data);
+    } catch {
+      setMetaStatus({ instagram: { connected: false }, facebook: { connected: false } });
     }
   };
 
@@ -311,6 +341,10 @@ function CreatorDashboardContent() {
       handleDisconnectTikTok();
       return;
     }
+    if (platform === "instagram" || platform === "facebook") {
+      handleDisconnectMeta(platform);
+      return;
+    }
     setProfile((prev) => ({
       ...prev,
       socialAccounts: prev.socialAccounts.filter((s) => s.platform !== platform),
@@ -348,6 +382,39 @@ function CreatorDashboardContent() {
       socialAccounts: prev.socialAccounts.filter((s) => s.platform !== "tiktok"),
     }));
     toast("TikTok disconnected", "success");
+  };
+
+  const handleConnectMeta = async (provider: MetaProvider) => {
+    try {
+      const data = await apiRequest<{ url: string }>(`/meta/connect/${provider}`, {
+        method: "POST",
+        token: getToken() || undefined,
+        body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
+      });
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error(`Failed to start ${provider} connect:`, err);
+      toast(`Could not connect ${provider === "facebook" ? "Facebook" : "Instagram"}. Please try again.`, "error");
+    }
+  };
+
+  const handleDisconnectMeta = async (provider: MetaProvider) => {
+    try {
+      await apiRequest(`/meta/disconnect/${provider}`, {
+        method: "POST",
+        token: getToken() || undefined,
+      });
+    } catch (err) {
+      console.error(`Failed to disconnect ${provider}:`, err);
+    }
+    setMetaStatus((prev) => ({ ...prev, [provider]: { connected: false } }));
+    setProfile((prev) => ({
+      ...prev,
+      socialAccounts: prev.socialAccounts.filter((s) => s.platform !== provider),
+    }));
+    toast(`${provider === "facebook" ? "Facebook" : "Instagram"} disconnected`, "success");
   };
 
   const handleSaveNiches = async (niches: string[]) => {
@@ -525,14 +592,10 @@ function CreatorDashboardContent() {
   };
 
   const refreshCampaigns = async () => {
-    try {
-      await apiRequest("/tiktok/sync", {
-        method: "POST",
-        token: getToken() || undefined,
-      });
-    } catch {
-      // sync is best-effort
-    }
+    await Promise.allSettled([
+      apiRequest("/tiktok/sync", { method: "POST", token: getToken() || undefined }),
+      apiRequest("/meta/sync", { method: "POST", token: getToken() || undefined }),
+    ]);
     await fetchCampaigns();
   };
 
@@ -651,6 +714,9 @@ function CreatorDashboardContent() {
             tiktokStatus={tiktokStatus}
             onConnectTikTok={handleConnectTikTok}
             onDisconnectTikTok={handleDisconnectTikTok}
+            metaStatus={metaStatus}
+            onConnectMeta={handleConnectMeta}
+            onDisconnectMeta={handleDisconnectMeta}
           />
         ) : (
           <>

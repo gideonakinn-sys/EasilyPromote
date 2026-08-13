@@ -18,6 +18,21 @@ export interface TikTokStatus {
   avatarUrl?: string;
 }
 
+export type MetaProvider = "instagram" | "facebook";
+
+export interface MetaProviderStatus {
+  connected: boolean;
+  username?: string;
+  displayName?: string;
+  avatarUrl?: string;
+  pages?: Array<{ pageId: string; name: string; igBusinessId?: string }>;
+}
+
+export interface MetaStatus {
+  instagram: MetaProviderStatus;
+  facebook: MetaProviderStatus;
+}
+
 export interface CreatorProfile {
   name: string;
   avatar: string | null;

@@ -5,9 +5,12 @@ const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
 function getKey() {
-  const secret = process.env.TIKTOK_TOKEN_KEY;
+  // Shared symmetric key for all social-token encryption. TOKEN_ENCRYPTION_KEY is the
+  // preferred name; TIKTOK_TOKEN_KEY is kept as a fallback for backward compatibility
+  // so existing TikTok tokens keep decrypting.
+  const secret = process.env.TOKEN_ENCRYPTION_KEY || process.env.TIKTOK_TOKEN_KEY;
   if (!secret) {
-    throw new Error("TIKTOK_TOKEN_KEY is not set");
+    throw new Error("TOKEN_ENCRYPTION_KEY (or TIKTOK_TOKEN_KEY) is not set");
   }
   return crypto.createHash("sha256").update(secret).digest();
 }

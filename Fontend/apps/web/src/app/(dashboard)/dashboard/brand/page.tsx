@@ -8,6 +8,7 @@ import { ActiveDashboard, type BrandCampaign } from "../../../../components/acti
 import { DraftAlertBanner } from "../../../../components/draft-alert-banner";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import { apiRequest, getUser, clearAuth, isAuthenticated, getToken, saveAuth } from "../../../../lib/api";
+import { uploadFile } from "@ep/ui/lib/upload";
 import { useSocket } from "../../../../lib/socket";
 
 function BrandDashboardContent() {
@@ -156,28 +157,20 @@ function BrandDashboardContent() {
   const handleAvatarUpload = useCallback(async (file: File) => {
     const token = getToken();
     if (!token) return;
-    const formData = new FormData();
-    formData.append("file", file);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/upload/image`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData }
-      );
-      const data = await res.json();
-      if (data.url) {
-        try {
-          await apiRequest("/auth/me", {
-            method: "PATCH",
-            token,
-            body: JSON.stringify({ avatar: data.url }),
-          });
-          const currentUser = getUser();
-          if (currentUser && token) saveAuth(token, { ...currentUser, avatar: data.url });
-        } catch (err) {
-          console.error("Failed to save avatar:", err);
-        }
-        setUserAvatarUrl(data.url);
+      const url = await uploadFile(file, "image", { token });
+      try {
+        await apiRequest("/auth/me", {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ avatar: url }),
+        });
+        const currentUser = getUser();
+        if (currentUser && token) saveAuth(token, { ...currentUser, avatar: url });
+      } catch (err) {
+        console.error("Failed to save avatar:", err);
       }
+      setUserAvatarUrl(url);
     } catch (err) {
       console.error("Avatar upload failed:", err);
     }

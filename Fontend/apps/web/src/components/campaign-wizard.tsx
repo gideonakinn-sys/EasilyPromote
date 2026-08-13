@@ -15,7 +15,8 @@ import {
 } from "@ep/ui/components/dropdown-menu";
 import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 import { useReveal } from "../hooks/use-reveal";
-import { apiRequest, getToken, API_URL } from "../lib/api";
+import { apiRequest, getToken } from "../lib/api";
+import { uploadFile } from "@ep/ui/lib/upload";
 import { Spinner } from "./ui/spinner";
 import { AVAILABLE_NICHES } from "./constants";
 
@@ -441,38 +442,15 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     setUploadingScript(true);
     setScriptProgress(0);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
       const token = getToken();
-      const url = `${API_URL}/upload/document`;
-      const data = await new Promise<{ url: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url);
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setScriptProgress(Math.round((e.loaded / e.total) * 90));
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            let msg = "Upload failed";
-            try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (parsed?.error) msg = parsed.error;
-            } catch {
-              // ignore
-            }
-            reject(new Error(msg));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.send(formData);
+      const url = await uploadFile(file, "document", {
+        token,
+        onProgress: (p) => setScriptProgress(p * 0.9),
       });
       isModified.current = true;
       setCampaign(prev => ({
         ...prev,
-        scriptUrl: data.url,
+        scriptUrl: url,
         scriptFileName: file.name,
       }));
     } catch (err) {
@@ -500,36 +478,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     setUploadingImage(true);
     setImageProgress(0);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
       const token = getToken();
-      const url = `${API_URL}/upload/image`;
-      const data = await new Promise<{ url: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url);
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setImageProgress(Math.round((e.loaded / e.total) * 90));
-        };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            let msg = "Upload failed";
-            try {
-              const parsed = JSON.parse(xhr.responseText);
-              if (parsed?.error) msg = parsed.error;
-            } catch {
-              // ignore
-            }
-            reject(new Error(msg));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.send(formData);
+      const url = await uploadFile(file, "image", {
+        token,
+        onProgress: (p) => setImageProgress(p * 0.9),
       });
       isModified.current = true;
-      setCampaign(prev => ({ ...prev, coverImageUrl: data.url }));
+      setCampaign(prev => ({ ...prev, coverImageUrl: url }));
     } catch (err) {
       toast(err instanceof Error && err.message ? err.message : "Failed to upload image. Please try again.", "error");
     } finally {

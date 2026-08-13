@@ -7,6 +7,7 @@ import {
   ArrowLeft01Icon,
   CheckmarkBadge01Icon,
   Delete01Icon,
+  Facebook01Icon,
   InstagramIcon,
   TiktokIcon,
   YoutubeIcon,
@@ -14,8 +15,9 @@ import {
 import { cn } from "@ep/ui/lib/utils";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
-import type { CreatorProfile, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
+import type { CreatorProfile, MetaProvider, MetaStatus, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
 import { API_URL, getToken } from "../lib/api";
+import { uploadFile } from "@ep/ui/lib/upload";
 import { useReveal } from "../hooks/use-reveal";
 
 interface ProfileViewProps {
@@ -30,11 +32,15 @@ interface ProfileViewProps {
   tiktokStatus: TikTokStatus;
   onConnectTikTok: () => void;
   onDisconnectTikTok: () => void;
+  metaStatus: MetaStatus;
+  onConnectMeta: (provider: MetaProvider) => void;
+  onDisconnectMeta: (provider: MetaProvider) => void;
 }
 
 const PLATFORM_STYLES: Record<string, { icon: typeof TiktokIcon; iconBg: string; iconColor: string }> = {
   tiktok: { icon: TiktokIcon, iconBg: "bg-purple-100 border-purple-200", iconColor: "text-purple-600" },
   instagram: { icon: InstagramIcon, iconBg: "bg-pink-100 border-pink-200", iconColor: "text-pink-600" },
+  facebook: { icon: Facebook01Icon, iconBg: "bg-blue-100 border-blue-200", iconColor: "text-blue-600" },
   youtube: { icon: YoutubeIcon, iconBg: "bg-red-100 border-red-200", iconColor: "text-red-600" },
 };
 
@@ -52,6 +58,9 @@ export function ProfileView({
   tiktokStatus,
   onConnectTikTok,
   onDisconnectTikTok,
+  metaStatus,
+  onConnectMeta,
+  onDisconnectMeta,
 }: ProfileViewProps) {
   useReveal();
 
@@ -65,8 +74,48 @@ export function ProfileView({
   const platformLabels: Record<string, string> = {
     tiktok: "TikTok",
     instagram: "Instagram",
+    facebook: "Facebook",
     youtube: "YouTube",
     twitter: "Twitter",
+  };
+
+  const renderMetaRow = (provider: MetaProvider, label: string, hint: string) => {
+    const status = metaStatus?.[provider];
+    const connected = !!status?.connected;
+    if (connected) {
+      const handle =
+        provider === "instagram"
+          ? `@${status?.username || status?.displayName || "instagram"}`
+          : status?.displayName || status?.username || "Facebook";
+      return (
+        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
+              <HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} className="text-emerald-600" />
+              {label} connected
+            </p>
+            <p className="text-xs font-medium text-emerald-700 truncate">{handle}</p>
+          </div>
+          <button
+            onClick={() => onDisconnectMeta(provider)}
+            className="px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-full font-semibold text-xs font-rethink"
+          >
+            Disconnect
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-2">
+        <button
+          onClick={() => onConnectMeta(provider)}
+          className="w-full py-2.5 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+        >
+          Connect {label}
+        </button>
+        <p className="text-[11px] font-medium text-stone-500 tracking-[-0.01em]">{hint}</p>
+      </div>
+    );
   };
 
   const [niches, setNiches] = useState<string[]>([]);
@@ -132,18 +181,9 @@ export function ProfileView({
     const localUrl = URL.createObjectURL(file);
     onProfileFormChange({ ...profileForm, avatarUrl: localUrl });
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const res = await fetch(`${API_URL}/upload/image`, {
-        method: "POST",
-        headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : undefined,
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = (await res.json()) as { url: string };
-      onProfileFormChange({ ...profileForm, avatarUrl: data.url });
+      const data = await uploadFile(file, "image", { token: getToken() });
+      onProfileFormChange({ ...profileForm, avatarUrl: data });
     } catch (err) {
       console.error("Avatar upload failed", err);
     }
@@ -328,6 +368,17 @@ export function ProfileView({
                   Opens TikTok to securely link your account and verify views.
                 </p>
               </div>
+            )}
+
+            {renderMetaRow(
+              "instagram",
+              "Instagram",
+              "Opens Instagram to securely link your professional account and verify views."
+            )}
+            {renderMetaRow(
+              "facebook",
+              "Facebook",
+              "Connect Facebook to verify views on your Page videos."
             )}
           </div>
 

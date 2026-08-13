@@ -6,6 +6,7 @@ const { initSocket } = require("./config/socket");
 const seedDefaultAdmin = require("./utils/seedAdmin");
 const { startCancelledCleanup } = require("./utils/cleanupCancelled");
 const { startTikTokSync } = require("./utils/syncTiktokViews");
+const { startMetaSync } = require("./utils/syncMetaViews");
 
 const PORT = process.env.PORT || 5000;
 
@@ -14,6 +15,7 @@ const start = async () => {
   await seedDefaultAdmin();
   startCancelledCleanup();
   startTikTokSync();
+  startMetaSync();
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, () => {

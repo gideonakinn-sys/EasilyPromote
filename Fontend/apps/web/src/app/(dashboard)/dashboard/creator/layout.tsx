@@ -34,6 +34,9 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
     tiktokStatus,
     handleConnectTikTok,
     handleDisconnectTikTok,
+    metaStatus,
+    handleConnectMeta,
+    handleDisconnectMeta,
     handleSubmitContent,
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
@@ -86,6 +89,9 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
             tiktokStatus={tiktokStatus}
             onConnectTikTok={handleConnectTikTok}
             onDisconnectTikTok={handleDisconnectTikTok}
+            metaStatus={metaStatus}
+            onConnectMeta={handleConnectMeta}
+            onDisconnectMeta={handleDisconnectMeta}
           />
         ) : (
           children

@@ -13,7 +13,8 @@ import inReviewCreatorImg from "@ep/ui/assets/in-review-creator.png";
 import changesFeedbackImg from "@ep/ui/assets/Changes-feedback-creator.png";
 import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
 import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
-import { API_URL, getToken } from "../lib/api";
+import { getToken } from "../lib/api";
+import { uploadFile } from "@ep/ui/lib/upload";
 import type { CampaignItem } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
 
@@ -76,7 +77,7 @@ export function CampaignDetailsDrawer({
     }
   };
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setSelectedFile(file);
@@ -84,40 +85,20 @@ export function CampaignDetailsDrawer({
     setUploadProgress(0);
     setVideoUrl("");
 
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_URL}/upload/video`);
-    xhr.setRequestHeader("Authorization", `Bearer ${getToken()}`);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        setUploadProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText) as { url: string };
-          setVideoUrl(data.url);
-          setUploadProgress(100);
-        } catch (err) {
-          console.error("Failed to parse upload response:", err);
-          toast("Upload failed. Please try again.", "error");
-        }
-      } else {
-        console.error("Video upload failed:", xhr.status, xhr.responseText);
-        toast("Upload failed. Please try again.", "error");
-      }
-      setUploading(false);
-    };
-    xhr.onerror = () => {
-      console.error("Video upload failed");
-      setUploading(false);
-      setVideoUrl("");
+    try {
+      const url = await uploadFile(file, "video", {
+        token: getToken() || undefined,
+        onProgress: (p) => setUploadProgress(p),
+      });
+      setVideoUrl(url);
+      setUploadProgress(100);
+    } catch (err) {
+      console.error("Video upload failed:", err);
       toast("Upload failed. Please try again.", "error");
-    };
-    xhr.send(formData);
+      setVideoUrl("");
+    } finally {
+      setUploading(false);
+    }
 
     e.target.value = "";
   };
