@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const CreatorProfile = require("../models/CreatorProfile");
@@ -265,6 +266,109 @@ router.post("/sync", protect, authorizeRoles("admin", "super_admin", "creator"),
   } catch (error) {
     next(error);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Signed-request helpers — Meta signs deauthorize / data-deletion callbacks
+// with the app secret (format: "<base64url sig>.<base64url json payload>").
+// ---------------------------------------------------------------------------
+function base64UrlDecode(input) {
+  const s = String(input).replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(s + "=".repeat((4 - (s.length % 4)) % 4), "base64");
+}
+
+function parseSignedRequest(signedRequest, appSecret) {
+  if (!signedRequest || typeof signedRequest !== "string" || !signedRequest.includes(".") || !appSecret) {
+    return null;
+  }
+  const [encodedSig, payload] = signedRequest.split(".", 2);
+  let data;
+  try {
+    data = JSON.parse(base64UrlDecode(payload).toString("utf8"));
+  } catch {
+    return null;
+  }
+  const expected = crypto.createHmac("sha256", appSecret).update(payload).digest();
+  const actual = base64UrlDecode(encodedSig);
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+    return null;
+  }
+  return data;
+}
+
+// The callback may come from either the Instagram or Facebook app, so try both secrets.
+function verifySignedRequest(signedRequest) {
+  for (const secret of [process.env.INSTAGRAM_APP_SECRET, process.env.FACEBOOK_APP_SECRET]) {
+    const data = parseSignedRequest(signedRequest, secret);
+    if (data) return data;
+  }
+  return null;
+}
+
+// Remove every trace of a Meta user: their connection(s) + the profile badge.
+async function purgeMetaUser(providerUserId) {
+  const connections = await MetaConnection.find({ providerUserId: String(providerUserId) });
+  for (const c of connections) {
+    await CreatorProfile.updateOne(
+      { userId: c.userId },
+      { $pull: { socialAccounts: { platform: c.provider } } }
+    );
+  }
+  await MetaConnection.deleteMany({ providerUserId: String(providerUserId) });
+  return connections.length;
+}
+
+// Deauthorize callback — Meta calls this when a user removes the app from their settings.
+router.post("/deauthorize", async (req, res) => {
+  const data = verifySignedRequest(req.body?.signed_request);
+  if (!data || !data.user_id) {
+    return res.status(400).json({ error: "Invalid signed_request" });
+  }
+  try {
+    const removed = await purgeMetaUser(data.user_id);
+    console.log("[Meta] Deauthorize for user", data.user_id, "| removed connections:", removed);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Meta] Deauthorize failed:", err.message);
+    res.status(500).json({ error: "Deauthorize failed" });
+  }
+});
+
+// Data deletion request (GDPR) — delete the user's data and return a status URL + code.
+router.post("/data-deletion", async (req, res) => {
+  const data = verifySignedRequest(req.body?.signed_request);
+  if (!data || !data.user_id) {
+    return res.status(400).json({ error: "Invalid signed_request" });
+  }
+  try {
+    await purgeMetaUser(data.user_id);
+  } catch (err) {
+    console.error("[Meta] Data deletion failed:", err.message);
+  }
+  const confirmationCode = crypto
+    .createHash("sha256")
+    .update(String(data.user_id) + (process.env.META_STATE_SECRET || ""))
+    .digest("hex")
+    .slice(0, 16);
+  const base = `https://${req.get("host")}`;
+  console.log("[Meta] Data deletion for user", data.user_id, "| code:", confirmationCode);
+  res.json({
+    url: `${base}/api/meta/data-deletion/status?code=${confirmationCode}`,
+    confirmation_code: confirmationCode,
+  });
+});
+
+// Human-readable status page the data-deletion `url` points to.
+router.get("/data-deletion/status", (req, res) => {
+  const code = String(req.query.code || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+  res.status(200).send(
+    `<!doctype html><html><head><meta charset="utf-8"><title>Data deletion</title></head>` +
+      `<body style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 16px">` +
+      `<h1>Data deletion completed</h1>` +
+      `<p>All Instagram and Facebook data connected to EasilyPromote for this account has been deleted.</p>` +
+      (code ? `<p>Confirmation code: <code>${code}</code></p>` : "") +
+      `</body></html>`
+  );
 });
 
 module.exports = router;
