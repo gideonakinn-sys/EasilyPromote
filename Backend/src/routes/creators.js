@@ -48,6 +48,15 @@ const ensureCampaignAccess = async (req, res, next) => {
   return res.status(403).json({ error, code: "CAMPAIGN_ACCESS_LOCKED" });
 };
 
+async function getCampaignLock(req) {
+  const access = await getCampaignAccess(req.user._id);
+  if (access.ok) return { locked: false, lockReason: null };
+  const reason = access.hasSocial && !access.hasNiches
+    ? "Choose your niches to unlock campaigns"
+    : "Connect a social account to unlock campaigns";
+  return { locked: true, lockReason: reason };
+}
+
 router.get("/profile/me", protect, async (req, res, next) => {
   try {
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
@@ -205,8 +214,9 @@ router.get("/leaderboard", async (req, res, next) => {
   }
 });
 
-router.get("/marketplace", protect, authorizeRoles("creator"), ensureCampaignAccess, async (req, res, next) => {
+router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
+    const lock = await getCampaignLock(req);
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     const creatorRank = profile ? profile.rank : "rank1";
     const profileNiches = (profile && Array.isArray(profile.niches) ? profile.niches : [])
@@ -308,15 +318,18 @@ router.get("/marketplace", protect, authorizeRoles("creator"), ensureCampaignAcc
       campaigns: marketplace,
       activeSlots,
       maxSlots,
-      canClaim,
+      canClaim: lock.locked ? false : canClaim,
+      locked: lock.locked,
+      lockReason: lock.lockReason,
     });
   } catch (error) {
     next(error);
   }
 });
 
-router.get("/slots/mine", protect, authorizeRoles("creator"), ensureCampaignAccess, async (req, res, next) => {
+router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
+    const lock = await getCampaignLock(req);
     const slots = await Slot.find({ creatorId: req.user._id })
       .populate({
         path: "campaignId",
@@ -432,7 +445,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), ensureCampaignAcce
         };
       });
 
-    res.json({ campaigns });
+    res.json({ campaigns, locked: lock.locked, lockReason: lock.lockReason });
   } catch (error) {
     next(error);
   }

@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
+import { cn } from "@ep/ui/lib/utils";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { LockIcon } from "@hugeicons/core-free-icons";
 import { apiRequest, getToken, getUser } from "../lib/api";
 import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type { CreatorProfile, ActiveTab, CampaignItem, MarketplaceCampaign, WalletData, ProfileForm, ProfileFocusSection, TikTokStatus, MetaStatus, MetaProvider } from "../components/types";
@@ -46,7 +49,7 @@ function CreatorDashboardContent() {
   const [campaignsFilter, setCampaignsFilter] = useState<string>("all");
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = useState<MarketplaceCampaign[]>([]);
-  const [marketplaceMeta, setMarketplaceMeta] = useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
+  const [marketplaceMeta, setMarketplaceMeta] = useState({ activeSlots: 0, maxSlots: 3, canClaim: true, locked: false, lockReason: "" });
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [tiktokStatus, setTiktokStatus] = useState<TikTokStatus>({ connected: false });
   const [metaStatus, setMetaStatus] = useState<MetaStatus>({ instagram: { connected: false }, facebook: { connected: false } });
@@ -286,7 +289,7 @@ function CreatorDashboardContent() {
 
   const fetchMarketplace = async () => {
     try {
-      const data = await apiRequest<{ campaigns: Array<Record<string, unknown>>; activeSlots: number; maxSlots: number; canClaim: boolean }>("/creators/marketplace", {
+      const data = await apiRequest<{ campaigns: Array<Record<string, unknown>>; activeSlots: number; maxSlots: number; canClaim: boolean; locked?: boolean; lockReason?: string }>("/creators/marketplace", {
         token: getToken() || undefined,
       });
 
@@ -315,6 +318,8 @@ function CreatorDashboardContent() {
         activeSlots: data.activeSlots || 0,
         maxSlots: data.maxSlots || 3,
         canClaim: data.canClaim ?? true,
+        locked: data.locked ?? false,
+        lockReason: data.lockReason || "",
       });
     } catch {
       console.log("Could not load marketplace");
@@ -744,16 +749,45 @@ function CreatorDashboardContent() {
             )}
 
             {activeTab === "campaign" && (
-              campaignsUnlocked ? (
-                <CampaignMarketplace
-                  campaigns={marketplaceCampaigns}
-                  meta={marketplaceMeta}
-                  onClaimSlot={handleClaimSlot}
-                  niches={profile.niches}
-                />
-              ) : (
-                renderOnboardingView(profile)
-              )
+              <div className="relative w-full">
+                <div className={cn(!campaignsUnlocked && "select-none")} aria-hidden={!campaignsUnlocked}>
+                  <CampaignMarketplace
+                    campaigns={marketplaceCampaigns}
+                    meta={marketplaceMeta}
+                    onClaimSlot={handleClaimSlot}
+                    niches={profile.niches}
+                  />
+                </div>
+                {!campaignsUnlocked && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-[#F5F5F4]/50 backdrop-blur-[3px]">
+                    <div className="bg-white/95 border border-stone-200 rounded-3xl px-6 py-6 max-w-sm w-full mx-4 text-center space-y-3 font-rethink">
+                      <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 flex items-center justify-center">
+                        <HugeiconsIcon icon={LockIcon} size={20} className="text-stone-500" />
+                      </div>
+                      <h4 className="font-semibold text-base text-stone-900 tracking-tight">
+                        Unlock campaigns to start earning
+                      </h4>
+                      <p className="text-sm font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+                        {marketplaceMeta.lockReason || "Connect a social account and choose your niches to unlock campaigns."}
+                      </p>
+                      <div className="pt-2 flex flex-col gap-2">
+                        <button
+                          onClick={() => openProfile("social")}
+                          className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100"
+                        >
+                          Connect social account
+                        </button>
+                        <button
+                          onClick={() => openProfile("niches")}
+                          className="w-full py-3 bg-white text-stone-900 rounded-full font-semibold text-sm border border-stone-200"
+                        >
+                          Choose my niches
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {activeTab === "wallet" && <WalletView profile={profile} walletData={walletData} />}

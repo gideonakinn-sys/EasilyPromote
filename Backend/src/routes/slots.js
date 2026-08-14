@@ -31,8 +31,17 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
   try {
     const { slotId, campaignId, committedViews } = req.body;
     const CreatorProfile = require("../models/CreatorProfile");
+    const TikTokConnection = require("../models/TikTokConnection");
+    const MetaConnection = require("../models/MetaConnection");
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
+    const hasTikTok = await TikTokConnection.exists({ userId: req.user._id });
+    const hasMeta = await MetaConnection.exists({ userId: req.user._id });
+    const hasSocial = Boolean(hasTikTok || hasMeta);
+    if (!hasSocial || niches.length === 0) {
+      return res.status(403).json({ error: "Connect a social account and choose your niches to claim campaigns", code: "CAMPAIGN_ACCESS_LOCKED" });
+    }
     const creatorRank = profile ? profile.rank : "rank1";
 
     const activeSlots = await Slot.countDocuments({
