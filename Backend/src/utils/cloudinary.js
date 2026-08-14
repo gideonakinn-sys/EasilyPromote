@@ -28,8 +28,16 @@ const uploadToCloudinary = (file, folder = "easily-promote") => {
     const stream = cloudinary.uploader.upload_stream(
       options,
       (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
+        if (error) {
+          console.error("[Cloudinary] Upload failed:", {
+            http_code: error.http_code,
+            code: error.code,
+            message: error.message,
+          });
+          reject(error);
+        } else {
+          resolve(result);
+        }
       }
     );
 
