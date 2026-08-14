@@ -123,6 +123,11 @@ const campaignSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    statusNote: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     slotCount: {
       type: Number,
       default: 5,

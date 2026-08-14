@@ -237,7 +237,10 @@ export function CampaignDetailsDrawer({
   const renderActivity = () => {
     const items = [];
 
-    const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string) => (
+    const timelineTime = (key: string) =>
+      displayCampaign.timeline?.find((t) => t.key === key)?.time;
+
+    const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string, time?: string) => (
       <div className={cn("bg-stone-100 rounded-[16px] p-2", review && "space-y-2")}>
         <div className="flex gap-3">
           <button
@@ -269,7 +272,7 @@ export function CampaignDetailsDrawer({
             <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-stone-500 tracking-[-0.01em] font-rethink">
               <span>{displayCampaign.videoDuration || "0:45"}</span>
               <span className="w-1 h-1 rounded-full bg-stone-300" />
-              <span>uploaded {displayCampaign.submittedAgo || "23 mins ago"}</span>
+              <span>{time || `uploaded ${displayCampaign.submittedAgo || "just now"}`}</span>
               <span className="w-1 h-1 rounded-full bg-stone-300" />
               <StatusDetailsBadge status={badgeStatus} />
             </div>
@@ -288,31 +291,31 @@ export function CampaignDetailsDrawer({
     if (displayCampaign.status === "delivered") {
       items.push(
         <div key="activity-delivered" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("delivered")}
+          {renderContentCard("delivered", undefined, timelineTime("posted") || displayCampaign.postedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("live_tracking")}
+          {renderContentCard("live_tracking", undefined, timelineTime("posted") || displayCampaign.postedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
+          {renderContentCard("approved_post", undefined, timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content", timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
+          {renderContentCard("under_review", undefined, displayCampaign.submittedAgo)}
         </div>
       );
     }
@@ -320,25 +323,25 @@ export function CampaignDetailsDrawer({
     if (displayCampaign.status === "live_tracking") {
       items.push(
         <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("live_tracking")}
+          {renderContentCard("live_tracking", undefined, timelineTime("posted") || displayCampaign.postedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
+          {renderContentCard("approved_post", undefined, timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content", timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
+          {renderContentCard("under_review", undefined, displayCampaign.submittedAgo)}
         </div>
       );
     }
@@ -346,13 +349,13 @@ export function CampaignDetailsDrawer({
     if (displayCampaign.status === "changes_requested") {
       items.push(
         <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content", timelineTime("reviewed") || displayCampaign.reviewedAgo || displayCampaign.submittedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
+          {renderContentCard("under_review", undefined, displayCampaign.submittedAgo)}
         </div>
       );
     }
@@ -360,7 +363,7 @@ export function CampaignDetailsDrawer({
     if (displayCampaign.status === "under_review") {
       items.push(
         <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
+          {renderContentCard("under_review", undefined, displayCampaign.submittedAgo)}
         </div>
       );
     }
@@ -368,19 +371,19 @@ export function CampaignDetailsDrawer({
     if (displayCampaign.status === "approved_post") {
       items.push(
         <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
+          {renderContentCard("approved_post", undefined, timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
+          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content", timelineTime("reviewed") || displayCampaign.reviewedAgo)}
         </div>
       );
 
       items.push(
         <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
+          {renderContentCard("under_review", undefined, displayCampaign.submittedAgo)}
         </div>
       );
     }

@@ -24,6 +24,7 @@ interface CampaignItem {
   niches?: string[];
   slotCount?: number;
   creatorCount?: number;
+  statusNote?: string;
   createdAt: string;
   brand?: { id: string; name: string; email: string };
 }
@@ -85,6 +86,7 @@ export default function AdminCampaignsPage() {
   const [customNicheInput, setCustomNicheInput] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
+  const [statusNote, setStatusNote] = useState("");
   const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
   const [industryOptions, setIndustryOptions] = useState<string[]>([]);
   const [campaignDetail, setCampaignDetail] = useState<{
@@ -173,13 +175,22 @@ export default function AdminCampaignsPage() {
   }, [router, fetchCampaigns, fetchPlatforms, fetchIndustries]);
 
   const handleStatusChange = async (campaignId: string, newStatus: string) => {
+    if (newStatus === "cancelled" && !statusNote.trim()) {
+      alert("A reason is required to cancel a campaign.");
+      return;
+    }
+    if (newStatus === "under_review" && !statusNote.trim()) {
+      alert("A reason is required to reject a campaign.");
+      return;
+    }
     try {
       setActionLoading(true);
       await apiRequest(`/admin/campaigns/${campaignId}/status`, {
         method: "PATCH",
         token: getToken() || undefined,
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: newStatus, note: statusNote }),
       });
+      setStatusNote("");
       setSelectedCampaign(null);
       fetchCampaigns();
     } catch (err: unknown) {
@@ -813,6 +824,29 @@ export default function AdminCampaignsPage() {
                 {/* Moderation Actions */}
                 <div className="pt-4 border-t border-stone-200">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Admin Actions</h4>
+
+                  {selectedCampaign.statusNote && (
+                    <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block mb-1">
+                        Last status note (sent to brand)
+                      </span>
+                      <p className="text-xs text-amber-900 font-medium leading-relaxed">{selectedCampaign.statusNote}</p>
+                    </div>
+                  )}
+
+                  <div className="mb-3">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block mb-1">
+                      Note / Reason for status change
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={statusNote}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                      placeholder="Required when rejecting or cancelling a campaign — sent to the brand..."
+                      className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 text-xs"
+                    />
+                  </div>
+
                   <div className="flex flex-wrap gap-3">
                     {selectedCampaign.status !== "live" && (
                       <button
@@ -821,6 +855,17 @@ export default function AdminCampaignsPage() {
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
                         Approve & Launch Live
+                      </button>
+                    )}
+
+                    {selectedCampaign.status === "live" && (
+                      <button
+                        onClick={() => handleStatusChange(selectedCampaign.id, "under_review")}
+                        disabled={actionLoading || !statusNote.trim()}
+                        title={statusNote.trim() ? undefined : "A reason is required to reject"}
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-40"
+                      >
+                        Reject & Send Back to Review
                       </button>
                     )}
 
@@ -837,8 +882,9 @@ export default function AdminCampaignsPage() {
                     {selectedCampaign.status !== "cancelled" && (
                       <button
                         onClick={() => handleStatusChange(selectedCampaign.id, "cancelled")}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                        disabled={actionLoading || !statusNote.trim()}
+                        title={statusNote.trim() ? undefined : "A reason is required to cancel"}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-40"
                       >
                         Cancel Campaign
                       </button>

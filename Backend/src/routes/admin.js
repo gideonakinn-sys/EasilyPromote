@@ -149,6 +149,7 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         contentStyle: c.contentStyle,
         niches: c.niches,
         slotCount: c.slotCount || 5,
+        statusNote: c.statusNote,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }
@@ -194,6 +195,7 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         platformFee: campaign.platformFee,
         creatorPool: campaign.creatorPool,
         status: campaign.status,
+        statusNote: campaign.statusNote,
         viewsDelivered: campaign.viewsDelivered || 0,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
@@ -256,12 +258,18 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
     }
+    if (["under_review", "cancelled"].includes(status) && !(note && String(note).trim())) {
+      return res.status(400).json({ error: "A reason is required to reject or cancel a campaign" });
+    }
 
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
     const prevStatus = campaign.status;
     campaign.status = status;
+    campaign.statusNote = ["under_review", "cancelled", "paused"].includes(status)
+      ? String(note || "").trim()
+      : null;
     await campaign.save();
 
     if (status === "live") {
@@ -361,6 +369,9 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
     if (!["approved", "rejected"].includes(status)) {
       return res.status(400).json({ error: "Status must be approved or rejected" });
     }
+    if (status === "rejected" && !(rejectionReason && String(rejectionReason).trim())) {
+      return res.status(400).json({ error: "A rejection reason is required" });
+    }
 
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
@@ -396,6 +407,9 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     const { decision, notes } = req.body; // 'approve' or 'reject'
     if (!["approve", "reject"].includes(decision)) {
       return res.status(400).json({ error: "Decision must be approve or reject" });
+    }
+    if (decision === "reject" && !(notes && String(notes).trim())) {
+      return res.status(400).json({ error: "A note/reason is required to uphold a rejection" });
     }
 
     const submission = await Submission.findById(req.params.id);

@@ -80,6 +80,9 @@ export interface CampaignItem {
   maxViews?: number;
   costPerView?: number;
   submittedAgo?: string;
+  reviewedAgo?: string;
+  postedAgo?: string;
+  timeline?: Array<{ key: string; label: string; time?: string }>;
   comment?: string;
   progress?: number;
   currentViews?: number;

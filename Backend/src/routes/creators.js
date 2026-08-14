@@ -15,6 +15,20 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
 
+function timeAgo(date) {
+  if (!date) return undefined;
+  const diffMs = Date.now() - new Date(date).getTime();
+  if (diffMs < 60 * 1000) return "just now";
+  const mins = Math.floor(diffMs / (60 * 1000));
+  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
+}
+
 async function getCampaignAccess(userId) {
   const profile = await CreatorProfile.findOne({ userId });
   const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
@@ -401,7 +415,20 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), ensureCampaignAcce
             : submission && (submission.status === "awaiting_post" || submission.status === "approved")
             ? "Awaiting Post"
             : "Submitted",
-          submittedAgo: submission ? submission.submittedAt : undefined,
+          submittedAgo: timeAgo(submission ? submission.submittedAt : undefined),
+          reviewedAgo: timeAgo(submission ? submission.reviewedAt : undefined),
+          postedAgo: timeAgo(submission ? submission.postedAt : undefined),
+          timeline: submission
+            ? [
+                { key: "submitted", label: "Content submitted", time: timeAgo(submission.submittedAt) },
+                ...(submission.reviewedAt
+                  ? [{ key: "reviewed", label: "Reviewed by admin", time: timeAgo(submission.reviewedAt) }]
+                  : []),
+                ...(submission.postedAt
+                  ? [{ key: "posted", label: "Posted on socials", time: timeAgo(submission.postedAt) }]
+                  : []),
+              ]
+            : [],
         };
       });
 

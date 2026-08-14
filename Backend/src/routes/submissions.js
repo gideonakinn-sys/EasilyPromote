@@ -197,6 +197,9 @@ router.patch("/:id/approve", protect, async (req, res, next) => {
 router.patch("/:id/reject", protect, async (req, res, next) => {
   try {
     const { reason } = req.body;
+    if (!(reason && String(reason).trim())) {
+      return res.status(400).json({ error: "A rejection reason is required" });
+    }
 
     const submission = await Submission.findById(req.params.id);
     if (!submission) {

@@ -134,6 +134,7 @@ interface CampaignData {
   startDate: string;
   endDate: string;
   status: string;
+  statusNote?: string;
   viewsDelivered: number;
   progressPercent: number;
   contentBrief?: string;
@@ -604,9 +605,15 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-rethink font-medium text-sm" style={{ color: "#854D0E" }}>Under review</h4>
-                  <p className="font-rethink text-xs font-medium leading-normal" style={{ color: "#854D0E" }}>
-                    We&apos;re reviewing your campaign. It&apos;ll go live within 2 hours.
-                  </p>
+                  {campaign.statusNote ? (
+                    <p className="font-rethink text-xs font-medium leading-normal" style={{ color: "#854D0E" }}>
+                      Feedback from admin: {campaign.statusNote}
+                    </p>
+                  ) : (
+                    <p className="font-rethink text-xs font-medium leading-normal" style={{ color: "#854D0E" }}>
+                      We&apos;re reviewing your campaign. It&apos;ll go live within 2 hours.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -633,7 +640,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     <>
                       <h4 className="font-rethink font-medium text-sm text-[#92400E]">Paused</h4>
                       <p className="font-rethink text-xs text-stone-600 font-medium leading-normal">
-                        This campaign is paused. Resume it when you&apos;re ready.
+                        {campaign.statusNote ? `Reason: ${campaign.statusNote}` : "This campaign is paused. Resume it when you're ready."}
                       </p>
                     </>
                   )}
@@ -641,7 +648,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     <>
                       <h4 className="font-rethink font-medium text-sm text-red-800">Cancelled</h4>
                       <p className="font-rethink text-xs text-stone-600 font-medium leading-normal">
-                        This campaign was cancelled. Unspent budget has been refunded.
+                        {campaign.statusNote ? `Reason: ${campaign.statusNote}` : "This campaign was cancelled. Unspent budget has been refunded."}
                       </p>
                     </>
                   )}

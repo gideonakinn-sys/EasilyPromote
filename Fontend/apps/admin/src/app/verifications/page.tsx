@@ -64,17 +64,34 @@ export default function AdminVerificationsPage() {
   }, [router, fetchSubmissions]);
 
   const handleReviewSubmission = async (id: string, status: "approved" | "rejected") => {
+    if (status === "rejected" && !rejectReason.trim()) {
+      alert("A rejection reason is required to reject a submission.");
+      return;
+    }
     try {
       setActionLoading(true);
-      await apiRequest(`/admin/submissions/${id}/review`, {
-        method: "PATCH",
-        token: getToken() || undefined,
-        body: JSON.stringify({ status, rejectionReason: rejectReason, adminNotes }),
-      });
+      const data = await apiRequest<{ submission?: { status?: string; rejectionReason?: string } }>(
+        `/admin/submissions/${id}/review`,
+        {
+          method: "PATCH",
+          token: getToken() || undefined,
+          body: JSON.stringify({ status, rejectionReason: rejectReason, adminNotes }),
+        }
+      );
+      const nextStatus: SubmissionItem["status"] = status === "approved" ? "awaiting_post" : "rejected";
+      const nextReason = status === "rejected" ? rejectReason : undefined;
+      const resolvedStatus: SubmissionItem["status"] =
+        (data?.submission?.status as SubmissionItem["status"]) || nextStatus;
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, status: resolvedStatus, rejectionReason: nextReason }
+            : s
+        )
+      );
       setSelectedSubmission(null);
       setRejectReason("");
       setAdminNotes("");
-      fetchSubmissions();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Review failed");
     } finally {
@@ -83,6 +100,10 @@ export default function AdminVerificationsPage() {
   };
 
   const handleResolveAppeal = async (id: string, decision: "approve" | "reject") => {
+    if (decision === "reject" && !adminNotes.trim()) {
+      alert("A note/reason is required to uphold a rejection.");
+      return;
+    }
     try {
       setActionLoading(true);
       await apiRequest(`/admin/submissions/${id}/appeal`, {
@@ -90,9 +111,15 @@ export default function AdminVerificationsPage() {
         token: getToken() || undefined,
         body: JSON.stringify({ decision, notes: adminNotes }),
       });
+      setSubmissions((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, status: decision === "approve" ? "awaiting_post" : "rejected", adminNotes: adminNotes || s.adminNotes }
+            : s
+        )
+      );
       setSelectedSubmission(null);
       setAdminNotes("");
-      fetchSubmissions();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Appeal resolution failed");
     } finally {
@@ -214,6 +241,11 @@ export default function AdminVerificationsPage() {
                       }`}>
                         {sub.status}
                       </span>
+                      {sub.status === "rejected" && sub.rejectionReason && (
+                        <p className="mt-1 text-[11px] text-red-700 max-w-[220px] leading-snug">
+                          {sub.rejectionReason}
+                        </p>
+                      )}
                     </td>
 
                     <td className="px-6 py-4 text-right">
@@ -274,7 +306,7 @@ export default function AdminVerificationsPage() {
 
                 {selectedSubmission.status !== "approved" && (
                   <div>
-                    <label className="font-bold text-stone-700 block mb-1">Rejection Reason (if rejecting)</label>
+                    <label className="font-bold text-stone-700 block mb-1">Rejection Reason (required to reject)</label>
                     <input
                       type="text"
                       value={rejectReason}
@@ -282,6 +314,9 @@ export default function AdminVerificationsPage() {
                       placeholder="e.g., Content violates brief guidelines..."
                       className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900"
                     />
+                    {!rejectReason.trim() && (
+                      <p className="mt-1 text-[11px] text-red-600 font-medium">A reason is required before you can reject this submission.</p>
+                    )}
                   </div>
                 )}
 
@@ -290,15 +325,15 @@ export default function AdminVerificationsPage() {
                     <>
                       <button
                         onClick={() => handleResolveAppeal(selectedSubmission.id, "reject")}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
+                        disabled={actionLoading || !adminNotes.trim()}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-40"
                       >
                         Uphold Rejection
                       </button>
                       <button
                         onClick={() => handleResolveAppeal(selectedSubmission.id, "approve")}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
                         Accept Appeal & Approve
                       </button>
@@ -307,15 +342,16 @@ export default function AdminVerificationsPage() {
                     <>
                       <button
                         onClick={() => handleReviewSubmission(selectedSubmission.id, "rejected")}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
+                        disabled={actionLoading || !rejectReason.trim()}
+                        title={rejectReason.trim() ? undefined : "A rejection reason is required"}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-40"
                       >
                         Reject Submission
                       </button>
                       <button
                         onClick={() => handleReviewSubmission(selectedSubmission.id, "approved")}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
                         Approve Content
                       </button>
