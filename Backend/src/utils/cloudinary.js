@@ -17,8 +17,6 @@ const uploadToCloudinary = (file, folder = "easily-promote") => {
 
     if (isVideo) {
       options.allowed_formats = ["mp4", "mov", "avi", "webm"];
-      options.transformation = [{ quality: "auto", fetch_format: "auto" }];
-      options.eager_async = true;
     } else if (isDocument) {
       options.allowed_formats = ["pdf", "doc", "docx"];
     } else {
