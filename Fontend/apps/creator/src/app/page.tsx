@@ -663,6 +663,11 @@ function CreatorDashboardContent() {
   }
 
   const profileComplete = profile.niches.length > 0 && !!profile.avatar;
+  const hasConnectedSocial =
+    tiktokStatus.connected ||
+    metaStatus.instagram.connected ||
+    metaStatus.facebook.connected;
+  const campaignsUnlocked = profile.niches.length > 0 && hasConnectedSocial;
 
   const renderOnboardingView = (p: CreatorProfile) => (
     <OnboardingView
@@ -722,13 +727,13 @@ function CreatorDashboardContent() {
           <>
             {activeTab === "home" && (
               <>
-                {showAllSet ? (
+                {!campaignsUnlocked ? (
+                  renderOnboardingView(profile)
+                ) : showAllSet ? (
                   <OnboardingComplete
                     profile={profile}
                     onBrowseCampaigns={handleBrowseCampaigns}
                   />
-                ) : !profileComplete ? (
-                  renderOnboardingView(profile)
                 ) : (
                   renderCampaignFeed()
                 )}
@@ -736,12 +741,16 @@ function CreatorDashboardContent() {
             )}
 
             {activeTab === "campaign" && (
-              <CampaignMarketplace
-                campaigns={marketplaceCampaigns}
-                meta={marketplaceMeta}
-                onClaimSlot={handleClaimSlot}
-                niches={profile.niches}
-              />
+              campaignsUnlocked ? (
+                <CampaignMarketplace
+                  campaigns={marketplaceCampaigns}
+                  meta={marketplaceMeta}
+                  onClaimSlot={handleClaimSlot}
+                  niches={profile.niches}
+                />
+              ) : (
+                renderOnboardingView(profile)
+              )
             )}
 
             {activeTab === "wallet" && <WalletView profile={profile} walletData={walletData} />}

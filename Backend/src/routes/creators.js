@@ -8,10 +8,31 @@ const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Niche = require("../models/Niche");
 const Withdrawal = require("../models/Withdrawal");
+const TikTokConnection = require("../models/TikTokConnection");
+const MetaConnection = require("../models/MetaConnection");
 const paystack = require("../services/paystack");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
+
+async function getCampaignAccess(userId) {
+  const profile = await CreatorProfile.findOne({ userId });
+  const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
+  const hasTikTok = await TikTokConnection.exists({ userId });
+  const hasMeta = await MetaConnection.exists({ userId });
+  const hasSocial = Boolean(hasTikTok || hasMeta);
+  const hasNiches = niches.length > 0;
+  return { ok: hasSocial && hasNiches, hasSocial, hasNiches };
+}
+
+const ensureCampaignAccess = async (req, res, next) => {
+  const access = await getCampaignAccess(req.user._id);
+  if (access.ok) return next();
+  const error = access.hasSocial && !access.hasNiches
+    ? "Choose your niches to unlock campaigns"
+    : "Connect a social account to unlock campaigns";
+  return res.status(403).json({ error, code: "CAMPAIGN_ACCESS_LOCKED" });
+};
 
 router.get("/profile/me", protect, async (req, res, next) => {
   try {
@@ -170,7 +191,7 @@ router.get("/leaderboard", async (req, res, next) => {
   }
 });
 
-router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, next) => {
+router.get("/marketplace", protect, authorizeRoles("creator"), ensureCampaignAccess, async (req, res, next) => {
   try {
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     const creatorRank = profile ? profile.rank : "rank1";
@@ -280,7 +301,7 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
   }
 });
 
-router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, next) => {
+router.get("/slots/mine", protect, authorizeRoles("creator"), ensureCampaignAccess, async (req, res, next) => {
   try {
     const slots = await Slot.find({ creatorId: req.user._id })
       .populate({
