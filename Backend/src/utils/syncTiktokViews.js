@@ -69,10 +69,20 @@ async function updateCampaignFromSubmission(submission) {
 }
 
 async function syncTiktokViews() {
+  const summary = {
+    connections: 0,
+    postedSubmissions: 0,
+    submissionsWithVideoId: 0,
+    videosQueried: 0,
+    updatedSubmissions: 0,
+    totalViews: 0,
+    errors: [],
+  };
+
   const connections = await TikTokConnection.find().select("+accessTokenEnc +refreshTokenEnc");
   if (connections.length === 0) {
     console.log("[TikTok Sync] Skipped — no TikTok connections");
-    return;
+    return summary;
   }
 
   const userIds = connections.map((c) => c.userId);
@@ -83,6 +93,9 @@ async function syncTiktokViews() {
   });
   console.log(`[TikTok Sync] connections=${connections.length} postedSubmissions=${submissions.length}`);
 
+  summary.connections = connections.length;
+  summary.postedSubmissions = submissions.length;
+
   const byUser = {};
   for (const submission of submissions) {
     const videoId = await getSubmissionVideoId(submission);
@@ -92,6 +105,7 @@ async function syncTiktokViews() {
     byUser[userId].videos.push({ submission, videoId });
   }
   console.log(`[TikTok Sync] submissionsWithVideoId=${Object.values(byUser).reduce((s, d) => s + d.videos.length, 0)}`);
+  summary.submissionsWithVideoId = Object.values(byUser).reduce((s, d) => s + d.videos.length, 0);
 
   const connectionByUser = {};
   for (const c of connections) {
@@ -111,11 +125,13 @@ async function syncTiktokViews() {
         const videos = await tiktok.queryVideos(accessToken, batch);
 
         const videoMap = new Map(videos.map((v) => [String(v.id), v]));
+        summary.videosQueried += videos.length;
         console.log(`[TikTok Sync] user=${userId} queried=${batch.length} returned=${videos.length} views=${videos.map((v) => v.view_count).join(",")}`);
 
         for (const { submission, videoId } of data.videos) {
           if (!videoMap.has(videoId)) {
             console.warn(`[TikTok Sync] video ${videoId} not returned for submission ${submission._id}`);
+            summary.errors.push(`video ${videoId} not returned for submission ${submission._id}`);
             continue;
           }
           const metrics = videoMap.get(videoId);
@@ -142,9 +158,11 @@ async function syncTiktokViews() {
           }
 
           submission.viewsDelivered = submission.postedPlatforms.reduce((sum, p) => sum + (p.views || 0), 0);
+          summary.totalViews += entry ? entry.views || 0 : 0;
           await submission.save();
           await updateCampaignFromSubmission(submission);
           emitCampaignUpdate(submission);
+          summary.updatedSubmissions += 1;
         }
       }
 
@@ -153,8 +171,11 @@ async function syncTiktokViews() {
       console.log(`[TikTok Sync] Updated ${data.videos.length} submission(s) for user ${userId}`);
     } catch (error) {
       console.error(`[TikTok Sync] Failed for user ${userId}:`, error.message);
+      summary.errors.push(`${userId}: ${error.message}`);
     }
   }
+
+  return summary;
 }
 
 function startTikTokSync() {

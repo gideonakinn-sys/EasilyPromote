@@ -226,8 +226,8 @@ router.get("/videos/:videoId/metrics", protect, authorizeRoles("creator"), async
 router.post("/sync", protect, authorizeRoles("admin", "super_admin", "creator"), async (req, res, next) => {
   try {
     const { syncTiktokViews } = require("../utils/syncTiktokViews");
-    await syncTiktokViews();
-    res.json({ success: true, message: "TikTok sync completed" });
+    const summary = await syncTiktokViews();
+    res.json({ success: true, message: "TikTok sync completed", summary });
   } catch (error) {
     next(error);
   }
