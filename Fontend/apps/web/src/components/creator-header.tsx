@@ -25,7 +25,7 @@ interface CreatorHeaderProps {
 }
 
 export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpenProfile }: CreatorHeaderProps) {
-  const isOnboarding = !profile.niches.length || !profile.avatar;
+  const isOnboarding = !profile.socialAccounts.length || !profile.niches.length || !profile.avatar;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -60,29 +60,23 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
           </button>
 
           <button
-            onClick={() => {
-              if (!isOnboarding) onTabChange("campaign");
-            }}
-            disabled={isOnboarding}
+            onClick={() => onTabChange("campaign")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "campaign"
                 ? "bg-white text-stone-950 border border-stone-200"
                 : "text-stone-500"
-            } disabled:opacity-40`}
+            }`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={14} />
             <span>Campaign</span>
           </button>
 
           <button
-            onClick={() => {
-              if (!isOnboarding) onTabChange("wallet");
-            }}
-            disabled={isOnboarding}
+            onClick={() => onTabChange("wallet")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "wallet"
                 ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500 disabled:opacity-40"
+                : "text-stone-500"
             }`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={14} />
@@ -235,30 +229,24 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
           </button>
           <button
             onClick={() => {
-              if (!isOnboarding) {
-                onTabChange("campaign");
-                setIsMenuOpen(false);
-              }
+              onTabChange("campaign");
+              setIsMenuOpen(false);
             }}
-            disabled={isOnboarding}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
               activeTab === "campaign" ? "text-stone-900 bg-stone-100" : "text-stone-600"
-            } disabled:opacity-40`}
+            }`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={18} />
             Campaign
           </button>
           <button
             onClick={() => {
-              if (!isOnboarding) {
-                onTabChange("wallet");
-                setIsMenuOpen(false);
-              }
+              onTabChange("wallet");
+              setIsMenuOpen(false);
             }}
-            disabled={isOnboarding}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
               activeTab === "wallet" ? "text-stone-900 bg-stone-100" : "text-stone-600"
-            } disabled:opacity-40`}
+            }`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={18} />
             Wallet

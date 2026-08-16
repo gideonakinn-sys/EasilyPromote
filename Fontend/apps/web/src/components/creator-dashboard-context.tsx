@@ -354,10 +354,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
-  const profileComplete = profile.niches.length > 0 && !!profile.avatar;
+  const isSetupComplete = (p: CreatorProfile) =>
+    p.socialAccounts.length > 0 && p.niches.length > 0 && !!p.avatar;
+
+  const profileComplete = isSetupComplete(profile);
 
   const markCompleteIfReady = (next: CreatorProfile) => {
-    const complete = next.niches.length > 0 && !!next.avatar;
+    const complete = isSetupComplete(next);
     if (complete && !profileComplete && !showAllSet) {
       setShowAllSet(true);
     }
