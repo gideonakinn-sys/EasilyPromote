@@ -15,6 +15,7 @@ const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
+const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -494,7 +495,10 @@ router.get("/users", adminGuard, async (req, res, next) => {
           creatorProfile: cp
             ? {
                 rank: cp.rank,
+                rankOverride: cp.rankOverride,
                 creatorScore: cp.creatorScore,
+                verifiedViews: cp.verifiedViews,
+                standingUpdatedAt: cp.standingUpdatedAt,
                 lifetimeEarnings: cp.lifetimeEarnings,
                 socialAccounts: cp.socialAccounts,
                 niches: cp.niches,
@@ -600,7 +604,7 @@ router.delete("/users/:id", adminGuard, async (req, res, next) => {
 // ─── PATCH /api/admin/users/:id/rank ─────────────────────────────────────────
 router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
   try {
-    const { rank, creatorScore } = req.body;
+    const { rank, creatorScore, rankOverride } = req.body;
     const validRanks = ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"];
 
     let profile = await CreatorProfile.findOne({ userId: req.params.id });
@@ -614,11 +618,37 @@ router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
       });
     }
 
-    if (rank && validRanks.includes(rank)) profile.rank = rank;
+    // A hand-set rank pins the creator until an admin clears the override, so the
+    // nightly recalculation can't silently undo it.
+    if (rank && validRanks.includes(rank)) {
+      profile.rank = rank;
+      profile.rankOverride = true;
+    }
     if (typeof creatorScore === "number") profile.creatorScore = Math.max(0, Math.min(100, creatorScore));
+    if (typeof rankOverride === "boolean") profile.rankOverride = rankOverride;
 
     await profile.save();
-    res.json({ success: true, rank: profile.rank, creatorScore: profile.creatorScore });
+
+    if (profile.rankOverride === false) {
+      await recalculateCreator(profile);
+    }
+
+    res.json({
+      success: true,
+      rank: profile.rank,
+      creatorScore: profile.creatorScore,
+      rankOverride: profile.rankOverride,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/rank/recalculate ────────────────────────────────────────
+router.post("/rank/recalculate", adminGuard, async (req, res, next) => {
+  try {
+    const summary = await recalculateAllCreators();
+    res.json({ success: true, message: "Creator ranking recalculated", summary });
   } catch (err) {
     next(err);
   }

@@ -11,6 +11,7 @@ const Withdrawal = require("../models/Withdrawal");
 const TikTokConnection = require("../models/TikTokConnection");
 const MetaConnection = require("../models/MetaConnection");
 const paystack = require("../services/paystack");
+const { rankAtLeast } = require("../services/creatorScore");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
@@ -77,6 +78,7 @@ router.get("/profile/me", protect, async (req, res, next) => {
       niches: profile.niches || [],
       rank: profile.rank,
       creatorScore: profile.creatorScore,
+      verifiedViews: profile.verifiedViews,
       lifetimeEarnings: profile.lifetimeEarnings,
       completionRate: profile.completionRate,
     });
@@ -256,9 +258,9 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
       }).sort({ createdAt: -1 });
 
       if (availableSlots.length > 0) {
-        const matchingSlot = availableSlots.find(
-          (s) => !s.rankRequired || s.rankRequired === creatorRank
-        ) || availableSlots[0];
+        const eligibleSlot = availableSlots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
+        const matchingSlot = eligibleSlot || availableSlots[0];
+        const rankLocked = !eligibleSlot;
 
         const daysLeft = campaign.endDate
           ? Math.max(Math.ceil((campaign.endDate - Date.now()) / (1000 * 60 * 60 * 24)), 1)
@@ -289,6 +291,7 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
           viewTarget: matchingSlot.viewTarget,
           slotId: matchingSlot._id,
           rankRequired: matchingSlot.rankRequired,
+          rankLocked,
           slotsLeft: availableSlots.length,
           targetViews: campaign.targetViews,
           coverImageUrl: campaign.coverImageUrl,

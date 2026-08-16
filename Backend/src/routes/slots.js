@@ -2,6 +2,7 @@ const express = require("express");
 const Slot = require("../models/Slot");
 const Campaign = require("../models/Campaign");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const { rankAtLeast } = require("../services/creatorScore");
 
 const router = express.Router();
 
@@ -74,9 +75,13 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
       if (availableSlots.length === 0) {
         return res.status(404).json({ error: "No available slots for this campaign" });
       }
-      slot = availableSlots.find(
-        (s) => !s.rankRequired || s.rankRequired === creatorRank
-      ) || availableSlots[0];
+      slot = availableSlots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
+      if (!slot) {
+        return res.status(403).json({
+          error: "Your rank doesn't meet the requirement for the remaining slots on this campaign",
+          code: "RANK_LOCKED",
+        });
+      }
     } else {
       return res.status(400).json({ error: "slotId or campaignId is required" });
     }
@@ -86,6 +91,12 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
     }
     if (slot.status !== "available") {
       return res.status(400).json({ error: "Slot is not available" });
+    }
+    if (!rankAtLeast(creatorRank, slot.rankRequired)) {
+      return res.status(403).json({
+        error: `This slot requires ${slot.rankRequired}`,
+        code: "RANK_LOCKED",
+      });
     }
 
     const campaign = await Campaign.findById(slot.campaignId);

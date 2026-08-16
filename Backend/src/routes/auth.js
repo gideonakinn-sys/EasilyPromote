@@ -365,6 +365,7 @@ router.get("/me", protect, async (req, res, next) => {
         country: profile.country,
         rank: profile.rank,
         creatorScore: profile.creatorScore,
+        verifiedViews: profile.verifiedViews,
         lifetimeEarnings: profile.lifetimeEarnings,
         completionRate: profile.completionRate,
         socialAccounts: profile.socialAccounts,

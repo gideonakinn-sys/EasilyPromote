@@ -45,11 +45,26 @@ const creatorProfileSchema = new mongoose.Schema(
       enum: ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"],
       default: "rank1",
     },
+    rankOverride: {
+      type: Boolean,
+      default: false,
+    },
     creatorScore: {
       type: Number,
       default: 0,
       min: 0,
       max: 100,
+    },
+    scoreBreakdown: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    verifiedViews: {
+      type: Number,
+      default: 0,
+    },
+    standingUpdatedAt: {
+      type: Date,
     },
     lifetimeEarnings: {
       type: Number,

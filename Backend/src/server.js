@@ -7,6 +7,7 @@ const seedDefaultAdmin = require("./utils/seedAdmin");
 const { startCancelledCleanup } = require("./utils/cleanupCancelled");
 const { startTikTokSync } = require("./utils/syncTiktokViews");
 const { startMetaSync } = require("./utils/syncMetaViews");
+const { startRankRecalc } = require("./utils/rankRecalc");
 
 const PORT = process.env.PORT || 5000;
 
@@ -16,6 +17,7 @@ const start = async () => {
   startCancelledCleanup();
   startTikTokSync();
   startMetaSync();
+  startRankRecalc();
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, () => {
