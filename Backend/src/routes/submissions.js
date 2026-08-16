@@ -7,6 +7,7 @@ const User = require("../models/User");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
+const { recordEvent } = require("../services/submissionEvents");
 
 const router = express.Router();
 
@@ -47,6 +48,14 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
       }
     }
 
+    await recordEvent(submission, {
+      type: "submitted",
+      actor: "creator",
+      actorId: req.user._id,
+      actorName: creatorHandle,
+      metadata: { videoUrl, caption, durationSeconds },
+    });
+
     res.status(201).json({
       id: submission._id,
       status: submission.status,
@@ -74,13 +83,22 @@ router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) =>
       return res.status(400).json({ error: "Content can only be updated before approval" });
     }
 
+    const wasRejected = submission.status === "rejected";
     if (videoUrl !== undefined) submission.videoUrl = videoUrl;
     if (caption !== undefined) submission.caption = caption;
-    if (submission.status === "rejected") {
+    if (wasRejected) {
       submission.status = "new";
       submission.rejectionReason = null;
     }
     await submission.save();
+
+    await recordEvent(submission, {
+      type: wasRejected ? "resubmitted" : "content_edited",
+      actor: "creator",
+      actorId: req.user._id,
+      actorName: submission.creatorHandle,
+      metadata: { videoUrl: submission.videoUrl, caption: submission.caption },
+    });
 
     res.json({
       id: submission._id,
@@ -178,6 +196,13 @@ router.patch("/:id/approve", protect, async (req, res, next) => {
     submission.reviewedAt = new Date();
     await submission.save();
 
+    await recordEvent(submission, {
+      type: "approved",
+      actor: "brand",
+      actorId: req.user._id,
+      actorName: req.user.name,
+    });
+
     await Notification.create({
       creatorId: submission.creatorId,
       campaignId: submission.campaignId,
@@ -218,6 +243,14 @@ router.patch("/:id/reject", protect, async (req, res, next) => {
     submission.rejectionReason = reason;
     submission.reviewedAt = new Date();
     await submission.save();
+
+    await recordEvent(submission, {
+      type: "rejected",
+      actor: "brand",
+      actorId: req.user._id,
+      actorName: req.user.name,
+      reason,
+    });
 
     await Notification.create({
       creatorId: submission.creatorId,
@@ -293,6 +326,16 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     submission.postedAt = new Date();
     submission.postedPlatforms = postedPlatforms;
     await submission.save();
+
+    await recordEvent(submission, {
+      type: "posted",
+      actor: "creator",
+      actorId: req.user._id,
+      actorName: submission.creatorHandle,
+      metadata: {
+        platforms: submission.postedPlatforms.map((p) => ({ platform: p.platform, postUrl: p.postUrl })),
+      },
+    });
 
     const { syncTiktokViews } = require("../utils/syncTiktokViews");
     try {

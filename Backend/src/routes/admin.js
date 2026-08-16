@@ -16,6 +16,8 @@ const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
 const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
+const { recordEvent, listEventsForCampaign, labelFor } = require("../services/submissionEvents");
+const { timeAgo } = require("../utils/timeAgo");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -383,6 +385,15 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
     submission.reviewedAt = new Date();
     await submission.save();
 
+    await recordEvent(submission, {
+      type: status === "approved" ? "approved" : "rejected",
+      actor: "admin",
+      actorId: req.user._id,
+      actorName: req.user.name,
+      reason: status === "rejected" ? rejectionReason : null,
+      metadata: adminNotes ? { adminNotes } : {},
+    });
+
     const campaign = await Campaign.findById(submission.campaignId);
     await Notification.create({
       creatorId: submission.creatorId,
@@ -424,6 +435,14 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
       submission.adminNotes = notes || "Appeal rejected by Admin";
     }
     await submission.save();
+
+    await recordEvent(submission, {
+      type: decision === "approve" ? "appeal_approved" : "appeal_rejected",
+      actor: "admin",
+      actorId: req.user._id,
+      actorName: req.user.name,
+      reason: notes || null,
+    });
 
     emitCampaignUpdate(submission);
 
@@ -638,6 +657,71 @@ router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
       rank: profile.rank,
       creatorScore: profile.creatorScore,
       rankOverride: profile.rankOverride,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/admin/campaigns/:id/activity ───────────────────────────────────
+router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
+  try {
+    const campaign = await Campaign.findById(req.params.id).populate("businessId", "name avatar");
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+    const [events, submissions] = await Promise.all([
+      listEventsForCampaign(campaign._id),
+      Submission.find({ campaignId: campaign._id }).sort({ submittedAt: 1 }),
+    ]);
+
+    const submissionById = new Map(submissions.map((s) => [String(s._id), s]));
+
+    res.json({
+      campaign: {
+        id: campaign._id,
+        name: campaign.name,
+        status: campaign.status,
+        brandName: campaign.businessId ? campaign.businessId.name : null,
+        targetViews: campaign.targetViews,
+        viewsDelivered: campaign.viewsDelivered,
+        creatorPool: campaign.creatorPool,
+        createdAt: campaign.createdAt,
+      },
+      submissions: submissions.map((s) => ({
+        id: s._id,
+        creatorId: s.creatorId,
+        creatorHandle: s.creatorHandle,
+        status: s.status,
+        videoUrl: s.videoUrl,
+        caption: s.caption,
+        confidenceScore: s.confidenceScore,
+        viewsDelivered: s.viewsDelivered,
+        payoutAmount: s.payoutAmount,
+        payoutStatus: s.payoutStatus,
+        rejectionReason: s.rejectionReason,
+        adminNotes: s.adminNotes,
+        postedPlatforms: s.postedPlatforms,
+        submittedAt: s.submittedAt,
+        reviewedAt: s.reviewedAt,
+        postedAt: s.postedAt,
+      })),
+      events: events.map((e) => {
+        const submission = submissionById.get(String(e.submissionId));
+        return {
+          id: e._id,
+          submissionId: e.submissionId,
+          type: e.type,
+          label: labelFor(e.type),
+          actor: e.actor,
+          actorName: e.actorName || (e.actorId ? e.actorId.name : null),
+          creatorHandle: submission ? submission.creatorHandle : null,
+          statusAfter: e.statusAfter,
+          reason: e.reason,
+          metadata: e.metadata,
+          at: e.createdAt,
+          ago: timeAgo(e.createdAt),
+        };
+      }),
     });
   } catch (err) {
     next(err);

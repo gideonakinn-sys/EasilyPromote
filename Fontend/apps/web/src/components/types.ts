@@ -60,8 +60,22 @@ export interface ProfileForm {
 
 export type ProfileFocusSection = "social" | "niches" | "details";
 
+export interface TimelineEvent {
+  id: string;
+  type: string;
+  label: string;
+  actor: "creator" | "brand" | "admin" | "system";
+  actorName?: string | null;
+  reason?: string | null;
+  statusAfter?: string | null;
+  metadata?: Record<string, unknown>;
+  at: string;
+  time?: string;
+}
+
 export interface CampaignItem {
   id: string;
+  timeline?: TimelineEvent[];
   slotId?: string;
   title: string;
   category: string;

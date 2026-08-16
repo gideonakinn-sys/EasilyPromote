@@ -15,15 +15,55 @@ import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
 import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
 import { getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
-import type { CampaignItem } from "./types";
+import type { CampaignItem, TimelineEvent } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
+
+// Events that represent a decision on the content itself, so they get the video card.
+const CONTENT_EVENT_TYPES = [
+  "submitted",
+  "resubmitted",
+  "content_edited",
+  "approved",
+  "rejected",
+  "posted",
+  "appeal_approved",
+  "appeal_rejected",
+];
+
+const EVENT_BADGE_STATUS: Record<string, CampaignItem["status"]> = {
+  submitted: "under_review",
+  resubmitted: "under_review",
+  content_edited: "under_review",
+  approved: "approved_post",
+  appeal_approved: "approved_post",
+  rejected: "changes_requested",
+  appeal_rejected: "changes_requested",
+  posted: "live_tracking",
+};
+
+function statusForEvent(type: string): CampaignItem["status"] {
+  return EVENT_BADGE_STATUS[type] || "under_review";
+}
+
+function actorLabel(event: TimelineEvent) {
+  switch (event.actor) {
+    case "creator":
+      return "by you";
+    case "brand":
+      return `by ${event.actorName || "the brand"}`;
+    case "admin":
+      return `by ${event.actorName || "Admin"}`;
+    default:
+      return event.actorName || "Automatic";
+  }
+}
 
 interface CampaignDetailsDrawerProps {
   campaign: CampaignItem;
   onClose: () => void;
   onSubmitContent: (id: string, videoUrl: string, caption: string) => void;
   onUpdateContent: (id: string, videoUrl: string, caption: string) => void;
-  onSubmitPostUrl: (id: string, urls: Record<string, string>) => void;
+  onSubmitPostUrl: (id: string, urls: Record<string, string>) => void | Promise<void>;
   onRefresh?: () => Promise<void>;
   isMobile?: boolean;
 }
@@ -47,6 +87,7 @@ export function CampaignDetailsDrawer({
   const [caption, setCaption] = useState("");
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [submittingLinks, setSubmittingLinks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -57,10 +98,25 @@ export function CampaignDetailsDrawer({
     : undefined;
 
   const linkPlatforms = displayCampaign.platforms?.length ? displayCampaign.platforms : ["tiktok", "instagram"];
-  const allLinksFilled = linkPlatforms.every((p) => (linkInputs[p] || "").trim().length > 0);
 
-  const handleLinkSubmit = () => {
-    onSubmitPostUrl(displayCampaign.id, linkInputs);
+  const filledLinks = linkPlatforms.filter((p) => (linkInputs[p] || "").trim().length > 0);
+  const invalidLinks = filledLinks.filter((p) => !/^https?:\/\//i.test(linkInputs[p].trim()));
+  const canSubmitLinks = filledLinks.length > 0 && invalidLinks.length === 0 && !submittingLinks;
+
+  const handleLinkSubmit = async () => {
+    if (!canSubmitLinks) return;
+    const payload: Record<string, string> = {};
+    for (const p of filledLinks) {
+      payload[p] = linkInputs[p].trim();
+    }
+
+    setSubmittingLinks(true);
+    try {
+      await onSubmitPostUrl(displayCampaign.id, payload);
+      setLinkInputs({});
+    } finally {
+      setSubmittingLinks(false);
+    }
   };
 
   const handleRefresh = async () => {
@@ -236,7 +292,7 @@ export function CampaignDetailsDrawer({
   );
 
   const renderActivity = () => {
-    const items = [];
+    const items: React.ReactNode[] = [];
 
     const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string) => (
       <div className={cn("bg-stone-100 rounded-[16px] p-2", review && "space-y-2")}>
@@ -286,105 +342,48 @@ export function CampaignDetailsDrawer({
       </div>
     );
 
-    if (displayCampaign.status === "delivered") {
-      items.push(
-        <div key="activity-delivered" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("delivered")}
-        </div>
-      );
+    const events = displayCampaign.timeline || [];
 
+    events.forEach((event, index) => {
+      const isLast = index === events.length - 1;
       items.push(
-        <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("live_tracking")}
-        </div>
-      );
+        <div
+          key={event.id}
+          className={cn("space-y-4", !isLast && "border-b border-stone-100 pb-5")}
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="font-rethink font-medium text-sm text-stone-900 tracking-[-0.01em]">
+              {event.label}
+            </p>
+            <span className="shrink-0 text-xs font-medium text-stone-500 tracking-[-0.01em]">
+              {event.time}
+            </span>
+          </div>
 
-      items.push(
-        <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
-        </div>
-      );
+          <p className="text-xs font-medium text-stone-500 tracking-[-0.01em] -mt-3">
+            {actorLabel(event)}
+          </p>
 
-      items.push(
-        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
-        </div>
-      );
+          {CONTENT_EVENT_TYPES.includes(event.type) &&
+            renderContentCard(statusForEvent(event.type), event.reason || undefined)}
 
-      items.push(
-        <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
-        </div>
-      );
-    }
+          {!CONTENT_EVENT_TYPES.includes(event.type) && event.reason && (
+            <div className="bg-stone-100 rounded-[16px] p-3">
+              <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
+                {event.reason}
+              </p>
+            </div>
+          )}
 
-    if (displayCampaign.status === "live_tracking") {
-      items.push(
-        <div key="activity-live" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("live_tracking")}
+          {event.type === "views_synced" && (
+            <p className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
+              {Number(event.metadata?.previousViews ?? 0).toLocaleString()} →{" "}
+              {Number(event.metadata?.views ?? 0).toLocaleString()} views
+            </p>
+          )}
         </div>
       );
-
-      items.push(
-        <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
-        </div>
-      );
-
-      items.push(
-        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
-        </div>
-      );
-
-      items.push(
-        <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
-        </div>
-      );
-    }
-
-    if (displayCampaign.status === "changes_requested") {
-      items.push(
-        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
-        </div>
-      );
-
-      items.push(
-        <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
-        </div>
-      );
-    }
-
-    if (displayCampaign.status === "under_review") {
-      items.push(
-        <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
-        </div>
-      );
-    }
-
-    if (displayCampaign.status === "approved_post") {
-      items.push(
-        <div key="activity-approved" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("approved_post")}
-        </div>
-      );
-
-      items.push(
-        <div key="activity-changes" className="space-y-4 border-b border-stone-100 pb-5">
-          {renderContentCard("changes_requested", displayCampaign.comment || "Please revise the content")}
-        </div>
-      );
-
-      items.push(
-        <div key="activity-submitted" className="space-y-4">
-          {renderContentCard("under_review")}
-        </div>
-      );
-    }
+    });
 
     return items;
   };
@@ -577,30 +576,65 @@ export function CampaignDetailsDrawer({
             renderInlineUploadPanel()}
 
           {displayCampaign.status === "approved_post" && (
-            <div className="space-y-2.5">
-              <div className={cn("grid gap-2.5", isMobile ? "grid-cols-1" : "grid-cols-3")}>
-                {linkPlatforms.map((p) => (
-                  <input
-                    key={p}
-                    type="text"
-                    placeholder={`${platformLabels[p] || p} post link`}
-                    value={linkInputs[p] || ""}
-                    onChange={(e) => setLinkInputs((prev) => ({ ...prev, [p]: e.target.value }))}
-                    className="w-full min-w-0 px-3 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink"
-                  />
-                ))}
+            <div className="space-y-4">
+              <div className="space-y-3">
+                {linkPlatforms.map((p) => {
+                  const value = linkInputs[p] || "";
+                  const isInvalid = invalidLinks.includes(p);
+                  return (
+                    <div key={p} className="space-y-1.5">
+                      <label
+                        htmlFor={`post-link-${p}`}
+                        className="flex items-center justify-between text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]"
+                      >
+                        <span>{platformLabels[p] || p} post link</span>
+                        <span className="text-stone-400">Optional</span>
+                      </label>
+                      <input
+                        id={`post-link-${p}`}
+                        type="url"
+                        inputMode="url"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder={`https://${p}.com/...`}
+                        value={value}
+                        onChange={(e) => setLinkInputs((prev) => ({ ...prev, [p]: e.target.value }))}
+                        className={cn(
+                          "w-full min-w-0 px-4 py-3 bg-white border rounded-[16px] text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:ring-2 font-rethink transition-colors",
+                          isInvalid
+                            ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                            : "border-stone-200 focus:border-stone-400 focus:ring-stone-100"
+                        )}
+                      />
+                      {isInvalid && (
+                        <p className="text-xs font-medium text-red-600 font-rethink tracking-[-0.01em]">
+                          Paste the full link, starting with https://
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+
+              <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+                Add at least one link. You can come back and add the others later.
+              </p>
+
               <button
                 onClick={handleLinkSubmit}
-                disabled={!allLinksFilled}
+                disabled={!canSubmitLinks}
                 className={cn(
-                  "w-full py-3 rounded-full font-semibold text-sm border font-rethink",
-                  allLinksFilled
+                  "w-full py-3 rounded-full font-semibold text-sm border font-rethink transition-colors",
+                  canSubmitLinks
                     ? "bg-[#FEB604] text-stone-900 border-stone-100"
                     : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
                 )}
               >
-                Submit link
+                {submittingLinks
+                  ? "Submitting…"
+                  : filledLinks.length > 1
+                    ? `Submit ${filledLinks.length} links`
+                    : "Submit link"}
               </button>
             </div>
           )}

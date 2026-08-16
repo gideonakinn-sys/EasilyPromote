@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Sidebar } from "../../components/sidebar";
 import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
 
@@ -201,7 +202,15 @@ export default function AdminVerificationsPage() {
                     </td>
 
                     <td className="px-6 py-4 font-semibold text-stone-800">
-                      {sub.campaignName}
+                      <div>
+                        <p>{sub.campaignName}</p>
+                        <Link
+                          href={`/verifications/campaign/${sub.campaignId}`}
+                          className="text-[11px] font-bold text-blue-600 hover:underline"
+                        >
+                          View full history
+                        </Link>
+                      </div>
                     </td>
 
                     <td className="px-6 py-4">

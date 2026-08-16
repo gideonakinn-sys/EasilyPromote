@@ -56,7 +56,7 @@ interface CreatorDashboardValue {
   handleDisconnectMeta: (provider: MetaProvider) => void;
   handleSubmitContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
-  handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => void;
+  handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => Promise<void>;
   refreshCampaigns: () => Promise<void>;
 }
 
@@ -297,6 +297,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         brandAvatar: c.brandAvatar as string | undefined,
         scriptUrl: c.scriptUrl as string | undefined,
         scriptFileName: c.scriptFileName as string | undefined,
+        timeline: (c.timeline as CampaignItem["timeline"]) || [],
       }));
 
       setCampaigns(items);
@@ -580,8 +581,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
             : c
         )
       );
+
+      toast("Link submitted — we're tracking your views now.", "success");
+      await fetchCampaigns();
     } catch (err) {
       console.error("Failed to submit post URLs:", err);
+      toast(err instanceof Error ? err.message : "Could not submit your link. Try again.", "error");
+      throw err;
     }
   };
 

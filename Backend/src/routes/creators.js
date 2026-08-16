@@ -12,23 +12,11 @@ const TikTokConnection = require("../models/TikTokConnection");
 const MetaConnection = require("../models/MetaConnection");
 const paystack = require("../services/paystack");
 const { rankAtLeast } = require("../services/creatorScore");
+const { listEventsForSubmissions, labelFor } = require("../services/submissionEvents");
+const { timeAgo } = require("../utils/timeAgo");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
-
-function timeAgo(date) {
-  if (!date) return undefined;
-  const diffMs = Date.now() - new Date(date).getTime();
-  if (diffMs < 60 * 1000) return "just now";
-  const mins = Math.floor(diffMs / (60 * 1000));
-  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
-  const weeks = Math.floor(days / 7);
-  return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
-}
 
 async function getCampaignAccess(userId) {
   const profile = await CreatorProfile.findOne({ userId });
@@ -350,6 +338,28 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
       submissionMap[sub.campaignId.toString()] = sub;
     }
 
+    // Newest first, matching how the drawer stacks its activity list.
+    const eventsBySubmission = {};
+    if (submissions.length > 0) {
+      const events = await listEventsForSubmissions(submissions.map((s) => s._id));
+      for (const event of events) {
+        const key = event.submissionId.toString();
+        if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
+        eventsBySubmission[key].unshift({
+          id: event._id,
+          type: event.type,
+          label: labelFor(event.type),
+          actor: event.actor,
+          actorName: event.actorName,
+          reason: event.reason,
+          statusAfter: event.statusAfter,
+          metadata: event.metadata,
+          at: event.createdAt,
+          time: timeAgo(event.createdAt),
+        });
+      }
+    }
+
     const campaigns = slots
       .filter((slot) => slot.campaignId)
       .map((slot) => {
@@ -434,17 +444,7 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
           submittedAgo: timeAgo(submission ? submission.submittedAt : undefined),
           reviewedAgo: timeAgo(submission ? submission.reviewedAt : undefined),
           postedAgo: timeAgo(submission ? submission.postedAt : undefined),
-          timeline: submission
-            ? [
-                { key: "submitted", label: "Content submitted", time: timeAgo(submission.submittedAt) },
-                ...(submission.reviewedAt
-                  ? [{ key: "reviewed", label: "Reviewed by admin", time: timeAgo(submission.reviewedAt) }]
-                  : []),
-                ...(submission.postedAt
-                  ? [{ key: "posted", label: "Posted on socials", time: timeAgo(submission.postedAt) }]
-                  : []),
-              ]
-            : [],
+          timeline: submission ? eventsBySubmission[submission._id.toString()] || [] : [],
         };
       });
 

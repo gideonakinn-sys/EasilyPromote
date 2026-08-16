@@ -4,6 +4,7 @@ const Notification = require("../models/Notification");
 const TikTokConnection = require("../models/TikTokConnection");
 const tiktok = require("../services/tiktok");
 const { emitCampaignUpdate } = require("./campaignUpdates");
+const { recordEvent } = require("../services/submissionEvents");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -157,9 +158,25 @@ async function syncTiktokViews() {
             });
           }
 
+          const previousViews = submission.viewsDelivered || 0;
           submission.viewsDelivered = submission.postedPlatforms.reduce((sum, p) => sum + (p.views || 0), 0);
           summary.totalViews += entry ? entry.views || 0 : 0;
           await submission.save();
+
+          // Only log when the number actually moved — this runs every 15 minutes.
+          if (submission.viewsDelivered !== previousViews) {
+            await recordEvent(submission, {
+              type: "views_synced",
+              actor: "system",
+              actorName: "TikTok sync",
+              metadata: {
+                previousViews,
+                views: submission.viewsDelivered,
+                delta: submission.viewsDelivered - previousViews,
+                videoId,
+              },
+            });
+          }
           await updateCampaignFromSubmission(submission);
           emitCampaignUpdate(submission);
           summary.updatedSubmissions += 1;
