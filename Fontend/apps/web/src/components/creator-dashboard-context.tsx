@@ -120,6 +120,23 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   });
 
   React.useEffect(() => {
+    // When the OAuth popup lands back here, hand the result to the opener and
+    // close — the dashboard itself never navigated away.
+    const returnParams = new URLSearchParams(window.location.search);
+    const popupResult = returnParams.get("meta");
+    if (popupResult && window.opener && window.opener !== window) {
+      window.opener.postMessage(
+        {
+          type: "meta_oauth",
+          result: popupResult,
+          provider: returnParams.get("meta_provider"),
+        },
+        window.location.origin
+      );
+      window.close();
+      return;
+    }
+
     const token = getToken();
     if (!token) {
       router.push("/login");
@@ -180,6 +197,26 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       url.searchParams.delete("meta_provider");
       router.replace(url.pathname + url.search, { scroll: false });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Result relayed back from the OAuth popup before it closes.
+  React.useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; result?: string; provider?: string } | null;
+      if (!data || data.type !== "meta_oauth") return;
+      const label = data.provider === "facebook" ? "Facebook" : "Instagram";
+      if (data.result === "connected") {
+        toast(`${label} connected`, "success");
+        fetchMetaStatus();
+        fetchProfile();
+      } else {
+        toast(`${label} connection failed. Please try again.`, "error");
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -416,6 +453,22 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   };
 
   const handleConnectMeta = async (provider: MetaProvider) => {
+    const label = provider === "facebook" ? "Facebook" : "Instagram";
+    // Open the window synchronously inside the click handler — browsers block
+    // window.open() once an await has run.
+    const width = 600;
+    const height = 760;
+    const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+    const popup = window.open(
+      "about:blank",
+      "meta_oauth",
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+    if (!popup) {
+      toast(`Allow popups for this site to connect ${label}.`, "error");
+      return;
+    }
     try {
       const data = await apiRequest<{ url: string }>(`/meta/connect/${provider}`, {
         method: "POST",
@@ -423,11 +476,15 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
       });
       if (data.url) {
-        window.location.href = data.url;
+        popup.location.href = data.url;
+      } else {
+        popup.close();
+        toast(`Could not connect ${label}. Please try again.`, "error");
       }
     } catch (err) {
+      popup.close();
       console.error(`Failed to start ${provider} connect:`, err);
-      toast(`Could not connect ${provider === "facebook" ? "Facebook" : "Instagram"}. Please try again.`, "error");
+      toast(`Could not connect ${label}. ${(err as Error)?.message || "Please try again."}`, "error");
     }
   };
 
@@ -466,11 +523,19 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   };
 
   const handleSaveProfile = async () => {
+    // A blob: URL is only valid for the current page view — persisting one leaves a
+    // dead reference that renders nothing after a reload.
+    const avatarUrl = profileForm.avatarUrl?.startsWith("blob:") ? "" : profileForm.avatarUrl;
+    if (profileForm.avatarUrl && !avatarUrl) {
+      toast("Your photo hasn't finished uploading. Try uploading it again.", "error");
+      return;
+    }
+
     const next: CreatorProfile = {
       ...profile,
       name: profileForm.name,
       displayName: profileForm.nickname,
-      avatar: profileForm.avatarUrl || profile.avatar,
+      avatar: avatarUrl || profile.avatar,
     };
     setProfile(next);
     markCompleteIfReady(next);
@@ -481,11 +546,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         token: getToken() || undefined,
         body: JSON.stringify({
           displayName: profileForm.nickname,
-          avatar: profileForm.avatarUrl || undefined,
+          avatar: avatarUrl || undefined,
         }),
       });
+      toast("Profile saved.", "success");
     } catch (err) {
       console.error(err);
+      toast(err instanceof Error ? err.message : "Could not save your profile. Try again.", "error");
     }
   };
 

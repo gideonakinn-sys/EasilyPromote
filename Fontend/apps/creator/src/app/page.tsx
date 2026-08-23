@@ -104,6 +104,23 @@ function CreatorDashboardContent() {
   useCampaignUpdates(handleCampaignUpdate);
 
   useEffect(() => {
+    // When the OAuth popup lands back here, hand the result to the opener and
+    // close — the dashboard itself never navigated away.
+    const returnParams = new URLSearchParams(window.location.search);
+    const popupResult = returnParams.get("meta");
+    if (popupResult && window.opener && window.opener !== window) {
+      window.opener.postMessage(
+        {
+          type: "meta_oauth",
+          result: popupResult,
+          provider: returnParams.get("meta_provider"),
+        },
+        window.location.origin
+      );
+      window.close();
+      return;
+    }
+
     const token = getToken();
     if (!token) {
       router.push("/login");
@@ -164,6 +181,25 @@ function CreatorDashboardContent() {
       url.searchParams.delete("meta_provider");
       router.replace(url.pathname + url.search, { scroll: false });
     }
+  }, []);
+
+  // Result relayed back from the OAuth popup before it closes.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; result?: string; provider?: string } | null;
+      if (!data || data.type !== "meta_oauth") return;
+      const label = data.provider === "facebook" ? "Facebook" : "Instagram";
+      if (data.result === "connected") {
+        toast(`${label} connected`, "success");
+        fetchMetaStatus();
+        fetchProfile();
+      } else {
+        toast(`${label} connection failed. Please try again.`, "error");
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, []);
 
   const fetchAllData = async () => {
@@ -393,6 +429,22 @@ function CreatorDashboardContent() {
   };
 
   const handleConnectMeta = async (provider: MetaProvider) => {
+    const label = provider === "facebook" ? "Facebook" : "Instagram";
+    // Open the window synchronously inside the click handler — browsers block
+    // window.open() once an await has run.
+    const width = 600;
+    const height = 760;
+    const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+    const popup = window.open(
+      "about:blank",
+      "meta_oauth",
+      `width=${width},height=${height},left=${left},top=${top}`
+    );
+    if (!popup) {
+      toast(`Allow popups for this site to connect ${label}.`, "error");
+      return;
+    }
     try {
       const data = await apiRequest<{ url: string }>(`/meta/connect/${provider}`, {
         method: "POST",
@@ -400,11 +452,15 @@ function CreatorDashboardContent() {
         body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
       });
       if (data.url) {
-        window.location.href = data.url;
+        popup.location.href = data.url;
+      } else {
+        popup.close();
+        toast(`Could not connect ${label}. Please try again.`, "error");
       }
     } catch (err) {
+      popup.close();
       console.error(`Failed to start ${provider} connect:`, err);
-      toast(`Could not connect ${provider === "facebook" ? "Facebook" : "Instagram"}. Please try again.`, "error");
+      toast(`Could not connect ${label}. ${(err as Error)?.message || "Please try again."}`, "error");
     }
   };
 
