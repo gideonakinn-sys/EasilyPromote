@@ -13,35 +13,27 @@ const MetaConnection = require("../models/MetaConnection");
 const tiktok = require("./tiktok");
 const { decrypt } = require("../utils/crypto");
 
+// Work that has not produced views yet — releasing these costs the brand nothing.
+const UNDELIVERED_SLOT_STATUSES = ["reserved", "claimed", "submitted"];
+// Work already delivered stays attached to the campaign; the brand got the views.
 const ACTIVE_SLOT_STATUSES = ["claimed", "submitted", "verifying", "approved"];
-const OPEN_WITHDRAWAL_STATUSES = ["pending", "processing"];
 const ACTIVE_CAMPAIGN_STATUSES = ["pending_payment", "under_review", "live", "paused"];
 
-// Reasons an account cannot simply disappear. Money in flight and work a brand
-// has already paid for both need resolving by a human first.
+// Deleting an account must always be possible. The only hard stop is a transfer
+// already moving at Paystack, which would break settlement if the records
+// vanished mid-flight — and that resolves itself within half an hour via
+// reconciliation. Everything else is handled as part of the deletion.
 async function deletionBlockers(user) {
   const blockers = [];
 
-  const openWithdrawals = await Withdrawal.countDocuments({
+  const inFlight = await Withdrawal.countDocuments({
     creatorId: user._id,
-    status: { $in: OPEN_WITHDRAWAL_STATUSES },
+    status: "processing",
   });
-  if (openWithdrawals > 0) {
+  if (inFlight > 0) {
     blockers.push(
-      "You have a withdrawal being processed. Wait for it to complete before deleting your account."
+      "A payout is currently being sent to your bank. Once it lands — usually within an hour — you can delete your account."
     );
-  }
-
-  if (user.role === "creator") {
-    const activeSlots = await Slot.countDocuments({
-      creatorId: user._id,
-      status: { $in: ACTIVE_SLOT_STATUSES },
-    });
-    if (activeSlots > 0) {
-      blockers.push(
-        `You have ${activeSlots} campaign${activeSlots === 1 ? "" : "s"} in progress. Finish or drop them first.`
-      );
-    }
   }
 
   if (user.role === "business") {
@@ -51,12 +43,39 @@ async function deletionBlockers(user) {
     });
     if (activeCampaigns > 0) {
       blockers.push(
-        `You have ${activeCampaigns} active campaign${activeCampaigns === 1 ? "" : "s"}. Creators may be working on them — cancel or complete them first.`
+        `You have ${activeCampaigns} active campaign${activeCampaigns === 1 ? "" : "s"}. Cancel them first so creators are released and your escrow is refunded.`
       );
     }
   }
 
   return blockers;
+}
+
+// What the user gives up by deleting. Shown before they confirm — these do not
+// prevent deletion, they just should not come as a surprise.
+async function deletionWarnings(user) {
+  const warnings = [];
+  if (user.role !== "creator") return warnings;
+
+  const activeSlots = await Slot.countDocuments({
+    creatorId: user._id,
+    status: { $in: ACTIVE_SLOT_STATUSES },
+  });
+  if (activeSlots > 0) {
+    warnings.push(
+      `You'll drop ${activeSlots} campaign${activeSlots === 1 ? "" : "s"} you're working on, and they'll be offered to other creators.`
+    );
+  }
+
+  const pending = await Withdrawal.find({ creatorId: user._id, status: "pending" });
+  const pendingTotal = pending.reduce((sum, w) => sum + (w.amount || 0), 0);
+  if (pendingTotal > 0) {
+    warnings.push(
+      `Your withdrawal request for ₦${pendingTotal.toLocaleString()} will be cancelled and cannot be reinstated.`
+    );
+  }
+
+  return warnings;
 }
 
 async function disconnectSocials(userId) {
@@ -90,7 +109,7 @@ async function anonymizeRecords(user) {
   }
 
   await Withdrawal.updateMany(
-    { creatorId: user._id, status: { $nin: OPEN_WITHDRAWAL_STATUSES } },
+    { creatorId: user._id },
     { $set: { adminNotes: "Account deleted by user" } }
   );
 }
@@ -102,10 +121,18 @@ async function deleteAccount(user) {
   await disconnectSocials(user._id);
   await anonymizeRecords(user);
 
-  // Release any slot still held so the campaign can be filled by someone else.
+  // A pending request is a claim on money that nobody can now pay out to, since
+  // the payout account goes with the account.
+  await Withdrawal.updateMany(
+    { creatorId: user._id, status: "pending" },
+    { $set: { status: "rejected", adminNotes: "Cancelled — creator deleted their account" } }
+  );
+
+  // Release work that produced nothing so the slot can be refilled. Slots that
+  // already delivered views stay put: the brand paid for those and got them.
   await Slot.updateMany(
-    { creatorId: user._id, status: { $in: ["reserved", "claimed"] } },
-    { $set: { creatorId: null, status: "available", claimedAt: null } }
+    { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES } },
+    { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } }
   );
 
   await Notification.deleteMany({ $or: [{ creatorId: user._id }, { businessId: user._id }] });
@@ -117,4 +144,4 @@ async function deleteAccount(user) {
   return { deleted: true, blockers: [] };
 }
 
-module.exports = { deleteAccount, deletionBlockers };
+module.exports = { deleteAccount, deletionBlockers, deletionWarnings };

@@ -71,18 +71,21 @@ export function ProfileView({
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteBlockers, setDeleteBlockers] = useState<string[]>([]);
+  const [deleteWarnings, setDeleteWarnings] = useState<string[]>([]);
 
   const openDelete = async () => {
     setDeleteOpen(true);
     setDeletePassword("");
     try {
-      const data = await apiRequest<{ deletable: boolean; blockers: string[] }>(
+      const data = await apiRequest<{ deletable: boolean; blockers: string[]; warnings: string[] }>(
         "/auth/account/deletable",
         { token: getToken() || undefined }
       );
       setDeleteBlockers(data.blockers || []);
+      setDeleteWarnings(data.warnings || []);
     } catch {
       setDeleteBlockers([]);
+      setDeleteWarnings([]);
     }
   };
 
@@ -511,6 +514,15 @@ export function ProfileView({
               </div>
             ) : (
               <>
+                {deleteWarnings.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1.5">
+                    {deleteWarnings.map((warning) => (
+                      <p key={warning} className="text-xs font-medium text-amber-900 leading-normal">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <label htmlFor="delete-password" className="block text-xs font-medium text-stone-500">
                     Enter your password to confirm

@@ -7,7 +7,7 @@ const { generateToken, generateRefreshToken, verifyToken } = require("../utils/j
 const { protect } = require("../middleware/auth");
 const { storeOTP, verifyOTP } = require("../config/otp");
 const { sendEmail, otpEmail } = require("../services/email");
-const { deleteAccount, deletionBlockers } = require("../services/accountDeletion");
+const { deleteAccount, deletionBlockers, deletionWarnings } = require("../services/accountDeletion");
 
 const router = express.Router();
 
@@ -406,8 +406,11 @@ router.patch("/me", protect, async (req, res, next) => {
 // Lets the UI warn about anything blocking deletion before the user commits.
 router.get("/account/deletable", protect, async (req, res, next) => {
   try {
-    const blockers = await deletionBlockers(req.user);
-    res.json({ deletable: blockers.length === 0, blockers });
+    const [blockers, warnings] = await Promise.all([
+      deletionBlockers(req.user),
+      deletionWarnings(req.user),
+    ]);
+    res.json({ deletable: blockers.length === 0, blockers, warnings });
   } catch (err) {
     next(err);
   }
