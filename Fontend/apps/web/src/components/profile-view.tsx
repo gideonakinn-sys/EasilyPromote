@@ -125,6 +125,9 @@ export function ProfileView({
   const renderMetaRow = (provider: MetaProvider, label: string, hint: string) => {
     const status = metaStatus?.[provider];
     const connected = !!status?.connected;
+    // Hide a provider this deployment has no app credentials for, unless the
+    // creator is already connected — then they still need a way to disconnect.
+    if (status && status.configured === false && !connected) return null;
     if (connected) {
       const handle =
         provider === "instagram"

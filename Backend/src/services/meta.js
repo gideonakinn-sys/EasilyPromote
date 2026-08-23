@@ -63,6 +63,18 @@ function getScopes(provider) {
     .filter(Boolean);
 }
 
+// Whether this deployment has credentials for a provider at all. Lets the UI
+// hide a connect button that could only ever fail.
+function isProviderConfigured(provider) {
+  if (provider === "instagram") {
+    return Boolean(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET);
+  }
+  if (provider === "facebook") {
+    return Boolean(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET);
+  }
+  return false;
+}
+
 function isValidProvider(provider) {
   return provider === "instagram" || provider === "facebook";
 }
@@ -346,6 +358,7 @@ async function getValidAccessToken(userId, provider) {
 module.exports = {
   graphVersion,
   isValidProvider,
+  isProviderConfigured,
   getScopes,
   getRedirectUri,
   generateAuthUrl,

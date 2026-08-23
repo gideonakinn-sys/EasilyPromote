@@ -63,6 +63,12 @@ router.post("/connect/:provider", protect, authorizeRoles("creator"), (req, res)
   if (!meta.isValidProvider(provider)) {
     return res.status(400).json({ error: "Unsupported provider" });
   }
+  if (!meta.isProviderConfigured(provider)) {
+    return res.status(503).json({
+      error: `${provider === "facebook" ? "Facebook" : "Instagram"} connections aren't available yet.`,
+      code: "PROVIDER_NOT_CONFIGURED",
+    });
+  }
   const { returnTo } = req.body || {};
   const state = jwt.sign(
     { id: req.user._id, provider, returnTo: normalizeReturnTo(returnTo) },
@@ -210,9 +216,17 @@ router.get("/status", protect, authorizeRoles("creator"), async (req, res, next)
         pages: (c.pages || []).map((p) => ({ pageId: p.pageId, name: p.name, igBusinessId: p.igBusinessId })),
       };
     }
+    // `configured` tells the UI whether this deployment has app credentials for
+    // the provider at all, so it can hide a button that could only ever fail.
     res.json({
-      instagram: byProvider.instagram || { connected: false },
-      facebook: byProvider.facebook || { connected: false },
+      instagram: {
+        ...(byProvider.instagram || { connected: false }),
+        configured: meta.isProviderConfigured("instagram"),
+      },
+      facebook: {
+        ...(byProvider.facebook || { connected: false }),
+        configured: meta.isProviderConfigured("facebook"),
+      },
     });
   } catch (error) {
     next(error);

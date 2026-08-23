@@ -21,6 +21,7 @@ export interface TikTokStatus {
 export type MetaProvider = "instagram" | "facebook";
 
 export interface MetaProviderStatus {
+  configured?: boolean;
   connected: boolean;
   username?: string;
   displayName?: string;
