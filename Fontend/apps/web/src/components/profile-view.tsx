@@ -17,7 +17,7 @@ import { useToast } from "@ep/ui/components/toast";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
 import type { CreatorProfile, MetaProvider, MetaStatus, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
-import { API_URL, getToken } from "../lib/api";
+import { API_URL, apiRequest, getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { useReveal } from "../hooks/use-reveal";
 
@@ -67,6 +67,42 @@ export function ProfileView({
 
   const { toast } = useToast();
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteBlockers, setDeleteBlockers] = useState<string[]>([]);
+
+  const openDelete = async () => {
+    setDeleteOpen(true);
+    setDeletePassword("");
+    try {
+      const data = await apiRequest<{ deletable: boolean; blockers: string[] }>(
+        "/auth/account/deletable",
+        { token: getToken() || undefined }
+      );
+      setDeleteBlockers(data.blockers || []);
+    } catch {
+      setDeleteBlockers([]);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deletePassword) return;
+    setDeleting(true);
+    try {
+      await apiRequest("/auth/account", {
+        method: "DELETE",
+        token: getToken() || undefined,
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not delete your account.", "error");
+      setDeleting(false);
+    }
+  };
 
   const tiktokConnected = !!tiktokStatus && tiktokStatus.connected;
 
@@ -427,7 +463,87 @@ export function ProfileView({
             </ul>
           )}
         </section>
+
+        <section data-reveal className="bg-white border border-red-200 rounded-3xl p-6">
+          <h3 className="font-rethink font-medium text-sm text-stone-900 mb-1">Delete account</h3>
+          <p className="text-xs font-medium text-stone-500 leading-normal mb-4">
+            Permanently deletes your profile, connected social accounts and personal data. Campaign
+            and payment records are kept for accounting, with your name removed. This cannot be
+            undone.
+          </p>
+          <button
+            onClick={openDelete}
+            className="px-5 py-2.5 bg-white border border-red-300 text-red-700 font-semibold text-xs rounded-full font-rethink"
+          >
+            Delete my account
+          </button>
+        </section>
       </div>
+
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="font-rethink font-medium text-base text-stone-900">
+                Delete your account?
+              </h3>
+              <p className="text-xs font-medium text-stone-500 leading-normal">
+                This removes your profile, your connected TikTok, Instagram and Facebook accounts,
+                and your personal data. It cannot be undone.
+              </p>
+            </div>
+
+            {deleteBlockers.length > 0 ? (
+              <div className="space-y-2">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1.5">
+                  {deleteBlockers.map((blocker) => (
+                    <p key={blocker} className="text-xs font-medium text-amber-900 leading-normal">
+                      {blocker}
+                    </p>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  className="w-full py-3 bg-stone-100 text-stone-900 rounded-full font-semibold text-xs font-rethink"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label htmlFor="delete-password" className="block text-xs font-medium text-stone-500">
+                    Enter your password to confirm
+                  </label>
+                  <input
+                    id="delete-password"
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-stone-200 rounded-[16px] text-sm font-medium text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-100 focus:border-stone-400 font-rethink"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDeleteOpen(false)}
+                    disabled={deleting}
+                    className="flex-1 py-3 bg-stone-100 text-stone-900 rounded-full font-semibold text-xs font-rethink disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    disabled={!deletePassword || deleting}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-full font-semibold text-xs font-rethink disabled:opacity-40"
+                  >
+                    {deleting ? "Deleting…" : "Delete for good"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

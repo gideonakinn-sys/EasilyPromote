@@ -7,6 +7,7 @@ const { generateToken, generateRefreshToken, verifyToken } = require("../utils/j
 const { protect } = require("../middleware/auth");
 const { storeOTP, verifyOTP } = require("../config/otp");
 const { sendEmail, otpEmail } = require("../services/email");
+const { deleteAccount, deletionBlockers } = require("../services/accountDeletion");
 
 const router = express.Router();
 
@@ -398,6 +399,46 @@ router.patch("/me", protect, async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// ─── GET /api/auth/account/deletable ─────────────────────────────────────────
+// Lets the UI warn about anything blocking deletion before the user commits.
+router.get("/account/deletable", protect, async (req, res, next) => {
+  try {
+    const blockers = await deletionBlockers(req.user);
+    res.json({ deletable: blockers.length === 0, blockers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /api/auth/account ────────────────────────────────────────────────
+router.delete("/account", protect, async (req, res, next) => {
+  try {
+    const { password } = req.body || {};
+    if (!password) {
+      return res.status(400).json({ error: "Enter your password to confirm" });
+    }
+
+    // Re-authenticate: a stolen session must not be enough to erase an account.
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return res.status(404).json({ error: "Account not found" });
+    }
+    const matches = await user.comparePassword(password);
+    if (!matches) {
+      return res.status(401).json({ error: "That password is not correct" });
+    }
+
+    const result = await deleteAccount(user);
+    if (!result.deleted) {
+      return res.status(409).json({ error: result.blockers[0], blockers: result.blockers });
+    }
+
+    res.json({ success: true, message: "Your account and personal data have been deleted." });
+  } catch (err) {
+    next(err);
   }
 });
 
