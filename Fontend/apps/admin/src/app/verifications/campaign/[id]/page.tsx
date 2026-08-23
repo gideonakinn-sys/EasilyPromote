@@ -77,6 +77,7 @@ export default function CampaignVerificationDetailPage() {
   const [creatorFilter, setCreatorFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const fetchActivity = useCallback(async () => {
     if (!campaignId) return;
@@ -165,6 +166,7 @@ export default function CampaignVerificationDetailPage() {
               <tr>
                 <th className="px-6 py-3">Creator</th>
                 <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3">Video</th>
                 <th className="px-6 py-3">Confidence</th>
                 <th className="px-6 py-3">Views</th>
                 <th className="px-6 py-3">Payout</th>
@@ -174,13 +176,13 @@ export default function CampaignVerificationDetailPage() {
             <tbody className="divide-y divide-stone-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-stone-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-stone-400">
                     Loading…
                   </td>
                 </tr>
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-stone-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-stone-400">
                     No submissions on this campaign yet.
                   </td>
                 </tr>
@@ -192,6 +194,18 @@ export default function CampaignVerificationDetailPage() {
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono bg-stone-100 text-stone-700">
                         {sub.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-3 font-mono">
+                      {sub.videoUrl ? (
+                        <button
+                          onClick={() => setPreviewUrl(sub.videoUrl || null)}
+                          className="text-blue-600 hover:underline font-semibold font-rethink"
+                        >
+                          ▶ Preview
+                        </button>
+                      ) : (
+                        <span className="text-stone-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-3 font-mono">{sub.confidenceScore ?? 100}%</td>
                     <td className="px-6 py-3 font-mono">{(sub.viewsDelivered || 0).toLocaleString()}</td>
@@ -291,6 +305,31 @@ export default function CampaignVerificationDetailPage() {
             )}
           </div>
         </section>
+
+        {previewUrl && (
+          <div
+            className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPreviewUrl(null)}
+          >
+            <div
+              className="bg-stone-950 rounded-2xl border border-stone-800 max-w-3xl w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-stone-800">
+                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+                  Submission Preview
+                </span>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-300 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+              <video src={previewUrl} controls autoPlay playsInline className="w-full max-h-[70vh] bg-black" />
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

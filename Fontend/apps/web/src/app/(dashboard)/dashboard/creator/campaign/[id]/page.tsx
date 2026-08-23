@@ -31,7 +31,7 @@ function toCampaignItem(c: Record<string, unknown>): CampaignItem {
     caption: c.caption as string,
     videoDuration: c.videoDuration as string,
     submittedAgo: c.submittedAgo as string,
-    postedPlatforms: c.postedPlatforms as Array<{ platform: string; views: number }>,
+    postedPlatforms: c.postedPlatforms as Array<{ platform: string; postUrl?: string; views: number }>,
     creatorHandle: c.creatorHandle as string | undefined,
     submissionId: c.submissionId as string,
     contentBrief: c.contentBrief as string,
@@ -191,11 +191,15 @@ function CampaignDetailsContent() {
           ? {
               ...prev,
               status: "live_tracking" as const,
-              progress: 0,
-              currentViews: 0,
-              postedPlatforms: Object.keys(urls)
-                .filter((k) => urls[k])
-                .map((k) => ({ platform: k, views: 0 })),
+              // Adding a second platform must not blank a counter already running.
+              progress: prev.progress ?? 0,
+              currentViews: prev.currentViews ?? 0,
+              postedPlatforms: [
+                ...(prev.postedPlatforms || []).filter((p) => !urls[p.platform]),
+                ...Object.keys(urls)
+                  .filter((k) => urls[k])
+                  .map((k) => ({ platform: k, postUrl: urls[k], views: 0 })),
+              ],
             }
           : prev
       );

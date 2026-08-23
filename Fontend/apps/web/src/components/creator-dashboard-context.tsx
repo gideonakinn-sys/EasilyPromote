@@ -639,11 +639,15 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
             ? {
                 ...c,
                 status: "live_tracking" as const,
-                progress: 0,
-                currentViews: 0,
-                postedPlatforms: Object.keys(urls)
-                  .filter((k) => urls[k])
-                  .map((k) => ({ platform: k, views: 0 })),
+                // Adding a second platform must not blank a counter already running.
+                progress: c.progress ?? 0,
+                currentViews: c.currentViews ?? 0,
+                postedPlatforms: [
+                  ...(c.postedPlatforms || []).filter((p) => !urls[p.platform]),
+                  ...Object.keys(urls)
+                    .filter((k) => urls[k])
+                    .map((k) => ({ platform: k, postUrl: urls[k], views: 0 })),
+                ],
               }
             : c
         )

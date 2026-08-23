@@ -102,7 +102,7 @@ export interface CampaignItem {
   videoUrl?: string;
   caption?: string;
   videoDuration?: string;
-  postedPlatforms?: Array<{ platform: string; views: number }>;
+  postedPlatforms?: Array<{ platform: string; postUrl?: string; views: number }>;
   creatorHandle?: string;
   submissionId?: string;
   contentBrief?: string;

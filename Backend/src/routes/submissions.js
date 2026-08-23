@@ -283,8 +283,10 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
-    if (!["awaiting_post", "approved"].includes(submission.status)) {
-      return res.status(400).json({ error: "Submission must be awaiting_post before marking as posted" });
+    // "posted" is allowed so a creator can add a second platform's link later —
+    // they often post to TikTok first and Instagram hours afterwards.
+    if (!["awaiting_post", "approved", "posted"].includes(submission.status)) {
+      return res.status(400).json({ error: "Submission must be approved before marking as posted" });
     }
 
     const normalizePlatform = (p) => {
@@ -322,8 +324,9 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       }
     }
 
+    const wasAlreadyPosted = submission.status === "posted";
     submission.status = "posted";
-    submission.postedAt = new Date();
+    if (!submission.postedAt) submission.postedAt = new Date();
     submission.postedPlatforms = postedPlatforms;
     await submission.save();
 
@@ -333,6 +336,8 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       actorId: req.user._id,
       actorName: submission.creatorHandle,
       metadata: {
+        addedPlatforms: newPosts.map((p) => normalizePlatform(p.platform)).filter(Boolean),
+        additional: wasAlreadyPosted,
         platforms: submission.postedPlatforms.map((p) => ({ platform: p.platform, postUrl: p.postUrl })),
       },
     });

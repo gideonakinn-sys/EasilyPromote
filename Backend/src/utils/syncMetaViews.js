@@ -5,6 +5,7 @@ const MetaConnection = require("../models/MetaConnection");
 const meta = require("../services/meta");
 const { decrypt } = require("../utils/crypto");
 const { emitCampaignUpdate } = require("./campaignUpdates");
+const { recordEvent } = require("../services/submissionEvents");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -90,9 +91,26 @@ async function buildInstagramMediaMap(userId) {
 
 async function getInstagramMetrics(ig, url) {
   const code = extractInstagramShortcode(url);
-  if (!code || !ig?.map.has(code)) return null;
+  if (!code) {
+    console.warn("[Meta Sync] Could not parse an Instagram shortcode from", url);
+    return null;
+  }
+  if (!ig?.map.has(code)) {
+    console.warn(
+      `[Meta Sync] Post ${code} is not in the connected account's recent media (${ig?.map.size ?? 0} items).`,
+      "Either it belongs to another account, or it has fallen outside the media window."
+    );
+    return null;
+  }
   const media = ig.map.get(code);
-  const insights = await meta.getInstagramMediaInsights(media.id, ig.accessToken).catch(() => ({}));
+  let insights;
+  try {
+    insights = await meta.getInstagramMediaInsights(media.id, ig.accessToken);
+  } catch (err) {
+    // Returning zeroes here would overwrite good numbers with 0 and hide the cause.
+    console.error(`[Meta Sync] Insights failed for media ${media.id} (${code}):`, err.message);
+    return null;
+  }
   return {
     views: insights.views || insights.reach || 0,
     likes: insights.likes ?? media.like_count ?? 0,
@@ -184,6 +202,7 @@ async function syncMetaViews() {
         }
 
         if (changed) {
+          const previousViews = submission.viewsDelivered || 0;
           submission.viewsDelivered = (submission.postedPlatforms || []).reduce(
             (sum, p) => sum + (p.views || 0),
             0
@@ -191,6 +210,20 @@ async function syncMetaViews() {
           await submission.save();
           await updateCampaignFromSubmission(submission);
           emitCampaignUpdate(submission);
+
+          // Only log when the number actually moved — this runs on a schedule.
+          if (submission.viewsDelivered !== previousViews) {
+            await recordEvent(submission, {
+              type: "views_synced",
+              actor: "system",
+              actorName: "Meta sync",
+              metadata: {
+                previousViews,
+                views: submission.viewsDelivered,
+                delta: submission.viewsDelivered - previousViews,
+              },
+            });
+          }
         }
       }
 

@@ -41,6 +41,11 @@ const EVENT_BADGE_STATUS: Record<string, CampaignItem["status"]> = {
   posted: "live_tracking",
 };
 
+interface EventContent {
+  videoUrl?: string;
+  caption?: string;
+}
+
 function statusForEvent(type: string): CampaignItem["status"] {
   return EVENT_BADGE_STATUS[type] || "under_review";
 }
@@ -93,11 +98,22 @@ export function CampaignDetailsDrawer({
 
   const displayCampaign = campaign;
 
-  const videoThumbUrl = displayCampaign.videoUrl
-    ? displayCampaign.videoUrl.replace(/\.(mp4|mov|webm|avi)$/i, ".jpg")
-    : undefined;
+  const allPlatforms = displayCampaign.platforms?.length
+    ? displayCampaign.platforms
+    : ["tiktok", "instagram"];
 
-  const linkPlatforms = displayCampaign.platforms?.length ? displayCampaign.platforms : ["tiktok", "instagram"];
+  // A creator often posts to one platform first and the other hours later, so only
+  // offer the ones they haven't submitted a link for yet.
+  const submittedPlatforms = new Set(
+    (displayCampaign.postedPlatforms || []).filter((p) => p.postUrl).map((p) => p.platform)
+  );
+  const linkPlatforms = allPlatforms.filter((p) => !submittedPlatforms.has(p));
+  const isAddingMore = submittedPlatforms.size > 0;
+  const canAddLinks =
+    linkPlatforms.length > 0 &&
+    (displayCampaign.status === "approved_post" ||
+      displayCampaign.status === "live_tracking" ||
+      displayCampaign.status === "delivered");
 
   const filledLinks = linkPlatforms.filter((p) => (linkInputs[p] || "").trim().length > 0);
   const invalidLinks = filledLinks.filter((p) => !/^https?:\/\//i.test(linkInputs[p].trim()));
@@ -294,17 +310,29 @@ export function CampaignDetailsDrawer({
   const renderActivity = () => {
     const items: React.ReactNode[] = [];
 
-    const renderContentCard = (badgeStatus: CampaignItem["status"], review?: string) => (
+    const renderContentCard = (
+      badgeStatus: CampaignItem["status"],
+      review?: string,
+      content?: EventContent,
+      uploadedAgo?: string
+    ) => {
+      const cardVideoUrl = content?.videoUrl ?? displayCampaign.videoUrl;
+      const cardCaption = content?.caption ?? displayCampaign.caption;
+      const cardThumb = cardVideoUrl
+        ? cardVideoUrl.replace(/\.(mp4|mov|webm|avi)$/i, ".jpg")
+        : undefined;
+
+      return (
       <div className={cn("bg-stone-100 rounded-[16px] p-2", review && "space-y-2")}>
         <div className="flex gap-3">
           <button
-            onClick={() => displayCampaign.videoUrl && setPreviewVideoUrl(displayCampaign.videoUrl)}
-            disabled={!displayCampaign.videoUrl}
+            onClick={() => cardVideoUrl && setPreviewVideoUrl(cardVideoUrl)}
+            disabled={!cardVideoUrl}
             className="w-20 h-28 rounded-xl bg-stone-200 relative flex items-center justify-center overflow-hidden shrink-0 cursor-pointer"
           >
-            {videoThumbUrl && (
+            {cardThumb && (
               <Image
-                src={videoThumbUrl}
+                src={cardThumb}
                 alt=""
                 fill
                 sizes="80px"
@@ -320,14 +348,24 @@ export function CampaignDetailsDrawer({
             <div className="absolute inset-0 bg-gradient-to-tr from-purple-200 to-indigo-100 opacity-40"></div>
           </button>
           <div className="flex-1 min-w-0 space-y-2">
-            <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
-              &quot;{displayCampaign.caption || "New drop from Musta4a is banging!!! This new jam called Pass am is so good #nusound #viral"}&quot;
-            </p>
+            {cardCaption && (
+              <p className="font-rethink text-sm font-medium text-stone-900 leading-relaxed tracking-[-0.01em]">
+                &quot;{cardCaption}&quot;
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-stone-500 tracking-[-0.01em] font-rethink">
-              <span>{displayCampaign.videoDuration || "0:45"}</span>
-              <span className="w-1 h-1 rounded-full bg-stone-300" />
-              <span>uploaded {displayCampaign.submittedAgo || "23 mins ago"}</span>
-              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              {displayCampaign.videoDuration && (
+                <>
+                  <span>{displayCampaign.videoDuration}</span>
+                  <span className="w-1 h-1 rounded-full bg-stone-300" />
+                </>
+              )}
+              {uploadedAgo && (
+                <>
+                  <span>uploaded {uploadedAgo}</span>
+                  <span className="w-1 h-1 rounded-full bg-stone-300" />
+                </>
+              )}
               <StatusDetailsBadge status={badgeStatus} />
             </div>
           </div>
@@ -340,9 +378,23 @@ export function CampaignDetailsDrawer({
           </div>
         )}
       </div>
-    );
+      );
+    };
 
     const events = displayCampaign.timeline || [];
+
+    // Walk oldest → newest so each event carries the content that was in force when
+    // it happened. An approval refers to whatever was last submitted before it, not
+    // to whatever the creator has uploaded since.
+    const contentByEvent = new Map<string, EventContent>();
+    let currentContent: EventContent = {};
+    for (let i = events.length - 1; i >= 0; i--) {
+      const meta = events[i].metadata as EventContent | undefined;
+      if (meta?.videoUrl || meta?.caption) {
+        currentContent = { videoUrl: meta.videoUrl, caption: meta.caption };
+      }
+      contentByEvent.set(events[i].id, currentContent);
+    }
 
     events.forEach((event, index) => {
       const isLast = index === events.length - 1;
@@ -365,7 +417,12 @@ export function CampaignDetailsDrawer({
           </p>
 
           {CONTENT_EVENT_TYPES.includes(event.type) &&
-            renderContentCard(statusForEvent(event.type), event.reason || undefined)}
+            renderContentCard(
+              statusForEvent(event.type),
+              event.reason || undefined,
+              contentByEvent.get(event.id),
+              event.time
+            )}
 
           {!CONTENT_EVENT_TYPES.includes(event.type) && event.reason && (
             <div className="bg-stone-100 rounded-[16px] p-3">
@@ -575,8 +632,18 @@ export function CampaignDetailsDrawer({
             (displayCampaign.status === "needs_content" || displayCampaign.status === "changes_requested") &&
             renderInlineUploadPanel()}
 
-          {displayCampaign.status === "approved_post" && (
+          {canAddLinks && (
             <div className="space-y-4">
+              {isAddingMore && (
+                <div className="space-y-1">
+                  <h5 className="font-rethink font-medium text-sm text-stone-900 tracking-[-0.01em]">
+                    Posted somewhere else too?
+                  </h5>
+                  <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+                    Add the link and we&apos;ll track those views alongside the ones already counting.
+                  </p>
+                </div>
+              )}
               <div className="space-y-3">
                 {linkPlatforms.map((p) => {
                   const value = linkInputs[p] || "";
@@ -616,9 +683,11 @@ export function CampaignDetailsDrawer({
                 })}
               </div>
 
-              <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
-                Add at least one link. You can come back and add the others later.
-              </p>
+              {!isAddingMore && (
+                <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+                  Add at least one link. You can come back and add the others later.
+                </p>
+              )}
 
               <button
                 onClick={handleLinkSubmit}

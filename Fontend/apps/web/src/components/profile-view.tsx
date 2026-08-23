@@ -13,6 +13,7 @@ import {
   YoutubeIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
+import { useToast } from "@ep/ui/components/toast";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
 import type { CreatorProfile, MetaProvider, MetaStatus, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
@@ -63,6 +64,9 @@ export function ProfileView({
   onDisconnectMeta,
 }: ProfileViewProps) {
   useReveal();
+
+  const { toast } = useToast();
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const tiktokConnected = !!tiktokStatus && tiktokStatus.connected;
 
@@ -178,14 +182,24 @@ export function ProfileView({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Preview immediately, but a blob: URL only lives for this page view — it must
+    // never survive as the saved value, or the avatar dies on the next reload.
+    const previousUrl = profileForm.avatarUrl;
     const localUrl = URL.createObjectURL(file);
     onProfileFormChange({ ...profileForm, avatarUrl: localUrl });
 
+    setAvatarUploading(true);
     try {
-      const data = await uploadFile(file, "image", { token: getToken() });
-      onProfileFormChange({ ...profileForm, avatarUrl: data });
+      const uploadedUrl = await uploadFile(file, "image", { token: getToken() });
+      onProfileFormChange({ ...profileForm, avatarUrl: uploadedUrl });
+      toast("Photo uploaded — hit Save to keep it.", "success");
     } catch (err) {
       console.error("Avatar upload failed", err);
+      onProfileFormChange({ ...profileForm, avatarUrl: previousUrl });
+      URL.revokeObjectURL(localUrl);
+      toast(err instanceof Error ? err.message : "Photo upload failed. Try again.", "error");
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -233,9 +247,10 @@ export function ProfileView({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-white border border-stone-200 text-stone-900 font-semibold text-xs rounded-full font-rethink"
+                disabled={avatarUploading}
+                className="px-4 py-2 bg-white border border-stone-200 text-stone-900 font-semibold text-xs rounded-full font-rethink disabled:opacity-50"
               >
-                Upload
+                {avatarUploading ? "Uploading…" : "Upload"}
               </button>
             </div>
           </div>
