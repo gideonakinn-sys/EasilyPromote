@@ -463,39 +463,20 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   const handleConnectMeta = async (provider: MetaProvider) => {
     const label = provider === "facebook" ? "Facebook" : "Instagram";
-    // Open the window synchronously inside the click handler — browsers block
-    // window.open() once an await has run.
-    const width = 600;
-    const height = 760;
-    const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
-    const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
-    const popup = window.open(
-      "about:blank",
-      "meta_oauth",
-      `width=${width},height=${height},left=${left},top=${top}`
-    );
-    if (!popup) {
-      toast(`Allow popups for this site to connect ${label}.`, "error");
-      return;
-    }
     try {
       const data = await apiRequest<{ url: string }>(`/meta/connect/${provider}`, {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({
-          returnTo: window.location.origin + window.location.pathname,
-          // Tells the callback to end the popup itself rather than redirecting it.
-          popup: true,
-        }),
+        body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
       });
       if (data.url) {
-        popup.location.href = data.url;
+        // Same tab, matching TikTok. A popup is a separate OS window, which most
+        // screen recorders miss — and app review needs the consent screen on film.
+        window.location.href = data.url;
       } else {
-        popup.close();
         toast(`Could not connect ${label}. Please try again.`, "error");
       }
     } catch (err) {
-      popup.close();
       console.error(`Failed to start ${provider} connect:`, err);
       toast(`Could not connect ${label}. ${(err as Error)?.message || "Please try again."}`, "error");
     }
