@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
-import { apiRequest, getToken, getUser } from "../lib/api";
+import { API_URL, apiRequest, getToken, getUser } from "../lib/api";
 import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type {
   CreatorProfile,
@@ -203,7 +203,16 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   // Result relayed back from the OAuth popup before it closes.
   React.useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      // The popup is closed by the OAuth callback itself, so the message comes
+      // from the API origin. The app origin stays valid for the older path where
+      // the popup lands back on the dashboard.
+      let apiOrigin = "";
+      try {
+        apiOrigin = new URL(API_URL).origin;
+      } catch {
+        apiOrigin = "";
+      }
+      if (event.origin !== window.location.origin && event.origin !== apiOrigin) return;
       const data = event.data as { type?: string; result?: string; provider?: string } | null;
       if (!data || data.type !== "meta_oauth") return;
       const label = data.provider === "facebook" ? "Facebook" : "Instagram";
@@ -473,7 +482,11 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       const data = await apiRequest<{ url: string }>(`/meta/connect/${provider}`, {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ returnTo: window.location.origin + window.location.pathname }),
+        body: JSON.stringify({
+          returnTo: window.location.origin + window.location.pathname,
+          // Tells the callback to end the popup itself rather than redirecting it.
+          popup: true,
+        }),
       });
       if (data.url) {
         popup.location.href = data.url;

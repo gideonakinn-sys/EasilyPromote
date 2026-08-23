@@ -89,12 +89,23 @@ export function ProfileView({
           : status?.displayName || status?.username || "Facebook";
       return (
         <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
+          {status?.avatarUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={status.avatarUrl}
+              alt={`${label} profile`}
+              className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-emerald-200"
+            />
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
               <HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} className="text-emerald-600" />
               {label} connected
             </p>
             <p className="text-xs font-medium text-emerald-700 truncate">{handle}</p>
+            {status?.displayName && status.displayName !== status.username && (
+              <p className="text-[11px] font-medium text-emerald-600 truncate">{status.displayName}</p>
+            )}
           </div>
           <button
             onClick={() => onDisconnectMeta(provider)}

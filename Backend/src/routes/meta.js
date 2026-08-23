@@ -34,11 +34,65 @@ function normalizeReturnTo(returnTo) {
   return ok ? returnTo : null;
 }
 
-function redirectToFrontend(res, result, returnTo, provider) {
+function frontendUrl(result, returnTo, provider) {
   const base = normalizeReturnTo(returnTo) || getFrontendReturnUrl();
   const separator = base.includes("?") ? "&" : "?";
   const suffix = provider ? `&meta_provider=${provider}` : "";
-  res.redirect(`${base}${separator}meta=${result}${suffix}`);
+  return `${base}${separator}meta=${result}${suffix}`;
+}
+
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+// A popup that redirects back to the app has to land on a page that knows to
+// close itself. If returnTo is not on the allowlist it falls back to the
+// marketing site instead, which has no such logic, and the popup just sits
+// there showing the homepage. Closing from here removes that dependency
+// entirely — the callback itself ends the popup.
+function popupResultPage(result, returnTo, provider, nonce) {
+  const safeResult = result === "connected" ? "connected" : "error";
+  const safeProvider = provider === "facebook" ? "facebook" : "instagram";
+  const fallback = frontendUrl(safeResult, returnTo, safeProvider);
+  const targetOrigin =
+    originOf(normalizeReturnTo(returnTo) || "") || originOf(getFrontendReturnUrl()) || "*";
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Finishing up…</title></head>
+<body style="font-family:system-ui,sans-serif;padding:40px;text-align:center;color:#57534e">
+<p>You can close this window.</p>
+<script nonce="${nonce}">
+(function () {
+  var payload = { type: "meta_oauth", result: ${JSON.stringify(safeResult)}, provider: ${JSON.stringify(safeProvider)} };
+  try {
+    if (window.opener && window.opener !== window) {
+      window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
+      window.close();
+      return;
+    }
+  } catch (e) {}
+  // Opened in the main window rather than a popup — carry on as a redirect.
+  window.location.replace(${JSON.stringify(fallback)});
+})();
+</script>
+</body></html>`;
+}
+
+function redirectToFrontend(res, result, returnTo, provider, popup) {
+  if (popup) {
+    // helmet's default policy is script-src 'self', which would block the inline
+    // script and leave the popup open. Scope a nonce to this one response.
+    const nonce = crypto.randomBytes(16).toString("base64");
+    res.setHeader(
+      "Content-Security-Policy",
+      `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'`
+    );
+    return res.status(200).type("html").send(popupResultPage(result, returnTo, provider, nonce));
+  }
+  res.redirect(frontendUrl(result, returnTo, provider));
 }
 
 // Upsert the generic socialAccounts entry on the creator profile.
@@ -69,9 +123,9 @@ router.post("/connect/:provider", protect, authorizeRoles("creator"), (req, res)
       code: "PROVIDER_NOT_CONFIGURED",
     });
   }
-  const { returnTo } = req.body || {};
+  const { returnTo, popup } = req.body || {};
   const state = jwt.sign(
-    { id: req.user._id, provider, returnTo: normalizeReturnTo(returnTo) },
+    { id: req.user._id, provider, returnTo: normalizeReturnTo(returnTo), popup: Boolean(popup) },
     STATE_SECRET(),
     { expiresIn: "10m" }
   );
@@ -94,7 +148,10 @@ router.get("/callback/:provider", async (req, res) => {
     errorDescription: errorDescription || null,
   });
 
-  const fail = (returnTo) => redirectToFrontend(res, "error", returnTo, provider);
+  // `popup` only becomes known once the state is decoded, so failures before
+  // that point fall back to a redirect.
+  let isPopup = false;
+  const fail = (returnTo) => redirectToFrontend(res, "error", returnTo, provider, isPopup);
 
   if (!meta.isValidProvider(provider)) return fail();
   if (error) {
@@ -113,6 +170,7 @@ router.get("/callback/:provider", async (req, res) => {
   if (!decoded || !decoded.id || decoded.provider !== provider) {
     return fail();
   }
+  isPopup = Boolean(decoded.popup);
 
   try {
     if (provider === "instagram") {
@@ -121,10 +179,10 @@ router.get("/callback/:provider", async (req, res) => {
       await handleFacebookConnect(decoded.id, code);
     }
     console.log("[Meta] Connection saved", provider, "for user", decoded.id);
-    redirectToFrontend(res, "connected", decoded.returnTo, provider);
+    redirectToFrontend(res, "connected", decoded.returnTo, provider, isPopup);
   } catch (err) {
     console.error("[Meta] Callback failed:", provider, err.message);
-    redirectToFrontend(res, "error", decoded.returnTo, provider);
+    redirectToFrontend(res, "error", decoded.returnTo, provider, isPopup);
   }
 });
 
