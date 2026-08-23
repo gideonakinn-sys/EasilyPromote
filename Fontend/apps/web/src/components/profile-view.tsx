@@ -432,11 +432,6 @@ export function ProfileView({
               "Instagram",
               "Opens Instagram to securely link your professional account and verify views."
             )}
-            {renderMetaRow(
-              "facebook",
-              "Facebook",
-              "Connect Facebook to verify views on your Page videos."
-            )}
           </div>
 
           {profile.socialAccounts.length > 0 && (
