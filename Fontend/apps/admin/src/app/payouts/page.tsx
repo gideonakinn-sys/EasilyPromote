@@ -11,7 +11,7 @@ interface TransactionItem {
   creatorHandle: string;
   type: "escrow_deposit" | "release" | "refund" | "topup";
   amount: number;
-  status: "escrow_deposit" | "released" | "refunded";
+  status: "escrow_deposit" | "released" | "refunded" | "failed";
   views?: number;
   date: string;
 }

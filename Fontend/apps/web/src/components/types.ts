@@ -175,7 +175,7 @@ export interface WithdrawalItem {
   campaignId: string;
   campaignName: string;
   amount: number;
-  status: "pending" | "rejected" | "released";
+  status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   requestedAt: string;
   reviewedAt?: string | null;

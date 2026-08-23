@@ -684,22 +684,45 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
 
     const submission = await Submission.findOne({ campaignId, creatorId: req.user._id });
     const views = submission ? submission.viewsDelivered || 0 : 0;
-    const earned = Math.min(views * (campaign.costPerView || 0), campaign.creatorPool || 0);
 
-    if (amount > earned) {
-      return res.status(400).json({ error: `You can only withdraw up to ₦${earned.toLocaleString()} for this campaign` });
-    }
+    // Cap against this creator's own slot, not the whole creator pool — otherwise
+    // one high-performing creator can claim money owed to everyone else.
+    const slotCeiling = slot.reward || 0;
+    const earned = Math.min(views * (campaign.costPerView || 0), slotCeiling);
+
+    // Anything already requested or paid for this campaign is spent entitlement.
+    // Rejected requests are excluded: that money never left.
+    const priorWithdrawals = await Withdrawal.find({
+      campaignId,
+      creatorId: req.user._id,
+      status: { $in: ["pending", "processing", "released"] },
+    });
+    const alreadyClaimed = priorWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
+    const available = Math.max(earned - alreadyClaimed, 0);
+
     if (amount <= 0) {
       return res.status(400).json({ error: "Amount must be greater than zero" });
+    }
+    if (available <= 0) {
+      return res.status(400).json({
+        error: alreadyClaimed > 0
+          ? `You've already withdrawn everything earned so far on this campaign (₦${alreadyClaimed.toLocaleString()}).`
+          : "You haven't earned anything on this campaign yet.",
+      });
+    }
+    if (amount > available) {
+      return res.status(400).json({
+        error: `You can only withdraw up to ₦${available.toLocaleString()} for this campaign`,
+      });
     }
 
     const existing = await Withdrawal.findOne({
       campaignId,
       creatorId: req.user._id,
-      status: "pending",
+      status: { $in: ["pending", "processing"] },
     });
     if (existing) {
-      return res.status(409).json({ error: "You already have a pending withdrawal for this campaign" });
+      return res.status(409).json({ error: "You already have a withdrawal being processed for this campaign" });
     }
 
     const withdrawal = await Withdrawal.create({

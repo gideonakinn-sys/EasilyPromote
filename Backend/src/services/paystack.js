@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const Paystack = require("paystack")(process.env.PAYSTACK_SECRET_KEY);
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -75,6 +76,18 @@ async function resolveAccountNumber({ account_number, bank_code }) {
   });
 }
 
+// Transfers are paid out of the Paystack balance, not your settlement bank
+// account. If settlements sweep automatically, this can be empty while the
+// campaign still shows escrow in our own ledger.
+async function fetchBalance(currency = "NGN") {
+  const balances = await paystackRequest("/balance");
+  const entry = (balances || []).find(
+    (b) => String(b.currency).toUpperCase() === String(currency).toUpperCase()
+  );
+  // Paystack reports balances in the minor unit.
+  return entry ? (entry.balance || 0) / 100 : 0;
+}
+
 async function initiateTransfer({ source, amount, recipient, reference, reason }) {
   return paystackRequest("/transfer", {
     method: "POST",
@@ -88,16 +101,25 @@ async function initiateTransfer({ source, amount, recipient, reference, reason }
   });
 }
 
-function verifyWebhookSignature(payload, signature) {
-  const crypto = require("crypto");
+// Paystack signs the raw request body with your secret key — there is no
+// separate webhook secret. Re-serialising the parsed JSON would change the
+// bytes and break every signature, so this must receive the raw buffer.
+function verifyWebhookSignature(rawBody, signature) {
+  if (!signature || !process.env.PAYSTACK_SECRET_KEY) return false;
+
   const hash = crypto
-    .createHmac("sha512", process.env.PAYSTACK_WEBHOOK_SECRET || process.env.PAYSTACK_SECRET_KEY)
-    .update(JSON.stringify(payload))
+    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .update(rawBody)
     .digest("hex");
-  return hash === signature;
+
+  const expected = Buffer.from(hash, "utf8");
+  const received = Buffer.from(String(signature), "utf8");
+  if (expected.length !== received.length) return false;
+  return crypto.timingSafeEqual(expected, received);
 }
 
 module.exports = {
+  fetchBalance,
   initializeTransaction,
   verifyTransaction,
   createRecipient,

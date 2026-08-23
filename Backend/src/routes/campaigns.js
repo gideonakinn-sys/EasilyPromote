@@ -7,6 +7,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
 
 const router = express.Router();
@@ -378,24 +379,37 @@ router.post("/:id/launch", protect, async (req, res, next) => {
       return res.status(400).json({ error: "Can only launch draft campaigns" });
     }
 
-    if (paystackReference) {
-      const verification = await verifyTransaction(paystackReference);
-      if (verification.status !== "success") {
-        return res.status(400).json({ error: "Payment verification failed" });
-      }
+    // A campaign only goes live against a verified payment — never on the
+    // client's say-so.
+    const reference = paystackReference || campaign.paymentReference;
+    if (!reference) {
+      return res.status(400).json({ error: "This campaign has not been paid for" });
     }
+
+    const verification = await verifyTransaction(reference);
+    if (verification.status !== "success") {
+      return res.status(400).json({ error: "Payment verification failed" });
+    }
+
+    const alreadyBooked = await Transaction.findOne({
+      campaignId: campaign._id,
+      type: "escrow_deposit",
+    });
 
     campaign.status = "live";
     await campaign.save();
     await ensureCampaignSlots(campaign);
 
-    await Transaction.create({
-      campaignId: campaign._id,
-      type: "escrow_deposit",
-      amount: campaign.budget,
-      status: "escrow_deposit",
-      date: new Date(),
-    });
+    if (!alreadyBooked) {
+      await Transaction.create({
+        campaignId: campaign._id,
+        type: "escrow_deposit",
+        amount: campaign.budget,
+        status: "escrow_deposit",
+        reference,
+        date: new Date(),
+      });
+    }
 
     await Notification.create({
       businessId: req.user._id,
@@ -480,28 +494,40 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
 
-    if (paystackReference) {
-      const verification = await verifyTransaction(paystackReference);
-      if (verification.status !== "success") {
-        return res.status(400).json({ error: "Payment verification failed" });
-      }
+    // The callback URL carries `amount` in the query string, so the request body
+    // is not evidence of anything. Only Paystack decides what was paid, and only
+    // a reference proves a payment happened at all.
+    if (!paystackReference) {
+      return res.status(400).json({ error: "A payment reference is required to top up" });
     }
 
-    const effectiveRate = campaign.costPerView || (campaign.budget > 0 && campaign.targetViews > 0 ? campaign.budget / campaign.targetViews : 0);
-    campaign.targetViews += effectiveRate > 0 ? Math.round(amount / effectiveRate) : 0;
-    await campaign.save();
+    const verification = await verifyTransaction(paystackReference);
+    if (!verification || verification.status !== "success") {
+      return res.status(400).json({ error: "Payment verification failed" });
+    }
 
-    await Transaction.create({
+    // A reference from another campaign (or another brand) must not credit this one.
+    const paidForCampaign = verification.metadata && verification.metadata.campaignId;
+    if (paidForCampaign && String(paidForCampaign) !== String(campaign._id)) {
+      return res.status(400).json({ error: "That payment belongs to a different campaign" });
+    }
+
+    const verifiedAmount = (verification.amount || 0) / 100;
+    const result = await creditTopup({
       campaignId: campaign._id,
-      type: "topup",
-      amount,
-      status: "escrow_deposit",
-      date: new Date(),
+      reference: paystackReference,
+      amount: verifiedAmount,
     });
 
+    const current = result.campaign || campaign;
+
     res.json({
-      budget: campaign.budget,
-      creatorPool: campaign.creatorPool,
+      budget: current.budget,
+      creatorPool: current.creatorPool,
+      targetViews: current.targetViews,
+      amount: verifiedAmount,
+      credited: result.credited === true,
+      alreadyCredited: result.alreadyCredited === true,
     });
   } catch (error) {
     next(error);

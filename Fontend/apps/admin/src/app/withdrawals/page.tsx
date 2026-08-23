@@ -14,7 +14,7 @@ interface WithdrawalItem {
   creatorId: string;
   creatorName: string;
   amount: number;
-  status: "pending" | "rejected" | "released";
+  status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   targetViews: number | null;
   viewsDelivered: number;
@@ -27,6 +27,7 @@ interface WithdrawalItem {
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "", label: "All" },
   { value: "pending", label: "Pending" },
+  { value: "processing", label: "Processing" },
   { value: "released", label: "Released" },
   { value: "rejected", label: "Rejected" },
 ];
@@ -185,6 +186,8 @@ export default function AdminWithdrawalsPage() {
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${
                         w.status === "released"
                           ? "bg-green-100 text-green-800"
+                          : w.status === "processing"
+                          ? "bg-blue-100 text-blue-800"
                           : w.status === "rejected"
                           ? "bg-red-100 text-red-800"
                           : "bg-amber-100 text-amber-800"

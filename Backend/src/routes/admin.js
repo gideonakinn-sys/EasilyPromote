@@ -15,6 +15,8 @@ const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
+const { campaignEscrowBalance } = require("../utils/escrow");
+const { settleRelease } = require("../utils/payouts");
 const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
 const { recordEvent, listEventsForCampaign, labelFor } = require("../services/submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
@@ -985,12 +987,16 @@ router.get("/payouts", adminGuard, async (req, res, next) => {
         .populate("campaignId", "name"),
       Transaction.countDocuments(),
       Transaction.aggregate([
-        { $group: { _id: "$type", totalAmount: { $sum: "$amount" } } },
+        { $group: { _id: { type: "$type", status: "$status" }, totalAmount: { $sum: "$amount" } } },
       ]),
     ]);
 
-    const statsMap = {};
-    stats.forEach((s) => { statsMap[s._id] = s.totalAmount; });
+    // Status matters: a failed or in-flight release is not money paid out, and
+    // top-ups are money deposited.
+    const sumWhere = (predicate) =>
+      stats
+        .filter((s) => predicate(s._id.type, s._id.status))
+        .reduce((total, s) => total + s.totalAmount, 0);
 
     res.json({
       transactions: transactions.map((t) => ({
@@ -1005,9 +1011,11 @@ router.get("/payouts", adminGuard, async (req, res, next) => {
       })),
       total,
       summary: {
-        escrowDeposited: statsMap.escrow_deposit || 0,
-        releasedPayouts: statsMap.release || 0,
-        refunds: statsMap.refund || 0,
+        escrowDeposited: sumWhere(
+          (type, status) => ["escrow_deposit", "topup"].includes(type) && status === "escrow_deposit"
+        ),
+        releasedPayouts: sumWhere((type, status) => type === "release" && status === "released"),
+        refunds: sumWhere((type) => type === "refund"),
       },
       page: Number(page),
       pages: Math.ceil(total / Number(limit)),
@@ -1024,7 +1032,7 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
     const skip = (Number(page) - 1) * Number(limit);
 
     const filter = {};
-    if (status && ["pending", "rejected", "released"].includes(status)) {
+    if (status && ["pending", "processing", "rejected", "released"].includes(status)) {
       filter.status = status;
     }
 
@@ -1040,15 +1048,6 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
       Withdrawal.countDocuments(filter),
       Withdrawal.countDocuments({ status: "pending" }),
     ]);
-
-    async function campaignEscrowBalance(campaignId) {
-      const txs = await Transaction.find({ campaignId });
-      const deposited = txs
-        .filter((t) => t.status === "escrow_deposit" && t.type === "escrow_deposit")
-        .reduce((s, t) => s + t.amount, 0);
-      const released = txs.filter((t) => t.status === "released").reduce((s, t) => s + t.amount, 0);
-      return Math.max(deposited - released, 0);
-    }
 
     const list = [];
     for (const w of withdrawals) {
@@ -1102,12 +1101,7 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         return res.status(400).json({ error: "Campaign not found" });
       }
 
-      const txs = await Transaction.find({ campaignId: campaign._id });
-      const deposited = txs
-        .filter((t) => t.status === "escrow_deposit" && t.type === "escrow_deposit")
-        .reduce((s, t) => s + t.amount, 0);
-      const released = txs.filter((t) => t.status === "released").reduce((s, t) => s + t.amount, 0);
-      const pendingInEscrow = deposited - released;
+      const pendingInEscrow = await campaignEscrowBalance(campaign._id);
 
       if (withdrawal.amount > pendingInEscrow) {
         return res.status(400).json({
@@ -1135,7 +1129,26 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         return res.status(502).json({ error: "Payout transfer failed. Check Paystack configuration." });
       }
 
-      await Transaction.create({
+      // Paystack returns the transfer's own state. Anything other than
+      // success/pending means no money moved, so nothing may be marked paid.
+      const transferStatus = transfer && transfer.status;
+
+      if (transferStatus === "otp") {
+        console.error("[Admin Withdrawals] Transfer requires OTP; aborting", reference);
+        return res.status(502).json({
+          error:
+            "Paystack is requiring OTP confirmation for transfers, so this payout did not go through. Disable OTP for transfers in your Paystack dashboard (Settings → Preferences), then approve again.",
+        });
+      }
+
+      if (!["success", "pending"].includes(transferStatus)) {
+        console.error("[Admin Withdrawals] Unexpected transfer status:", transferStatus, reference);
+        return res.status(502).json({
+          error: `Paystack did not accept this payout (status: ${transferStatus || "unknown"}). No funds were moved.`,
+        });
+      }
+
+      const releaseTransaction = await Transaction.create({
         campaignId: campaign._id,
         submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
         creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
@@ -1151,22 +1164,34 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         { payoutStatus: "escrow_deposit" }
       );
 
-      withdrawal.status = "released";
+      // "processing" keeps the transfer out of the pending queue so it cannot
+      // be approved (and paid) a second time while it is in flight.
+      withdrawal.status = "processing";
       withdrawal.reference = reference;
       withdrawal.adminNotes = note || withdrawal.adminNotes || null;
       withdrawal.reviewedAt = new Date();
-      withdrawal.releasedAt = new Date();
       await withdrawal.save();
+
+      // Test mode settles instantly; live transfers come back "pending" and are
+      // finalised by the transfer.success webhook. settleRelease is idempotent.
+      if (transferStatus === "success") {
+        await settleRelease(releaseTransaction);
+      }
+
+      const settled = await Withdrawal.findById(withdrawal._id);
 
       await Notification.create({
         businessId: withdrawal.businessId,
         campaignId: campaign._id,
         type: "payout",
-        title: "Payout released",
-        body: `Creators have been paid ₦${withdrawal.amount.toLocaleString()} for this campaign.`,
+        title: settled.status === "released" ? "Payout released" : "Payout on the way",
+        body:
+          settled.status === "released"
+            ? `Creators have been paid ₦${withdrawal.amount.toLocaleString()} for this campaign.`
+            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to the creator.`,
       });
 
-      res.json({ success: true, withdrawal, transfer });
+      res.json({ success: true, withdrawal: settled, transfer });
     } else {
       withdrawal.status = "rejected";
       withdrawal.adminNotes = note || null;

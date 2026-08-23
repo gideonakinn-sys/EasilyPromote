@@ -29,7 +29,7 @@ const withdrawalSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "rejected", "released"],
+      enum: ["pending", "processing", "rejected", "released"],
       default: "pending",
     },
     adminNotes: {

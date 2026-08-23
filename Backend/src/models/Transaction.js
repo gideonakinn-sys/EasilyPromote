@@ -35,7 +35,7 @@ const transactionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["escrow_deposit", "released", "refunded"],
+      enum: ["escrow_deposit", "released", "refunded", "failed"],
       required: true,
     },
     date: {

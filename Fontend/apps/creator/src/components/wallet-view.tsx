@@ -20,6 +20,7 @@ interface BankOption {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
+  processing: "Processing",
   rejected: "Rejected",
   released: "Released",
 };
@@ -334,6 +335,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                       "text-[10px] font-medium px-2 py-0.5 rounded-full",
                       w.status === "released" && "bg-green-50 text-green-700 border border-green-100",
                       w.status === "pending" && "bg-amber-50 text-amber-700 border border-amber-100",
+                      w.status === "processing" && "bg-blue-50 text-blue-700 border border-blue-100",
                       w.status === "rejected" && "bg-red-50 text-red-700 border border-red-100"
                     )}
                   >

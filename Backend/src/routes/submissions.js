@@ -283,10 +283,19 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
-    // "posted" is allowed so a creator can add a second platform's link later —
-    // they often post to TikTok first and Instagram hours afterwards.
-    if (!["awaiting_post", "approved", "posted"].includes(submission.status)) {
-      return res.status(400).json({ error: "Submission must be approved before marking as posted" });
+    // "posted" and "verifying" are allowed so a creator can add a second
+    // platform's link later — they often post to TikTok first and Instagram
+    // hours afterwards, by which point the sync jobs have already moved the
+    // submission on.
+    const POSTABLE = ["awaiting_post", "approved", "posted", "verifying"];
+    if (!POSTABLE.includes(submission.status)) {
+      const reason =
+        submission.status === "new"
+          ? "This submission is still waiting to be reviewed."
+          : submission.status === "rejected"
+            ? "This submission needs changes — upload new content first."
+            : `A submission with status "${submission.status}" cannot accept post links.`;
+      return res.status(400).json({ error: reason });
     }
 
     const normalizePlatform = (p) => {
@@ -324,8 +333,8 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       }
     }
 
-    const wasAlreadyPosted = submission.status === "posted";
-    submission.status = "posted";
+    const wasAlreadyPosted = ["posted", "verifying"].includes(submission.status);
+    if (submission.status !== "verifying") submission.status = "posted";
     if (!submission.postedAt) submission.postedAt = new Date();
     submission.postedPlatforms = postedPlatforms;
     await submission.save();
