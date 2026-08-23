@@ -88,6 +88,12 @@ async function fetchBalance(currency = "NGN") {
   return entry ? (entry.balance || 0) / 100 : 0;
 }
 
+// Current state of a transfer, for reconciling payouts whose webhook never
+// arrived. Returns null when Paystack does not recognise the reference.
+async function fetchTransfer(reference) {
+  return paystackRequest(`/transfer/verify/${encodeURIComponent(reference)}`);
+}
+
 async function initiateTransfer({ source, amount, recipient, reference, reason }) {
   return paystackRequest("/transfer", {
     method: "POST",
@@ -120,6 +126,7 @@ function verifyWebhookSignature(rawBody, signature) {
 
 module.exports = {
   fetchBalance,
+  fetchTransfer,
   initializeTransaction,
   verifyTransaction,
   createRecipient,

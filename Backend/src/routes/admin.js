@@ -17,6 +17,7 @@ const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
 const { campaignEscrowBalance } = require("../utils/escrow");
 const { settleRelease } = require("../utils/payouts");
+const { reconcilePayouts } = require("../utils/reconcilePayouts");
 const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
 const { recordEvent, listEventsForCampaign, labelFor } = require("../services/submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
@@ -730,6 +731,16 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── POST /api/admin/payouts/reconcile ───────────────────────────────────────
+router.post("/payouts/reconcile", adminGuard, async (req, res, next) => {
+  try {
+    const summary = await reconcilePayouts();
+    res.json({ success: true, message: "Payout reconciliation completed", summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/admin/rank/recalculate ────────────────────────────────────────
 router.post("/rank/recalculate", adminGuard, async (req, res, next) => {
   try {
@@ -1103,6 +1114,26 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       const pendingInEscrow = await campaignEscrowBalance(campaign._id);
 
+      // Our ledger says the campaign is covered; the Paystack balance is what
+      // actually funds the transfer. If settlements sweep to the bank these two
+      // drift apart, and the transfer fails after we have already committed.
+      let paystackBalance = null;
+      try {
+        paystackBalance = await paystack.fetchBalance("NGN");
+      } catch (err) {
+        console.error("[Admin Withdrawals] Balance lookup failed:", err.message);
+      }
+      if (paystackBalance !== null && withdrawal.amount > paystackBalance) {
+        return res.status(400).json({
+          error:
+            `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which does not cover this ` +
+            `₦${withdrawal.amount.toLocaleString()} payout. Fund the Paystack balance, or switch settlement ` +
+            `to manual so collections stay there, then approve again.`,
+          code: "INSUFFICIENT_PAYSTACK_BALANCE",
+          paystackBalance,
+        });
+      }
+
       if (withdrawal.amount > pendingInEscrow) {
         return res.status(400).json({
           error: `Insufficient funds in this campaign's escrow. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
@@ -1125,8 +1156,14 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
           reason: `Creator payout for ${campaign.name || "campaign"}`,
         });
       } catch (err) {
+        // Paystack's own message says whether this is a balance problem, a bad
+        // recipient, or transfers being disabled on the account. Swallowing it
+        // sends admins hunting in the wrong place.
         console.error("[Admin Withdrawals] Transfer failed:", err.message);
-        return res.status(502).json({ error: "Payout transfer failed. Check Paystack configuration." });
+        return res.status(502).json({
+          error: `Paystack rejected this payout: ${err.message}`,
+          paystackBalance,
+        });
       }
 
       // Paystack returns the transfer's own state. Anything other than
