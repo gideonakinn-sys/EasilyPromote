@@ -107,4 +107,11 @@ const submissionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Creator dashboard and wallet: all of one creator's submissions, newest first.
+submissionSchema.index({ creatorId: 1, createdAt: -1 });
+// Brand campaign page: per-campaign counts by status; withdrawals: one creator's
+// submission on one campaign.
+submissionSchema.index({ campaignId: 1, status: 1 });
+submissionSchema.index({ campaignId: 1, creatorId: 1 });
+
 module.exports = mongoose.model("Submission", submissionSchema);

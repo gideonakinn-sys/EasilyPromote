@@ -44,12 +44,10 @@ router.get("/", protect, async (req, res, next) => {
       }
     }
 
-    const campaigns = await Campaign.find(filter).sort({ createdAt: -1 });
-
-    const draftCount = await Campaign.countDocuments({
-      businessId: req.user._id,
-      status: "draft",
-    });
+    const [campaigns, draftCount] = await Promise.all([
+      Campaign.find(filter).sort({ createdAt: -1 }).lean(),
+      Campaign.countDocuments({ businessId: req.user._id, status: "draft" }),
+    ]);
 
     const campaignsResponse = campaigns.map((c) => {
       const progressPercent =
@@ -638,22 +636,19 @@ router.get("/:id", protect, async (req, res, next) => {
         ? Math.min(Math.round((campaign.viewsDelivered / campaign.targetViews) * 100), 100)
         : 0;
 
-    const submissionsReceived = await Submission.countDocuments({
-      campaignId: campaign._id,
-    });
-    const submissionsApproved = await Submission.countDocuments({
-      campaignId: campaign._id,
-      status: { $in: ["approved", "awaiting_post", "posted"] },
-    });
-    const submissionsAwaitingReview = await Submission.countDocuments({
-      campaignId: campaign._id,
-      status: "new",
-    });
-
-    const creatorCount = await Slot.distinct("creatorId", {
-      campaignId: campaign._id,
-      status: { $ne: "available" },
-    }).then((ids) => ids.length);
+    const [submissionsReceived, submissionsApproved, submissionsAwaitingReview, creatorCount] =
+      await Promise.all([
+        Submission.countDocuments({ campaignId: campaign._id }),
+        Submission.countDocuments({
+          campaignId: campaign._id,
+          status: { $in: ["approved", "awaiting_post", "posted"] },
+        }),
+        Submission.countDocuments({ campaignId: campaign._id, status: "new" }),
+        Slot.distinct("creatorId", {
+          campaignId: campaign._id,
+          status: { $ne: "available" },
+        }).then((ids) => ids.length),
+      ]);
 
     res.json({
       id: campaign._id,

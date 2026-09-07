@@ -46,4 +46,9 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Escrow and refund lookups per campaign.
+transactionSchema.index({ campaignId: 1, type: 1, status: 1 });
+// Creator wallet: recent transactions for a handle.
+transactionSchema.index({ creatorHandle: 1, date: -1 });
+
 module.exports = mongoose.model("Transaction", transactionSchema);

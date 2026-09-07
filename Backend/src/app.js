@@ -1,4 +1,5 @@
 const express = require("express");
+const compression = require("compression");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const errorHandler = require("./middleware/errorHandler");
@@ -30,6 +31,9 @@ const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000,http://
 const isDev = process.env.NODE_ENV === "development";
 
 app.use(helmet());
+// Dashboard payloads carry every campaign brief; gzip cuts them to a fraction
+// on the mobile networks most creators are on.
+app.use(compression());
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 

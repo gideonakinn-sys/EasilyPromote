@@ -63,4 +63,9 @@ const slotSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Creator dashboard: "my slots" and active-slot counts.
+slotSchema.index({ creatorId: 1, status: 1 });
+// Marketplace: open slots per live campaign, newest first.
+slotSchema.index({ campaignId: 1, status: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Slot", slotSchema);

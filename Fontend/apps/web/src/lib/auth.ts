@@ -19,10 +19,24 @@ export function saveAuth(token: string, user: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+// Cached API snapshots (see lib/cache.ts) are keyed by this prefix and must not
+// outlive the session that produced them.
+const CACHE_PREFIX = "ep-cache:";
+
 export function clearAuth(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(CACHE_PREFIX)) stale.push(key);
+    }
+    stale.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // ignore
+  }
 }
 
 export function getToken(): string | null {

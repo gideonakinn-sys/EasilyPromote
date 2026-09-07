@@ -8,8 +8,16 @@ import { ActiveDashboard, type BrandCampaign } from "../../../../components/acti
 import { DraftAlertBanner } from "../../../../components/draft-alert-banner";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import { apiRequest, getUser, clearAuth, isAuthenticated, getToken, saveAuth } from "../../../../lib/api";
+import { readCache, writeCache } from "../../../../lib/cache";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { useSocket } from "../../../../lib/socket";
+
+interface CampaignsPayload {
+  campaigns: BrandCampaign[];
+  draftCount: number;
+}
+
+const CAMPAIGNS_CACHE = "brand-campaigns";
 
 function BrandDashboardContent() {
   const router = useRouter();
@@ -25,19 +33,24 @@ function BrandDashboardContent() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
 
+  const applyCampaigns = useCallback((data: CampaignsPayload) => {
+    const list = data.campaigns || [];
+    setDraftCount(data.draftCount || 0);
+    setCampaigns(list);
+    setDashboardState(list.length > 0 ? "active" : "empty");
+  }, []);
+
   const fetchCampaigns = useCallback(async () => {
     setFetchError("");
     try {
-      const data = await apiRequest<{ campaigns: BrandCampaign[]; draftCount: number }>("/campaigns", {
+      const data = await apiRequest<CampaignsPayload>("/campaigns", {
         method: "GET",
         token: getToken() || undefined,
       });
 
       const list = data.campaigns || [];
-      setDraftCount(data.draftCount || 0);
-
       const pending = list.filter(c => c.status === "pending_payment");
-      let finalList = list;
+      let final = data;
 
       if (pending.length > 0) {
         await Promise.allSettled(
@@ -46,23 +59,21 @@ function BrandDashboardContent() {
           )
         );
 
-        const refreshed = await apiRequest<{ campaigns: BrandCampaign[]; draftCount: number }>("/campaigns", {
+        const refreshed = await apiRequest<CampaignsPayload>("/campaigns", {
           method: "GET",
           token: getToken() || undefined,
         });
-
-        finalList = refreshed.campaigns || list;
-        setDraftCount(refreshed.draftCount || 0);
+        final = { campaigns: refreshed.campaigns || list, draftCount: refreshed.draftCount || 0 };
       }
-      setCampaigns(finalList);
-      setDashboardState(finalList.length > 0 ? "active" : "empty");
+      applyCampaigns(final);
+      writeCache(CAMPAIGNS_CACHE, final);
     } catch (err: unknown) {
       console.error("Could not load campaigns:", err);
       setFetchError(err instanceof Error ? err.message : "Could not load campaigns");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyCampaigns]);
 
   useSocket(
     (data) => {
@@ -116,6 +127,14 @@ function BrandDashboardContent() {
     if (u?.email) setUserEmail(u.email);
     if (u?.avatar || u?.avatarUrl) setUserAvatarUrl((u.avatar || u.avatarUrl) ?? "");
 
+    // Paint the last snapshot at once; the verification check and the fresh
+    // list run together instead of one after the other.
+    const cached = readCache<CampaignsPayload>(CAMPAIGNS_CACHE);
+    if (cached) {
+      applyCampaigns(cached);
+      setLoading(false);
+    }
+
     apiRequest<{ emailVerified: boolean }>("/auth/me", { token: getToken() || undefined })
       .then((me) => {
         if (!me.emailVerified) {
@@ -127,12 +146,12 @@ function BrandDashboardContent() {
           freshUser.emailVerified = me.emailVerified;
           localStorage.setItem("user", JSON.stringify(freshUser));
         }
-        fetchCampaigns();
       })
       .catch(() => {
         router.push("/login");
       });
-  }, [searchParams, router, fetchCampaigns]);
+    fetchCampaigns();
+  }, [searchParams, router, fetchCampaigns, applyCampaigns]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -179,6 +198,7 @@ function BrandDashboardContent() {
   return (
     <div className="h-dvh bg-stone-50 text-stone-900 flex flex-col font-rethink">
       <NavBar
+        roleLabel="Brand"
         userName={userName}
         userEmail={userEmail}
         userAvatarUrl={userAvatarUrl}

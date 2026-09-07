@@ -10,7 +10,8 @@ const protect = async (req, res, next) => {
 
     const token = header.split(" ")[1];
     const decoded = verifyToken(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
+    // Routes only read from req.user, so skip hydrating a full document.
+    const user = await User.findById(decoded.id).select("-password").lean();
 
     if (!user) {
       return res.status(401).json({ error: "Not authorized, user not found" });

@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
 import { apiRequest, getToken, isAuthenticated } from "../../../../../../lib/api";
+import { readCache } from "../../../../../../lib/cache";
 import type { CampaignItem } from "../../../../../../components/types";
 import { CampaignDetailsDrawer } from "../../../../../../components/campaign-details-drawer";
 import { Skeleton } from "../../../../../../components/ui/skeleton";
@@ -70,6 +71,16 @@ function CampaignDetailsContent() {
     }
 
     let active = true;
+
+    // The dashboard already holds this campaign in its last snapshot; show it
+    // now and let the fresh copy replace it.
+    const snapshot = readCache<{ campaigns?: { campaigns?: Array<Record<string, unknown>> } }>("creator-dashboard");
+    const known = (snapshot?.campaigns?.campaigns || []).find((c) => (c.id as string) === campaignId);
+    if (known) {
+      setCampaign(toCampaignItem(known));
+      setLoading(false);
+    }
+
     const load = async () => {
       try {
         const data = await apiRequest<{ campaigns: Array<Record<string, unknown>> }>(

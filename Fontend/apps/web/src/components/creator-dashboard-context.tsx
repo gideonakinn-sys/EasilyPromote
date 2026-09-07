@@ -4,7 +4,8 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
-import { API_URL, apiRequest, getToken, getUser } from "../lib/api";
+import { API_URL, apiRequest, clearAuth, getToken, getUser } from "../lib/api";
+import { readCache, writeCache, updateCache } from "../lib/cache";
 import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type {
   CreatorProfile,
@@ -58,6 +59,106 @@ interface CreatorDashboardValue {
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => Promise<void>;
   refreshCampaigns: () => Promise<void>;
+}
+
+// One response for the whole dashboard (GET /creators/dashboard).
+interface DashboardPayload {
+  profile: Record<string, unknown>;
+  campaigns: { campaigns: Array<Record<string, unknown>> };
+  marketplace: {
+    campaigns: Array<Record<string, unknown>>;
+    activeSlots: number;
+    maxSlots: number;
+    canClaim: boolean;
+  };
+  wallet: WalletData;
+  tiktok: TikTokStatus;
+  meta: MetaStatus;
+}
+
+const DASHBOARD_CACHE = "creator-dashboard";
+
+function mapProfile(data: Record<string, unknown>): CreatorProfile {
+  return {
+    name: data.name as string,
+    avatar: (data.avatar as string) || null,
+    displayName: (data.displayName as string) || (data.name as string),
+    username: data.username as string,
+    bio: (data.bio as string) || "",
+    country: (data.country as string) || "",
+    socialAccounts: (data.socialAccounts as CreatorProfile["socialAccounts"]) || [],
+    niches: (data.niches as string[]) || [],
+    rank: (data.rank as string) || "rank1",
+    creatorScore: (data.creatorScore as number) || 0,
+    lifetimeEarnings: (data.lifetimeEarnings as number) || 0,
+    completionRate: (data.completionRate as number) || 0,
+  };
+}
+
+function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): CampaignItem[] {
+  return (list || []).map((c) => ({
+    id: c.id as string,
+    slotId: c.slotId as string,
+    title: c.title as string,
+    category: c.category as string,
+    coverImageUrl: c.coverImageUrl as string,
+    delivery: c.delivery as string,
+    status: c.status as CampaignItem["status"],
+    reward: c.reward as number,
+    viewTarget: c.viewTarget as number,
+    minViews: c.minViews as number | undefined,
+    maxViews: c.maxViews as number | undefined,
+    costPerView: c.costPerView as number | undefined,
+    comment: c.comment as string,
+    progress: c.progress as number,
+    currentViews: c.currentViews as number,
+    targetViews: c.targetViews as number,
+    videoUrl: c.videoUrl as string,
+    caption: c.caption as string,
+    videoDuration: c.videoDuration as string,
+    submittedAgo: c.submittedAgo as string,
+    postedPlatforms: c.postedPlatforms as Array<{ platform: string; views: number }>,
+    creatorHandle: c.creatorHandle as string | undefined,
+    submissionId: c.submissionId as string,
+    contentBrief: c.contentBrief as string,
+    description: c.description as string,
+    keyMessageCta: c.keyMessageCta as string,
+    whatToAvoid: c.whatToAvoid as string,
+    goal: c.goal as string | undefined,
+    competitors: c.competitors as string | undefined,
+    uniqueSellingPoint: c.uniqueSellingPoint as string | undefined,
+    funFact: c.funFact as string | undefined,
+    platforms: c.platforms as string[],
+    contentStyle: c.contentStyle as string[],
+    brandName: c.brandName as string | undefined,
+    brandAvatar: c.brandAvatar as string | undefined,
+    scriptUrl: c.scriptUrl as string | undefined,
+    scriptFileName: c.scriptFileName as string | undefined,
+    timeline: (c.timeline as CampaignItem["timeline"]) || [],
+  }));
+}
+
+function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): MarketplaceCampaign[] {
+  return (list || []).map((c) => ({
+    id: c.id as string,
+    title: c.title as string,
+    category: c.category as string,
+    coverImageUrl: c.coverImageUrl as string,
+    reward: c.reward as number,
+    platforms: (c.platforms as string[]) || [],
+    slotsLeft: c.slotsLeft as number,
+    daysLeft: c.daysLeft as number,
+    targetViews: c.targetViews as number,
+    costPerView: c.costPerView as number,
+    creatorPool: c.creatorPool as number | undefined,
+    contentBrief: c.contentBrief as string,
+    brandName: (c.brandName as string) || "Brand",
+    brandAvatar: c.brandAvatar as string | undefined,
+    minViews: (c.minViews as number) || 1000,
+    maxViews: (c.maxViews as number) || undefined,
+    viewTarget: (c.viewTarget as number) || undefined,
+    description: (c.description as string) || "",
+  }));
 }
 
 const CreatorDashboardContext = React.createContext<CreatorDashboardValue | null>(null);
@@ -149,8 +250,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       return;
     }
     if (user?.role !== "creator") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      clearAuth();
       router.push("/login");
       return;
     }
@@ -164,6 +264,12 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       }));
     }
 
+    // Show the last snapshot immediately; the network only ever updates it.
+    const cached = readCache<DashboardPayload>(DASHBOARD_CACHE);
+    if (cached) {
+      applyDashboard(cached);
+      setLoading(false);
+    }
     fetchAllData();
 
     const params = new URLSearchParams(window.location.search);
@@ -229,17 +335,36 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Paint from the last snapshot at once, then replace it with a fresh one.
+  const applyDashboard = (data: DashboardPayload) => {
+    if (data.profile) applyProfile(data.profile);
+    if (data.campaigns) setCampaigns(mapCampaignItems(data.campaigns.campaigns));
+    if (data.marketplace) applyMarketplace(data.marketplace);
+    if (data.wallet) setWalletData(data.wallet);
+    if (data.tiktok) setTiktokStatus(data.tiktok);
+    if (data.meta) setMetaStatus(data.meta);
+  };
+
   const fetchAllData = async () => {
-    setLoading(true);
-    await Promise.allSettled([
-      fetchProfile(),
-      fetchCampaigns(),
-      fetchMarketplace(),
-      fetchWallet(),
-      fetchTikTokStatus(),
-      fetchMetaStatus(),
-    ]);
-    setLoading(false);
+    try {
+      const data = await apiRequest<DashboardPayload>("/creators/dashboard", {
+        token: getToken() || undefined,
+      });
+      applyDashboard(data);
+      writeCache(DASHBOARD_CACHE, data);
+    } catch {
+      // An API without the combined endpoint yet: load section by section.
+      await Promise.allSettled([
+        fetchProfile(),
+        fetchCampaigns(),
+        fetchMarketplace(),
+        fetchWallet(),
+        fetchTikTokStatus(),
+        fetchMetaStatus(),
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchTikTokStatus = async () => {
@@ -248,6 +373,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         token: getToken() || undefined,
       });
       setTiktokStatus(data);
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { tiktok: data });
     } catch {
       setTiktokStatus({ connected: false });
     }
@@ -259,9 +385,23 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         token: getToken() || undefined,
       });
       setMetaStatus(data);
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { meta: data });
     } catch {
       setMetaStatus({ instagram: { connected: false }, facebook: { connected: false } });
     }
+  };
+
+  const applyProfile = (data: Record<string, unknown>) => {
+    const p = mapProfile(data);
+    setProfile(p);
+    const user = getUser();
+    setProfileForm({
+      name: p.name,
+      nickname: p.displayName,
+      email: user?.email || "",
+      phone: user?.phone || "",
+      avatarUrl: p.avatar || "",
+    });
   };
 
   const fetchProfile = async () => {
@@ -269,31 +409,8 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       const data = await apiRequest<Record<string, unknown>>("/creators/profile/me", {
         token: getToken() || undefined,
       });
-
-      const p: CreatorProfile = {
-        name: data.name as string,
-        avatar: (data.avatar as string) || null,
-        displayName: (data.displayName as string) || (data.name as string),
-        username: data.username as string,
-        bio: (data.bio as string) || "",
-        country: (data.country as string) || "",
-        socialAccounts: (data.socialAccounts as CreatorProfile["socialAccounts"]) || [],
-        niches: (data.niches as string[]) || [],
-        rank: (data.rank as string) || "rank1",
-        creatorScore: (data.creatorScore as number) || 0,
-        lifetimeEarnings: (data.lifetimeEarnings as number) || 0,
-        completionRate: (data.completionRate as number) || 0,
-      };
-
-      setProfile(p);
-      const user = getUser();
-      setProfileForm({
-        name: p.name,
-        nickname: p.displayName,
-        email: user?.email || "",
-        phone: user?.phone || "",
-        avatarUrl: p.avatar || "",
-      });
+      applyProfile(data);
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { profile: data });
     } catch {
       console.log("Could not load profile");
     }
@@ -301,90 +418,32 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   const fetchCampaigns = async () => {
     try {
-      const data = await apiRequest<{ campaigns: Array<Record<string, unknown>> }>("/creators/slots/mine", {
+      const data = await apiRequest<DashboardPayload["campaigns"]>("/creators/slots/mine", {
         token: getToken() || undefined,
       });
-
-      const items: CampaignItem[] = (data.campaigns || []).map((c) => ({
-        id: c.id as string,
-        slotId: c.slotId as string,
-        title: c.title as string,
-        category: c.category as string,
-        coverImageUrl: c.coverImageUrl as string,
-        delivery: c.delivery as string,
-        status: c.status as CampaignItem["status"],
-        reward: c.reward as number,
-        viewTarget: c.viewTarget as number,
-        minViews: c.minViews as number | undefined,
-        maxViews: c.maxViews as number | undefined,
-        costPerView: c.costPerView as number | undefined,
-        comment: c.comment as string,
-        progress: c.progress as number,
-        currentViews: c.currentViews as number,
-        targetViews: c.targetViews as number,
-        videoUrl: c.videoUrl as string,
-        caption: c.caption as string,
-        videoDuration: c.videoDuration as string,
-        submittedAgo: c.submittedAgo as string,
-        postedPlatforms: c.postedPlatforms as Array<{ platform: string; views: number }>,
-        creatorHandle: c.creatorHandle as string | undefined,
-        submissionId: c.submissionId as string,
-        contentBrief: c.contentBrief as string,
-        description: c.description as string,
-        keyMessageCta: c.keyMessageCta as string,
-        whatToAvoid: c.whatToAvoid as string,
-        goal: c.goal as string | undefined,
-        competitors: c.competitors as string | undefined,
-        uniqueSellingPoint: c.uniqueSellingPoint as string | undefined,
-        funFact: c.funFact as string | undefined,
-        platforms: c.platforms as string[],
-        contentStyle: c.contentStyle as string[],
-        brandName: c.brandName as string | undefined,
-        brandAvatar: c.brandAvatar as string | undefined,
-        scriptUrl: c.scriptUrl as string | undefined,
-        scriptFileName: c.scriptFileName as string | undefined,
-        timeline: (c.timeline as CampaignItem["timeline"]) || [],
-      }));
-
-      setCampaigns(items);
+      setCampaigns(mapCampaignItems(data.campaigns));
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { campaigns: data });
     } catch {
       console.log("Could not load campaigns");
     }
   };
 
+  const applyMarketplace = (data: DashboardPayload["marketplace"]) => {
+    setMarketplaceCampaigns(mapMarketplaceItems(data.campaigns));
+    setMarketplaceMeta({
+      activeSlots: data.activeSlots || 0,
+      maxSlots: data.maxSlots || 3,
+      canClaim: data.canClaim ?? true,
+    });
+  };
+
   const fetchMarketplace = async () => {
     try {
-      const data = await apiRequest<{ campaigns: Array<Record<string, unknown>>; activeSlots: number; maxSlots: number; canClaim: boolean }>("/creators/marketplace", {
+      const data = await apiRequest<DashboardPayload["marketplace"]>("/creators/marketplace", {
         token: getToken() || undefined,
       });
-
-      const items: MarketplaceCampaign[] = (data.campaigns || []).map((c) => ({
-        id: c.id as string,
-        title: c.title as string,
-        category: c.category as string,
-        coverImageUrl: c.coverImageUrl as string,
-        reward: c.reward as number,
-        platforms: (c.platforms as string[]) || [],
-        slotsLeft: c.slotsLeft as number,
-        daysLeft: c.daysLeft as number,
-        targetViews: c.targetViews as number,
-        costPerView: c.costPerView as number,
-        creatorPool: c.creatorPool as number | undefined,
-        contentBrief: c.contentBrief as string,
-        brandName: (c.brandName as string) || "Brand",
-        brandAvatar: c.brandAvatar as string | undefined,
-        minViews: (c.minViews as number) || 1000,
-        maxViews: (c.maxViews as number) || undefined,
-        viewTarget: (c.viewTarget as number) || undefined,
-        description: (c.description as string) || "",
-      }));
-
-      setMarketplaceCampaigns(items);
-      setMarketplaceMeta({
-        activeSlots: data.activeSlots || 0,
-        maxSlots: data.maxSlots || 3,
-        canClaim: data.canClaim ?? true,
-      });
+      applyMarketplace(data);
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { marketplace: data });
     } catch {
       console.log("Could not load marketplace");
     }
@@ -396,6 +455,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         token: getToken() || undefined,
       });
       setWalletData(data);
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { wallet: data });
     } catch {
       console.log("Could not load wallet");
     }
@@ -741,8 +801,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   });
 
   const handleLogout = React.useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearAuth();
     router.push("/login");
   }, [router]);
 

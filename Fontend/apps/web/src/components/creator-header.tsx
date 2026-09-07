@@ -40,9 +40,12 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
   return (
     <header className="sticky top-0 z-40 w-full bg-stone-50">
       <div className="max-w-7xl mx-auto px-6 h-16 grid grid-cols-3 items-center">
-        {/* Logo — no text */}
+        {/* Logo + workspace label, so this never reads as the brand dashboard */}
         <div className="justify-self-start flex items-center gap-2.5">
           <Image src={logoPrimary} alt="EasilyPromote" width={32} height={32} priority />
+          <span className="inline-flex items-center rounded-full bg-[#6D28D9]/10 px-2.5 py-1 text-[11px] font-medium leading-none text-[#6D28D9]">
+            Creator
+          </span>
         </div>
 
         {/* Desktop Navigation Tabs */}

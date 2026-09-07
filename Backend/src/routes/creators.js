@@ -2,74 +2,45 @@ const express = require("express");
 const { z } = require("zod");
 const CreatorProfile = require("../models/CreatorProfile");
 const User = require("../models/User");
-const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
-const Transaction = require("../models/Transaction");
 const Niche = require("../models/Niche");
 const Withdrawal = require("../models/Withdrawal");
-const TikTokConnection = require("../models/TikTokConnection");
-const MetaConnection = require("../models/MetaConnection");
 const paystack = require("../services/paystack");
-const { rankAtLeast } = require("../services/creatorScore");
-const { listEventsForSubmissions, labelFor } = require("../services/submissionEvents");
-const { timeAgo } = require("../utils/timeAgo");
+const {
+  loadContext,
+  buildProfile,
+  buildMarketplace,
+  buildMyCampaigns,
+  buildWallet,
+  buildDashboard,
+} = require("../services/creatorDashboard");
 const { protect, authorizeRoles } = require("../middleware/auth");
 
 const router = express.Router();
 
-async function getCampaignAccess(userId) {
-  const profile = await CreatorProfile.findOne({ userId });
-  const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
-  const hasTikTok = await TikTokConnection.exists({ userId });
-  const hasMeta = await MetaConnection.exists({ userId });
-  const hasSocial = Boolean(hasTikTok || hasMeta);
-  const hasNiches = niches.length > 0;
-  return { ok: hasSocial && hasNiches, hasSocial, hasNiches };
-}
-
-const ensureCampaignAccess = async (req, res, next) => {
-  const access = await getCampaignAccess(req.user._id);
-  if (access.ok) return next();
-  const error = access.hasSocial && !access.hasNiches
-    ? "Choose your niches to unlock campaigns"
-    : "Connect a social account to unlock campaigns";
-  return res.status(403).json({ error, code: "CAMPAIGN_ACCESS_LOCKED" });
-};
-
-async function getCampaignLock(req) {
-  const access = await getCampaignAccess(req.user._id);
-  if (access.ok) return { locked: false, lockReason: null };
-  const reason = access.hasSocial && !access.hasNiches
-    ? "Choose your niches to unlock campaigns"
-    : "Connect a social account to unlock campaigns";
-  return { locked: true, lockReason: reason };
-}
-
 router.get("/profile/me", protect, async (req, res, next) => {
   try {
-    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    const ctx = await loadContext(req.user._id);
+    const profile = buildProfile(req.user, ctx);
     if (!profile) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
+    res.json(profile);
+  } catch (error) {
+    next(error);
+  }
+});
 
-    const user = await User.findById(req.user._id);
-
-    res.json({
-      name: user.name,
-      avatar: user.avatar || null,
-      displayName: profile.displayName || user.name,
-      username: profile.username,
-      bio: profile.bio || "",
-      country: profile.country || "",
-      socialAccounts: profile.socialAccounts || [],
-      niches: profile.niches || [],
-      rank: profile.rank,
-      creatorScore: profile.creatorScore,
-      verifiedViews: profile.verifiedViews,
-      lifetimeEarnings: profile.lifetimeEarnings,
-      completionRate: profile.completionRate,
-    });
+// Everything the creator dashboard needs in one round trip: profile, claimed
+// campaigns, marketplace, wallet and social connection state.
+router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const dashboard = await buildDashboard(req.user);
+    if (!dashboard) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+    res.json(dashboard);
   } catch (error) {
     next(error);
   }
@@ -206,113 +177,8 @@ router.get("/leaderboard", async (req, res, next) => {
 
 router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const lock = await getCampaignLock(req);
-    const profile = await CreatorProfile.findOne({ userId: req.user._id });
-    const creatorRank = profile ? profile.rank : "rank1";
-    const profileNiches = (profile && Array.isArray(profile.niches) ? profile.niches : [])
-      .map((n) => String(n).trim().toLowerCase())
-      .filter(Boolean);
-
-    const activeSlots = await Slot.countDocuments({
-      creatorId: req.user._id,
-      status: { $in: ["claimed", "submitted", "verifying"] },
-    });
-
-    const claimedCampaignIds = await Slot.distinct("campaignId", {
-      creatorId: req.user._id,
-      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
-    });
-    const claimedCampaignSet = new Set(claimedCampaignIds.map((id) => id.toString()));
-
-    const maxSlots = 3;
-    const canClaim = activeSlots < maxSlots;
-
-    const campaigns = await Campaign.find({
-      status: "live",
-    })
-      .populate("businessId", "name avatar")
-      .sort({ createdAt: -1 });
-
-    const marketplace = [];
-
-    for (const campaign of campaigns) {
-      if (claimedCampaignSet.has(campaign._id.toString())) {
-        continue;
-      }
-
-      const availableSlots = await Slot.find({
-        campaignId: campaign._id,
-        status: "available",
-      }).sort({ createdAt: -1 });
-
-      if (availableSlots.length > 0) {
-        const eligibleSlot = availableSlots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
-        const matchingSlot = eligibleSlot || availableSlots[0];
-        const rankLocked = !eligibleSlot;
-
-        const daysLeft = campaign.endDate
-          ? Math.max(Math.ceil((campaign.endDate - Date.now()) / (1000 * 60 * 60 * 24)), 1)
-          : 7;
-        const brand = campaign.businessId;
-
-        const campaignNiches = (Array.isArray(campaign.niches) ? campaign.niches : [])
-          .map((n) => String(n).trim().toLowerCase())
-          .filter(Boolean);
-
-        let matchScore = 0;
-        if (profileNiches.length > 0) {
-          const overlap = campaignNiches.filter((n) => profileNiches.includes(n)).length;
-          matchScore += overlap * 3;
-          if (campaign.category && profileNiches.includes(String(campaign.category).trim().toLowerCase())) {
-            matchScore += 2;
-          }
-          if (campaignNiches.length === 0) matchScore += 1;
-        }
-
-        marketplace.push({
-          id: campaign._id,
-          title: campaign.name,
-          category: campaign.category,
-          niches: campaignNiches,
-          reward: matchingSlot.reward,
-          creatorPool: campaign.creatorPool,
-          viewTarget: matchingSlot.viewTarget,
-          slotId: matchingSlot._id,
-          rankRequired: matchingSlot.rankRequired,
-          rankLocked,
-          slotsLeft: availableSlots.length,
-          targetViews: campaign.targetViews,
-          coverImageUrl: campaign.coverImageUrl,
-          contentBrief: campaign.contentBrief,
-          keyMessageCta: campaign.keyMessageCta,
-          platforms: campaign.platforms,
-          description: campaign.contentBrief || "",
-          minViews: 1000,
-          maxViews: matchingSlot.viewTarget,
-          costPerView: campaign.costPerView,
-          daysLeft,
-          brandName: brand ? brand.name || "Brand" : "Brand",
-          brandAvatar: brand ? brand.avatar || null : null,
-          matchScore,
-          recommended: matchScore > 0,
-        });
-      }
-    }
-
-    marketplace.sort((a, b) => {
-      if (b.recommended !== a.recommended) return b.recommended - a.recommended;
-      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-      return b.slotsLeft - a.slotsLeft;
-    });
-
-    res.json({
-      campaigns: marketplace,
-      activeSlots,
-      maxSlots,
-      canClaim: lock.locked ? false : canClaim,
-      locked: lock.locked,
-      lockReason: lock.lockReason,
-    });
+    const ctx = await loadContext(req.user._id);
+    res.json(await buildMarketplace(ctx));
   } catch (error) {
     next(error);
   }
@@ -320,135 +186,8 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
 
 router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const lock = await getCampaignLock(req);
-    const slots = await Slot.find({ creatorId: req.user._id })
-      .populate({
-        path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId",
-        populate: { path: "businessId", select: "name avatar" },
-      })
-      .sort({ createdAt: -1 });
-
-    const submissions = await Submission.find({
-      creatorId: req.user._id,
-    }).sort({ createdAt: -1 });
-
-    const submissionMap = {};
-    for (const sub of submissions) {
-      submissionMap[sub.campaignId.toString()] = sub;
-    }
-
-    // Newest first, matching how the drawer stacks its activity list.
-    const eventsBySubmission = {};
-    if (submissions.length > 0) {
-      const events = await listEventsForSubmissions(submissions.map((s) => s._id));
-      for (const event of events) {
-        const key = event.submissionId.toString();
-        if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
-        eventsBySubmission[key].unshift({
-          id: event._id,
-          type: event.type,
-          label: labelFor(event.type),
-          actor: event.actor,
-          actorName: event.actorName,
-          reason: event.reason,
-          statusAfter: event.statusAfter,
-          metadata: event.metadata,
-          at: event.createdAt,
-          time: timeAgo(event.createdAt),
-        });
-      }
-    }
-
-    const campaigns = slots
-      .filter((slot) => slot.campaignId)
-      .map((slot) => {
-        const campaign = slot.campaignId;
-        const submission = submissionMap[campaign._id.toString()];
-
-        let status;
-        if (submission) {
-          switch (submission.status) {
-            case "new":
-              status = "under_review";
-              break;
-            case "awaiting_post":
-            case "approved":
-              status = "approved_post";
-              break;
-            case "posted":
-              if (submission.viewsDelivered >= campaign.targetViews) {
-                status = "delivered";
-              } else {
-                status = "live_tracking";
-              }
-              break;
-            case "rejected":
-              status = "changes_requested";
-              break;
-            default:
-              status = "under_review";
-          }
-        } else {
-          status = "needs_content";
-        }
-
-        if (campaign.status === "cancelled") status = "cancelled";
-
-        return {
-          id: campaign._id,
-          slotId: slot._id,
-          title: campaign.name,
-          category: campaign.category,
-          coverImageUrl: campaign.coverImageUrl,
-          status,
-          reward: slot.reward,
-          viewTarget: slot.viewTarget,
-          minViews: 1000,
-          maxViews: slot.viewTarget,
-          costPerView: campaign.costPerView,
-          submissionId: submission ? submission._id : null,
-          comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
-          progress: submission && submission.viewsDelivered > 0
-            ? Math.min(Number(((submission.viewsDelivered / (slot.viewTarget || campaign.targetViews)) * 100).toFixed(3)), 100)
-            : 0,
-          currentViews: submission ? submission.viewsDelivered : undefined,
-          targetViews: campaign.targetViews,
-          videoUrl: submission ? submission.videoUrl : undefined,
-          caption: submission ? submission.caption : undefined,
-          videoDuration: submission && submission.durationSeconds
-            ? `${Math.floor(submission.durationSeconds / 60)}m ${submission.durationSeconds % 60}s`
-            : undefined,
-          postedPlatforms: submission ? submission.postedPlatforms : undefined,
-          contentBrief: campaign.contentBrief,
-          description: campaign.contentBrief || undefined,
-          keyMessageCta: campaign.keyMessageCta,
-          whatToAvoid: campaign.whatToAvoid,
-          goal: campaign.goal,
-          competitors: campaign.competitors,
-          uniqueSellingPoint: campaign.uniqueSellingPoint,
-          funFact: campaign.funFact,
-          platforms: campaign.platforms,
-          contentStyle: campaign.contentStyle,
-          scriptUrl: campaign.scriptUrl,
-          scriptFileName: campaign.scriptFileName,
-          brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
-          brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
-          delivery: slot.status === "claimed"
-            ? "Claimed"
-            : submission && submission.status === "posted"
-            ? "Live"
-            : submission && (submission.status === "awaiting_post" || submission.status === "approved")
-            ? "Awaiting Post"
-            : "Submitted",
-          submittedAgo: timeAgo(submission ? submission.submittedAt : undefined),
-          reviewedAgo: timeAgo(submission ? submission.reviewedAt : undefined),
-          postedAgo: timeAgo(submission ? submission.postedAt : undefined),
-          timeline: submission ? eventsBySubmission[submission._id.toString()] || [] : [],
-        };
-      });
-
-    res.json({ campaigns, locked: lock.locked, lockReason: lock.lockReason });
+    const ctx = await loadContext(req.user._id);
+    res.json(await buildMyCampaigns(ctx));
   } catch (error) {
     next(error);
   }
@@ -456,89 +195,8 @@ router.get("/slots/mine", protect, authorizeRoles("creator"), async (req, res, n
 
 router.get("/wallet", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id);
-    const profile = await CreatorProfile.findOne({ userId: req.user._id });
-
-    const handle = profile ? profile.username : user.name;
-
-    const transactions = await Transaction.find({
-      creatorHandle: handle,
-    })
-      .sort({ date: -1 })
-      .limit(50);
-
-    const myTransactions = await Submission.find({
-      creatorId: req.user._id,
-      payoutStatus: "released",
-    });
-
-    const totalReleased = myTransactions.reduce((sum, s) => sum + (s.payoutAmount || 0), 0);
-
-    const slots = await Slot.find({ creatorId: req.user._id }).populate({
-      path: "campaignId",
-      select: "name status targetViews costPerView viewsDelivered",
-    });
-    const submissions = await Submission.find({ creatorId: req.user._id });
-
-    const submissionMap = {};
-    for (const sub of submissions) {
-      submissionMap[sub.campaignId.toString()] = sub;
-    }
-
-    let withdrawableBalance = 0;
-    const pendingByCampaign = [];
-
-    for (const slot of slots) {
-      const campaign = slot.campaignId;
-      if (!campaign) continue;
-      const submission = submissionMap[campaign._id.toString()];
-      if (!submission) continue;
-
-      const views = submission.viewsDelivered || 0;
-      const costPerView = campaign.costPerView || 0;
-      const earned = views * costPerView;
-
-      if (campaign.status === "completed") {
-        withdrawableBalance += earned;
-      } else if (["live", "paused", "under_review"].includes(campaign.status)) {
-        pendingByCampaign.push({
-          id: campaign._id,
-          title: campaign.name,
-          views,
-          viewTarget: slot.viewTarget,
-          earned,
-          status: campaign.status,
-        });
-      }
-    }
-
-    const pendingBalance = pendingByCampaign.reduce((sum, c) => sum + c.earned, 0);
-
-    res.json({
-      balance: withdrawableBalance,
-      withdrawableBalance,
-      pendingBalance,
-      pendingByCampaign,
-      hasBankAccount: !!(profile && profile.payoutAccount && profile.payoutAccount.paystackRecipientCode),
-      bankName: profile && profile.payoutAccount ? profile.payoutAccount.bankName : null,
-      accountName: profile && profile.payoutAccount ? profile.payoutAccount.accountName : null,
-      maskedAccountNumber:
-        profile && profile.payoutAccount && profile.payoutAccount.accountNumber
-          ? `****${profile.payoutAccount.accountNumber.slice(-4)}`
-          : null,
-      lifetimeEarnings: profile ? profile.lifetimeEarnings : 0,
-      completionRate: profile ? profile.completionRate : 0,
-      totalReleased,
-      recentTransactions: transactions.map((t) => ({
-        id: t._id,
-        createdAt: t.date,
-        date: t.date,
-        amount: t.amount,
-        type: t.type,
-        status: t.status,
-        views: t.views,
-      })),
-    });
+    const ctx = await loadContext(req.user._id);
+    res.json(await buildWallet(req.user, ctx));
   } catch (error) {
     next(error);
   }

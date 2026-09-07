@@ -14,6 +14,9 @@ import logoPrimary from "../assets/logo-primary.svg";
 import avatarSvg from "../assets/illustrations/Avatar [1.0].svg";
 
 export interface NavBarProps {
+  /** Which side of the marketplace this is — shown beside the logo so a brand
+   *  workspace never looks like a creator one. */
+  roleLabel?: string;
   userName?: string;
   userEmail?: string;
   userAvatarUrl?: string;
@@ -23,6 +26,7 @@ export interface NavBarProps {
 }
 
 export function NavBar({
+  roleLabel,
   userName = "Acme Inc.",
   userEmail,
   userAvatarUrl,
@@ -59,6 +63,11 @@ export function NavBar({
         {/* Brand Logo */}
         <div className="flex items-center gap-2.5">
           <Image src={logoPrimary} alt="EasilyPromote" width={32} height={32} priority />
+          {roleLabel && (
+            <span className="inline-flex items-center rounded-full bg-[#FEB604]/20 px-2.5 py-1 text-[11px] font-medium leading-none text-amber-900 font-rethink">
+              {roleLabel}
+            </span>
+          )}
         </div>
 
         {/* Desktop Profile Dropdown */}

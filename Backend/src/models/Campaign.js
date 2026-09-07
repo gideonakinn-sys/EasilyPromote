@@ -137,6 +137,11 @@ const campaignSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Brand dashboard: a brand's campaigns, newest first (plus its draft count).
+campaignSchema.index({ businessId: 1, status: 1, createdAt: -1 });
+// Marketplace and background syncs: every campaign in a given status.
+campaignSchema.index({ status: 1, createdAt: -1 });
+
 campaignSchema.pre("save", function (next) {
   if (this.isModified("targetViews")) {
     const { getPriceForViews } = require("../config/pricing");
