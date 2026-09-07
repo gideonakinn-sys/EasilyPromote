@@ -114,7 +114,7 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
 
                 <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center text-xs font-medium">
                   <span className="text-stone-400 font-medium">
-                    {camp.slotsLeft} slots left
+                    {camp.slotsLeft} placements left
                   </span>
                   <span className="text-stone-900 font-medium font-rethink">
                     ₦{camp.reward.toLocaleString()}
@@ -135,7 +135,7 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
               <Image src={slotLimitImg} alt="" width={36} height={36} className="w-9 h-9 shrink-0" unoptimized />
               <div>
                 <h4 className="font-rethink text-xs font-medium text-stone-900 leading-snug">
-                  You&apos;re at your active slot limit ({meta.activeSlots}/{meta.maxSlots}). Complete or deliver a slot to claim something new.
+                  You&apos;re at your active placement limit ({meta.activeSlots}/{meta.maxSlots}). Complete or deliver a placement to claim something new.
                 </h4>
               </div>
             </div>

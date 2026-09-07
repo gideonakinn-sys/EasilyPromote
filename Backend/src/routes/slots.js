@@ -50,7 +50,7 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
       status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
     });
     if (activeSlots >= 3) {
-      return res.status(400).json({ error: "Slot limit reached — complete active campaigns to claim more" });
+      return res.status(400).json({ error: "Placement limit reached — complete active campaigns to claim more" });
     }
 
     let slot;
@@ -73,12 +73,12 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
 
       const availableSlots = await Slot.find({ campaignId, status: "available" }).sort({ createdAt: 1 });
       if (availableSlots.length === 0) {
-        return res.status(404).json({ error: "No available slots for this campaign" });
+        return res.status(404).json({ error: "No available placements for this campaign" });
       }
       slot = availableSlots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
       if (!slot) {
         return res.status(403).json({
-          error: "Your rank doesn't meet the requirement for the remaining slots on this campaign",
+          error: "Your rank doesn't meet the requirement for the remaining placements on this campaign",
           code: "RANK_LOCKED",
         });
       }
@@ -87,14 +87,14 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
     }
 
     if (!slot) {
-      return res.status(404).json({ error: "Slot not found" });
+      return res.status(404).json({ error: "Placement not found" });
     }
     if (slot.status !== "available") {
-      return res.status(400).json({ error: "Slot is not available" });
+      return res.status(400).json({ error: "Placement is not available" });
     }
     if (!rankAtLeast(creatorRank, slot.rankRequired)) {
       return res.status(403).json({
-        error: `This slot requires ${slot.rankRequired}`,
+        error: `This placement requires ${slot.rankRequired}`,
         code: "RANK_LOCKED",
       });
     }
@@ -139,13 +139,13 @@ router.post("/:id/submit", protect, authorizeRoles("creator"), async (req, res, 
   try {
     const slot = await Slot.findById(req.params.id);
     if (!slot) {
-      return res.status(404).json({ error: "Slot not found" });
+      return res.status(404).json({ error: "Placement not found" });
     }
     if (slot.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
     if (slot.status !== "claimed") {
-      return res.status(400).json({ error: "Slot must be claimed before submitting" });
+      return res.status(400).json({ error: "Placement must be claimed before submitting" });
     }
 
     slot.submissionUrl = req.body.url;

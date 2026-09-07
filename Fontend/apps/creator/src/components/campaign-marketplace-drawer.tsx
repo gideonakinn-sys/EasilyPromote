@@ -192,7 +192,7 @@ function CampaignDrawerContent({
                 : "bg-[#FEB604] text-[#1C1917] border border-stone-100"
             }`}
           >
-            {isAtLimit ? "At slot limit" : "Claim slot"}
+            {isAtLimit ? "At placement limit" : "Claim placement"}
           </button>
 
           {/* Info text */}

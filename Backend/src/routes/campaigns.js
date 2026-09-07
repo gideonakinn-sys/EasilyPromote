@@ -210,7 +210,7 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
               campaignId: campaign._id,
               type: "campaign_live",
               title: "Campaign is live",
-              body: "Your campaign is now live. Creators can start claiming slots.",
+              body: "Your campaign is now live. Creators can start claiming placements.",
             });
           }
         } catch {
@@ -416,7 +416,7 @@ router.post("/:id/launch", protect, async (req, res, next) => {
       campaignId: campaign._id,
       type: "campaign_live",
       title: "Campaign is live",
-      body: "Your campaign is now live. Creators can start claiming slots.",
+      body: "Your campaign is now live. Creators can start claiming placements.",
     });
 
     res.json({

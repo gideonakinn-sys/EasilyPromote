@@ -770,7 +770,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <Image src={payoutsEmpty} alt="Nothing yet" width={120} height={120} />
                 <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-stone-900">Nothing to show yet</h3>
-                <p className="font-rethink text-xs text-stone-500 font-medium">Your first transaction will appear here once slots start delivering.</p>
+                <p className="font-rethink text-xs text-stone-500 font-medium">Your first transaction will appear here once placements start delivering.</p>
               </div>
             )}
           </div>

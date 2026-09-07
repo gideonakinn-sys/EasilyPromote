@@ -55,7 +55,7 @@ export function RoleSelectStep({ role, onSelectRole, onContinue }: RoleSelectSte
           <div className="space-y-1.5 mt-auto">
             <h3 className="font-medium text-lg text-stone-900 font-rethink tracking-tighter">I&apos;m a creator</h3>
             <p className="text-base text-stone-500 font-medium leading-normal font-rethink tracking-[-0.01em]">
-              Claim slots and get paid<br />for real views
+              Claim placements and get paid<br />for real views
             </p>
           </div>
         </button>

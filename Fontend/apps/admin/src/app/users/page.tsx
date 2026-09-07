@@ -79,7 +79,7 @@ export default function AdminUsersPage() {
   };
 
   const deleteUser = async (user: UserItem) => {
-    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, slots, transactions, and notifications. This cannot be undone.`)) return;
+    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, placements, transactions, and notifications. This cannot be undone.`)) return;
     try {
       setActionLoading(true);
       await apiRequest(`/admin/users/${user.id}`, {

@@ -37,7 +37,7 @@ export function CampaignSuccess({ onClose, isMobile }: CampaignSuccessProps) {
           <div className="space-y-3">
             <h3 className="font-rethink font-medium tracking-tighter md:text-2xl text-xl text-stone-900">Locked in. Let's get you views.</h3>
             <p className="font-rethink text-sm text-stone-500 leading-relaxed max-w-md mx-auto">
-              Your campaign is funded and waiting for a quick review. We'll notify you the moment it's live and creators can start claiming slots.
+              Your campaign is funded and waiting for a quick review. We'll notify you the moment it's live and creators can start claiming placements.
             </p>
           </div>
 

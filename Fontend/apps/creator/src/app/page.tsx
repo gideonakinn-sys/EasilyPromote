@@ -665,10 +665,10 @@ function CreatorDashboardContent() {
         body: JSON.stringify({ campaignId, committedViews: views }),
       });
 
-      toast("Slot claimed! Check Home for your campaign.", "success");
+      toast("Placement claimed! Check Home for your campaign.", "success");
       await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to claim slot";
+      const message = err instanceof Error ? err.message : "Failed to claim placement";
       toast(message, "error");
       await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
     }

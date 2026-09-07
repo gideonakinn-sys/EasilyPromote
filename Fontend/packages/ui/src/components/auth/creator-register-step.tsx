@@ -20,7 +20,7 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
           Create your creator account
         </h1>
         <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-[-0.01em]">
-          Claim slots and get paid for real views.
+          Claim placements and get paid for real views.
         </p>
       </div>
 

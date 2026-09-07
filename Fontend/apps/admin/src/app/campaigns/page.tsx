@@ -648,10 +648,10 @@ export default function AdminCampaignsPage() {
                       </select>
                     </div>
 
-                    {/* Number of slots */}
+                    {/* Number of placements */}
                     <div>
                       <label className="font-bold text-stone-700 block mb-1.5">
-                        Number of slots
+                        Number of placements
                       </label>
                       <input
                         type="number"
@@ -662,7 +662,7 @@ export default function AdminCampaignsPage() {
                         className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
                       />
                       <p className="text-xs text-stone-500 mt-1">
-                        Each slot splits target views and creator pool equally. Available slots
+                        Each placement splits target views and creator pool equally. Available placements
                         are rebuilt to this count on save.
                       </p>
                     </div>
