@@ -12,7 +12,7 @@ const Platform = require("../models/Platform");
 const Industry = require("../models/Industry");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
-const { emitCampaignUpdate } = require("../utils/campaignUpdates");
+const { emitCampaignUpdate, emitCampaignStatus } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
 const { campaignEscrowBalance } = require("../utils/escrow");
@@ -281,6 +281,27 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     if (status === "live") {
       await ensureCampaignSlots(campaign);
     }
+
+    if (status === "cancelled") {
+      const alreadyRefunded = await Transaction.findOne({
+        campaignId: campaign._id,
+        type: "refund",
+      });
+      if (!alreadyRefunded) {
+        const balance = await campaignEscrowBalance(campaign._id);
+        if (balance > 0) {
+          await Transaction.create({
+            campaignId: campaign._id,
+            type: "refund",
+            amount: balance,
+            status: "refunded",
+            date: new Date(),
+          });
+        }
+      }
+    }
+
+    await emitCampaignStatus(campaign);
 
     await Notification.create({
       businessId: campaign.businessId,

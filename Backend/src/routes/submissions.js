@@ -352,30 +352,35 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     });
 
     const { syncTiktokViews } = require("../utils/syncTiktokViews");
+    const { syncMetaViews } = require("../utils/syncMetaViews");
     try {
-      await syncTiktokViews();
+      await Promise.allSettled([syncTiktokViews(), syncMetaViews()]);
     } catch (err) {
-      console.error("[TikTok Sync] Immediate sync after post failed:", err.message);
+      console.error("[Views Sync] Immediate sync after post failed:", err.message);
     }
 
-    const campaign = await Campaign.findById(submission.campaignId);
+    const freshSubmission = await Submission.findById(submission._id);
+    const subToEmit = freshSubmission || submission;
+
+    const campaign = await Campaign.findById(subToEmit.campaignId);
     if (campaign) {
       await Notification.create({
         businessId: campaign.businessId,
         campaignId: campaign._id,
         type: "submission_pending",
         title: "Content posted",
-        body: `${submission.creatorHandle} has posted content for "${campaign.name}".`,
+        body: `${subToEmit.creatorHandle} has posted content for "${campaign.name}".`,
       });
     }
 
     res.json({
-      id: submission._id,
-      status: submission.status,
-      postedPlatforms: submission.postedPlatforms,
+      id: subToEmit._id,
+      status: subToEmit.status,
+      postedPlatforms: subToEmit.postedPlatforms,
+      viewsDelivered: subToEmit.viewsDelivered || 0,
     });
 
-    emitCampaignUpdate(submission);
+    await emitCampaignUpdate(subToEmit);
   } catch (error) {
     next(error);
   }

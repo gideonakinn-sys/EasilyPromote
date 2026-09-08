@@ -10,6 +10,7 @@ import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
+import { useSocket } from "../lib/socket";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
@@ -237,6 +238,27 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       setSubmissionsError("Failed to load submissions");
     }
   }, [campaignId]);
+
+  useSocket(
+    undefined,
+    useCallback(
+      (data: { campaignId: string; status: string; viewsDelivered?: number; targetViews?: number }) => {
+        if (data.campaignId === campaignId) {
+          setCampaign((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: (data.status as CampaignData["status"]) || prev.status,
+                  viewsDelivered: data.viewsDelivered ?? prev.viewsDelivered,
+                }
+              : prev
+          );
+          fetchSubmissions();
+        }
+      },
+      [campaignId, fetchSubmissions]
+    )
+  );
 
   useEffect(() => {
     const load = async () => {

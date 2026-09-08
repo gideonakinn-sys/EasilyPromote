@@ -6,7 +6,16 @@ import { getToken } from "./api";
 
 const SOCKET_URL = (() => {
   if (typeof window === "undefined") return "http://localhost:5000";
-  return window.location.origin;
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) return process.env.NEXT_PUBLIC_SOCKET_URL;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (apiUrl) {
+    try {
+      return new URL(apiUrl).origin;
+    } catch {
+      return "http://localhost:5000";
+    }
+  }
+  return "http://localhost:5000";
 })();
 
 let socket: Socket | null = null;

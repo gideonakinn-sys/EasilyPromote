@@ -583,8 +583,9 @@ function CreatorDashboardContent() {
 
     try {
       const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
+      let resData: { viewsDelivered?: number; postedPlatforms?: Array<{ platform: string; views?: number }> } | null = null;
       if (submissionId) {
-        await apiRequest(`/submissions/${submissionId}/mark-posted`, {
+        resData = await apiRequest(`/submissions/${submissionId}/mark-posted`, {
           method: "PATCH",
           token: getToken() || undefined,
           body: JSON.stringify({ url, platform: "tiktok" }),
@@ -597,9 +598,11 @@ function CreatorDashboardContent() {
             ? {
                 ...c,
                 status: "live_tracking" as const,
-                progress: 0,
-                currentViews: 0,
                 postUrl: url,
+                currentViews: resData?.viewsDelivered ?? c.currentViews ?? 0,
+                progress: resData?.viewsDelivered && c.viewTarget
+                  ? Math.min(Number(((resData.viewsDelivered / c.viewTarget) * 100).toFixed(3)), 100)
+                  : c.progress ?? 0,
               }
             : c
         )
@@ -610,6 +613,8 @@ function CreatorDashboardContent() {
         delete next[campaignId];
         return next;
       });
+
+      await fetchCampaigns();
     } catch (err) {
       console.error("Failed to submit post URL:", err);
     }
@@ -620,30 +625,39 @@ function CreatorDashboardContent() {
       const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
       if (submissionId) {
         const platforms = Object.entries(urls).filter(([, url]) => url);
-        for (const [platform, url] of platforms) {
-          await apiRequest(`/submissions/${submissionId}/mark-posted`, {
-            method: "PATCH",
-            token: getToken() || undefined,
-            body: JSON.stringify({ url, platform }),
-          });
-        }
-      }
+        const postsPayload = platforms.map(([platform, url]) => ({ platform, postUrl: url }));
+        const resData = await apiRequest<{
+          viewsDelivered?: number;
+          postedPlatforms?: Array<{ platform: string; views?: number }>;
+        }>(`/submissions/${submissionId}/mark-posted`, {
+          method: "PATCH",
+          token: getToken() || undefined,
+          body: JSON.stringify({ posts: postsPayload }),
+        });
 
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === campaignId
-            ? {
-                ...c,
-                status: "live_tracking" as const,
-                progress: 0,
-                currentViews: 0,
-                postedPlatforms: Object.keys(urls)
-                  .filter((k) => urls[k])
-                  .map((k) => ({ platform: k, views: 0 })),
-              }
-            : c
-        )
-      );
+        setCampaigns((prev) =>
+          prev.map((c) =>
+            c.id === campaignId
+              ? {
+                  ...c,
+                  status: "live_tracking" as const,
+                  currentViews: resData?.viewsDelivered ?? c.currentViews ?? 0,
+                  progress: resData?.viewsDelivered && c.viewTarget
+                    ? Math.min(Number(((resData.viewsDelivered / c.viewTarget) * 100).toFixed(3)), 100)
+                    : c.progress ?? 0,
+                  postedPlatforms: resData?.postedPlatforms?.map((p) => ({
+                    platform: p.platform,
+                    views: p.views ?? 0,
+                  })) || Object.keys(urls)
+                    .filter((k) => urls[k])
+                    .map((k) => ({ platform: k, views: 0 })),
+                }
+              : c
+          )
+        );
+
+        await fetchCampaigns();
+      }
     } catch (err) {
       console.error("Failed to submit post URLs:", err);
     }

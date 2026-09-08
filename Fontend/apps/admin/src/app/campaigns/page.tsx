@@ -854,7 +854,7 @@ export default function AdminCampaignsPage() {
                         disabled={actionLoading}
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
-                        Approve & Launch Live
+                        {selectedCampaign.status === "paused" ? "Resume Campaign" : "Approve & Launch Live"}
                       </button>
                     )}
 

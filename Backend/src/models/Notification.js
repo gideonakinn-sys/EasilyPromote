@@ -16,8 +16,8 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["under_review", "completed", "rejected", "submission_pending", "slot_claimed", "content_approved", "content_rejected", "payment_released", "campaign_live"],
       required: true,
+      trim: true,
     },
     title: {
       type: String,

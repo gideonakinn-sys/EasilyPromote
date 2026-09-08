@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { apiRequest, getToken, isAuthenticated } from "../../../lib/api";
+import { useCampaignUpdates } from "../../../lib/socket";
 import type { CampaignItem } from "../../../components/types";
 import { CampaignDetailsDrawer } from "../../../components/campaign-details-drawer";
 import { Skeleton } from "../../../components/ui/skeleton";
@@ -59,6 +60,27 @@ function CampaignDetailsContent() {
   const [campaign, setCampaign] = useState<CampaignItem | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useCampaignUpdates((data) => {
+    if (data.campaignId === campaignId) {
+      setCampaign((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: (data.status as CampaignItem["status"]) || prev.status,
+              progress: data.progress ?? prev.progress,
+              currentViews: data.currentViews ?? prev.currentViews,
+              viewTarget: data.viewTarget ?? prev.viewTarget,
+              targetViews: data.targetViews ?? prev.targetViews,
+              reward: data.reward ?? prev.reward,
+              costPerView: data.costPerView ?? prev.costPerView,
+              delivery: data.delivery ?? prev.delivery,
+              postedPlatforms: data.postedPlatforms ?? prev.postedPlatforms,
+            }
+          : prev
+      );
+    }
+  });
+
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/login");
@@ -98,10 +120,16 @@ function CampaignDetailsContent() {
 
   const handleRefresh = async () => {
     try {
-      await apiRequest("/tiktok/sync", {
-        method: "POST",
-        token: getToken() || undefined,
-      });
+      await Promise.allSettled([
+        apiRequest("/tiktok/sync", {
+          method: "POST",
+          token: getToken() || undefined,
+        }),
+        apiRequest("/meta/sync", {
+          method: "POST",
+          token: getToken() || undefined,
+        }),
+      ]);
     } catch {
       // sync is best-effort
     }
@@ -171,15 +199,18 @@ function CampaignDetailsContent() {
   ) => {
     try {
       const submissionId = campaign?.id === id ? campaign.submissionId : undefined;
+      let resData: { viewsDelivered?: number; postedPlatforms?: Array<{ platform: string; views?: number }> } | null = null;
       if (submissionId) {
         const platforms = Object.entries(urls).filter(([, url]) => url);
-        for (const [platform, url] of platforms) {
-          await apiRequest(`/submissions/${submissionId}/mark-posted`, {
-            method: "PATCH",
-            token: getToken() || undefined,
-            body: JSON.stringify({ url, platform }),
-          });
-        }
+        const postsPayload = platforms.map(([platform, url]) => ({ platform, postUrl: url }));
+        resData = await apiRequest<{
+          viewsDelivered?: number;
+          postedPlatforms?: Array<{ platform: string; views?: number }>;
+        }>(`/submissions/${submissionId}/mark-posted`, {
+          method: "PATCH",
+          token: getToken() || undefined,
+          body: JSON.stringify({ posts: postsPayload }),
+        });
       }
 
       setCampaign((prev) =>
@@ -187,14 +218,21 @@ function CampaignDetailsContent() {
           ? {
               ...prev,
               status: "live_tracking" as const,
-              progress: 0,
-              currentViews: 0,
-              postedPlatforms: Object.keys(urls)
+              currentViews: resData?.viewsDelivered ?? prev.currentViews ?? 0,
+              progress: resData?.viewsDelivered && prev.viewTarget
+                ? Math.min(Number(((resData.viewsDelivered / prev.viewTarget) * 100).toFixed(3)), 100)
+                : prev.progress ?? 0,
+              postedPlatforms: resData?.postedPlatforms?.map((p) => ({
+                platform: p.platform,
+                views: p.views ?? 0,
+              })) || Object.keys(urls)
                 .filter((k) => urls[k])
                 .map((k) => ({ platform: k, views: 0 })),
             }
           : prev
       );
+
+      await handleRefresh();
     } catch (err) {
       console.error("Failed to submit post URLs:", err);
     }

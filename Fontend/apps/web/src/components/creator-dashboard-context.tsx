@@ -676,15 +676,18 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   const handleDetailsSubmitPostUrl = async (campaignId: string, urls: Record<string, string>) => {
     try {
       const submissionId = campaigns.find((c) => c.id === campaignId)?.submissionId;
+      let resData: { viewsDelivered?: number; postedPlatforms?: Array<{ platform: string; views?: number }> } | null = null;
       if (submissionId) {
         const platforms = Object.entries(urls).filter(([, url]) => url);
-        for (const [platform, url] of platforms) {
-          await apiRequest(`/submissions/${submissionId}/mark-posted`, {
-            method: "PATCH",
-            token: getToken() || undefined,
-            body: JSON.stringify({ url, platform }),
-          });
-        }
+        const postsPayload = platforms.map(([platform, url]) => ({ platform, postUrl: url }));
+        resData = await apiRequest<{
+          viewsDelivered?: number;
+          postedPlatforms?: Array<{ platform: string; views?: number }>;
+        }>(`/submissions/${submissionId}/mark-posted`, {
+          method: "PATCH",
+          token: getToken() || undefined,
+          body: JSON.stringify({ posts: postsPayload }),
+        });
       }
 
       setCampaigns((prev) =>
@@ -693,10 +696,14 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
             ? {
                 ...c,
                 status: "live_tracking" as const,
-                // Adding a second platform must not blank a counter already running.
-                progress: c.progress ?? 0,
-                currentViews: c.currentViews ?? 0,
-                postedPlatforms: [
+                currentViews: resData?.viewsDelivered ?? c.currentViews ?? 0,
+                progress: resData?.viewsDelivered && c.viewTarget
+                  ? Math.min(Number(((resData.viewsDelivered / c.viewTarget) * 100).toFixed(3)), 100)
+                  : c.progress ?? 0,
+                postedPlatforms: resData?.postedPlatforms?.map((p) => ({
+                  platform: p.platform,
+                  views: p.views ?? 0,
+                })) || [
                   ...(c.postedPlatforms || []).filter((p) => !urls[p.platform]),
                   ...Object.keys(urls)
                     .filter((k) => urls[k])

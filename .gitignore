@@ -13,3 +13,5 @@ Backend/env
 Backend/.env
 Fontend/.env
 Fontend/.env.local
+.turbo/
+.claude/

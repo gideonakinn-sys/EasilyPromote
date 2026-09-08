@@ -21,9 +21,10 @@ function initSocket(server) {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded.id || decoded._id;
+      const userId = (decoded.id || decoded._id).toString();
       socket.userId = userId;
       onlineUsers.set(userId, socket.id);
+      socket.join(`user:${userId}`);
       console.log(`[Socket] User connected: ${userId}`);
     } catch {
       socket.disconnect();
@@ -46,8 +47,10 @@ function getIO() {
 }
 
 function emitToUser(userId, event, data) {
-  if (!io) return;
-  const socketId = onlineUsers.get(userId.toString());
+  if (!io || !userId) return;
+  const uid = userId.toString();
+  io.to(`user:${uid}`).emit(event, data);
+  const socketId = onlineUsers.get(uid);
   if (socketId) {
     io.to(socketId).emit(event, data);
   }
