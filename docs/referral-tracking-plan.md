@@ -172,6 +172,16 @@ Problem: brands had to load Easily Promote codes into their own systems (CSV + "
 - [x] App: settings page "Try a request" switch (Check a code / Test conversion), code-check example in the guide, new log labels; Referrals tab no longer asks brands to load codes
 - [x] Website: `/developers` "Checking a code" section (request, responses, reasons, fail-open guidance), flow + quickstart rewritten, examples switch between Check a code / Report a conversion in all four languages, two new FAQs
 
+## Phase 5d — Admin referral console and activity log
+
+- [x] Backend: `models/AdminActivity.js` + `services/adminActivity.js` — append-only record of admin actions (actor, role, action, target, brand, note, from/to metadata); logging never blocks the action
+- [x] Backend: existing admin actions now logged — campaign status changes, user activate/deactivate, withdrawal approve/reject
+- [x] Backend: `routes/adminReferrals.js` at `/api/admin/referrals` — `stats`, `flags`, `brands`, `brands/:id`, `campaigns`, `campaigns/:id/codes`, `conversions`, `conversions.csv`, `PATCH codes/:id/status`, `POST keys/:id/revoke`
+- [x] Backend: `routes/adminActivity.js` at `/api/admin/activity` — filter by target type, action, admin, brand, target, date; search admin/target/note
+- [x] Flags: campaigns with views but no conversions (tracking on 3+ days), brands with ≥10 requests in 7 days and ≥50% rejected (dashboard tests excluded), active keys unused for 30+ days
+- [x] Access: all admin roles can view; only `admin` and `super_admin` can disable/enable codes or revoke keys; every action needs a note, notifies the brand and is logged
+- [x] Admin app: sidebar items; `/referrals` (Overview & flags, Brands, Campaigns, Conversions with CSV export; brand panel with keys/campaigns/recent requests; codes panel; note dialog); `/activity` log page
+
 ## Phase 6 — Payouts ⛔ BLOCKED (needs product decision)
 
 Do **not** start until the payout rules below are decided.
@@ -236,6 +246,9 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — Developer docs are public on the landing site (`/developers`) so a brand can send the link to engineers without accounts; keys, the test sender and the request log stay in the app because they need authentication. No public "paste your secret" tool — the docs ship a fixed test vector instead.
 - 2026-09-14 — The docs test vector is checked against `signPayload` in the backend test suite; regenerate it if signing ever changes.
 - 2026-09-14 — Test events now report whether the sent code would match (`code.found`, `status`, `campaignAcceptingConversions`) but still return 200 and record nothing.
+- 2026-09-14 — Admin referral data is visible to every admin role (matching existing admin pages); disabling codes and revoking keys is limited to `admin`/`super_admin` because both break a brand's live integration.
+- 2026-09-14 — The activity log records the new referral actions plus the existing campaign status, user status and withdrawal review actions, so it is useful from day one. It has no TTL — it is the audit trail.
+- 2026-09-14 — Admin search input is escaped before being used as a regex (existing admin list routes use raw input; not changed here).
 - 2026-09-14 — Live validation (Option A) chosen over pulling code lists (B) or pushing codes to brands (C): one extra signed call, nothing to sync. CSV export stays for brands whose systems must pre-store codes.
 - 2026-09-14 — Code checks use POST with a signed JSON body rather than GET, so they reuse the exact conversion signing code and the signature covers the code being checked.
 - 2026-09-14 — An invalid code is a normal answer (`200 { valid: false }`), not an HTTP error, so brands only treat 4xx/5xx as integration problems. Docs tell brands to fail open on errors/timeouts; the conversion webhook still rejects codes that were never valid.

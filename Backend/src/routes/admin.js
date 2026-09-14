@@ -21,6 +21,7 @@ const { reconcilePayouts } = require("../utils/reconcilePayouts");
 const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
 const { recordEvent, listEventsForCampaign, labelFor } = require("../services/submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
+const { recordAdminActivity } = require("../services/adminActivity");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -311,6 +312,16 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
       body: `Your campaign "${campaign.name}" status was updated from ${prevStatus} to ${status}.${note ? ` Note: ${note}` : ""}`,
     });
 
+    await recordAdminActivity(req, {
+      action: "campaign.status_changed",
+      targetType: "campaign",
+      targetId: campaign._id,
+      targetLabel: campaign.name,
+      businessId: campaign.businessId,
+      note,
+      metadata: { from: prevStatus, to: status },
+    });
+
     res.json({ success: true, status: campaign.status });
   } catch (err) {
     next(err);
@@ -586,8 +597,18 @@ router.patch("/users/:id/status", adminGuard, async (req, res, next) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
 
+    const wasActive = user.isActive;
     user.isActive = Boolean(isActive);
     await user.save();
+
+    await recordAdminActivity(req, {
+      action: user.isActive ? "user.activated" : "user.deactivated",
+      targetType: "user",
+      targetId: user._id,
+      targetLabel: user.email,
+      businessId: user.role === "business" ? user._id : null,
+      metadata: { from: wasActive, to: user.isActive, role: user.role },
+    });
 
     res.json({ success: true, isActive: user.isActive });
   } catch (err) {
@@ -1249,12 +1270,33 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
             : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to the creator.`,
       });
 
+      await recordAdminActivity(req, {
+        action: "withdrawal.approved",
+        targetType: "withdrawal",
+        targetId: withdrawal._id,
+        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaign.name || "campaign"}`,
+        businessId: withdrawal.businessId,
+        note,
+        metadata: { amount: withdrawal.amount, reference, status: settled.status, creatorId: withdrawal.creatorId },
+      });
+
       res.json({ success: true, withdrawal: settled, transfer });
     } else {
       withdrawal.status = "rejected";
       withdrawal.adminNotes = note || null;
       withdrawal.reviewedAt = new Date();
       await withdrawal.save();
+
+      const campaignName = withdrawal.campaignId && withdrawal.campaignId.name;
+      await recordAdminActivity(req, {
+        action: "withdrawal.rejected",
+        targetType: "withdrawal",
+        targetId: withdrawal._id,
+        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaignName || "campaign"}`,
+        businessId: withdrawal.businessId,
+        note,
+        metadata: { amount: withdrawal.amount, creatorId: withdrawal.creatorId },
+      });
 
       res.json({ success: true, withdrawal });
     }

@@ -27,6 +27,26 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
   return res.json();
 }
 
+// apiRequest always parses JSON, so file exports are fetched directly and saved.
+export async function apiDownload(endpoint: string, filename: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Download failed" }));
+    throw new Error(error.error || `HTTP ${res.status}`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
