@@ -3,6 +3,7 @@ const { z } = require("zod");
 const WebhookKey = require("../models/WebhookKey");
 const ReferralCode = require("../models/ReferralCode");
 const ConversionEvent = require("../models/ConversionEvent");
+const WebhookDelivery = require("../models/WebhookDelivery");
 const Campaign = require("../models/Campaign");
 const BusinessProfile = require("../models/BusinessProfile");
 const { decrypt } = require("../utils/crypto");
@@ -38,6 +39,21 @@ function signPayload(secret, timestamp, rawBody) {
   return crypto.createHmac("sha256", secret).update(`${timestamp}.`).update(rawBody).digest("hex");
 }
 
+// Builds a request exactly as a brand's server should, so the dashboard test and the
+// developer docs exercise the same signing code the webhook verifies.
+function buildSignedRequest({ keyId, secret, payload, now = Date.now() }) {
+  const rawBody = JSON.stringify(payload);
+  const t = Math.floor(now / 1000);
+  return {
+    rawBody,
+    headers: {
+      "Content-Type": "application/json",
+      "X-EP-Key-Id": keyId,
+      "X-EP-Signature": `t=${t},v1=${signPayload(secret, t, rawBody)}`,
+    },
+  };
+}
+
 function verifyConversionSignature({ secret, header, rawBody, now = Date.now() }) {
   const { t, v1 } = parseSignatureHeader(header);
   const timestamp = Number(t);
@@ -65,10 +81,6 @@ function campaignAcceptsConversions(campaign, now = Date.now()) {
   return false;
 }
 
-function reply(status, body) {
-  return { status, body };
-}
-
 async function markConnected(key, now) {
   await Promise.all([
     WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } }),
@@ -79,8 +91,50 @@ async function markConnected(key, now) {
   ]);
 }
 
-async function handleConversionWebhook({ headers, rawBody }) {
+// Test events never need a real code, but when one is sent we report whether it
+// would match, so a brand can check its setup before going live.
+async function checkTestCode(businessId, rawCode, now) {
+  const value = String(rawCode || "").toUpperCase();
+  const referralCode = await ReferralCode.findOne({ businessId, code: value }).select("status campaignId").lean();
+  if (!referralCode) return { value, found: false };
+
+  const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt").lean();
+  return {
+    value,
+    found: true,
+    status: referralCode.status,
+    campaignAcceptingConversions: Boolean(campaign) && campaignAcceptsConversions(campaign, now.getTime()),
+  };
+}
+
+async function logDelivery(context, result, source) {
+  if (!context.businessId) return;
+  try {
+    const body = result.body || {};
+    const details = Array.isArray(body.details) ? ` (${body.details.join("; ")})` : "";
+    await WebhookDelivery.create({
+      businessId: context.businessId,
+      keyId: context.keyId,
+      source,
+      statusCode: result.status,
+      result: result.status === 200 ? body.status : "rejected",
+      error: result.status === 200 ? null : `${body.error || "Request failed"}${details}`,
+      eventId: context.eventId,
+      code: context.code,
+      eventType: context.eventType,
+      isTest: context.isTest,
+      counted: Boolean(body.counted),
+    });
+  } catch (error) {
+    // The log is a debugging aid; it must never change the webhook's answer.
+    console.error("[Referral] Failed to log webhook delivery:", error.message);
+  }
+}
+
+async function processConversion({ headers, rawBody }, context) {
   const now = new Date();
+  const reply = (status, body) => ({ status, body });
+
   const keyId = headers["x-ep-key-id"];
   if (!keyId) {
     return reply(401, { error: "Missing X-EP-Key-Id header" });
@@ -93,6 +147,8 @@ async function handleConversionWebhook({ headers, rawBody }) {
   if (!key || !key.isUsable(now)) {
     return reply(401, { error: "Unknown, revoked or expired key" });
   }
+  context.businessId = key.businessId;
+  context.keyId = key.keyId;
 
   const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from("");
   const signature = verifyConversionSignature({
@@ -112,6 +168,13 @@ async function handleConversionWebhook({ headers, rawBody }) {
     return reply(400, { error: "Body must be valid JSON" });
   }
 
+  if (json && typeof json === "object") {
+    context.eventId = typeof json.event_id === "string" ? json.event_id.slice(0, 128) : null;
+    context.code = typeof json.code === "string" ? json.code.slice(0, 64).toUpperCase() : null;
+    context.eventType = typeof json.event === "string" ? json.event.slice(0, 32) : null;
+    context.isTest = json.test === true;
+  }
+
   const parsed = payloadSchema.safeParse(json);
   if (!parsed.success) {
     const details = parsed.error.issues.map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`);
@@ -122,8 +185,8 @@ async function handleConversionWebhook({ headers, rawBody }) {
   // Test events prove the key and signing work. They don't need a real code yet,
   // so a brand can connect before its first campaign exists.
   if (payload.test) {
-    await markConnected(key, now);
-    return reply(200, { status: "test_ok" });
+    const [code] = await Promise.all([checkTestCode(key.businessId, payload.code, now), markConnected(key, now)]);
+    return reply(200, { status: "test_ok", code });
   }
 
   const referralCode = await ReferralCode.findOne({
@@ -189,9 +252,17 @@ async function handleConversionWebhook({ headers, rawBody }) {
   return reply(200, { status: "recorded", counted });
 }
 
+async function handleConversionWebhook({ headers, rawBody, source = "webhook" }) {
+  const context = { businessId: null, keyId: null, eventId: null, code: null, eventType: null, isTest: false };
+  const result = await processConversion({ headers, rawBody }, context);
+  await logDelivery(context, result, source);
+  return result;
+}
+
 module.exports = {
   EVENT_TYPES,
   handleConversionWebhook,
   verifyConversionSignature,
+  buildSignedRequest,
   signPayload,
 };

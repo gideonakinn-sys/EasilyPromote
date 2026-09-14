@@ -7,7 +7,15 @@ import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { Skeleton } from "../../../../../../components/ui/skeleton";
 import { getUser, isAuthenticated } from "../../../../../../lib/api";
-import { formatWhen, referralApi, type ReferralStatus, type WebhookKey } from "../../../../../../lib/referral";
+import {
+  DEVELOPER_DOCS_URL,
+  formatWhen,
+  referralApi,
+  type ReferralStatus,
+  type TestEventResult,
+  type WebhookDeliveryLog,
+  type WebhookKey,
+} from "../../../../../../lib/referral";
 
 type SnippetLanguage = "node" | "python" | "php";
 
@@ -133,6 +141,44 @@ const RESPONSES: { status: string; meaning: string }[] = [
   { status: "429", meaning: "Too many requests for this key. Retry with backoff." },
 ];
 
+const DELIVERY_CHIPS: Record<WebhookDeliveryLog["result"], { label: string; className: string }> = {
+  recorded: { label: "Recorded", className: "bg-[#CBF5E5] text-[#176448]" },
+  test_ok: { label: "Test passed", className: "bg-[#EBF3FF] text-blue-800" },
+  ignored: { label: "Duplicate", className: "bg-stone-100 text-stone-600" },
+  rejected: { label: "Rejected", className: "bg-red-50 text-red-700" },
+};
+
+function describeTestResult(result: TestEventResult): { ok: boolean; message: string } {
+  const { status, body } = result.response;
+  if (status !== 200) {
+    return { ok: false, message: `${status}: ${body.error || "The test request was rejected."}` };
+  }
+  const code = body.code;
+  if (!code || code.value === "TEST-CODE") {
+    return { ok: true, message: "Signature verified. Your key works and you're connected." };
+  }
+  if (!code.found) {
+    return { ok: true, message: `Signature verified. ${code.value} isn't assigned to a creator in your account yet, so a real event with it would get a 404.` };
+  }
+  const accepting = code.campaignAcceptingConversions
+    ? "its campaign is accepting conversions"
+    : "its campaign isn't accepting conversions right now, so a real event would get a 409";
+  return { ok: true, message: `Signature verified. ${code.value} is set up (${code.status?.replace("_", " ")}) and ${accepting}.` };
+}
+
+function formatExchange(result: TestEventResult): string {
+  const headerLines = Object.entries(result.request.headers).map(([name, value]) => `${name}: ${value}`);
+  return [
+    `${result.request.method} ${result.request.url}`,
+    ...headerLines,
+    "",
+    JSON.stringify(result.request.body, null, 2),
+    "",
+    `← ${result.response.status}`,
+    JSON.stringify(result.response.body, null, 2),
+  ].join("\n");
+}
+
 const KEY_STATUS_CHIPS: Record<WebhookKey["status"], string> = {
   active: "bg-[#CBF5E5] text-[#176448]",
   expiring: "bg-amber-50 text-amber-800",
@@ -154,13 +200,23 @@ function ReferralSettingsContent() {
   const [revealed, setRevealed] = useState<{ keyId: string; secret: string; rotated: boolean } | null>(null);
   const [savedConfirmed, setSavedConfirmed] = useState(false);
   const [language, setLanguage] = useState<SnippetLanguage>("node");
+  const [events, setEvents] = useState<WebhookDeliveryLog[]>([]);
+  const [refreshingEvents, setRefreshingEvents] = useState(false);
+  const [testCode, setTestCode] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<TestEventResult | null>(null);
 
   const load = useCallback(async () => {
     setError("");
     try {
-      const [nextStatus, nextKeys] = await Promise.all([referralApi.status(), referralApi.listKeys()]);
+      const [nextStatus, nextKeys, nextEvents] = await Promise.all([
+        referralApi.status(),
+        referralApi.listKeys(),
+        referralApi.events(),
+      ]);
       setStatus(nextStatus);
       setKeys(nextKeys);
+      setEvents(nextEvents);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load referral settings");
     } finally {
@@ -239,6 +295,30 @@ function ReferralSettingsContent() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const handleRefreshEvents = async () => {
+    setRefreshingEvents(true);
+    try {
+      setEvents(await referralApi.events());
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Could not load recent requests", "error");
+    } finally {
+      setRefreshingEvents(false);
+    }
+  };
+
+  const handleSendTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSendingTest(true);
+    try {
+      setTestResult(await referralApi.sendTestEvent(testCode.trim() || undefined));
+      await load();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Could not send the test event", "error");
+    } finally {
+      setSendingTest(false);
+    }
   };
 
   const webhookUrl = status?.webhookUrl || "";
@@ -409,6 +489,118 @@ function ReferralSettingsContent() {
               )}
             </section>
 
+            {/* Test sender */}
+            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="test-heading">
+              <div className="space-y-1">
+                <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Send a test event</h2>
+                <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                  We sign a test request with your newest key and run it through the same checks as a real one. Nothing
+                  is counted. Add a creator&apos;s code to check it&apos;s set up on a campaign.
+                </p>
+              </div>
+              <form onSubmit={handleSendTest} className="flex flex-wrap gap-2">
+                <label htmlFor="test-code" className="sr-only">
+                  Referral code to check (optional)
+                </label>
+                <input
+                  id="test-code"
+                  value={testCode}
+                  onChange={(e) => setTestCode(e.target.value.toUpperCase())}
+                  placeholder="Code to check (optional)"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="flex-1 min-w-[180px] px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-mono text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingTest || keys.length === 0}
+                  className="px-5 py-2.5 bg-stone-900 text-white rounded-full text-xs font-semibold disabled:bg-stone-200 disabled:text-stone-400"
+                >
+                  {sendingTest ? "Sending…" : "Send test event"}
+                </button>
+              </form>
+              {keys.length === 0 && (
+                <p className="text-xs text-stone-500 font-medium">Generate a key first — test events are signed with it.</p>
+              )}
+              {testResult && (() => {
+                const outcome = describeTestResult(testResult);
+                return (
+                  <div className="space-y-3">
+                    <p
+                      role="status"
+                      className={cn(
+                        "rounded-xl px-4 py-3 text-xs font-medium leading-relaxed",
+                        outcome.ok ? "bg-[#CBF5E5] text-[#176448]" : "bg-red-50 text-red-700"
+                      )}
+                    >
+                      {outcome.message}
+                    </p>
+                    <details>
+                      <summary className="cursor-pointer text-xs font-semibold text-stone-900">
+                        Show the request and response
+                      </summary>
+                      <div className="mt-2 overflow-x-auto bg-stone-900 rounded-2xl">
+                        <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{formatExchange(testResult)}</pre>
+                      </div>
+                    </details>
+                  </div>
+                );
+              })()}
+            </section>
+
+            {/* Recent requests */}
+            <section className="space-y-4" aria-labelledby="events-heading">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h2 id="events-heading" className="font-semibold text-sm text-stone-900">Recent requests</h2>
+                  <p className="text-xs text-stone-500 font-medium">Every signed request we received in the last 30 days.</p>
+                </div>
+                <button
+                  onClick={handleRefreshEvents}
+                  disabled={refreshingEvents}
+                  className="shrink-0 px-4 py-2 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
+                >
+                  {refreshingEvents ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
+
+              {events.length === 0 ? (
+                <div className="border border-dashed border-stone-300 rounded-2xl p-6 text-center">
+                  <p className="text-sm font-medium text-stone-900">No requests yet</p>
+                  <p className="text-xs text-stone-500 font-medium mt-1">
+                    Test events and real conversions will appear here.
+                  </p>
+                </div>
+              ) : (
+                <ul className="bg-white border border-stone-200 rounded-2xl divide-y divide-stone-100">
+                  {events.map((event) => {
+                    const chip = DELIVERY_CHIPS[event.result] || DELIVERY_CHIPS.rejected;
+                    return (
+                      <li key={event.id} className="px-4 py-3 space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium", chip.className)}>
+                              {event.statusCode} · {chip.label}
+                            </span>
+                            {event.code && <code className="min-w-0 truncate font-mono text-xs text-stone-900">{event.code}</code>}
+                          </div>
+                          <span className="shrink-0 text-xs font-medium text-stone-500">{formatWhen(event.createdAt)}</span>
+                        </div>
+                        <p className="text-xs font-medium text-stone-500 break-words">
+                          {event.source === "dashboard_test" ? "Dashboard test" : "Your server"}
+                          {event.eventType && ` · ${event.eventType}`}
+                          {event.isTest && event.source !== "dashboard_test" && " · test"}
+                          {event.result === "recorded" && !event.counted && " · stored, not counted (different event type)"}
+                          {event.eventId && ` · ${event.eventId}`}
+                        </p>
+                        {event.error && <p className="text-xs font-medium text-red-700 break-words">{event.error}</p>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
             {/* Integration guide */}
             <section className="space-y-6" aria-labelledby="guide-heading">
               <div className="space-y-1">
@@ -417,6 +609,14 @@ function ReferralSettingsContent() {
                   Call this from your server whenever someone converts with a partner code. Store the key ID and secret
                   as environment variables, never in your app or website code.
                 </p>
+                <a
+                  href={DEVELOPER_DOCS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-xs font-semibold text-stone-900 underline underline-offset-2"
+                >
+                  Read the full developer docs
+                </a>
               </div>
 
               <div className="space-y-2">

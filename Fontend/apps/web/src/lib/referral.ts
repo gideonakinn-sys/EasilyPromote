@@ -50,6 +50,36 @@ export function formatWhen(iso: string | null | undefined): string {
   return rtf.format(Math.round(diffSeconds / 86400), "day");
 }
 
+export const DEVELOPER_DOCS_URL = "https://www.easilypromote.com/developers";
+
+export interface WebhookDeliveryLog {
+  id: string;
+  createdAt: string;
+  source: "webhook" | "dashboard_test";
+  statusCode: number;
+  result: "recorded" | "ignored" | "test_ok" | "rejected";
+  error: string | null;
+  eventId: string | null;
+  code: string | null;
+  eventType: string | null;
+  isTest: boolean;
+  counted: boolean;
+  keyId: string | null;
+}
+
+export interface TestEventResult {
+  request: { method: string; url: string; headers: Record<string, string>; body: Record<string, unknown> };
+  response: {
+    status: number;
+    body: {
+      status?: string;
+      error?: string;
+      details?: string[];
+      code?: { value: string; found: boolean; status?: string; campaignAcceptingConversions?: boolean };
+    };
+  };
+}
+
 export interface ReferralSettings {
   enabled: boolean;
   eventType: ReferralEventType;
@@ -114,6 +144,13 @@ export const referralApi = {
       ...auth(),
     }),
   revokeKey: (id: string) => apiRequest<WebhookKey>(`/referral/keys/${id}`, { method: "DELETE", ...auth() }),
+  sendTestEvent: (code?: string) =>
+    apiRequest<TestEventResult>("/referral/test-event", {
+      method: "POST",
+      body: JSON.stringify(code ? { code } : {}),
+      ...auth(),
+    }),
+  events: () => apiRequest<WebhookDeliveryLog[]>("/referral/events", auth()),
   updateSettings: (campaignId: string, changes: SettingsChanges) =>
     apiRequest<{ referral: ReferralSettings; codesCreated: number }>(`/campaigns/${campaignId}/referral`, {
       method: "PATCH",

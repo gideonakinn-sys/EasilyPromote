@@ -1,9 +1,11 @@
 const express = require("express");
 const crypto = require("crypto");
 const WebhookKey = require("../models/WebhookKey");
+const WebhookDelivery = require("../models/WebhookDelivery");
 const BusinessProfile = require("../models/BusinessProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
-const { encrypt } = require("../utils/crypto");
+const { encrypt, decrypt } = require("../utils/crypto");
+const { EVENT_TYPES, buildSignedRequest, handleConversionWebhook } = require("../services/conversions");
 
 const router = express.Router();
 
@@ -121,6 +123,66 @@ router.delete("/keys/:id", async (req, res, next) => {
     key.status = "revoked";
     await key.save();
     res.json(serializeKey(key));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Signs a test event with the brand's newest active key and runs it through the real
+// webhook handler, so the dashboard proves the whole path without any brand code.
+router.post("/test-event", async (req, res, next) => {
+  try {
+    const keys = await WebhookKey.find(usableKeysFilter(req.user._id)).sort({ createdAt: -1 });
+    const key = keys.find((candidate) => candidate.status === "active") || keys[0];
+    if (!key) {
+      return res.status(400).json({ error: "Generate a signing key first. Test events are signed with your newest active key." });
+    }
+
+    const code = typeof req.body.code === "string" && req.body.code.trim() ? req.body.code.trim().slice(0, 64) : "TEST-CODE";
+    const payload = {
+      event_id: `dashboard-test-${crypto.randomUUID()}`,
+      code,
+      event: EVENT_TYPES.includes(req.body.event) ? req.body.event : "signup",
+      timestamp: new Date().toISOString(),
+      test: true,
+    };
+    const signed = buildSignedRequest({ keyId: key.keyId, secret: decrypt(key.secretEncrypted), payload });
+
+    const result = await handleConversionWebhook({
+      headers: Object.fromEntries(Object.entries(signed.headers).map(([name, value]) => [name.toLowerCase(), value])),
+      rawBody: Buffer.from(signed.rawBody),
+      source: "dashboard_test",
+    });
+
+    res.json({
+      request: { method: "POST", url: webhookUrl(req), headers: signed.headers, body: payload },
+      response: { status: result.status, body: result.body },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/events", async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
+    const events = await WebhookDelivery.find({ businessId: req.user._id }).sort({ createdAt: -1 }).limit(limit).lean();
+    res.json(
+      events.map((event) => ({
+        id: event._id,
+        createdAt: event.createdAt,
+        source: event.source,
+        statusCode: event.statusCode,
+        result: event.result,
+        error: event.error,
+        eventId: event.eventId,
+        code: event.code,
+        eventType: event.eventType,
+        isTest: event.isTest,
+        counted: event.counted,
+        keyId: event.keyId,
+      }))
+    );
   } catch (error) {
     next(error);
   }

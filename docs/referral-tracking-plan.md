@@ -151,6 +151,15 @@ Responses:
 - [x] Creator: "Your referral code" card on creator campaign page + `campaign-details-drawer.tsx` — code, copy button, status, live conversions count
 - [x] Empty/error states and phone-width layout checked for every new UI
 
+## Phase 5b — Developer docs and self-serve testing
+
+- [x] Backend: `models/WebhookDelivery.js` — per-request log (status, result, error, event_id, code, event type, source), no PII, 30-day TTL
+- [x] Backend: every webhook outcome is logged once the key identifies the business (unknown keys and rate-limited requests are not logged)
+- [x] Backend: `POST /api/referral/test-event` — signs a test event with the brand's newest active key and runs it through the real handler; optional `code` is checked (found, status, campaign accepting)
+- [x] Backend: `GET /api/referral/events?limit=` — newest first, max 100, business-scoped
+- [x] App: settings page "Send a test event" (optional code), result message + request/response viewer, "Recent requests" log, link to public docs
+- [x] Website (`Easilypromote-website`, branch `docs/referral-webhooks`): public `/developers` page — how it works, quickstart, signing + test vector, request fields, responses, retries, Node/Python/PHP/cURL examples, testing, FAQ; prerendered; footer link
+
 ## Phase 6 — Payouts ⛔ BLOCKED (needs product decision)
 
 Do **not** start until the payout rules below are decided.
@@ -212,4 +221,8 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — The settings page is linked from each campaign's Referrals tab, not the shared `@ep/ui` NavBar, to avoid changing the navigation of the other apps.
 - 2026-09-14 — The create-campaign toggle lives in the wizard's Brief step (`campaign-wizard.tsx`, since `create-campaign/page.tsx` only hosts the wizard) and shows on the Review step. `ReferralSettingsFields` is shared with the campaign Referrals tab.
 - 2026-09-14 — Live counts apply the change in a code's absolute `conversions` rather than +1 per socket event, because the backend's `emitToUser` currently delivers each event twice (room + socket id). Follow-up task raised for the backend duplicate.
+- 2026-09-14 — Developer docs are public on the landing site (`/developers`) so a brand can send the link to engineers without accounts; keys, the test sender and the request log stay in the app because they need authentication. No public "paste your secret" tool — the docs ship a fixed test vector instead.
+- 2026-09-14 — The docs test vector is checked against `signPayload` in the backend test suite; regenerate it if signing ever changes.
+- 2026-09-14 — Test events now report whether the sent code would match (`code.found`, `status`, `campaignAcceptingConversions`) but still return 200 and record nothing.
+- 2026-09-14 — Phase 5b verified: 17 new backend checks pass, Phase 3/4 suites re-run clean, web typecheck clean, website `npm run build` prerenders `/developers`, and the app test sender + request log were exercised in the browser.
 - 2026-09-14 — Phase 5 verified in the browser against the local API + throwaway DB: web typecheck clean; settings page (connect status, generate key + one-time secret modal, rotate/revoke controls, max-3 limit), campaign Referrals tab (totals, codes, mark all active, live conversion over socket), wizard toggle round-trip, and phone width (no horizontal overflow).
