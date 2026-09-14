@@ -135,6 +135,7 @@ function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): Cam
     scriptUrl: c.scriptUrl as string | undefined,
     scriptFileName: c.scriptFileName as string | undefined,
     timeline: (c.timeline as CampaignItem["timeline"]) || [],
+    referral: (c.referral as CampaignItem["referral"]) ?? null,
   }));
 }
 

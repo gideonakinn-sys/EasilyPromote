@@ -123,3 +123,41 @@ export function useSocket(
 
   return socket;
 }
+
+export interface ReferralConversionUpdate {
+  campaignId: string;
+  referralCodeId: string;
+  code: string;
+  eventType: string;
+  counted: boolean;
+  conversions: number;
+}
+
+export function useReferralConversions(onConversion?: (data: ReferralConversionUpdate) => void) {
+  const conversionRef = useRef(onConversion);
+  conversionRef.current = onConversion;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    if (!socket) {
+      socket = io(SOCKET_URL, {
+        auth: { token },
+        transports: ["websocket", "polling"],
+      });
+    }
+
+    const handleConversion = (data: ReferralConversionUpdate) => {
+      conversionRef.current?.(data);
+    };
+
+    socket.on("referral-conversion", handleConversion);
+
+    return () => {
+      socket?.off("referral-conversion", handleConversion);
+    };
+  }, []);
+
+  return socket;
+}

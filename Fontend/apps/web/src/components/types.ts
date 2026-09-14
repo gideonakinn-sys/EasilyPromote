@@ -120,6 +120,14 @@ export interface CampaignItem {
   brandAvatar?: string;
   scriptUrl?: string;
   scriptFileName?: string;
+  referral?: CampaignReferral | null;
+}
+
+export interface CampaignReferral {
+  eventType: string;
+  code: string | null;
+  status: "awaiting_code" | "awaiting_business" | "active" | "disabled";
+  conversions: number;
 }
 
 export interface MarketplaceCampaign {

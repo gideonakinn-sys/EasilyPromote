@@ -1,6 +1,6 @@
 # Referral Tracking — Implementation Plan
 
-Status: **in progress** · Branch: `feature/referral-tracking` · Last updated: 2026-09-14
+Status: **Phases 1–5 complete** (Phase 6 blocked on payout decision, Phase 7 later) · Branch: `feature/referral-tracking` · Last updated: 2026-09-14
 
 ## Goal
 
@@ -136,20 +136,20 @@ Responses:
 
 ## Phase 5 — Frontend (`Fontend/apps/web`)
 
-- [ ] API client functions in `apps/web/src/lib/api.ts` for all Phase 2 and Phase 4 endpoints
-- [ ] Business: **Referral tracking settings** page — `dashboard/brand/settings/referral/page.tsx` + nav link
+- [x] API client functions in `apps/web/src/lib/api.ts` for all Phase 2 and Phase 4 endpoints
+- [x] Business: **Referral tracking settings** page — `dashboard/brand/settings/referral/page.tsx` + nav link
   - Connection badge (Connected / Not connected) + last event time
   - Keys list with last4, status, last used; Generate / Rotate / Revoke (revoke has a confirm)
   - "Copy your secret now — you won't see it again" dialog, requires confirm checkbox before closing
   - Integration guide: webhook URL, headers, body, response table, copyable signing snippets (Node, PHP, Python) and a test `curl`/script command
-- [ ] Business: `create-campaign/page.tsx` — "Track signups with referral codes" toggle, event type select, code source radio (Easily Promote codes / Our own codes)
-- [ ] Business: `campaign-details.tsx` — **Referrals** section
+- [x] Business: `create-campaign/page.tsx` — "Track signups with referral codes" toggle, event type select, code source radio (Easily Promote codes / Our own codes)
+- [x] Business: `campaign-details.tsx` — **Referrals** section
   - Summary: total conversions, codes active vs awaiting
   - Table: creator, code, status chip, conversions
   - Actions: Export CSV, Mark all as loaded, per-row "Set code" when source is business, Import codes
   - Live updates on `referral-conversion` socket event
-- [ ] Creator: "Your referral code" card on creator campaign page + `campaign-details-drawer.tsx` — code, copy button, status, live conversions count
-- [ ] Empty/error states and phone-width layout checked for every new UI
+- [x] Creator: "Your referral code" card on creator campaign page + `campaign-details-drawer.tsx` — code, copy button, status, live conversions count
+- [x] Empty/error states and phone-width layout checked for every new UI
 
 ## Phase 6 — Payouts ⛔ BLOCKED (needs product decision)
 
@@ -208,3 +208,8 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — Business-supplied codes are marked `active` immediately (the business created them in its own system). CSV import matches rows by creator username.
 - 2026-09-14 — Creator dashboard `referral` block is `null` when tracking is off; `status: "awaiting_code"` with `code: null` when the brand supplies codes and hasn't set one yet.
 - 2026-09-14 — Phase 4 verified end to end on local MongoDB: 27 checks passed, Phase 3 suite re-run clean.
+- 2026-09-14 — Frontend referral API client lives in its own `apps/web/src/lib/referral.ts` (built on `apiRequest`) rather than growing `api.ts`; CSV export uses a direct `fetch` because `apiRequest` always parses JSON.
+- 2026-09-14 — The settings page is linked from each campaign's Referrals tab, not the shared `@ep/ui` NavBar, to avoid changing the navigation of the other apps.
+- 2026-09-14 — The create-campaign toggle lives in the wizard's Brief step (`campaign-wizard.tsx`, since `create-campaign/page.tsx` only hosts the wizard) and shows on the Review step. `ReferralSettingsFields` is shared with the campaign Referrals tab.
+- 2026-09-14 — Live counts apply the change in a code's absolute `conversions` rather than +1 per socket event, because the backend's `emitToUser` currently delivers each event twice (room + socket id). Follow-up task raised for the backend duplicate.
+- 2026-09-14 — Phase 5 verified in the browser against the local API + throwaway DB: web typecheck clean; settings page (connect status, generate key + one-time secret modal, rotate/revoke controls, max-3 limit), campaign Referrals tab (totals, codes, mark all active, live conversion over socket), wizard toggle round-trip, and phone width (no horizontal overflow).

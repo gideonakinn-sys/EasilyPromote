@@ -4,19 +4,21 @@ import * as React from "react";
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FolderOpenIcon, File02Icon, File01Icon, Download01Icon, MoneyReceiveFlow02Icon } from "@hugeicons/core-free-icons";
+import { FolderOpenIcon, File02Icon, File01Icon, Download01Icon, MoneyReceiveFlow02Icon, Link01Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
 import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
+import type { ReferralSettings } from "../lib/referral";
+import { CampaignReferrals } from "./campaign-referrals";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
 import payoutsEmpty from "@ep/ui/assets/Payouts empty.png";
 
-type TabType = "Overview" | "Submission" | "Payouts";
+type TabType = "Overview" | "Submission" | "Payouts" | "Referrals";
 
 const PRESET_VIEWS = [100000, 1000000, 5000000, 10000000, 20000000] as const;
 
@@ -155,6 +157,7 @@ interface CampaignData {
   submissionsReceived: number;
   submissionsApproved: number;
   submissionsAwaitingReview: number;
+  referral?: ReferralSettings;
 }
 
 interface SubmissionData {
@@ -438,6 +441,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             { label: "Overview",    value: "Overview"   as TabType },
             { label: "Submissions", value: "Submission" as TabType },
             { label: "Payouts",     value: "Payouts"    as TabType },
+            { label: "Referrals",   value: "Referrals"  as TabType },
           ]).map(({ label, value }) => {
             const isActive = activeTab === value;
             return (
@@ -466,6 +470,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               { label: "Overview",    value: "Overview"   as TabType },
               { label: "Submissions", value: "Submission" as TabType },
               { label: "Payouts",     value: "Payouts"    as TabType },
+              { label: "Referrals",   value: "Referrals"  as TabType },
             ]).map(({ label, value }) => {
               const isActive = activeTab === value;
               return (
@@ -486,6 +491,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   {value === "Payouts" && (
                     <HugeiconsIcon icon={MoneyReceiveFlow02Icon} size={16} className="flex-shrink-0" />
                   )}
+                  {value === "Referrals" && <HugeiconsIcon icon={Link01Icon} size={16} className="flex-shrink-0" />}
                   <span>{label}</span>
                 </button>
               );
@@ -814,6 +820,17 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <p className="font-rethink text-xs text-stone-500 font-medium">Your first transaction will appear here once placements start delivering.</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ================= TAB 4: REFERRALS ================= */}
+        {activeTab === "Referrals" && (
+          <div className={cn("pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
+            <CampaignReferrals
+              campaignId={campaign.id}
+              campaignStatus={campaign.status}
+              initialSettings={campaign.referral}
+            />
           </div>
         )}
       </div>

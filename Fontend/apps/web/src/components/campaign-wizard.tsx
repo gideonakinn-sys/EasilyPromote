@@ -19,6 +19,13 @@ import { apiRequest, getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { Spinner } from "./ui/spinner";
 import { AVAILABLE_NICHES } from "./constants";
+import { ReferralSettingsFields } from "./campaign-referrals";
+import {
+  CODE_SOURCE_OPTIONS,
+  REFERRAL_EVENT_TYPES,
+  type ReferralCodeSource,
+  type ReferralEventType,
+} from "../lib/referral";
 
 // Assets imports
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
@@ -44,6 +51,9 @@ interface CampaignData {
   scriptUrl: string;
   scriptFileName: string;
   coverImageUrl: string;
+  referralEnabled: boolean;
+  referralEventType: ReferralEventType;
+  referralCodeSource: ReferralCodeSource;
 }
 
 interface CampaignWizardProps {
@@ -220,7 +230,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; referral?: { enabled: boolean; eventType: ReferralEventType; codeSource: ReferralCodeSource } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -240,6 +250,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           scriptUrl: data.scriptUrl || "",
           scriptFileName: data.scriptFileName || "",
           coverImageUrl: data.coverImageUrl || "",
+          referralEnabled: Boolean(data.referral?.enabled),
+          referralEventType: data.referral?.eventType || "signup",
+          referralCodeSource: data.referral?.codeSource || "easilypromote",
         });
 
         const hasBrief = data.contentBrief && data.keyMessageCta;
@@ -274,6 +287,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     scriptUrl: "",
     scriptFileName: "",
     coverImageUrl: "",
+    referralEnabled: false,
+    referralEventType: "signup",
+    referralCodeSource: "easilypromote",
   });
 
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -325,6 +341,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             scriptUrl: parsed.campaign.scriptUrl || "",
             scriptFileName: parsed.campaign.scriptFileName || "",
             coverImageUrl: parsed.campaign.coverImageUrl || "",
+            referralEnabled: Boolean(parsed.campaign.referralEnabled),
+            referralEventType: parsed.campaign.referralEventType || "signup",
+            referralCodeSource: parsed.campaign.referralCodeSource || "easilypromote",
           });
           if (parsed.createStep) setCreateStep(parsed.createStep);
           if (parsed.viewsInput) setViewsInput(parsed.viewsInput);
@@ -511,6 +530,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     scriptUrl: campaign.scriptUrl || undefined,
     scriptFileName: campaign.scriptFileName || undefined,
     coverImageUrl: campaign.coverImageUrl || undefined,
+    referral: {
+      enabled: campaign.referralEnabled,
+      eventType: campaign.referralEventType,
+      codeSource: campaign.referralCodeSource,
+    },
   });
 
   const handleNextStep = async () => {
@@ -1215,6 +1239,58 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   />
                 </div>
 
+                {/* Referral tracking */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <label htmlFor="referral-enabled" className="text-xs font-medium text-stone-500">
+                        Track conversions with referral codes
+                      </label>
+                      <InfoTooltip text="Each creator gets a unique code. Your servers tell us when someone converts with it, so you see results per creator." />
+                    </div>
+                    <button
+                      id="referral-enabled"
+                      type="button"
+                      role="switch"
+                      aria-checked={campaign.referralEnabled}
+                      onClick={() => {
+                        isModified.current = true;
+                        setCampaign(prev => ({ ...prev, referralEnabled: !prev.referralEnabled }));
+                      }}
+                      className={cn(
+                        "relative w-10 h-6 rounded-full transition-colors shrink-0",
+                        campaign.referralEnabled ? "bg-stone-900" : "bg-stone-200"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform",
+                          campaign.referralEnabled && "translate-x-4"
+                        )}
+                      />
+                    </button>
+                  </div>
+                  {campaign.referralEnabled && (
+                    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+                      <ReferralSettingsFields
+                        eventType={campaign.referralEventType}
+                        codeSource={campaign.referralCodeSource}
+                        onEventTypeChange={(value) => {
+                          isModified.current = true;
+                          setCampaign(prev => ({ ...prev, referralEventType: value }));
+                        }}
+                        onCodeSourceChange={(value) => {
+                          isModified.current = true;
+                          setCampaign(prev => ({ ...prev, referralCodeSource: value }));
+                        }}
+                      />
+                      <p className="text-[10px] text-stone-400 font-medium font-rethink leading-relaxed">
+                        Creators can start posting as soon as the campaign is live. Connect your servers any time from the campaign&apos;s Referrals tab.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
               {/* Bottom Navigation */}
               <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-50 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
                 <button
@@ -1327,6 +1403,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Niches</span>
                   <span className="font-medium text-stone-800">{(campaign.niches || []).length > 0 ? (campaign.niches || []).join(", ") : "Any"}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-medium text-stone-500">Referral tracking</span>
+                  <span className="font-medium text-stone-800">
+                    {campaign.referralEnabled
+                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · ${CODE_SOURCE_OPTIONS.find((o) => o.value === campaign.referralCodeSource)?.shortLabel || ""}`
+                      : "Off"}
+                  </span>
                 </div>
               </div>
 

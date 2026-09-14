@@ -15,8 +15,10 @@ import approvedCreatorImg from "@ep/ui/assets/approved-creator.png";
 import deliveredCreatorImg from "@ep/ui/assets/delievered-creators.png";
 import { getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
-import type { CampaignItem, TimelineEvent } from "./types";
+import type { CampaignItem, CampaignReferral, TimelineEvent } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
+import { ReferralCodeCard } from "./referral-code-card";
+import { useReferralConversions } from "../lib/socket";
 
 // Events that represent a decision on the content itself, so they get the video card.
 const CONTENT_EVENT_TYPES = [
@@ -97,6 +99,20 @@ export function CampaignDetailsDrawer({
   const { toast } = useToast();
 
   const displayCampaign = campaign;
+
+  // Live conversions arrive over the socket between dashboard refreshes.
+  const [liveReferral, setLiveReferral] = useState<Pick<CampaignReferral, "conversions" | "status"> | null>(null);
+  useReferralConversions((update) => {
+    if (update.campaignId !== displayCampaign.id) return;
+    setLiveReferral({ conversions: update.conversions, status: "active" });
+  });
+  const referral: CampaignReferral | null = displayCampaign.referral
+    ? {
+        ...displayCampaign.referral,
+        ...(liveReferral && displayCampaign.referral.code ? { status: liveReferral.status } : {}),
+        conversions: Math.max(displayCampaign.referral.conversions, liveReferral?.conversions ?? 0),
+      }
+    : null;
 
   const allPlatforms = displayCampaign.platforms?.length
     ? displayCampaign.platforms
@@ -473,6 +489,8 @@ export function CampaignDetailsDrawer({
               </div>
             </div>
           </div>
+
+          {referral && <ReferralCodeCard referral={referral} />}
 
           {/* Live CTA */}
           {displayCampaign.status === "live_tracking" && (
