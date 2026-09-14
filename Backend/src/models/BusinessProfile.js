@@ -43,6 +43,11 @@ const businessProfileSchema = new mongoose.Schema(
       type: String,
       maxlength: 500,
     },
+    // Set when the first validly signed conversion webhook (test or real) arrives.
+    referralConnectedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

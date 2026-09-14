@@ -133,6 +133,27 @@ const campaignSchema = new mongoose.Schema(
       default: 5,
       min: 1,
     },
+    // Referral tracking runs alongside the views campaign and never gates going live.
+    referral: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      eventType: {
+        type: String,
+        enum: ["install", "signup", "purchase", "deposit", "custom"],
+        default: "signup",
+      },
+      codeSource: {
+        type: String,
+        enum: ["easilypromote", "business"],
+        default: "easilypromote",
+      },
+      conversions: {
+        type: Number,
+        default: 0,
+      },
+    },
   },
   { timestamps: true }
 );
