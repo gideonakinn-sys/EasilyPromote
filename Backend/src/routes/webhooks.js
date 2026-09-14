@@ -7,6 +7,7 @@ const { emitToUser } = require("../config/socket");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { settleRelease, revertRelease } = require("../utils/payouts");
 const { creditTopup } = require("../utils/topups");
+const { handleConversionWebhook } = require("../services/conversions");
 
 const router = express.Router();
 
@@ -92,6 +93,17 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
     }
 
     res.sendStatus(200);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Brands report referral conversions here. Accept any content type so the body
+// always arrives as raw bytes — the signature is computed over those exact bytes.
+router.post("/conversions", express.raw({ type: () => true, limit: "16kb" }), async (req, res, next) => {
+  try {
+    const result = await handleConversionWebhook({ headers: req.headers, rawBody: req.body });
+    res.status(result.status).json(result.body);
   } catch (error) {
     next(error);
   }

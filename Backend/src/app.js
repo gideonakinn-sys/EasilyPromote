@@ -21,6 +21,7 @@ const industryRoutes = require("./routes/industries");
 const tiktokRoutes = require("./routes/tiktok");
 const metaRoutes = require("./routes/meta");
 const waitlistRoutes = require("./routes/waitlist");
+const referralRoutes = require("./routes/referral");
 
 const app = express();
 
@@ -87,6 +88,7 @@ app.use("/api/industries", industryRoutes);
 app.use("/api/tiktok", tiktokRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api/waitlist", waitlistRoutes);
+app.use("/api/referral", referralRoutes);
 
 app.use(errorHandler);
 

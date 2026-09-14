@@ -87,21 +87,21 @@ Responses:
 
 ## Phase 2 — Key management API
 
-- [ ] `routes/referral.js`, mounted in `app.js` at `/api/referral` (after `express.json`); all routes `protect, authorizeRoles("business")`
-- [ ] `POST /keys` — generate `keyId` + secret (`whsec_` + 32 random bytes base64url), store encrypted, return `{ keyId, secret, last4 }` **once**
-- [ ] `GET /keys` — list `{ id, keyId, last4, status, expiresAt, lastUsedAt, createdAt }`; never the secret
-- [ ] `POST /keys/:id/rotate` — create new active key; set old key `status: "expiring"`, `expiresAt: now + 24h`; return new secret once
-- [ ] `DELETE /keys/:id` — set `status: "revoked"` immediately
-- [ ] `GET /status` — `{ connected: Boolean(referralConnectedAt), connectedAt, lastEventAt, activeKeys }`
-- [ ] Limit: max 3 non-revoked keys per business
-- [ ] All routes scoped to `req.user._id` (a business can never see/modify another business's keys)
+- [x] `routes/referral.js`, mounted in `app.js` at `/api/referral` (after `express.json`); all routes `protect, authorizeRoles("business")`
+- [x] `POST /keys` — generate `keyId` + secret (`whsec_` + 32 random bytes base64url), store encrypted, return `{ keyId, secret, last4 }` **once**
+- [x] `GET /keys` — list `{ id, keyId, last4, status, expiresAt, lastUsedAt, createdAt }`; never the secret
+- [x] `POST /keys/:id/rotate` — create new active key; set old key `status: "expiring"`, `expiresAt: now + 24h`; return new secret once
+- [x] `DELETE /keys/:id` — set `status: "revoked"` immediately
+- [x] `GET /status` — `{ connected: Boolean(referralConnectedAt), connectedAt, lastEventAt, activeKeys }`
+- [x] Limit: max 3 non-revoked keys per business
+- [x] All routes scoped to `req.user._id` (a business can never see/modify another business's keys)
 
 ## Phase 3 — Webhook receiver
 
-- [ ] `services/conversions.js` with:
+- [x] `services/conversions.js` with:
   - `verifyConversionSignature({ keyDoc, header, rawBody })` — parse `t=…,v1=…`, reject if `|now - t| > 300s`, HMAC-SHA256 of `${t}.${rawBody}`, compare with `crypto.timingSafeEqual` (guard length mismatch)
   - `recordConversion({ businessId, payload })` — the steps below
-- [ ] `routes/webhooks.js` — `router.post("/conversions", express.raw({ type: "application/json", limit: "16kb" }), …)`
+- [x] `routes/webhooks.js` — `router.post("/conversions", express.raw({ type: "application/json", limit: "16kb" }), …)`
   1. Read `X-EP-Key-Id`; load key; treat `revoked`, or `expiring` past `expiresAt`, as invalid → `401`
   2. Verify signature → `401` on failure
   3. Parse JSON + validate with zod (`event_id` 1–128 chars, `code` 1–64, `event` enum, `timestamp` ISO datetime, `test` optional boolean) → `400`
@@ -113,9 +113,9 @@ Responses:
   9. Set `referralConnectedAt` if unset; update key `lastUsedAt`
   10. `emitToUser(creatorId, "referral-conversion", {...})` and `emitToUser(businessId, "referral-conversion", {...})`
   11. Return `200 { status: "recorded" }`
-- [ ] Simple in-memory rate limiter per `keyId` (e.g. 50 req/s, `429` over limit) — `utils/rateLimit.js`
-- [ ] `Backend/scripts/sendTestConversion.js` — CLI: `node scripts/sendTestConversion.js --url … --key-id … --secret … --code … [--event signup] [--test]`; signs and sends, prints response
-- [ ] Verify manually with the script: valid, bad signature, stale timestamp, duplicate `event_id`, unknown code, other business's code, test event
+- [x] Simple in-memory rate limiter per `keyId` (e.g. 50 req/s, `429` over limit) — `utils/rateLimit.js`
+- [x] `Backend/scripts/sendTestConversion.js` — CLI: `node scripts/sendTestConversion.js --url … --key-id … --secret … --code … [--event signup] [--test]`; signs and sends, prints response
+- [x] Verify manually with the script: valid, bad signature, stale timestamp, duplicate `event_id`, unknown code, other business's code, test event
 
 ## Phase 4 — Codes
 
@@ -196,3 +196,9 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — Single webhook URL; business identified by `X-EP-Key-Id`; signature includes timestamp (±5 min) to block replays.
 - 2026-09-14 — Secrets stored encrypted (not hashed) because HMAC verification needs the plaintext.
 - 2026-09-14 — One event per conversion with `event_id` idempotency, rather than running totals.
+- 2026-09-14 — Test events (`test: true`) skip the code lookup, so a brand can connect before its first campaign has codes.
+- 2026-09-14 — Every event type is stored, but only the campaign's chosen `referral.eventType` increments the conversion counters.
+- 2026-09-14 — Webhook route accepts any Content-Type as raw bytes, so a missing header can't break signature checks. Body limit 16kb.
+- 2026-09-14 — Webhook URL shown to brands comes from `API_PUBLIC_URL` env var, falling back to the request host.
+- 2026-09-14 — Completed campaigns accept conversions for 7 days after `endDate` (or `updatedAt` when no end date).
+- 2026-09-14 — Phase 3 verified against a throwaway local MongoDB (not the `.env` database): 33 end-to-end checks passed.
