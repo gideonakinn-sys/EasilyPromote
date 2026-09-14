@@ -9,6 +9,7 @@ const { initializeTransaction, verifyTransaction } = require("../services/paysta
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
+const { parseReferralSettings } = require("../utils/referralCodes");
 
 const router = express.Router();
 
@@ -82,7 +83,12 @@ router.get("/", protect, async (req, res, next) => {
 
 router.post("/", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
-    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName } = req.body;
+    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral } = req.body;
+
+    const referralSettings = parseReferralSettings(referral);
+    if (referralSettings.error) {
+      return res.status(400).json({ error: referralSettings.error });
+    }
 
     const { getPriceForViews } = require("../config/pricing");
     const budget = getPriceForViews(targetViews);
@@ -108,6 +114,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       niches: niches || [],
       scriptUrl: scriptUrl || null,
       scriptFileName: scriptFileName || null,
+      referral: referralSettings.value,
       status: "draft",
     });
 
@@ -266,6 +273,17 @@ router.patch("/:id", protect, async (req, res, next) => {
           field === "contentStyle" && typeof req.body[field] === "string"
             ? req.body[field].split(",").map((s) => s.trim()).filter(Boolean)
             : req.body[field];
+      }
+    }
+
+    if (req.body.referral !== undefined) {
+      const referralSettings = parseReferralSettings(req.body.referral);
+      if (referralSettings.error) {
+        return res.status(400).json({ error: referralSettings.error });
+      }
+      // Dotted paths so the conversions counter is never overwritten.
+      for (const [key, value] of Object.entries(referralSettings.value)) {
+        updates[`referral.${key}`] = value;
       }
     }
 
@@ -683,6 +701,12 @@ router.get("/:id", protect, async (req, res, next) => {
       submissionsApproved,
       submissionsAwaitingReview,
       creatorCount,
+      referral: {
+        enabled: Boolean(campaign.referral && campaign.referral.enabled),
+        eventType: campaign.referral ? campaign.referral.eventType : "signup",
+        codeSource: campaign.referral ? campaign.referral.codeSource : "easilypromote",
+        conversions: campaign.referral ? campaign.referral.conversions : 0,
+      },
     });
   } catch (error) {
     next(error);

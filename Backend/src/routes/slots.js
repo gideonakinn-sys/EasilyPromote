@@ -123,12 +123,25 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
     slot.claimedAt = new Date();
     await slot.save();
 
+    // A code failure must never cost the creator their placement; backfill repairs it.
+    let referralCode = null;
+    if (campaign.referral && campaign.referral.enabled && campaign.referral.codeSource === "easilypromote") {
+      try {
+        const { createReferralCode } = require("../utils/referralCodes");
+        const code = await createReferralCode({ slot, campaign });
+        referralCode = code ? code.code : null;
+      } catch (error) {
+        console.error(`[Referral] Code generation failed for slot ${slot._id}:`, error.message);
+      }
+    }
+
     res.json({
       id: slot._id,
       campaignId: slot.campaignId,
       status: slot.status,
       viewTarget: slot.viewTarget,
       reward: slot.reward,
+      referralCode,
     });
   } catch (error) {
     next(error);

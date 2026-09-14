@@ -1,6 +1,7 @@
 const CreatorProfile = require("../models/CreatorProfile");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
+const ReferralCode = require("../models/ReferralCode");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const TikTokConnection = require("../models/TikTokConnection");
@@ -233,22 +234,36 @@ function indexSubmissionsByCampaign(submissions) {
   return map;
 }
 
+// Only campaigns with referral tracking on carry a referral block. A null code means
+// the brand supplies its own codes and hasn't set this creator's yet.
+function buildCreatorReferral(campaign, code) {
+  if (!campaign.referral || !campaign.referral.enabled) return null;
+  return {
+    eventType: campaign.referral.eventType,
+    code: code ? code.code : null,
+    status: code ? code.status : "awaiting_code",
+    conversions: code ? code.conversions : 0,
+  };
+}
+
 async function buildMyCampaigns(ctx) {
   const { userId } = ctx;
 
-  const [slots, submissions] = await Promise.all([
+  const [slots, submissions, referralCodes] = await Promise.all([
     Slot.find({ creatorId: userId })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral",
         populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 })
       .lean(),
     Submission.find({ creatorId: userId }).sort({ createdAt: -1 }).lean(),
+    ReferralCode.find({ creatorId: userId }).select("slotId code status conversions").lean(),
   ]);
 
   const submissionMap = indexSubmissionsByCampaign(submissions);
+  const referralBySlot = new Map(referralCodes.map((code) => [code.slotId.toString(), code]));
 
   // Newest first, matching how the drawer stacks its activity list.
   const eventsBySubmission = {};
@@ -353,6 +368,7 @@ async function buildMyCampaigns(ctx) {
         reviewedAgo: timeAgo(submission ? submission.reviewedAt : undefined),
         postedAgo: timeAgo(submission ? submission.postedAt : undefined),
         timeline: submission ? eventsBySubmission[submission._id.toString()] || [] : [],
+        referral: buildCreatorReferral(campaign, referralBySlot.get(slot._id.toString())),
       };
     });
 

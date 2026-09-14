@@ -22,6 +22,7 @@ const tiktokRoutes = require("./routes/tiktok");
 const metaRoutes = require("./routes/meta");
 const waitlistRoutes = require("./routes/waitlist");
 const referralRoutes = require("./routes/referral");
+const referralCodeRoutes = require("./routes/referralCodes");
 
 const app = express();
 
@@ -75,6 +76,7 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
 app.use("/api/creators", creatorRoutes);
+app.use("/api/campaigns", referralCodeRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/upload", uploadRoutes);

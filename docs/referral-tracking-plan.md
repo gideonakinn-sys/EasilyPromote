@@ -119,20 +119,20 @@ Responses:
 
 ## Phase 4 — Codes
 
-- [ ] `utils/referralCodes.js`
+- [x] `utils/referralCodes.js`
   - `buildDisplayCode(brandName, creatorHandle)` → `ACME-TUNDE` (uppercase, A–Z0–9 only, each part ≤ 12 chars)
   - `createReferralCode({ slot, campaign, creatorId })` — insert; on `11000` append `-` + 3 random chars and retry (max 5 tries)
   - `backfillReferralCodes(campaign)` — create codes for claimed slots that don't have one
-- [ ] `routes/slots.js` claim — after `slot.save()`, if `campaign.referral.enabled && campaign.referral.codeSource === "easilypromote"` create the code; include `referralCode` in the response. Code creation failure must **not** fail the claim (log it; backfill can repair).
+- [x] `routes/slots.js` claim — after `slot.save()`, if `campaign.referral.enabled && campaign.referral.codeSource === "easilypromote"` create the code; include `referralCode` in the response. Code creation failure must **not** fail the claim (log it; backfill can repair).
   - Status: `awaiting_business` until the business marks codes loaded or the first conversion arrives
-- [ ] Campaign create/update (`routes/campaigns.js`) — accept `referral.enabled`, `referral.eventType`, `referral.codeSource`; when enabled on a live campaign, run `backfillReferralCodes`
-- [ ] Business code routes (owner of campaign only):
-  - [ ] `GET /api/campaigns/:id/referral-codes` — rows: creator name/handle, code, source, status, conversions, loadedAt
-  - [ ] `GET /api/campaigns/:id/referral-codes.csv` — `creator_handle,code,status`
-  - [ ] `POST /api/campaigns/:id/referral-codes/mark-loaded` — body `{ codeIds?: [] }` (all if omitted) → `active`, `loadedAt`
-  - [ ] `PUT /api/campaigns/:id/referral-codes/:slotId` — business-made code `{ code }`; validate format and uniqueness within business; `source: "business"`, `status: "active"`
-  - [ ] `POST /api/campaigns/:id/referral-codes/import` — CSV/JSON `[{ creator_handle, code }]`; return per-row results
-- [ ] Creator payload — `services/creatorDashboard.js` (and the creator campaign detail endpoint): include `referral: { code, status, conversions }` when present; creators see `awaiting_business` as "Code being activated by the brand"
+- [x] Campaign create/update (`routes/campaigns.js`) — accept `referral.enabled`, `referral.eventType`, `referral.codeSource`; when enabled on a live campaign, run `backfillReferralCodes`
+- [x] Business code routes (owner of campaign only):
+  - [x] `GET /api/campaigns/:id/referral-codes` — rows: creator name/handle, code, source, status, conversions, loadedAt
+  - [x] `GET /api/campaigns/:id/referral-codes.csv` — `creator_handle,code,status`
+  - [x] `POST /api/campaigns/:id/referral-codes/mark-loaded` — body `{ codeIds?: [] }` (all if omitted) → `active`, `loadedAt`
+  - [x] `PUT /api/campaigns/:id/referral-codes/:slotId` — business-made code `{ code }`; validate format and uniqueness within business; `source: "business"`, `status: "active"`
+  - [x] `POST /api/campaigns/:id/referral-codes/import` — CSV/JSON `[{ creator_handle, code }]`; return per-row results
+- [x] Creator payload — `services/creatorDashboard.js` (and the creator campaign detail endpoint): include `referral: { code, status, conversions }` when present; creators see `awaiting_business` as "Code being activated by the brand"
 
 ## Phase 5 — Frontend (`Fontend/apps/web`)
 
@@ -202,3 +202,9 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — Webhook URL shown to brands comes from `API_PUBLIC_URL` env var, falling back to the request host.
 - 2026-09-14 — Completed campaigns accept conversions for 7 days after `endDate` (or `updatedAt` when no end date).
 - 2026-09-14 — Phase 3 verified against a throwaway local MongoDB (not the `.env` database): 33 end-to-end checks passed.
+- 2026-09-14 — Generated codes are `BRAND-USERNAME` from `BusinessProfile.companyName` and `CreatorProfile.username` (12 chars max each, A–Z0–9); on collision a 3-char suffix is added (`ACMEINC-TUNDE-K7Q`).
+- 2026-09-14 — Business code routes live in `routes/referralCodes.js`, mounted at `/api/campaigns` before the main campaign router, with auth per route so `/pricing` stays public.
+- 2026-09-14 — Referral settings on live campaigns change via `PATCH /api/campaigns/:id/referral` (the existing `PATCH /:id` only allows drafts). Switching to Easily Promote codes on a live/paused/completed campaign backfills missing codes.
+- 2026-09-14 — Business-supplied codes are marked `active` immediately (the business created them in its own system). CSV import matches rows by creator username.
+- 2026-09-14 — Creator dashboard `referral` block is `null` when tracking is off; `status: "awaiting_code"` with `code: null` when the brand supplies codes and hasn't set one yet.
+- 2026-09-14 — Phase 4 verified end to end on local MongoDB: 27 checks passed, Phase 3 suite re-run clean.
