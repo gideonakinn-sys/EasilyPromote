@@ -54,6 +54,7 @@ interface CampaignData {
   referralEnabled: boolean;
   referralEventType: ReferralEventType;
   referralCodeSource: ReferralCodeSource;
+  referralRewardPerConversion: string;
 }
 
 interface CampaignWizardProps {
@@ -230,7 +231,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; referral?: { enabled: boolean; eventType: ReferralEventType; codeSource: ReferralCodeSource } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; referral?: { enabled: boolean; eventType: ReferralEventType; codeSource: ReferralCodeSource; rewardPerConversion?: number } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -253,6 +254,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           referralEnabled: Boolean(data.referral?.enabled),
           referralEventType: data.referral?.eventType || "signup",
           referralCodeSource: data.referral?.codeSource || "easilypromote",
+          referralRewardPerConversion: data.referral?.rewardPerConversion ? String(data.referral.rewardPerConversion) : "",
         });
 
         const hasBrief = data.contentBrief && data.keyMessageCta;
@@ -290,6 +292,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     referralEnabled: false,
     referralEventType: "signup",
     referralCodeSource: "easilypromote",
+    referralRewardPerConversion: "",
   });
 
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -344,6 +347,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             referralEnabled: Boolean(parsed.campaign.referralEnabled),
             referralEventType: parsed.campaign.referralEventType || "signup",
             referralCodeSource: parsed.campaign.referralCodeSource || "easilypromote",
+            referralRewardPerConversion: parsed.campaign.referralRewardPerConversion || "",
           });
           if (parsed.createStep) setCreateStep(parsed.createStep);
           if (parsed.viewsInput) setViewsInput(parsed.viewsInput);
@@ -534,6 +538,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       enabled: campaign.referralEnabled,
       eventType: campaign.referralEventType,
       codeSource: campaign.referralCodeSource,
+      rewardPerConversion: Number(campaign.referralRewardPerConversion) || 0,
     },
   });
 
@@ -1284,8 +1289,27 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                           setCampaign(prev => ({ ...prev, referralCodeSource: value }));
                         }}
                       />
+                      <div className="space-y-1.5">
+                        <label htmlFor="referral-reward-wizard" className="text-xs font-medium text-stone-500 font-rethink block">
+                          Creators earn per conversion (optional)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+                          <input
+                            id="referral-reward-wizard"
+                            inputMode="decimal"
+                            value={campaign.referralRewardPerConversion}
+                            onChange={(e) => {
+                              isModified.current = true;
+                              setCampaign(prev => ({ ...prev, referralRewardPerConversion: e.target.value.replace(/[^0-9.]/g, "") }));
+                            }}
+                            placeholder="500"
+                            className="w-full pl-8 pr-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
+                          />
+                        </div>
+                      </div>
                       <p className="text-[10px] text-stone-400 font-medium font-rethink leading-relaxed">
-                        Creators can start posting as soon as the campaign is live. Connect your servers any time from the campaign&apos;s Referrals tab.
+                        Rewards are paid from a separate referral budget you add once the campaign is live. Creators can start posting straight away; connect your servers any time from the campaign&apos;s Referrals tab.
                       </p>
                     </div>
                   )}
@@ -1408,7 +1432,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <span className="font-medium text-stone-500">Referral tracking</span>
                   <span className="font-medium text-stone-800">
                     {campaign.referralEnabled
-                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · ${CODE_SOURCE_OPTIONS.find((o) => o.value === campaign.referralCodeSource)?.shortLabel || ""}`
+                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · ${CODE_SOURCE_OPTIONS.find((o) => o.value === campaign.referralCodeSource)?.shortLabel || ""}${Number(campaign.referralRewardPerConversion) > 0 ? ` · ₦${Number(campaign.referralRewardPerConversion).toLocaleString()} each` : ""}`
                       : "Off"}
                   </span>
                 </div>

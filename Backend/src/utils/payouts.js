@@ -34,8 +34,12 @@ async function settleRelease(transaction) {
   if (submission) {
     submission.payoutStatus = "released";
     await submission.save();
+  }
 
-    const profile = await CreatorProfile.findOne({ userId: submission.creatorId });
+  // Referral payouts have no submission; their release records the creator directly.
+  const creatorId = submission ? submission.creatorId : transaction.creatorId;
+  if (creatorId) {
+    const profile = await CreatorProfile.findOne({ userId: creatorId });
     if (profile) {
       profile.lifetimeEarnings = (profile.lifetimeEarnings || 0) + (transaction.amount || 0);
       await profile.save();
@@ -75,16 +79,17 @@ async function revertRelease(transaction, reason) {
   if (submission) {
     submission.payoutStatus = "pending";
     await submission.save();
+  }
 
-    if (wasSettled) {
-      const profile = await CreatorProfile.findOne({ userId: submission.creatorId });
-      if (profile) {
-        profile.lifetimeEarnings = Math.max(
-          (profile.lifetimeEarnings || 0) - (transaction.amount || 0),
-          0
-        );
-        await profile.save();
-      }
+  const creatorId = submission ? submission.creatorId : transaction.creatorId;
+  if (wasSettled && creatorId) {
+    const profile = await CreatorProfile.findOne({ userId: creatorId });
+    if (profile) {
+      profile.lifetimeEarnings = Math.max(
+        (profile.lifetimeEarnings || 0) - (transaction.amount || 0),
+        0
+      );
+      await profile.save();
     }
   }
 

@@ -22,6 +22,7 @@ const { recalculateCreator, recalculateAllCreators } = require("../services/crea
 const { recordEvent, listEventsForCampaign, labelFor } = require("../services/submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
 const { recordAdminActivity } = require("../services/adminActivity");
+const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -287,6 +288,7 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
       const alreadyRefunded = await Transaction.findOne({
         campaignId: campaign._id,
         type: "refund",
+        bucket: { $ne: "referral" },
       });
       if (!alreadyRefunded) {
         const balance = await campaignEscrowBalance(campaign._id);
@@ -300,6 +302,10 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
           });
         }
       }
+    }
+
+    if (status === "cancelled") {
+      await refundUnusedReferralBudget(campaign._id);
     }
 
     await emitCampaignStatus(campaign);
@@ -1121,7 +1127,9 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
           : w.campaignId
             ? w.campaignId.viewsDelivered
             : 0,
-        escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId) : 0,
+        kind: w.kind || "views",
+        // Each withdrawal is paid from its own pot, so show the balance that will fund it.
+        escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId, w.kind === "referral" ? "referral" : "views") : 0,
         requestedAt: w.requestedAt,
         reviewedAt: w.reviewedAt,
         releasedAt: w.releasedAt,
@@ -1154,7 +1162,9 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         return res.status(400).json({ error: "Campaign not found" });
       }
 
-      const pendingInEscrow = await campaignEscrowBalance(campaign._id);
+      // Referral withdrawals are paid from the referral budget, views withdrawals from the views escrow.
+      const bucket = withdrawal.kind === "referral" ? "referral" : "views";
+      const pendingInEscrow = await campaignEscrowBalance(campaign._id, bucket);
 
       // Our ledger says the campaign is covered; the Paystack balance is what
       // actually funds the transfer. If settlements sweep to the bank these two
@@ -1178,7 +1188,7 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       if (withdrawal.amount > pendingInEscrow) {
         return res.status(400).json({
-          error: `Insufficient funds in this campaign's escrow. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
+          error: `Insufficient funds in this campaign's ${bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
         });
       }
 
@@ -1229,6 +1239,8 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       const releaseTransaction = await Transaction.create({
         campaignId: campaign._id,
+        bucket,
+        creatorId: withdrawal.creatorId,
         submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
         creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
         type: "release",
@@ -1238,10 +1250,9 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         date: new Date(),
       });
 
-      await Submission.updateOne(
-        { _id: withdrawal.submissionId ? withdrawal.submissionId._id : null },
-        { payoutStatus: "escrow_deposit" }
-      );
+      if (bucket === "views" && withdrawal.submissionId) {
+        await Submission.updateOne({ _id: withdrawal.submissionId._id }, { payoutStatus: "escrow_deposit" });
+      }
 
       // "processing" keeps the transfer out of the pending queue so it cannot
       // be approved (and paid) a second time while it is in flight.

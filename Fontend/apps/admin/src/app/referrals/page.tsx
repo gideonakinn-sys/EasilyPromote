@@ -21,6 +21,7 @@ interface Stats {
   codes: { total: number; active: number };
   conversions: { today: number; last7Days: number; allTime: number };
   requests: { last24h: number; rejectedLast24h: number };
+  referralBudget: { funded: number; platformFee: number; earnedByCreators: number; remaining: number };
   flagCounts: { campaignsWithoutConversions: number; brandsWithHighRejections: number; staleKeys: number };
 }
 
@@ -93,6 +94,10 @@ interface CampaignRow {
   targetViews: number;
   codes: number;
   activeCodes: number;
+  rewardPerConversion: number;
+  referralBudget: number;
+  earnedByCreators: number;
+  poolRemaining: number;
 }
 
 interface CodeRow {
@@ -103,6 +108,7 @@ interface CodeRow {
   conversions: number;
   creator: { id: string; username: string | null; name: string | null };
   lastConversionAt: string | null;
+  earned: number;
 }
 
 interface ConversionRow {
@@ -112,6 +118,12 @@ interface ConversionRow {
   eventId: string;
   eventType: string;
   counted: boolean;
+  rewardAmount: number;
+  unpaidReason: string | null;
+  availableAt: string | null;
+  voidedAt: string | null;
+  voidedReason: string | null;
+  payoutStatus: "pending" | "available" | "voided" | "unpaid";
   code: string | null;
   brand: { id: string; name: string | null };
   campaign: { id: string; name: string | null };
@@ -125,7 +137,7 @@ interface PageMeta {
 }
 
 interface PendingAction {
-  kind: "disable_code" | "enable_code" | "revoke_key";
+  kind: "disable_code" | "enable_code" | "revoke_key" | "void_conversion";
   id: string;
   label: string;
   onDone: () => void;
@@ -137,6 +149,10 @@ const CAMPAIGN_STATUSES = ["all", "live", "paused", "completed", "cancelled"];
 
 const STATUS_TONE: Record<string, Tone> = {
   active: "green",
+  available: "green",
+  pending: "amber",
+  voided: "red",
+  unpaid: "stone",
   live: "green",
   recorded: "green",
   valid: "green",
@@ -290,6 +306,7 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
     disable_code: { title: `Disable ${action.label}?`, body: "Code checks and conversions with this code will be rejected until it is re-enabled.", button: "Disable code" },
     enable_code: { title: `Re-enable ${action.label}?`, body: "The code will be accepted again for code checks and conversions.", button: "Re-enable code" },
     revoke_key: { title: `Revoke ${action.label}?`, body: "Requests signed with this key are rejected immediately. The brand must generate a new key. This can't be undone.", button: "Revoke key" },
+    void_conversion: { title: `Void ${action.label}?`, body: "The conversion stops counting and its reward goes back to the campaign's referral budget. The creator is notified. This can't be undone.", button: "Void conversion" },
   }[action.kind];
 
   const submit = async (e: FormEvent) => {
@@ -303,6 +320,8 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
     try {
       if (action.kind === "revoke_key") {
         await apiRequest(`/admin/referrals/keys/${action.id}/revoke`, { method: "POST", body: JSON.stringify({ note }) });
+      } else if (action.kind === "void_conversion") {
+        await apiRequest(`/admin/referrals/conversions/${action.id}/void`, { method: "POST", body: JSON.stringify({ note }) });
       } else {
         await apiRequest(`/admin/referrals/codes/${action.id}/status`, {
           method: "PATCH",
@@ -397,10 +416,10 @@ function CodesPanel({
       <Panel title={`Codes (${codes.length})`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-stone-700">
-            <TableHead columns={["Code", "Creator", "Status", "Conversions", "Last conversion", "Actions"]} />
+            <TableHead columns={["Code", "Creator", "Status", "Conversions", "Earned", "Last conversion", "Actions"]} />
             <tbody className="divide-y divide-stone-100">
               {loading || codes.length === 0 ? (
-                <EmptyRow colSpan={6} loading={loading} message="No creators have codes on this campaign yet." />
+                <EmptyRow colSpan={7} loading={loading} message="No creators have codes on this campaign yet." />
               ) : (
                 codes.map((code) => (
                   <tr key={code.id} className="align-top">
@@ -413,6 +432,7 @@ function CodesPanel({
                       <StatusBadge status={code.status} />
                     </td>
                     <td className="px-6 py-4 font-mono">{numberFormat.format(code.conversions)}</td>
+                    <td className="px-6 py-4 font-mono">₦{numberFormat.format(code.earned)}</td>
                     <td className="px-6 py-4 text-stone-500">{formatDateTime(code.lastConversionAt)}</td>
                     <td className="px-6 py-4">
                       {canAct ? (
@@ -628,6 +648,13 @@ function OverviewTab({
           hint={`${numberFormat.format(stats.requests.last24h)} requests · ${percent(rejectionShare)} rejected`}
           tone={stats.requests.rejectedLast24h > 0 ? "warn" : undefined}
         />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Referral budget funded" value={`₦${numberFormat.format(stats.referralBudget.funded)}`} hint="Paid in by brands, all campaigns" />
+        <StatCard label="Platform fee" value={`₦${numberFormat.format(stats.referralBudget.platformFee)}`} hint="Kept from referral budgets" />
+        <StatCard label="Earned by creators" value={`₦${numberFormat.format(stats.referralBudget.earnedByCreators)}`} hint="Reserved rewards, excluding voided" />
+        <StatCard label="Left for rewards" value={`₦${numberFormat.format(stats.referralBudget.remaining)}`} hint="Unreserved across campaigns" />
       </div>
 
       <Panel title={`Campaigns with views but no conversions (${flags.campaignsWithoutConversions.length})`}>
@@ -867,10 +894,10 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
       <Panel title="Campaigns with referral tracking">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-stone-700">
-            <TableHead columns={["Campaign", "Brand", "Status", "Counts", "Codes", "Conversions", "Views", ""]} />
+            <TableHead columns={["Campaign", "Brand", "Status", "Counts", "Codes", "Conversions", "Reward · budget", "Views", ""]} />
             <tbody className="divide-y divide-stone-100">
               {loading || rows.length === 0 ? (
-                <EmptyRow colSpan={8} loading={loading} message="No campaigns match." />
+                <EmptyRow colSpan={9} loading={loading} message="No campaigns match." />
               ) : (
                 rows.map((campaign) => (
                   <tr key={campaign.id} className="align-top">
@@ -888,6 +915,14 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
                     </td>
                     <td className={`px-6 py-4 font-mono ${campaign.conversions === 0 && campaign.viewsDelivered > 0 ? "text-amber-700" : ""}`}>
                       {numberFormat.format(campaign.conversions)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <p className="font-mono text-stone-800">
+                        {campaign.rewardPerConversion > 0 ? `₦${numberFormat.format(campaign.rewardPerConversion)} each` : "No reward"}
+                      </p>
+                      <p className="text-[11px] text-stone-400">
+                        ₦{numberFormat.format(campaign.earnedByCreators)} earned · ₦{numberFormat.format(campaign.poolRemaining)} left of ₦{numberFormat.format(campaign.referralBudget)}
+                      </p>
                     </td>
                     <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.viewsDelivered)}</td>
                     <td className="px-6 py-4">
@@ -910,7 +945,8 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
   );
 }
 
-function ConversionsTab() {
+function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (action: PendingAction) => void }) {
+  const [refreshKey, setRefreshKey] = useState(0);
   const [rows, setRows] = useState<ConversionRow[]>([]);
   const [meta, setMeta] = useState<PageMeta>({ total: 0, page: 1, pages: 1 });
   const [draft, setDraft] = useState({ code: "", eventType: "", from: "", to: "" });
@@ -941,7 +977,7 @@ function ConversionsTab() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load conversions"))
       .finally(() => setLoading(false));
-  }, [applied]);
+  }, [applied, refreshKey]);
 
   const exportCsv = async () => {
     setDownloading(true);
@@ -999,10 +1035,10 @@ function ConversionsTab() {
       <Panel title={`Conversions (${numberFormat.format(meta.total)})`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-stone-700">
-            <TableHead columns={["Occurred", "Brand", "Campaign", "Creator", "Code", "Event", "Counted", "Event ID"]} />
+            <TableHead columns={["Occurred", "Brand", "Campaign", "Creator", "Code", "Event", "Counted", "Event ID", "Reward", "Payout", ""]} />
             <tbody className="divide-y divide-stone-100">
               {loading || rows.length === 0 ? (
-                <EmptyRow colSpan={8} loading={loading} message="No conversions match these filters." />
+                <EmptyRow colSpan={11} loading={loading} message="No conversions match these filters." />
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} className="align-top">
@@ -1015,6 +1051,38 @@ function ConversionsTab() {
                     <td className="px-6 py-4">{row.counted ? <StatusBadge status="active" /> : <span className="text-stone-400">No</span>}</td>
                     <td className="px-6 py-4 font-mono text-stone-500 max-w-[180px] truncate" title={row.eventId}>
                       {row.eventId}
+                    </td>
+                    <td className="px-6 py-4 font-mono whitespace-nowrap">
+                      {row.rewardAmount > 0 ? `₦${numberFormat.format(row.rewardAmount)}` : "—"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={row.payoutStatus} />
+                      <p className="text-[10px] text-stone-400 mt-1 whitespace-nowrap">
+                        {row.payoutStatus === "pending" && row.availableAt
+                          ? `until ${formatDateTime(row.availableAt)}`
+                          : row.payoutStatus === "unpaid" && row.unpaidReason
+                            ? row.unpaidReason.replace(/_/g, " ")
+                            : row.payoutStatus === "voided" && row.voidedReason
+                              ? row.voidedReason
+                              : ""}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      {canAct && (row.payoutStatus === "pending" || row.payoutStatus === "unpaid") ? (
+                        <button
+                          onClick={() =>
+                            onAction({
+                              kind: "void_conversion",
+                              id: row.id,
+                              label: `${row.code || "conversion"} (${row.eventId})`,
+                              onDone: () => setRefreshKey((key) => key + 1),
+                            })
+                          }
+                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                        >
+                          Void
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -1083,7 +1151,7 @@ export default function AdminReferralsPage() {
         {tab === "overview" && <OverviewTab onOpenBrand={setOpenBrandId} onOpenCampaign={setOpenCampaign} />}
         {tab === "brands" && <BrandsTab onOpenBrand={setOpenBrandId} />}
         {tab === "campaigns" && <CampaignsTab onOpenCampaign={setOpenCampaign} />}
-        {tab === "conversions" && <ConversionsTab />}
+        {tab === "conversions" && <ConversionsTab canAct={canAct} onAction={setPendingAction} />}
       </main>
 
       {openBrandId && (

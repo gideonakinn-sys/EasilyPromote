@@ -182,11 +182,25 @@ Problem: brands had to load Easily Promote codes into their own systems (CSV + "
 - [x] Access: all admin roles can view; only `admin` and `super_admin` can disable/enable codes or revoke keys; every action needs a note, notifies the brand and is logged
 - [x] Admin app: sidebar items; `/referrals` (Overview & flags, Brands, Campaigns, Conversions with CSV export; brand panel with keys/campaigns/recent requests; codes panel; note dialog); `/activity` log page
 
-## Phase 6 — Payouts ⛔ BLOCKED (needs product decision)
+## Phase 6 — Creator referral earnings
 
-Do **not** start until the payout rules below are decided.
+Decided 2026-09-14: brand sets the reward per conversion; paid from a separate referral budget the brand funds; same platform fee % as views (30%); 7-day hold per conversion; no per-creator cap (the budget is the limit).
 
-- [ ] Decide: amount per conversion; paid from campaign escrow or business `walletBalance`; cap per creator
+- [x] Models: `Campaign.referral` gains `rewardPerConversion`, `budget`, `platformFee`, `pool`, `poolRemaining`, `earned`, `budgetExhaustedAt`; `ConversionEvent` gains `counted`, `rewardAmount`, `unpaidReason`, `availableAt`, `voidedAt/Reason/By`; `Transaction` gains `bucket` (views|referral) and `creatorId`; `Withdrawal` gains `kind` (views|referral); `AdminActivity` target `conversion`
+- [x] `utils/referralEarnings.js`: atomic reward reservation from `poolRemaining` (never overspends), one-time "budget used up" brand notification, idempotent `creditReferralTopup`, `refundUnusedReferralBudget`, `creatorReferralEarnings`, `voidConversion`
+- [x] Conversions: event saved first (idempotency), then reward reserved and stored on the event with a 7-day `availableAt`
+- [x] Brand: `POST /api/campaigns/:id/referral-budget/init` (Paystack, `metadata.type = referral_topup`), `PATCH /api/campaigns/:id/referral-budget` (verify + credit); Paystack webhook `referral_topup` branch; referral settings accept `rewardPerConversion`; codes list shows earned per creator
+- [x] Money isolation: views escrow, refunds, completion checks and the brand payouts summary exclude referral money; admin withdrawal approval checks the escrow of the withdrawal's kind; releases record `bucket` + `creatorId`; `settleRelease`/`revertRelease` credit `lifetimeEarnings` via the release's creator when there is no submission
+- [x] Creators: `POST /api/creators/withdrawals` with `kind: "referral"` (available = past hold − already withdrawn; allowed after cancel); dashboard campaigns carry rate + earnings; wallet has a `referral` section; marketplace shows `referralReward`
+- [x] Cancel (brand or admin): unused referral budget (incl. its fee share) refunded to a separate `referral` refund row; money already earned stays withdrawable
+- [x] Admin: void a conversion during its hold (`POST /api/admin/referrals/conversions/:id/void`, note required, creator notified, logged); conversions show reward + payout status (pending/available/voided/unpaid) incl. CSV; stats show referral budget totals; campaigns and codes show earnings
+- [x] UI: wizard reward field; brand Referrals tab "Creator rewards" (rate, budget breakdown, Paystack top-up + return confirmation); creator code card earnings; wallet referral section + referral withdrawals; marketplace reward badge; admin void action + columns
+
+Not changed here (pre-existing, flagged as a separate task): views earnings formulas still disagree across withdrawals, dashboard and sync-stats; `Submission.payoutAmount` is never written; brand fee % displays ×100; brand cancel refund has no idempotency; `Transaction.reference` has no unique index.
+
+## Phase 6 (old) — Payouts
+
+- [x] Decide: amount per conversion; paid from campaign escrow or business `walletBalance`; cap per creator
 - [ ] Unify the three inconsistent earnings formulas into `utils/earnings.js`:
   - `routes/creators.js` ~line 349 (`min(views * costPerView, slot.reward)`)
   - `services/creatorDashboard.js` ~line 395 (`views * costPerView`)

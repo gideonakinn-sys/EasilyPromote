@@ -5,7 +5,14 @@ const User = require("../models/User");
 const ReferralCode = require("../models/ReferralCode");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const ConversionEvent = require("../models/ConversionEvent");
 const { parseReferralSettings, normalizeCode, backfillReferralCodes } = require("../utils/referralCodes");
+const {
+  MIN_REFERRAL_TOPUP,
+  MAX_REFERRAL_TOPUP,
+  creditReferralTopup,
+} = require("../utils/referralEarnings");
+const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 
 // Mounted at /api/campaigns alongside the main campaign router. Auth is applied per
 // route (not router.use) so public campaign routes like /pricing stay public.
@@ -36,6 +43,14 @@ function serializeSettings(campaign) {
     eventType: referral.eventType || "signup",
     codeSource: referral.codeSource || "easilypromote",
     conversions: referral.conversions || 0,
+    rewardPerConversion: referral.rewardPerConversion || 0,
+    budget: referral.budget || 0,
+    platformFee: referral.platformFee || 0,
+    platformFeePercent: Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30,
+    pool: referral.pool || 0,
+    poolRemaining: referral.poolRemaining || 0,
+    earned: referral.earned || 0,
+    budgetExhausted: Boolean(referral.budgetExhaustedAt),
   };
 }
 
@@ -49,11 +64,16 @@ async function buildCodeRows(campaign) {
     .lean();
 
   const creatorIds = slots.map((slot) => slot.creatorId);
-  const [codes, profiles, users] = await Promise.all([
+  const [codes, profiles, users, earningGroups] = await Promise.all([
     ReferralCode.find({ campaignId: campaign._id }).lean(),
     CreatorProfile.find({ userId: { $in: creatorIds } }).select("userId username displayName").lean(),
     User.find({ _id: { $in: creatorIds } }).select("name").lean(),
+    ConversionEvent.aggregate([
+      { $match: { campaignId: campaign._id, rewardAmount: { $gt: 0 }, voidedAt: null } },
+      { $group: { _id: "$creatorId", earned: { $sum: "$rewardAmount" } } },
+    ]),
   ]);
+  const earnedByCreator = new Map(earningGroups.map((group) => [String(group._id), Math.round(group.earned * 100) / 100]));
 
   const codeBySlot = new Map(codes.map((code) => [code.slotId.toString(), code]));
   const profileByUser = new Map(profiles.map((profile) => [profile.userId.toString(), profile]));
@@ -74,6 +94,7 @@ async function buildCodeRows(campaign) {
       source: code ? code.source : null,
       status: code ? code.status : "missing",
       conversions: code ? code.conversions : 0,
+      earned: earnedByCreator.get(creatorKey) || 0,
       loadedAt: code ? code.loadedAt : null,
     };
   });
@@ -179,6 +200,85 @@ router.patch("/:id/referral", ...businessOnly, async (req, res, next) => {
     }
 
     res.json({ referral: serializeSettings(campaign), codesCreated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Starts a Paystack payment for the campaign's referral budget. The budget is separate
+// from the views budget; 30% (the campaign's platform fee) is kept, the rest pays creators.
+router.post("/:id/referral-budget/init", ...businessOnly, async (req, res, next) => {
+  try {
+    const campaign = await loadOwnedCampaign(req, res);
+    if (!campaign) return;
+    if (!["live", "paused", "under_review"].includes(campaign.status)) {
+      return res.status(400).json({ error: "You can add a referral budget once the campaign is live." });
+    }
+
+    const amount = Math.round(Number(req.body && req.body.amount));
+    if (!Number.isFinite(amount) || amount < MIN_REFERRAL_TOPUP || amount > MAX_REFERRAL_TOPUP) {
+      return res.status(400).json({
+        error: `Enter an amount between ₦${MIN_REFERRAL_TOPUP.toLocaleString()} and ₦${MAX_REFERRAL_TOPUP.toLocaleString()}`,
+      });
+    }
+
+    const reference = `ep_reftopup_${campaign._id}_${Date.now()}`;
+    const origin = req.headers.origin || process.env.PAYSTACK_CALLBACK_URL || "http://localhost:3000";
+    const callback_url = `${origin.replace(/\/$/, "")}/dashboard/brand/campaign/${campaign._id}?referralTopup=success&reference=${reference}`;
+
+    const paymentData = await initializeTransaction({
+      email: req.user.email,
+      amount,
+      reference,
+      metadata: {
+        campaignId: campaign._id.toString(),
+        businessId: req.user._id.toString(),
+        campaignName: campaign.name,
+        type: "referral_topup",
+      },
+      callback_url,
+    });
+
+    res.json({ authorization_url: paymentData.authorization_url, reference });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Called when the brand returns from Paystack. Only Paystack decides what was paid;
+// the webhook may already have credited it, which is reported as alreadyCredited.
+router.patch("/:id/referral-budget", ...businessOnly, async (req, res, next) => {
+  try {
+    const campaign = await loadOwnedCampaign(req, res);
+    if (!campaign) return;
+
+    const paystackReference = req.body && req.body.paystackReference;
+    if (!paystackReference) {
+      return res.status(400).json({ error: "A payment reference is required" });
+    }
+
+    const verification = await verifyTransaction(paystackReference);
+    if (!verification || verification.status !== "success") {
+      return res.status(400).json({ error: "Payment verification failed" });
+    }
+    const metadata = verification.metadata || {};
+    if (metadata.type !== "referral_topup") {
+      return res.status(400).json({ error: "That payment isn't a referral budget payment" });
+    }
+    if (String(metadata.campaignId) !== String(campaign._id)) {
+      return res.status(400).json({ error: "That payment belongs to a different campaign" });
+    }
+
+    const amount = (verification.amount || 0) / 100;
+    const result = await creditReferralTopup({ campaignId: campaign._id, reference: paystackReference, amount });
+    const current = await Campaign.findById(campaign._id);
+
+    res.json({
+      referral: serializeSettings(current),
+      amount,
+      credited: result.credited === true,
+      alreadyCredited: result.alreadyCredited === true,
+    });
   } catch (error) {
     next(error);
   }

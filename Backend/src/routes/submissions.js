@@ -430,7 +430,8 @@ router.post("/:id/sync-stats", protect, async (req, res, next) => {
       if (!shouldComplete && campaign.status === "live") {
         const Transaction = require("../models/Transaction");
         const released = await Transaction.aggregate([
-          { $match: { campaignId: campaign._id, status: "released" } },
+          // The views pool only: referral payouts must not complete a views campaign.
+          { $match: { campaignId: campaign._id, status: "released", bucket: { $ne: "referral" } } },
           { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
         const totalReleased = released.length > 0 ? released[0].total : 0;

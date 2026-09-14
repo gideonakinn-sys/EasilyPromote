@@ -128,6 +128,16 @@ export interface CampaignReferral {
   code: string | null;
   status: "awaiting_code" | "awaiting_business" | "active" | "disabled";
   conversions: number;
+  rewardPerConversion?: number;
+  paying?: boolean;
+  earnings?: {
+    earned: number;
+    pending: number;
+    available: number;
+    withdrawn: number;
+    availableToWithdraw: number;
+    paidConversions: number;
+  };
 }
 
 export interface MarketplaceCampaign {
@@ -149,6 +159,7 @@ export interface MarketplaceCampaign {
   viewTarget?: number;
   creatorPool?: number;
   description: string;
+  referralReward?: { amount: number; eventType: string } | null;
 }
 
 export interface WalletData {
@@ -170,6 +181,26 @@ export interface WalletData {
   lifetimeEarnings: number;
   completionRate: number;
   totalReleased: number;
+  referral?: {
+    earned: number;
+    pending: number;
+    availableToWithdraw: number;
+    withdrawn: number;
+    holdDays: number;
+    byCampaign: Array<{
+      id: string;
+      title: string;
+      status: string;
+      eventType: string | null;
+      rewardPerConversion: number;
+      paidConversions: number;
+      earned: number;
+      pending: number;
+      available: number;
+      withdrawn: number;
+      availableToWithdraw: number;
+    }>;
+  };
   recentTransactions: Array<{
     id: string;
     type: string;
@@ -183,6 +214,7 @@ export interface WithdrawalItem {
   id: string;
   campaignId: string;
   campaignName: string;
+  kind?: "views" | "referral";
   amount: number;
   status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;

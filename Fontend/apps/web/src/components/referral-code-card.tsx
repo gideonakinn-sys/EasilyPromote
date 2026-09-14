@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
-import { conversionNoun } from "../lib/referral";
+import { conversionNoun, formatNaira } from "../lib/referral";
 import type { CampaignReferral } from "./types";
 
 const STATUS_COPY: Record<CampaignReferral["status"], { label: string; className: string; hint: string }> = {
@@ -33,6 +33,8 @@ const STATUS_COPY: Record<CampaignReferral["status"], { label: string; className
 export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
   const { toast } = useToast();
   const copy = STATUS_COPY[referral.status] || STATUS_COPY.awaiting_code;
+  const rate = referral.rewardPerConversion || 0;
+  const earnings = referral.earnings;
 
   const handleCopy = async () => {
     if (!referral.code) return;
@@ -73,6 +75,17 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
 
       <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">{copy.hint}</p>
 
+      {rate > 0 && (
+        <p className="font-rethink text-xs font-medium text-stone-900 tracking-[-0.01em]">
+          You earn {formatNaira(rate)} per {conversionNoun(referral.eventType, 1)} through your code.
+          {referral.paying === false && (
+            <span className="block text-amber-700 mt-0.5">
+              The brand&apos;s referral budget has run out, so new {conversionNoun(referral.eventType, 2)} aren&apos;t paid until they add more.
+            </span>
+          )}
+        </p>
+      )}
+
       {referral.code && (
         <>
           <div className="border-t border-stone-100" />
@@ -82,6 +95,25 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
               {referral.conversions.toLocaleString()} {conversionNoun(referral.eventType, referral.conversions)}
             </span>
           </div>
+          {earnings && earnings.earned > 0 && (
+            <div className="grid grid-cols-3 gap-2 font-rethink">
+              {[
+                ["Earned", earnings.earned],
+                ["On hold", earnings.pending],
+                ["Withdrawable", earnings.availableToWithdraw],
+              ].map(([label, value]) => (
+                <div key={label as string} className="bg-stone-50 rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
+                  <span className="text-sm font-medium text-stone-900 tabular-nums">{formatNaira(value as number)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {earnings && earnings.pending > 0 && (
+            <p className="font-rethink text-[11px] font-medium text-stone-500 leading-relaxed">
+              Referral earnings are held for 7 days after each conversion, then you can withdraw them from your wallet.
+            </p>
+          )}
         </>
       )}
     </div>

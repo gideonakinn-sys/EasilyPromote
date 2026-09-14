@@ -8,21 +8,30 @@ const DEPOSIT_TYPES = ["escrow_deposit", "topup"];
 // money — only a "failed" release returns its amount to the pool.
 const COMMITTED_RELEASE_STATUSES = ["escrow_deposit", "released"];
 
-function escrowBalanceFrom(transactions) {
-  const deposited = transactions
+// Views and referral budgets are separate pots. Rows from before referral
+// budgets existed have no bucket and belong to views.
+function bucketOf(transaction) {
+  return transaction.bucket === "referral" ? "referral" : "views";
+}
+
+function escrowBalanceFrom(transactions, bucket = "views") {
+  const inBucket = transactions.filter((t) => bucketOf(t) === bucket);
+
+  const deposited = inBucket
     .filter((t) => DEPOSIT_TYPES.includes(t.type) && t.status === "escrow_deposit")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const committed = transactions
+  const committed = inBucket
     .filter((t) => t.type === "release" && COMMITTED_RELEASE_STATUSES.includes(t.status))
     .reduce((sum, t) => sum + t.amount, 0);
 
   return Math.max(deposited - committed, 0);
 }
 
-async function campaignEscrowBalance(campaignId) {
-  const transactions = await Transaction.find({ campaignId });
-  return escrowBalanceFrom(transactions);
+async function campaignEscrowBalance(campaignId, bucket = "views") {
+  const filter = bucket === "referral" ? { campaignId, bucket: "referral" } : { campaignId, bucket: { $ne: "referral" } };
+  const transactions = await Transaction.find(filter);
+  return escrowBalanceFrom(transactions, bucket);
 }
 
 module.exports = { campaignEscrowBalance, escrowBalanceFrom };

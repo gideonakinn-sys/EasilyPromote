@@ -152,6 +152,7 @@ function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): 
     targetViews: c.targetViews as number,
     costPerView: c.costPerView as number,
     creatorPool: c.creatorPool as number | undefined,
+    referralReward: (c.referralReward as MarketplaceCampaign["referralReward"]) ?? null,
     contentBrief: c.contentBrief as string,
     brandName: (c.brandName as string) || "Brand",
     brandAvatar: c.brandAvatar as string | undefined,

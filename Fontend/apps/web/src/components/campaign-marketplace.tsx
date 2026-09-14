@@ -5,6 +5,7 @@ import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import type { MarketplaceCampaign } from "./types";
+import { conversionNoun, formatNaira } from "../lib/referral";
 import { useReveal } from "../hooks/use-reveal";
 import slotLimitImg from "@ep/ui/assets/Slot-limit+new-user-empty.png";
 import emptyCampaignImg from "@ep/ui/assets/empty-campaign.png";
@@ -107,6 +108,11 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
                     {camp.platforms.length > 0 && (
                       <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
                         {camp.platforms.join(", ")}
+                      </span>
+                    )}
+                    {camp.referralReward && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-tight text-[10px] font-rethink whitespace-nowrap">
+                        +{formatNaira(camp.referralReward.amount)} per {conversionNoun(camp.referralReward.eventType, 1)}
                       </span>
                     )}
                   </div>

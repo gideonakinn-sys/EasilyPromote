@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
@@ -8,10 +8,13 @@ import { Skeleton } from "./ui/skeleton";
 import { useReferralConversions } from "../lib/socket";
 import {
   CODE_SOURCE_OPTIONS,
+  MIN_REFERRAL_BUDGET,
   REFERRAL_EVENT_TYPES,
   conversionNoun,
   downloadReferralCodesCsv,
+  formatNaira,
   referralApi,
+  type SettingsChanges,
   type ReferralCodeRow,
   type ReferralCodeSource,
   type ReferralCodesPayload,
@@ -31,7 +34,17 @@ const DEFAULT_SETTINGS: ReferralSettings = {
   eventType: "signup",
   codeSource: "easilypromote",
   conversions: 0,
+  rewardPerConversion: 0,
+  budget: 0,
+  platformFee: 0,
+  platformFeePercent: 30,
+  pool: 0,
+  poolRemaining: 0,
+  earned: 0,
+  budgetExhausted: false,
 };
+
+const FUNDABLE_STATUSES = ["live", "paused", "under_review"];
 
 interface ReferralSettingsFieldsProps {
   eventType: ReferralEventType;
@@ -106,9 +119,18 @@ interface CampaignReferralsProps {
   campaignId: string;
   campaignStatus: string;
   initialSettings?: ReferralSettings;
+  // Set when the brand returns from paying for referral budget on Paystack.
+  topupReference?: string | null;
+  onTopupHandled?: () => void;
 }
 
-export function CampaignReferrals({ campaignId, campaignStatus, initialSettings }: CampaignReferralsProps) {
+export function CampaignReferrals({
+  campaignId,
+  campaignStatus,
+  initialSettings,
+  topupReference,
+  onTopupHandled,
+}: CampaignReferralsProps) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<ReferralSettings>(initialSettings || DEFAULT_SETTINGS);
   const [draftEventType, setDraftEventType] = useState<ReferralEventType>(initialSettings?.eventType || "signup");
@@ -128,6 +150,12 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
   const [importCsv, setImportCsv] = useState("");
   const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [rewardInput, setRewardInput] = useState(
+    initialSettings?.rewardPerConversion ? String(initialSettings.rewardPerConversion) : ""
+  );
+  const [savingReward, setSavingReward] = useState(false);
+  const [fundAmount, setFundAmount] = useState("");
+  const [funding, setFunding] = useState(false);
 
   const isCancelled = campaignStatus === "cancelled";
 
@@ -139,6 +167,7 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
       setSettings(payload.referral);
       setDraftEventType(payload.referral.eventType);
       setDraftCodeSource(payload.referral.codeSource);
+      setRewardInput(payload.referral.rewardPerConversion ? String(payload.referral.rewardPerConversion) : "");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load referral codes");
     } finally {
@@ -168,10 +197,30 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
     });
   });
 
-  const saveSettings = async (
-    changes: Partial<Pick<ReferralSettings, "enabled" | "eventType" | "codeSource">>,
-    successMessage: string
-  ) => {
+  // Confirm a referral budget payment once, when the brand lands back here from Paystack.
+  useEffect(() => {
+    if (!topupReference) return;
+    let active = true;
+    referralApi
+      .confirmReferralBudget(campaignId, topupReference)
+      .then((result) => {
+        if (!active) return;
+        setSettings(result.referral);
+        toast(`${formatNaira(result.amount)} added to your referral budget.`, "success");
+        fetchCodes();
+      })
+      .catch((err: unknown) => {
+        if (active) toast(err instanceof Error ? err.message : "Couldn't confirm your referral budget payment", "error");
+      })
+      .finally(() => onTopupHandled?.());
+    return () => {
+      active = false;
+    };
+    // Runs once per returned payment reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topupReference]);
+
+  const saveSettings = async (changes: SettingsChanges, successMessage: string) => {
     setSavingSettings(true);
     try {
       const result = await referralApi.updateSettings(campaignId, changes);
@@ -185,6 +234,40 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
       toast(err instanceof Error ? err.message : "Could not save referral settings", "error");
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveReward = async (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Number(rewardInput || 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast("Enter a reward of ₦0 or more", "error");
+      return;
+    }
+    setSavingReward(true);
+    await saveSettings(
+      { rewardPerConversion: amount },
+      amount > 0
+        ? `Creators now earn ${formatNaira(amount)} per ${conversionNoun(settings.eventType, 1)}.`
+        : "Creator rewards are off."
+    );
+    setSavingReward(false);
+  };
+
+  const handleFund = async (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Math.round(Number(fundAmount || 0));
+    if (!Number.isFinite(amount) || amount < MIN_REFERRAL_BUDGET) {
+      toast(`Add at least ${formatNaira(MIN_REFERRAL_BUDGET)}`, "error");
+      return;
+    }
+    setFunding(true);
+    try {
+      const payment = await referralApi.startReferralBudget(campaignId, amount);
+      window.location.href = payment.authorization_url;
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Couldn't start the payment", "error");
+      setFunding(false);
     }
   };
 
@@ -387,6 +470,118 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
         </div>
       </div>
 
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="font-rethink font-semibold text-sm text-stone-900">Creator rewards</h4>
+          {settings.rewardPerConversion > 0 &&
+            (settings.poolRemaining >= settings.rewardPerConversion ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-[#CBF5E5] text-[#176448]">
+                Paying creators
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-amber-50 text-amber-800">
+                Budget used up
+              </span>
+            ))}
+        </div>
+
+        <form onSubmit={handleSaveReward} className="space-y-2">
+          <label htmlFor="referral-reward" className="text-xs font-medium text-stone-500 font-rethink block">
+            Creators earn per {conversionNoun(settings.eventType, 1)}
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">
+                ₦
+              </span>
+              <input
+                id="referral-reward"
+                inputMode="decimal"
+                value={rewardInput}
+                onChange={(e) => setRewardInput(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="500"
+                disabled={isCancelled}
+                className="w-full pl-8 pr-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-rethink text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 disabled:opacity-50"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={savingReward || isCancelled || Number(rewardInput || 0) === settings.rewardPerConversion}
+              className="px-4 py-2.5 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink disabled:opacity-40"
+            >
+              {savingReward ? "Saving…" : "Save"}
+            </button>
+          </div>
+          <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
+            Applies to new {conversionNoun(settings.eventType, 2)}; each one keeps the reward it earned. Creators can withdraw
+            rewards 7 days after the conversion.
+          </p>
+        </form>
+
+        <div className="grid grid-cols-2 gap-3 border-t border-stone-100 pt-4">
+          {[
+            ["Budget added", formatNaira(settings.budget)],
+            [`Platform fee (${settings.platformFeePercent ?? 30}%)`, formatNaira(settings.platformFee)],
+            ["Earned by creators", formatNaira(settings.earned)],
+            ["Left for rewards", formatNaira(settings.poolRemaining)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
+              <span className="font-rethink text-sm font-medium text-stone-900 tabular-nums">{value}</span>
+            </div>
+          ))}
+        </div>
+        {settings.rewardPerConversion > 0 && (
+          <p className="text-[11px] text-stone-500 font-medium font-rethink">
+            Enough for about {Math.floor(settings.poolRemaining / settings.rewardPerConversion).toLocaleString()} more{" "}
+            {conversionNoun(settings.eventType, 2)}. When it runs out, conversions are still recorded but not paid.
+          </p>
+        )}
+
+        {FUNDABLE_STATUSES.includes(campaignStatus) ? (
+          <form onSubmit={handleFund} className="space-y-2 border-t border-stone-100 pt-4">
+            <label htmlFor="referral-fund" className="text-xs font-medium text-stone-500 font-rethink block">
+              Add referral budget
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">
+                  ₦
+                </span>
+                <input
+                  id="referral-fund"
+                  inputMode="numeric"
+                  value={fundAmount}
+                  onChange={(e) => setFundAmount(e.target.value.replace(/\D/g, ""))}
+                  placeholder="50000"
+                  className="w-full pl-8 pr-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-rethink text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={funding || Number(fundAmount || 0) < MIN_REFERRAL_BUDGET}
+                className="px-4 py-2.5 bg-[#FEB604] text-[#1C1917] rounded-full text-xs font-semibold font-rethink border border-stone-100 disabled:bg-stone-200 disabled:text-stone-400"
+              >
+                {funding ? "Redirecting…" : "Pay"}
+              </button>
+            </div>
+            <p className="text-[11px] text-stone-500 font-medium font-rethink">
+              {Number(fundAmount || 0) >= MIN_REFERRAL_BUDGET
+                ? `${formatNaira(
+                    Math.round(Number(fundAmount) * (1 - (settings.platformFeePercent ?? 30) / 100) * 100) / 100
+                  )} goes to creator rewards after the ${settings.platformFeePercent ?? 30}% platform fee.`
+                : `Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Kept separate from your views budget.`}
+            </p>
+          </form>
+        ) : (
+          !isCancelled && (
+            <p className="text-[11px] text-stone-500 font-medium font-rethink border-t border-stone-100 pt-4">
+              You can add a referral budget once the campaign is live.
+            </p>
+          )
+        )}
+      </div>
+
       {(awaitingCount > 0 || missingCount > 0) && (
         <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-3">
           <p className="font-rethink text-xs font-medium text-amber-900 leading-relaxed">
@@ -507,6 +702,12 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
                     <span className="text-stone-500">{conversionNoun(settings.eventType, row.conversions)}</span>
                   </span>
                 </div>
+
+                {row.earned > 0 && (
+                  <p className="font-rethink text-xs font-medium text-stone-500">
+                    {formatNaira(row.earned)} earned from referrals
+                  </p>
+                )}
 
                 {isEditing ? (
                   <form

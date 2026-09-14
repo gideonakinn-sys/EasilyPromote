@@ -8,6 +8,7 @@ const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { settleRelease, revertRelease } = require("../utils/payouts");
 const { creditTopup } = require("../utils/topups");
 const { handleConversionWebhook, handleCodeCheck } = require("../services/conversions");
+const { creditReferralTopup } = require("../utils/referralEarnings");
 
 const router = express.Router();
 
@@ -41,6 +42,22 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
           emitToUser(result.campaign.businessId, "topup-success", {
             campaignId: result.campaign._id,
             amount: paidAmount,
+          });
+        }
+      } else if (metadata.type === "referral_topup" && metadata.campaignId) {
+        // Referral budget payments are credited to their own pot; creditReferralTopup
+        // is idempotent on the reference, so the brand's browser can race this safely.
+        const result = await creditReferralTopup({
+          campaignId: metadata.campaignId,
+          reference,
+          amount: paidAmount,
+        });
+
+        if (result.credited) {
+          emitToUser(result.campaign.businessId, "referral-budget-topup", {
+            campaignId: result.campaign._id,
+            amount: paidAmount,
+            poolRemaining: result.campaign.referral.poolRemaining,
           });
         }
       } else if (metadata.campaignId) {

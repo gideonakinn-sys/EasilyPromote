@@ -2,6 +2,7 @@ const CreatorProfile = require("../models/CreatorProfile");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
+const { creatorReferralEarnings } = require("../utils/referralEarnings");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const TikTokConnection = require("../models/TikTokConnection");
@@ -205,6 +206,14 @@ async function buildMarketplace(ctx) {
       brandAvatar: brand ? brand.avatar || null : null,
       matchScore,
       recommended: matchScore > 0,
+      // Shown before claiming, so creators know a campaign also pays per referral.
+      referralReward:
+        campaign.referral &&
+        campaign.referral.enabled &&
+        campaign.referral.rewardPerConversion > 0 &&
+        campaign.referral.poolRemaining >= campaign.referral.rewardPerConversion
+          ? { amount: campaign.referral.rewardPerConversion, eventType: campaign.referral.eventType }
+          : null,
     });
   }
 
@@ -236,20 +245,36 @@ function indexSubmissionsByCampaign(submissions) {
 
 // Only campaigns with referral tracking on carry a referral block. A null code means
 // the brand supplies its own codes and hasn't set this creator's yet.
-function buildCreatorReferral(campaign, code) {
+function emptyReferralEarnings() {
+  return { earned: 0, pending: 0, available: 0, withdrawn: 0, availableToWithdraw: 0, paidConversions: 0 };
+}
+
+function buildCreatorReferral(campaign, code, earnings) {
   if (!campaign.referral || !campaign.referral.enabled) return null;
+  const totals = earnings || emptyReferralEarnings();
   return {
     eventType: campaign.referral.eventType,
     code: code ? code.code : null,
     status: code ? code.status : "awaiting_code",
     conversions: code ? code.conversions : 0,
+    rewardPerConversion: campaign.referral.rewardPerConversion || 0,
+    // Whether new conversions are currently being paid (the brand has budget left).
+    paying: (campaign.referral.rewardPerConversion || 0) > 0 && (campaign.referral.poolRemaining || 0) >= (campaign.referral.rewardPerConversion || 0),
+    earnings: {
+      earned: totals.earned,
+      pending: totals.pending,
+      available: totals.available,
+      withdrawn: totals.withdrawn,
+      availableToWithdraw: totals.availableToWithdraw,
+      paidConversions: totals.paidConversions,
+    },
   };
 }
 
 async function buildMyCampaigns(ctx) {
   const { userId } = ctx;
 
-  const [slots, submissions, referralCodes] = await Promise.all([
+  const [slots, submissions, referralCodes, referralEarnings] = await Promise.all([
     Slot.find({ creatorId: userId })
       .populate({
         path: "campaignId",
@@ -260,6 +285,7 @@ async function buildMyCampaigns(ctx) {
       .lean(),
     Submission.find({ creatorId: userId }).sort({ createdAt: -1 }).lean(),
     ReferralCode.find({ creatorId: userId }).select("slotId code status conversions").lean(),
+    creatorReferralEarnings(userId),
   ]);
 
   const submissionMap = indexSubmissionsByCampaign(submissions);
@@ -368,7 +394,11 @@ async function buildMyCampaigns(ctx) {
         reviewedAgo: timeAgo(submission ? submission.reviewedAt : undefined),
         postedAgo: timeAgo(submission ? submission.postedAt : undefined),
         timeline: submission ? eventsBySubmission[submission._id.toString()] || [] : [],
-        referral: buildCreatorReferral(campaign, referralBySlot.get(slot._id.toString())),
+        referral: buildCreatorReferral(
+          campaign,
+          referralBySlot.get(slot._id.toString()),
+          referralEarnings.get(campaign._id.toString())
+        ),
       };
     });
 
@@ -379,12 +409,13 @@ async function buildWallet(user, ctx) {
   const { userId, profile } = ctx;
   const handle = profile ? profile.username : user.name;
 
-  const [transactions, submissions, slots] = await Promise.all([
+  const [transactions, submissions, slots, referralEarnings] = await Promise.all([
     Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean(),
     Submission.find({ creatorId: userId }).lean(),
     Slot.find({ creatorId: userId })
-      .populate({ path: "campaignId", select: "name status targetViews costPerView viewsDelivered" })
+      .populate({ path: "campaignId", select: "name status targetViews costPerView viewsDelivered referral" })
       .lean(),
+    creatorReferralEarnings(userId),
   ]);
 
   const totalReleased = submissions
@@ -427,6 +458,32 @@ async function buildWallet(user, ctx) {
   const pendingBalance = pendingByCampaign.reduce((sum, c) => sum + c.earned, 0);
   const payout = profile && profile.payoutAccount;
 
+  // Referral earnings are their own pot: held 7 days per conversion, then withdrawable.
+  const referralByCampaign = [];
+  for (const slot of slots) {
+    const campaign = slot.campaignId;
+    if (!campaign) continue;
+    const earnings = referralEarnings.get(campaign._id.toString());
+    const tracking = campaign.referral && campaign.referral.enabled;
+    if (!earnings && !tracking) continue;
+    const totals = earnings || emptyReferralEarnings();
+    referralByCampaign.push({
+      id: campaign._id,
+      title: campaign.name,
+      status: campaign.status,
+      eventType: campaign.referral ? campaign.referral.eventType : null,
+      rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
+      paidConversions: totals.paidConversions,
+      earned: totals.earned,
+      pending: totals.pending,
+      available: totals.available,
+      withdrawn: totals.withdrawn,
+      availableToWithdraw: totals.availableToWithdraw,
+    });
+  }
+  const sumReferral = (field) =>
+    Math.round(referralByCampaign.reduce((sum, c) => sum + c[field], 0) * 100) / 100;
+
   return {
     balance: withdrawableBalance,
     withdrawableBalance,
@@ -439,6 +496,14 @@ async function buildWallet(user, ctx) {
     lifetimeEarnings: profile ? profile.lifetimeEarnings : 0,
     completionRate: profile ? profile.completionRate : 0,
     totalReleased,
+    referral: {
+      earned: sumReferral("earned"),
+      pending: sumReferral("pending"),
+      availableToWithdraw: sumReferral("availableToWithdraw"),
+      withdrawn: sumReferral("withdrawn"),
+      holdDays: 7,
+      byCampaign: referralByCampaign,
+    },
     recentTransactions: transactions.map((t) => ({
       id: t._id,
       createdAt: t.date,

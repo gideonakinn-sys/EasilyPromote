@@ -283,6 +283,18 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     }
   }, [campaignId, fetchCampaign]);
 
+  // Back from paying for referral budget: open the Referrals tab, which confirms the payment.
+  const [referralTopupReference, setReferralTopupReference] = useState<string | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("reference");
+    if (params.get("referralTopup") === "success" && reference) {
+      setReferralTopupReference(reference);
+      setActiveTab("Referrals");
+      window.history.replaceState({}, "", `/dashboard/brand/campaign/${campaignId}`);
+    }
+  }, [campaignId]);
+
   useEffect(() => {
     if (!topupSuccess) return;
     const timer = setTimeout(() => setTopupSuccess(false), 5000);
@@ -830,6 +842,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               campaignId={campaign.id}
               campaignStatus={campaign.status}
               initialSettings={campaign.referral}
+              topupReference={referralTopupReference}
+              onTopupHandled={() => setReferralTopupReference(null)}
             />
           </div>
         )}

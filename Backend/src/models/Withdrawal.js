@@ -52,11 +52,19 @@ const withdrawalSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Views earnings and referral earnings are separate entitlements with separate
+    // escrow. Older withdrawals have no kind and are views withdrawals.
+    kind: {
+      type: String,
+      enum: ["views", "referral"],
+      default: "views",
+    },
   },
   { timestamps: true }
 );
 
 withdrawalSchema.index({ creatorId: 1, status: 1 });
 withdrawalSchema.index({ campaignId: 1, creatorId: 1, status: 1 });
+withdrawalSchema.index({ creatorId: 1, kind: 1, campaignId: 1, status: 1 });
 
 module.exports = mongoose.model("Withdrawal", withdrawalSchema);

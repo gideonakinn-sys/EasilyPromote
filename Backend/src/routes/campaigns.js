@@ -10,6 +10,7 @@ const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
 const { parseReferralSettings } = require("../utils/referralCodes");
+const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 
 const router = express.Router();
 
@@ -617,8 +618,9 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
 
     emitCampaignStatus(campaign);
 
+    // Views escrow only; the referral budget is refunded separately below.
     const unreleased = await Transaction.aggregate([
-      { $match: { campaignId: campaign._id, status: "escrow_deposit" } },
+      { $match: { campaignId: campaign._id, status: "escrow_deposit", bucket: { $ne: "referral" } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
 
@@ -632,6 +634,8 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
         date: new Date(),
       });
     }
+
+    await refundUnusedReferralBudget(campaign._id);
 
     res.json({ id: campaign._id, status: campaign.status });
   } catch (error) {
@@ -706,6 +710,12 @@ router.get("/:id", protect, async (req, res, next) => {
         eventType: campaign.referral ? campaign.referral.eventType : "signup",
         codeSource: campaign.referral ? campaign.referral.codeSource : "easilypromote",
         conversions: campaign.referral ? campaign.referral.conversions : 0,
+        rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
+        budget: campaign.referral ? campaign.referral.budget || 0 : 0,
+        platformFee: campaign.referral ? campaign.referral.platformFee || 0 : 0,
+        pool: campaign.referral ? campaign.referral.pool || 0 : 0,
+        poolRemaining: campaign.referral ? campaign.referral.poolRemaining || 0 : 0,
+        earned: campaign.referral ? campaign.referral.earned || 0 : 0,
       },
     });
   } catch (error) {

@@ -9,6 +9,7 @@ const BusinessProfile = require("../models/BusinessProfile");
 const { decrypt } = require("../utils/crypto");
 const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
+const { reserveConversionReward } = require("../utils/referralEarnings");
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -161,7 +162,7 @@ async function evaluateCode(businessId, rawCode, now) {
   if (!referralCode) return { value, referralCode: null, campaign: null, reason: "not_found" };
   if (referralCode.status === "disabled") return { value, referralCode, campaign: null, reason: "disabled" };
 
-  const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt referral");
+  const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt referral businessId name");
   if (!campaign || !campaignAcceptsConversions(campaign, now.getTime())) {
     return { value, referralCode, campaign, reason: "campaign_not_accepting" };
   }
@@ -251,8 +252,9 @@ async function processConversion(request, context) {
   if (evaluation.reason) return reply(409, { error: INVALID_CODE_MESSAGES[evaluation.reason] });
   const { referralCode, campaign } = evaluation;
 
+  let event;
   try {
-    await ConversionEvent.create({
+    event = await ConversionEvent.create({
       businessId: key.businessId,
       campaignId: campaign._id,
       referralCodeId: referralCode._id,
@@ -272,11 +274,26 @@ async function processConversion(request, context) {
   // Every event is stored; only the campaign's chosen conversion type moves the counters.
   const counted = payload.event === (campaign.referral && campaign.referral.eventType);
 
+  // The event is saved first (it's the idempotency guard); only then is money
+  // reserved, so a duplicate delivery can never reserve a reward twice.
+  const reward = await reserveConversionReward(campaign, counted, now);
+
   const [updatedCode] = await Promise.all([
     ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
     counted
       ? Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } })
       : Promise.resolve(),
+    ConversionEvent.updateOne(
+      { _id: event._id },
+      {
+        $set: {
+          counted,
+          rewardAmount: reward.rewardAmount,
+          unpaidReason: counted && reward.rewardAmount > 0 ? null : reward.unpaidReason,
+          availableAt: reward.availableAt,
+        },
+      }
+    ),
     activateIfPending(referralCode, now),
     markConnected(key, now),
   ]);
@@ -287,6 +304,7 @@ async function processConversion(request, context) {
     code: referralCode.code,
     eventType: payload.event,
     counted,
+    rewardAmount: reward.rewardAmount,
     conversions: updatedCode ? updatedCode.conversions : referralCode.conversions,
   };
   emitToUser(referralCode.creatorId, "referral-conversion", update);

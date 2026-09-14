@@ -12,6 +12,7 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { EVENT_TYPES } = require("../services/conversions");
 const { paging, pageMeta, isObjectId, searchRegex, parseDate, csvCell } = require("../utils/adminQuery");
+const { payoutStatusOf, voidConversion } = require("../utils/referralEarnings");
 
 const router = express.Router();
 
@@ -162,6 +163,26 @@ router.get("/stats", viewGuard, async (req, res, next) => {
       buildFlags(now),
     ]);
 
+    const [budgetGroup] = await Campaign.aggregate([
+      { $match: { "referral.budget": { $gt: 0 } } },
+      {
+        $group: {
+          _id: null,
+          funded: { $sum: "$referral.budget" },
+          platformFee: { $sum: "$referral.platformFee" },
+          earnedByCreators: { $sum: "$referral.earned" },
+          remaining: { $sum: "$referral.poolRemaining" },
+        },
+      },
+    ]);
+    const round = (value) => Math.round((value || 0) * 100) / 100;
+    const budgetTotals = {
+      funded: round(budgetGroup && budgetGroup.funded),
+      platformFee: round(budgetGroup && budgetGroup.platformFee),
+      earnedByCreators: round(budgetGroup && budgetGroup.earnedByCreators),
+      remaining: round(budgetGroup && budgetGroup.remaining),
+    };
+
     res.json({
       brandsConnected,
       activeKeys,
@@ -169,6 +190,7 @@ router.get("/stats", viewGuard, async (req, res, next) => {
       codes: { total: totalCodes, active: activeCodes },
       conversions: { today: conversionsToday, last7Days: conversions7d, allTime: conversionsAll },
       requests: { last24h: requests24h, rejectedLast24h: rejected24h },
+      referralBudget: budgetTotals,
       flagCounts: {
         campaignsWithoutConversions: flags.campaignsWithoutConversions.length,
         brandsWithHighRejections: flags.brandsWithHighRejections.length,
@@ -410,6 +432,10 @@ router.get("/campaigns", viewGuard, async (req, res, next) => {
           eventType: campaign.referral.eventType,
           codeSource: campaign.referral.codeSource,
           conversions: campaign.referral.conversions,
+          rewardPerConversion: campaign.referral.rewardPerConversion || 0,
+          referralBudget: campaign.referral.budget || 0,
+          earnedByCreators: campaign.referral.earned || 0,
+          poolRemaining: campaign.referral.poolRemaining || 0,
           viewsDelivered: campaign.viewsDelivered,
           targetViews: campaign.targetViews,
           codes: codes ? codes.total : 0,
@@ -438,9 +464,20 @@ router.get("/campaigns/:id/codes", viewGuard, async (req, res, next) => {
       User.find({ _id: { $in: creatorIds } }).select("name").lean(),
       ConversionEvent.aggregate([
         { $match: { campaignId: campaign._id } },
-        { $group: { _id: "$referralCodeId", lastAt: { $max: "$createdAt" } } },
+        {
+          $group: {
+            _id: "$referralCodeId",
+            lastAt: { $max: "$createdAt" },
+            earned: {
+              $sum: {
+                $cond: [{ $and: [{ $gt: ["$rewardAmount", 0] }, { $eq: [{ $ifNull: ["$voidedAt", null] }, null] }] }, "$rewardAmount", 0],
+              },
+            },
+          },
+        },
       ]),
     ]);
+    const earnedByCode = countMap(lastConversions, "earned");
     const profileByUser = new Map(profiles.map((profile) => [String(profile.userId), profile]));
     const userById = new Map(users.map((user) => [String(user._id), user]));
     const lastByCode = countMap(lastConversions, "lastAt");
@@ -462,6 +499,7 @@ router.get("/campaigns/:id/codes", viewGuard, async (req, res, next) => {
             name: (profile && profile.displayName) || (user && user.name) || null,
           },
           lastConversionAt: lastByCode.get(String(code._id)) || null,
+          earned: Math.round((earnedByCode.get(String(code._id)) || 0) * 100) / 100,
           createdAt: code.createdAt,
         };
       }),
@@ -511,6 +549,7 @@ async function hydrateConversions(events) {
   const profileByUser = byId(profiles, "userId");
   const codeById = byId(codes);
 
+  const now = new Date();
   return events.map((event) => {
     const campaign = campaignById.get(String(event.campaignId));
     const brand = brandById.get(String(event.businessId));
@@ -523,7 +562,17 @@ async function hydrateConversions(events) {
       receivedAt: event.createdAt,
       eventId: event.eventId,
       eventType: event.eventType,
-      counted: Boolean(campaign && campaign.referral && campaign.referral.eventType === event.eventType),
+      // Stored at record time; events from before that fall back to the campaign's current type.
+      counted:
+        typeof event.counted === "boolean"
+          ? event.counted
+          : Boolean(campaign && campaign.referral && campaign.referral.eventType === event.eventType),
+      rewardAmount: event.rewardAmount || 0,
+      unpaidReason: event.unpaidReason || null,
+      availableAt: event.availableAt || null,
+      voidedAt: event.voidedAt || null,
+      voidedReason: event.voidedReason || null,
+      payoutStatus: payoutStatusOf(event, now),
       code: code ? code.code : null,
       brand: { id: event.businessId, name: brand ? brand.name : null },
       campaign: { id: event.campaignId, name: campaign ? campaign.name : null },
@@ -555,7 +604,7 @@ router.get("/conversions.csv", viewGuard, async (req, res, next) => {
     const rows = await hydrateConversions(events);
 
     const lines = [
-      "occurred_at,received_at,brand,campaign,creator_username,code,event,counted,event_id",
+      "occurred_at,received_at,brand,campaign,creator_username,code,event,counted,event_id,reward_ngn,payout_status",
       ...rows.map((row) =>
         [
           row.occurredAt && new Date(row.occurredAt).toISOString(),
@@ -567,6 +616,8 @@ router.get("/conversions.csv", viewGuard, async (req, res, next) => {
           row.eventType,
           row.counted ? "yes" : "no",
           row.eventId,
+          row.rewardAmount,
+          row.payoutStatus,
         ]
           .map(csvCell)
           .join(",")
@@ -577,6 +628,46 @@ router.get("/conversions.csv", viewGuard, async (req, res, next) => {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="referral-conversions-${stamp}.csv"`);
     res.send(`${lines.join("\n")}\n`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/referrals/conversions/:id/void ───────────────────────────
+// Voids a fake or reversed conversion while its earnings are still on hold.
+router.post("/conversions/:id/void", actGuard, async (req, res, next) => {
+  try {
+    const note = requireNote(req, res);
+    if (!note) return;
+    if (!isObjectId(req.params.id)) return res.status(404).json({ error: "Conversion not found" });
+
+    const result = await voidConversion(req.params.id, { reason: note, voidedBy: req.user._id });
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+
+    const { event, campaign, refundedToPool } = result;
+    const code = await ReferralCode.findById(event.referralCodeId).select("code").lean();
+
+    await Notification.create({
+      creatorId: event.creatorId,
+      campaignId: event.campaignId,
+      type: "referral_conversion_voided",
+      title: "A referral conversion was voided",
+      body: `A ${event.eventType} on your code ${code ? code.code : ""}${campaign ? ` for "${campaign.name}"` : ""} was voided after review${
+        refundedToPool > 0 ? `, so its ₦${refundedToPool.toLocaleString()} reward was removed from your pending earnings` : ""
+      }. Note: ${note}`,
+    });
+
+    await recordAdminActivity(req, {
+      action: "conversion.voided",
+      targetType: "conversion",
+      targetId: event._id,
+      targetLabel: `${code ? code.code : "Conversion"} · ${event.eventId}`,
+      businessId: event.businessId,
+      note,
+      metadata: { amount: refundedToPool, eventType: event.eventType, creatorId: event.creatorId, campaignId: event.campaignId },
+    });
+
+    res.json({ success: true, conversion: { id: event._id, voided: true, refundedToPool } });
   } catch (err) {
     next(err);
   }

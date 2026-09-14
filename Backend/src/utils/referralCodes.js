@@ -36,6 +36,13 @@ function parseReferralSettings(input) {
     }
     value.codeSource = input.codeSource;
   }
+  if (input.rewardPerConversion !== undefined) {
+    const amount = Number(input.rewardPerConversion);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000) {
+      return { error: "referral.rewardPerConversion must be a number between 0 and 1,000,000" };
+    }
+    value.rewardPerConversion = Math.round(amount * 100) / 100;
+  }
   return { value };
 }
 

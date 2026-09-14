@@ -15,7 +15,10 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       return res.status(403).json({ error: "Not authorized" });
     }
 
-    const transactions = await Transaction.find({ campaignId: campaign._id }).sort({ date: -1 });
+    const allTransactions = await Transaction.find({ campaignId: campaign._id }).sort({ date: -1 });
+    // The views escrow and the referral budget are separate pots; these totals are views only.
+    const transactions = allTransactions.filter((t) => t.bucket !== "referral");
+    const referralTransactions = allTransactions.filter((t) => t.bucket === "referral");
 
     const deposited = transactions
       .filter((t) => t.status === "escrow_deposit")
@@ -28,6 +31,8 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
     const refunded = transactions
       .filter((t) => t.status === "refunded")
       .reduce((sum, t) => sum + t.amount, 0);
+
+    const sumReferral = (predicate) => referralTransactions.filter(predicate).reduce((sum, t) => sum + t.amount, 0);
 
     const pendingInEscrow = deposited - released;
     const refundable = pendingInEscrow > 0 && ["completed", "cancelled"].includes(campaign.status)
@@ -51,6 +56,14 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       platformFeePercent: campaign.platformFeePercent,
       platformFeeAmount: campaign.platformFee,
       ledger,
+      referral: {
+        funded: sumReferral((t) => t.type === "topup" && t.status === "escrow_deposit"),
+        platformFee: (campaign.referral && campaign.referral.platformFee) || 0,
+        earnedByCreators: (campaign.referral && campaign.referral.earned) || 0,
+        paidOut: sumReferral((t) => t.type === "release" && t.status === "released"),
+        refunded: sumReferral((t) => t.type === "refund"),
+        poolRemaining: (campaign.referral && campaign.referral.poolRemaining) || 0,
+      },
     });
   } catch (error) {
     next(error);

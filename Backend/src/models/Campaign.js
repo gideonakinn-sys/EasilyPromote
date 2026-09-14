@@ -153,6 +153,42 @@ const campaignSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      // What a creator earns per counted conversion, set by the brand. Each conversion
+      // stores the amount it was paid, so changing this only affects new conversions.
+      rewardPerConversion: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      // Referral budget, funded separately from the views budget.
+      // budget = total paid in; platformFee = our share; pool = budget - platformFee.
+      budget: {
+        type: Number,
+        default: 0,
+      },
+      platformFee: {
+        type: Number,
+        default: 0,
+      },
+      pool: {
+        type: Number,
+        default: 0,
+      },
+      // Pool not yet promised to a creator. Rewards are reserved from it atomically.
+      poolRemaining: {
+        type: Number,
+        default: 0,
+      },
+      // Total promised to creators (reserved rewards, minus voided ones).
+      earned: {
+        type: Number,
+        default: 0,
+      },
+      // Set the first time a conversion couldn't be paid, so the brand is told once.
+      budgetExhaustedAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true }

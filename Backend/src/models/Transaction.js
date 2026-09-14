@@ -42,12 +42,28 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Which pot the money belongs to. Views and referral budgets are funded and paid
+    // out separately, so escrow checks and refunds must never mix them. Rows written
+    // before referral budgets existed have no bucket and count as views.
+    bucket: {
+      type: String,
+      enum: ["views", "referral"],
+      default: "views",
+    },
+    // Set on releases so a payout can be credited to its creator without a submission
+    // (referral payouts have none).
+    creatorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
 // Escrow and refund lookups per campaign.
 transactionSchema.index({ campaignId: 1, type: 1, status: 1 });
+transactionSchema.index({ campaignId: 1, bucket: 1, type: 1, status: 1 });
 // Creator wallet: recent transactions for a handle.
 transactionSchema.index({ creatorHandle: 1, date: -1 });
 

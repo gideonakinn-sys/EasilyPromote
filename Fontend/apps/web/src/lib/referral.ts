@@ -87,11 +87,26 @@ export interface TestEventResult {
   };
 }
 
+export const MIN_REFERRAL_BUDGET = 1000;
+
+export function formatNaira(value: number | null | undefined): string {
+  return `₦${(value || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
+}
+
 export interface ReferralSettings {
   enabled: boolean;
   eventType: ReferralEventType;
   codeSource: ReferralCodeSource;
   conversions: number;
+  // What a creator earns per counted conversion, and the separately funded budget that pays it.
+  rewardPerConversion: number;
+  budget: number;
+  platformFee: number;
+  platformFeePercent?: number;
+  pool: number;
+  poolRemaining: number;
+  earned: number;
+  budgetExhausted?: boolean;
 }
 
 export interface WebhookKey {
@@ -123,6 +138,7 @@ export interface ReferralCodeRow {
   source: ReferralCodeSource | null;
   status: "active" | "awaiting_business" | "disabled" | "missing";
   conversions: number;
+  earned: number;
   loadedAt: string | null;
 }
 
@@ -138,7 +154,7 @@ export interface ReferralImportResult {
   results: { row: number; creatorUsername: string; code: string | null; status: "saved" | "error"; error?: string }[];
 }
 
-type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventType" | "codeSource">>;
+export type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventType" | "codeSource" | "rewardPerConversion">>;
 
 const auth = () => ({ token: getToken() || undefined });
 
@@ -176,6 +192,17 @@ export const referralApi = {
     apiRequest<{ codeId: string; slotId: string; code: string; status: string }>(
       `/campaigns/${campaignId}/referral-codes/${slotId}`,
       { method: "PUT", body: JSON.stringify({ code }), ...auth() }
+    ),
+  startReferralBudget: (campaignId: string, amount: number) =>
+    apiRequest<{ authorization_url: string; reference: string }>(`/campaigns/${campaignId}/referral-budget/init`, {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+      ...auth(),
+    }),
+  confirmReferralBudget: (campaignId: string, paystackReference: string) =>
+    apiRequest<{ referral: ReferralSettings; amount: number; credited: boolean; alreadyCredited: boolean }>(
+      `/campaigns/${campaignId}/referral-budget`,
+      { method: "PATCH", body: JSON.stringify({ paystackReference }), ...auth() }
     ),
   importCodes: (campaignId: string, csv: string) =>
     apiRequest<ReferralImportResult>(`/campaigns/${campaignId}/referral-codes/import`, {
