@@ -1,5 +1,6 @@
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { TYPOGRAPHY } from "@ep/ui/lib/constants";
 import emptyHomeImg from "@ep/ui/assets/empty_home.png";
 import { useReveal } from "../hooks/use-reveal";
@@ -45,6 +46,15 @@ export function EmptyState({ onCreateCampaign, userName = "User" }: EmptyStatePr
         >
           Create Campaign
         </button>
+
+        {/* Referral keys and code checks don't depend on having a campaign yet. */}
+        <Link
+          data-reveal
+          href="/dashboard/brand/settings/referral"
+          className="mt-4 text-sm font-semibold text-stone-900 font-rethink underline underline-offset-2"
+        >
+          Set up referral tracking
+        </Link>
       </div>
     </main>
   );

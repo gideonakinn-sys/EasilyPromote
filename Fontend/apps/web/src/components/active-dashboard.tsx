@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FilterIcon, ChevronDownIcon, Add01Icon } from "@hugeicons/core-free-icons";
+import { FilterIcon, ChevronDownIcon, Add01Icon, Link01Icon } from "@hugeicons/core-free-icons";
 import { CampaignCard } from "@ep/ui/components/campaign-card";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import {
@@ -114,6 +114,17 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+
+          {/* Referral tracking settings — account-wide, so reachable without opening a campaign */}
+          <button
+            onClick={() => router.push("/dashboard/brand/settings/referral")}
+            aria-label="Referral tracking"
+            className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
+          >
+            <HugeiconsIcon icon={Link01Icon} size={20} className="text-stone-500 md:hidden" />
+            <HugeiconsIcon icon={Link01Icon} size={16} className="text-stone-500 hidden md:block" />
+            <span className="hidden md:inline text-sm font-medium text-stone-900">Referral tracking</span>
+          </button>
 
           {/* Create campaign button */}
           <button
