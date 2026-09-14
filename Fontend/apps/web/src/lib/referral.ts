@@ -16,7 +16,7 @@ export const CODE_SOURCE_OPTIONS: { value: ReferralCodeSource; label: string; sh
     value: "easilypromote",
     label: "Easily Promote creates them",
     shortLabel: "Easily Promote codes",
-    description: "We generate a code for each creator. You load the codes into your app.",
+    description: "We generate a code for each creator. Your app checks codes with our API as users enter them, so there's nothing to load.",
   },
   {
     value: "business",
@@ -55,9 +55,9 @@ export const DEVELOPER_DOCS_URL = "https://www.easilypromote.com/developers";
 export interface WebhookDeliveryLog {
   id: string;
   createdAt: string;
-  source: "webhook" | "dashboard_test";
+  source: "webhook" | "code_check" | "dashboard_test";
   statusCode: number;
-  result: "recorded" | "ignored" | "test_ok" | "rejected";
+  result: "recorded" | "ignored" | "test_ok" | "valid" | "invalid" | "rejected";
   error: string | null;
   eventId: string | null;
   code: string | null;
@@ -67,7 +67,10 @@ export interface WebhookDeliveryLog {
   keyId: string | null;
 }
 
+export type TestRequestType = "validate" | "conversion";
+
 export interface TestEventResult {
+  type: TestRequestType;
   request: { method: string; url: string; headers: Record<string, string>; body: Record<string, unknown> };
   response: {
     status: number;
@@ -75,7 +78,11 @@ export interface TestEventResult {
       status?: string;
       error?: string;
       details?: string[];
-      code?: { value: string; found: boolean; status?: string; campaignAcceptingConversions?: boolean };
+      valid?: boolean;
+      reason?: string;
+      campaign_id?: string;
+      event?: string;
+      code?: string | { value: string; found: boolean; status?: string; campaignAcceptingConversions?: boolean };
     };
   };
 }
@@ -103,6 +110,7 @@ export interface ReferralStatus {
   lastEventAt: string | null;
   activeKeys: number;
   webhookUrl: string;
+  validateUrl: string;
 }
 
 export interface ReferralCodeRow {
@@ -144,10 +152,10 @@ export const referralApi = {
       ...auth(),
     }),
   revokeKey: (id: string) => apiRequest<WebhookKey>(`/referral/keys/${id}`, { method: "DELETE", ...auth() }),
-  sendTestEvent: (code?: string) =>
+  sendTestEvent: (code: string | undefined, type: TestRequestType) =>
     apiRequest<TestEventResult>("/referral/test-event", {
       method: "POST",
-      body: JSON.stringify(code ? { code } : {}),
+      body: JSON.stringify({ type, ...(code ? { code } : {}) }),
       ...auth(),
     }),
   events: () => apiRequest<WebhookDeliveryLog[]>("/referral/events", auth()),

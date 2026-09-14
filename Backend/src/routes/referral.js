@@ -5,7 +5,7 @@ const WebhookDelivery = require("../models/WebhookDelivery");
 const BusinessProfile = require("../models/BusinessProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { encrypt, decrypt } = require("../utils/crypto");
-const { EVENT_TYPES, buildSignedRequest, handleConversionWebhook } = require("../services/conversions");
+const { EVENT_TYPES, buildSignedRequest, handleCodeCheck, handleConversionWebhook } = require("../services/conversions");
 
 const router = express.Router();
 
@@ -43,9 +43,17 @@ function usableKeysFilter(businessId, now = new Date()) {
   };
 }
 
-function webhookUrl(req) {
+function apiBase(req) {
   const base = process.env.API_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
-  return `${base.replace(/\/$/, "")}/api/webhooks/conversions`;
+  return base.replace(/\/$/, "");
+}
+
+function webhookUrl(req) {
+  return `${apiBase(req)}/api/webhooks/conversions`;
+}
+
+function validateCodeUrl(req) {
+  return `${apiBase(req)}/api/webhooks/codes/validate`;
 }
 
 async function createKey(businessId) {
@@ -138,24 +146,39 @@ router.post("/test-event", async (req, res, next) => {
       return res.status(400).json({ error: "Generate a signing key first. Test events are signed with your newest active key." });
     }
 
-    const code = typeof req.body.code === "string" && req.body.code.trim() ? req.body.code.trim().slice(0, 64) : "TEST-CODE";
-    const payload = {
-      event_id: `dashboard-test-${crypto.randomUUID()}`,
-      code,
-      event: EVENT_TYPES.includes(req.body.event) ? req.body.event : "signup",
-      timestamp: new Date().toISOString(),
-      test: true,
-    };
+    const type = req.body.type === "validate" ? "validate" : "conversion";
+    const rawCode = typeof req.body.code === "string" ? req.body.code.trim().slice(0, 64) : "";
+    if (type === "validate" && !rawCode) {
+      return res.status(400).json({ error: "Enter a code to check." });
+    }
+
+    const payload =
+      type === "validate"
+        ? { code: rawCode }
+        : {
+            event_id: `dashboard-test-${crypto.randomUUID()}`,
+            code: rawCode || "TEST-CODE",
+            event: EVENT_TYPES.includes(req.body.event) ? req.body.event : "signup",
+            timestamp: new Date().toISOString(),
+            test: true,
+          };
     const signed = buildSignedRequest({ keyId: key.keyId, secret: decrypt(key.secretEncrypted), payload });
 
-    const result = await handleConversionWebhook({
+    const handler = type === "validate" ? handleCodeCheck : handleConversionWebhook;
+    const result = await handler({
       headers: Object.fromEntries(Object.entries(signed.headers).map(([name, value]) => [name.toLowerCase(), value])),
       rawBody: Buffer.from(signed.rawBody),
       source: "dashboard_test",
     });
 
     res.json({
-      request: { method: "POST", url: webhookUrl(req), headers: signed.headers, body: payload },
+      type,
+      request: {
+        method: "POST",
+        url: type === "validate" ? validateCodeUrl(req) : webhookUrl(req),
+        headers: signed.headers,
+        body: payload,
+      },
       response: { status: result.status, body: result.body },
     });
   } catch (error) {
@@ -206,6 +229,7 @@ router.get("/status", async (req, res, next) => {
       lastEventAt,
       activeKeys: keys.length,
       webhookUrl: webhookUrl(req),
+      validateUrl: validateCodeUrl(req),
     });
   } catch (error) {
     next(error);

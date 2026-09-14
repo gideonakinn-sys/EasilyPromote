@@ -93,7 +93,8 @@ async function createReferralCode({ slot, campaign }) {
         creatorId: slot.creatorId,
         code,
         source: "easilypromote",
-        status: "awaiting_business",
+        // Active at once: brands check codes live, so there is nothing to load first.
+        status: "active",
       });
     } catch (error) {
       if (error.code !== 11000) throw error;

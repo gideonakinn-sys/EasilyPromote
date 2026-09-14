@@ -14,14 +14,24 @@ const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 const EVENT_TYPES = ["install", "signup", "purchase", "deposit", "custom"];
 
+const INVALID_CODE_MESSAGES = {
+  not_found: "No creator in your account has this code",
+  disabled: "Referral code is disabled",
+  campaign_not_accepting: "Campaign is not accepting conversions",
+};
+
 const allowRequest = createRateLimiter({ windowMs: 1000, max: 50 });
 
-const payloadSchema = z.object({
+const conversionSchema = z.object({
   event_id: z.string().trim().min(1).max(128),
   code: z.string().trim().min(1).max(64),
   event: z.enum(EVENT_TYPES),
   timestamp: z.string().datetime({ offset: true }),
   test: z.boolean().optional(),
+});
+
+const codeCheckSchema = z.object({
+  code: z.string().trim().min(1).max(64),
 });
 
 function parseSignatureHeader(header) {
@@ -81,6 +91,15 @@ function campaignAcceptsConversions(campaign, now = Date.now()) {
   return false;
 }
 
+function reply(status, body) {
+  return { status, body };
+}
+
+function invalidPayload(error) {
+  const details = error.issues.map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`);
+  return reply(400, { error: "Invalid payload", details });
+}
+
 async function markConnected(key, now) {
   await Promise.all([
     WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } }),
@@ -91,61 +110,20 @@ async function markConnected(key, now) {
   ]);
 }
 
-// Test events never need a real code, but when one is sent we report whether it
-// would match, so a brand can check its setup before going live.
-async function checkTestCode(businessId, rawCode, now) {
-  const value = String(rawCode || "").toUpperCase();
-  const referralCode = await ReferralCode.findOne({ businessId, code: value }).select("status campaignId").lean();
-  if (!referralCode) return { value, found: false };
-
-  const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt").lean();
-  return {
-    value,
-    found: true,
-    status: referralCode.status,
-    campaignAcceptingConversions: Boolean(campaign) && campaignAcceptsConversions(campaign, now.getTime()),
-  };
-}
-
-async function logDelivery(context, result, source) {
-  if (!context.businessId) return;
-  try {
-    const body = result.body || {};
-    const details = Array.isArray(body.details) ? ` (${body.details.join("; ")})` : "";
-    await WebhookDelivery.create({
-      businessId: context.businessId,
-      keyId: context.keyId,
-      source,
-      statusCode: result.status,
-      result: result.status === 200 ? body.status : "rejected",
-      error: result.status === 200 ? null : `${body.error || "Request failed"}${details}`,
-      eventId: context.eventId,
-      code: context.code,
-      eventType: context.eventType,
-      isTest: context.isTest,
-      counted: Boolean(body.counted),
-    });
-  } catch (error) {
-    // The log is a debugging aid; it must never change the webhook's answer.
-    console.error("[Referral] Failed to log webhook delivery:", error.message);
-  }
-}
-
-async function processConversion({ headers, rawBody }, context) {
-  const now = new Date();
-  const reply = (status, body) => ({ status, body });
-
+// Shared by conversions and code checks: key lookup, rate limit, signature, JSON.
+// Returns { key, json } on success or { failure } with the response to send.
+async function authenticateSignedRequest({ headers, rawBody }, context, now) {
   const keyId = headers["x-ep-key-id"];
   if (!keyId) {
-    return reply(401, { error: "Missing X-EP-Key-Id header" });
+    return { failure: reply(401, { error: "Missing X-EP-Key-Id header" }) };
   }
   if (!allowRequest(String(keyId))) {
-    return reply(429, { error: "Too many requests for this key. Slow down and retry." });
+    return { failure: reply(429, { error: "Too many requests for this key. Slow down and retry." }) };
   }
 
   const key = await WebhookKey.findOne({ keyId: String(keyId) });
   if (!key || !key.isUsable(now)) {
-    return reply(401, { error: "Unknown, revoked or expired key" });
+    return { failure: reply(401, { error: "Unknown, revoked or expired key" }) };
   }
   context.businessId = key.businessId;
   context.keyId = key.keyId;
@@ -158,52 +136,120 @@ async function processConversion({ headers, rawBody }, context) {
     now: now.getTime(),
   });
   if (!signature.ok) {
-    return reply(401, { error: signature.reason });
+    return { failure: reply(401, { error: signature.reason }) };
   }
 
   let json;
   try {
     json = JSON.parse(body.toString("utf8"));
   } catch {
-    return reply(400, { error: "Body must be valid JSON" });
+    return { failure: reply(400, { error: "Body must be valid JSON" }) };
   }
 
   if (json && typeof json === "object") {
-    context.eventId = typeof json.event_id === "string" ? json.event_id.slice(0, 128) : null;
     context.code = typeof json.code === "string" ? json.code.slice(0, 64).toUpperCase() : null;
-    context.eventType = typeof json.event === "string" ? json.event.slice(0, 32) : null;
     context.isTest = json.test === true;
   }
+  return { key, json };
+}
 
-  const parsed = payloadSchema.safeParse(json);
-  if (!parsed.success) {
-    const details = parsed.error.issues.map((issue) => `${issue.path.join(".") || "body"}: ${issue.message}`);
-    return reply(400, { error: "Invalid payload", details });
-  }
-  const payload = parsed.data;
-
-  // Test events prove the key and signing work. They don't need a real code yet,
-  // so a brand can connect before its first campaign exists.
-  if (payload.test) {
-    const [code] = await Promise.all([checkTestCode(key.businessId, payload.code, now), markConnected(key, now)]);
-    return reply(200, { status: "test_ok", code });
-  }
-
-  const referralCode = await ReferralCode.findOne({
-    businessId: key.businessId,
-    code: payload.code.toUpperCase(),
-  });
-  if (!referralCode) {
-    return reply(404, { error: "Unknown referral code" });
-  }
-  if (referralCode.status === "disabled") {
-    return reply(409, { error: "Referral code is disabled" });
-  }
+// One answer to "would this code count right now?", used by code checks, test events
+// and conversions so they can never disagree.
+async function evaluateCode(businessId, rawCode, now) {
+  const value = String(rawCode || "").trim().toUpperCase();
+  const referralCode = await ReferralCode.findOne({ businessId, code: value });
+  if (!referralCode) return { value, referralCode: null, campaign: null, reason: "not_found" };
+  if (referralCode.status === "disabled") return { value, referralCode, campaign: null, reason: "disabled" };
 
   const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt referral");
   if (!campaign || !campaignAcceptsConversions(campaign, now.getTime())) {
-    return reply(409, { error: "Campaign is not accepting conversions" });
+    return { value, referralCode, campaign, reason: "campaign_not_accepting" };
   }
+  return { value, referralCode, campaign, reason: null };
+}
+
+// Codes issued before live validation existed waited for the brand to confirm them.
+// A signed check or conversion is that confirmation.
+async function activateIfPending(referralCode, now) {
+  if (referralCode.status !== "awaiting_business") return;
+  await ReferralCode.updateOne(
+    { _id: referralCode._id, status: "awaiting_business" },
+    { $set: { status: "active", loadedAt: referralCode.loadedAt || now } }
+  );
+}
+
+async function logDelivery(context, result, source) {
+  if (!context.businessId) return;
+  try {
+    const body = result.body || {};
+    let outcome = "rejected";
+    let error = null;
+    if (result.status === 200) {
+      if (typeof body.valid === "boolean") {
+        outcome = body.valid ? "valid" : "invalid";
+        error = body.valid ? null : INVALID_CODE_MESSAGES[body.reason] || body.reason || null;
+      } else {
+        outcome = body.status;
+      }
+    } else {
+      const details = Array.isArray(body.details) ? ` (${body.details.join("; ")})` : "";
+      error = `${body.error || "Request failed"}${details}`;
+    }
+
+    await WebhookDelivery.create({
+      businessId: context.businessId,
+      keyId: context.keyId,
+      source,
+      statusCode: result.status,
+      result: outcome,
+      error,
+      eventId: context.eventId,
+      code: context.code,
+      eventType: context.eventType,
+      isTest: context.isTest,
+      counted: Boolean(body.counted),
+    });
+  } catch (error) {
+    // The log is a debugging aid; it must never change the webhook's answer.
+    console.error("[Referral] Failed to log webhook delivery:", error.message);
+  }
+}
+
+async function processConversion(request, context) {
+  const now = new Date();
+  const auth = await authenticateSignedRequest(request, context, now);
+  if (auth.failure) return auth.failure;
+  const { key, json } = auth;
+
+  if (json && typeof json === "object") {
+    context.eventId = typeof json.event_id === "string" ? json.event_id.slice(0, 128) : null;
+    context.eventType = typeof json.event === "string" ? json.event.slice(0, 32) : null;
+  }
+
+  const parsed = conversionSchema.safeParse(json);
+  if (!parsed.success) return invalidPayload(parsed.error);
+  const payload = parsed.data;
+
+  const evaluation = await evaluateCode(key.businessId, payload.code, now);
+
+  // Test events prove the key and signing work. They don't need a real code yet,
+  // but report whether the code would match so a brand can check its setup.
+  if (payload.test) {
+    await markConnected(key, now);
+    return reply(200, {
+      status: "test_ok",
+      code: {
+        value: evaluation.value,
+        found: Boolean(evaluation.referralCode),
+        ...(evaluation.referralCode && { status: evaluation.referralCode.status }),
+        ...(evaluation.referralCode && { campaignAcceptingConversions: evaluation.reason === null }),
+      },
+    });
+  }
+
+  if (evaluation.reason === "not_found") return reply(404, { error: "Unknown referral code" });
+  if (evaluation.reason) return reply(409, { error: INVALID_CODE_MESSAGES[evaluation.reason] });
+  const { referralCode, campaign } = evaluation;
 
   try {
     await ConversionEvent.create({
@@ -225,16 +271,13 @@ async function processConversion({ headers, rawBody }, context) {
 
   // Every event is stored; only the campaign's chosen conversion type moves the counters.
   const counted = payload.event === (campaign.referral && campaign.referral.eventType);
-  const codeUpdate = { $inc: { conversions: counted ? 1 : 0 } };
-  if (referralCode.status === "awaiting_business") {
-    codeUpdate.$set = { status: "active", loadedAt: referralCode.loadedAt || now };
-  }
 
   const [updatedCode] = await Promise.all([
-    ReferralCode.findByIdAndUpdate(referralCode._id, codeUpdate, { new: true }),
+    ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
     counted
       ? Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } })
       : Promise.resolve(),
+    activateIfPending(referralCode, now),
     markConnected(key, now),
   ]);
 
@@ -252,9 +295,45 @@ async function processConversion({ headers, rawBody }, context) {
   return reply(200, { status: "recorded", counted });
 }
 
+// Called by a brand's sign-up flow when a user enters a code, so brands never have to
+// load or sync creators' codes. Records nothing; the conversion comes later.
+async function processCodeCheck(request, context) {
+  const now = new Date();
+  const auth = await authenticateSignedRequest(request, context, now);
+  if (auth.failure) return auth.failure;
+  const { key, json } = auth;
+
+  const parsed = codeCheckSchema.safeParse(json);
+  if (!parsed.success) return invalidPayload(parsed.error);
+
+  const [evaluation] = await Promise.all([evaluateCode(key.businessId, parsed.data.code, now), markConnected(key, now)]);
+  if (evaluation.reason) {
+    return reply(200, { valid: false, code: evaluation.value, reason: evaluation.reason });
+  }
+
+  await activateIfPending(evaluation.referralCode, now);
+  return reply(200, {
+    valid: true,
+    code: evaluation.value,
+    campaign_id: String(evaluation.campaign._id),
+    event: evaluation.campaign.referral ? evaluation.campaign.referral.eventType : "signup",
+  });
+}
+
+function emptyContext() {
+  return { businessId: null, keyId: null, eventId: null, code: null, eventType: null, isTest: false };
+}
+
 async function handleConversionWebhook({ headers, rawBody, source = "webhook" }) {
-  const context = { businessId: null, keyId: null, eventId: null, code: null, eventType: null, isTest: false };
+  const context = emptyContext();
   const result = await processConversion({ headers, rawBody }, context);
+  await logDelivery(context, result, source);
+  return result;
+}
+
+async function handleCodeCheck({ headers, rawBody, source = "code_check" }) {
+  const context = emptyContext();
+  const result = await processCodeCheck({ headers, rawBody }, context);
   await logDelivery(context, result, source);
   return result;
 }
@@ -262,6 +341,7 @@ async function handleConversionWebhook({ headers, rawBody, source = "webhook" })
 module.exports = {
   EVENT_TYPES,
   handleConversionWebhook,
+  handleCodeCheck,
   verifyConversionSignature,
   buildSignedRequest,
   signPayload,

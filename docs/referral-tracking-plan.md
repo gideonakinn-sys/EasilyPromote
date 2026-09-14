@@ -160,6 +160,18 @@ Responses:
 - [x] App: settings page "Send a test event" (optional code), result message + request/response viewer, "Recent requests" log, link to public docs
 - [x] Website (`Easilypromote-website`, branch `docs/referral-webhooks`): public `/developers` page — how it works, quickstart, signing + test vector, request fields, responses, retries, Node/Python/PHP/cURL examples, testing, FAQ; prerendered; footer link
 
+## Phase 5c — Live code validation (no manual code loading)
+
+Problem: brands had to load Easily Promote codes into their own systems (CSV + "mark active") every time creators joined, and creators waited on "Activating".
+
+- [x] Backend: `POST /api/webhooks/codes/validate` — signed like a conversion; body `{ "code": "..." }`; answers `200 { valid: true, code, campaign_id, event }` or `200 { valid: false, code, reason }` with `reason` in `not_found | disabled | campaign_not_accepting`; 400/401/429 as for conversions; records nothing
+- [x] Backend: shared `authenticateSignedRequest` + `evaluateCode` so code checks, test events and conversions can never disagree
+- [x] Backend: codes generated on claim are `active` immediately; legacy `awaiting_business` codes activate on their first signed check or conversion
+- [x] Backend: code checks logged in the request log (`source: code_check`, results `valid | invalid | rejected` with readable reasons)
+- [x] Backend: `POST /api/referral/test-event` accepts `type: "validate"`; `/api/referral/status` returns `validateUrl`
+- [x] App: settings page "Try a request" switch (Check a code / Test conversion), code-check example in the guide, new log labels; Referrals tab no longer asks brands to load codes
+- [x] Website: `/developers` "Checking a code" section (request, responses, reasons, fail-open guidance), flow + quickstart rewritten, examples switch between Check a code / Report a conversion in all four languages, two new FAQs
+
 ## Phase 6 — Payouts ⛔ BLOCKED (needs product decision)
 
 Do **not** start until the payout rules below are decided.
@@ -224,5 +236,9 @@ Do **not** start until the payout rules below are decided.
 - 2026-09-14 — Developer docs are public on the landing site (`/developers`) so a brand can send the link to engineers without accounts; keys, the test sender and the request log stay in the app because they need authentication. No public "paste your secret" tool — the docs ship a fixed test vector instead.
 - 2026-09-14 — The docs test vector is checked against `signPayload` in the backend test suite; regenerate it if signing ever changes.
 - 2026-09-14 — Test events now report whether the sent code would match (`code.found`, `status`, `campaignAcceptingConversions`) but still return 200 and record nothing.
+- 2026-09-14 — Live validation (Option A) chosen over pulling code lists (B) or pushing codes to brands (C): one extra signed call, nothing to sync. CSV export stays for brands whose systems must pre-store codes.
+- 2026-09-14 — Code checks use POST with a signed JSON body rather than GET, so they reuse the exact conversion signing code and the signature covers the code being checked.
+- 2026-09-14 — An invalid code is a normal answer (`200 { valid: false }`), not an HTTP error, so brands only treat 4xx/5xx as integration problems. Docs tell brands to fail open on errors/timeouts; the conversion webhook still rejects codes that were never valid.
+- 2026-09-14 — Phase 5c verified: 22 new backend checks pass; Phase 3, 4 and 5b suites re-run clean; web typecheck clean; website build prerenders `/developers`.
 - 2026-09-14 — Phase 5b verified: 17 new backend checks pass, Phase 3/4 suites re-run clean, web typecheck clean, website `npm run build` prerenders `/developers`, and the app test sender + request log were exercised in the browser.
 - 2026-09-14 — Phase 5 verified in the browser against the local API + throwaway DB: web typecheck clean; settings page (connect status, generate key + one-time secret modal, rotate/revoke controls, max-3 limit), campaign Referrals tab (totals, codes, mark all active, live conversion over socket), wizard toggle round-trip, and phone width (no horizontal overflow).

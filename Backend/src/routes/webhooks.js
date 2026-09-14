@@ -7,7 +7,7 @@ const { emitToUser } = require("../config/socket");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { settleRelease, revertRelease } = require("../utils/payouts");
 const { creditTopup } = require("../utils/topups");
-const { handleConversionWebhook } = require("../services/conversions");
+const { handleConversionWebhook, handleCodeCheck } = require("../services/conversions");
 
 const router = express.Router();
 
@@ -103,6 +103,17 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
 router.post("/conversions", express.raw({ type: () => true, limit: "16kb" }), async (req, res, next) => {
   try {
     const result = await handleConversionWebhook({ headers: req.headers, rawBody: req.body });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Brands' sign-up flows check a code here before accepting it, signed exactly like a
+// conversion, so they never have to load creators' codes into their own systems.
+router.post("/codes/validate", express.raw({ type: () => true, limit: "16kb" }), async (req, res, next) => {
+  try {
+    const result = await handleCodeCheck({ headers: req.headers, rawBody: req.body });
     res.status(result.status).json(result.body);
   } catch (error) {
     next(error);

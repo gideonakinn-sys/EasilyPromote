@@ -13,6 +13,7 @@ import {
   referralApi,
   type ReferralStatus,
   type TestEventResult,
+  type TestRequestType,
   type WebhookDeliveryLog,
   type WebhookKey,
 } from "../../../../../../lib/referral";
@@ -144,8 +145,16 @@ const RESPONSES: { status: string; meaning: string }[] = [
 const DELIVERY_CHIPS: Record<WebhookDeliveryLog["result"], { label: string; className: string }> = {
   recorded: { label: "Recorded", className: "bg-[#CBF5E5] text-[#176448]" },
   test_ok: { label: "Test passed", className: "bg-[#EBF3FF] text-blue-800" },
+  valid: { label: "Valid code", className: "bg-[#CBF5E5] text-[#176448]" },
+  invalid: { label: "Invalid code", className: "bg-amber-50 text-amber-800" },
   ignored: { label: "Duplicate", className: "bg-stone-100 text-stone-600" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700" },
+};
+
+const INVALID_REASONS: Record<string, string> = {
+  not_found: "no creator in your account has it",
+  disabled: "the code is turned off",
+  campaign_not_accepting: "its campaign isn't accepting conversions",
 };
 
 function describeTestResult(result: TestEventResult): { ok: boolean; message: string } {
@@ -153,7 +162,16 @@ function describeTestResult(result: TestEventResult): { ok: boolean; message: st
   if (status !== 200) {
     return { ok: false, message: `${status}: ${body.error || "The test request was rejected."}` };
   }
-  const code = body.code;
+  if (result.type === "validate") {
+    const value = typeof body.code === "string" ? body.code : "";
+    return body.valid
+      ? { ok: true, message: `${value} is valid. Your app should accept it.` }
+      : {
+          ok: false,
+          message: `${value} isn't valid: ${INVALID_REASONS[body.reason || ""] || body.reason}. Your app should reject it.`,
+        };
+  }
+  const code = typeof body.code === "object" ? body.code : undefined;
   if (!code || code.value === "TEST-CODE") {
     return { ok: true, message: "Signature verified. Your key works and you're connected." };
   }
@@ -205,6 +223,7 @@ function ReferralSettingsContent() {
   const [testCode, setTestCode] = useState("");
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState<TestEventResult | null>(null);
+  const [testType, setTestType] = useState<TestRequestType>("validate");
 
   const load = useCallback(async () => {
     setError("");
@@ -312,7 +331,7 @@ function ReferralSettingsContent() {
     e.preventDefault();
     setSendingTest(true);
     try {
-      setTestResult(await referralApi.sendTestEvent(testCode.trim() || undefined));
+      setTestResult(await referralApi.sendTestEvent(testCode.trim() || undefined, testType));
       await load();
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "Could not send the test event", "error");
@@ -323,6 +342,16 @@ function ReferralSettingsContent() {
 
   const webhookUrl = status?.webhookUrl || "";
   const sampleKeyId = keys.find((key) => key.status === "active")?.keyId || "key_…";
+  const sampleValidate = [
+    `POST ${status?.validateUrl || ""}`,
+    "Content-Type: application/json",
+    `X-EP-Key-Id: ${sampleKeyId}`,
+    "X-EP-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of \"t.body\">",
+    "",
+    '{ "code": "KUDA-TUNDE" }',
+    "",
+    '← 200 { "valid": true, "code": "KUDA-TUNDE", "campaign_id": "…", "event": "signup" }',
+  ].join("\n");
   const sampleRequest = [
     `POST ${webhookUrl}`,
     "Content-Type: application/json",
@@ -492,12 +521,39 @@ function ReferralSettingsContent() {
             {/* Test sender */}
             <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="test-heading">
               <div className="space-y-1">
-                <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Send a test event</h2>
+                <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Try a request</h2>
                 <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  We sign a test request with your newest key and run it through the same checks as a real one. Nothing
-                  is counted. Add a creator&apos;s code to check it&apos;s set up on a campaign.
+                  We sign a request with your newest key and run it through the real checks. Nothing is recorded.
                 </p>
               </div>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Request type">
+                {([
+                  ["validate", "Check a code"],
+                  ["conversion", "Test conversion"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={testType === value}
+                    onClick={() => {
+                      setTestType(value);
+                      setTestResult(null);
+                    }}
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-xs font-medium transition-colors",
+                      testType === value ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                {testType === "validate"
+                  ? "What your sign-up flow calls when a user enters a code."
+                  : "A signed conversion marked as a test. Add a code to see whether it would match."}
+              </p>
               <form onSubmit={handleSendTest} className="flex flex-wrap gap-2">
                 <label htmlFor="test-code" className="sr-only">
                   Referral code to check (optional)
@@ -506,17 +562,17 @@ function ReferralSettingsContent() {
                   id="test-code"
                   value={testCode}
                   onChange={(e) => setTestCode(e.target.value.toUpperCase())}
-                  placeholder="Code to check (optional)"
+                  placeholder={testType === "validate" ? "Code to check, e.g. KUDA-TUNDE" : "Code to check (optional)"}
                   autoComplete="off"
                   spellCheck={false}
                   className="flex-1 min-w-[180px] px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-mono text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
                 />
                 <button
                   type="submit"
-                  disabled={sendingTest || keys.length === 0}
+                  disabled={sendingTest || keys.length === 0 || (testType === "validate" && !testCode.trim())}
                   className="px-5 py-2.5 bg-stone-900 text-white rounded-full text-xs font-semibold disabled:bg-stone-200 disabled:text-stone-400"
                 >
-                  {sendingTest ? "Sending…" : "Send test event"}
+                  {sendingTest ? "Sending…" : testType === "validate" ? "Check code" : "Send test event"}
                 </button>
               </form>
               {keys.length === 0 && (
@@ -587,7 +643,11 @@ function ReferralSettingsContent() {
                           <span className="shrink-0 text-xs font-medium text-stone-500">{formatWhen(event.createdAt)}</span>
                         </div>
                         <p className="text-xs font-medium text-stone-500 break-words">
-                          {event.source === "dashboard_test" ? "Dashboard test" : "Your server"}
+                          {event.source === "dashboard_test"
+                            ? "Dashboard test"
+                            : event.source === "code_check"
+                              ? "Code check from your server"
+                              : "Conversion from your server"}
                           {event.eventType && ` · ${event.eventType}`}
                           {event.isTest && event.source !== "dashboard_test" && " · test"}
                           {event.result === "recorded" && !event.counted && " · stored, not counted (different event type)"}
@@ -628,6 +688,18 @@ function ReferralSettingsContent() {
                   <code className="font-mono text-stone-900">event</code> is one of install, signup, purchase, deposit or
                   custom. <code className="font-mono text-stone-900">event_id</code> must be unique per conversion — resending
                   it is safe and never counts twice.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Check a code at sign-up</span>
+                <div className="overflow-x-auto bg-stone-900 rounded-2xl">
+                  <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{sampleValidate}</pre>
+                </div>
+                <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                  Call this when a user enters a referral code, signed the same way. Accept the code when the answer is{" "}
+                  <code className="font-mono text-stone-900">{'"valid": true'}</code>. There&apos;s nothing to load or
+                  sync — new creators&apos; codes work as soon as they join.
                 </p>
               </div>
 

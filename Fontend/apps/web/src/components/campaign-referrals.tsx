@@ -21,7 +21,7 @@ import {
 
 const STATUS_CHIPS: Record<ReferralCodeRow["status"], { label: string; className: string }> = {
   active: { label: "Active", className: "bg-[#CBF5E5] text-[#176448]" },
-  awaiting_business: { label: "Load into your app", className: "bg-amber-50 text-amber-800" },
+  awaiting_business: { label: "Pending", className: "bg-amber-50 text-amber-800" },
   missing: { label: "No code yet", className: "bg-stone-100 text-stone-500" },
   disabled: { label: "Disabled", className: "bg-red-50 text-red-700" },
 };
@@ -391,7 +391,7 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
         <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-3">
           <p className="font-rethink text-xs font-medium text-amber-900 leading-relaxed">
             {awaitingCount > 0 &&
-              `${awaitingCount} code${awaitingCount === 1 ? "" : "s"} need${awaitingCount === 1 ? "s" : ""} loading into your app. Download the list, add the codes to your referral system, then mark them active. `}
+              `${awaitingCount} older code${awaitingCount === 1 ? " is" : "s are"} pending. ${awaitingCount === 1 ? "It activates" : "They activate"} the first time your app checks or reports ${awaitingCount === 1 ? "it" : "them"}, or you can mark ${awaitingCount === 1 ? "it" : "them"} active now. `}
             {missingCount > 0 &&
               `${missingCount} creator${missingCount === 1 ? " doesn't" : "s don't"} have a code yet.`}
           </p>
@@ -401,7 +401,7 @@ export function CampaignReferrals({ campaignId, campaignStatus, initialSettings 
               disabled={markingLoaded}
               className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink disabled:opacity-50"
             >
-              {markingLoaded ? "Updating…" : "I've loaded them — mark all active"}
+              {markingLoaded ? "Updating…" : "Mark all active"}
             </button>
           )}
         </div>

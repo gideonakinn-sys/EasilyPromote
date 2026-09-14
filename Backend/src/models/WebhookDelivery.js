@@ -16,14 +16,14 @@ const webhookDeliverySchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["webhook", "dashboard_test"],
+      enum: ["webhook", "code_check", "dashboard_test"],
       default: "webhook",
     },
     statusCode: {
       type: Number,
       required: true,
     },
-    // recorded | ignored | test_ok | rejected
+    // recorded | ignored | test_ok | valid | invalid | rejected
     result: {
       type: String,
       required: true,
