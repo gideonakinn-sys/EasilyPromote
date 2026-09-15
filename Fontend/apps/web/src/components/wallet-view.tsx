@@ -31,7 +31,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
 
   const withdrawable = walletData?.withdrawableBalance ?? walletData?.balance ?? 0;
   const pending = walletData?.pendingBalance ?? 0;
-  const pendingByCampaign = walletData?.pendingByCampaign ?? [];
+  const viewsByCampaign = walletData?.viewsByCampaign ?? [];
   const lifetimeEarnings = walletData?.lifetimeEarnings ?? profile.lifetimeEarnings;
   const completionRate = walletData?.completionRate ?? profile.completionRate;
   const totalReleased = walletData?.totalReleased ?? 0;
@@ -58,15 +58,16 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   const [withdrawals, setWithdrawals] = React.useState<WithdrawalItem[]>([]);
   const [withdrawKind, setWithdrawKind] = React.useState<"views" | "referral">("views");
 
-  const eligibleCampaigns = pendingByCampaign.filter((c) => c.earned > 0 && c.status !== "under_review");
-  const selectedCampaign = pendingByCampaign.find((c) => c.id === withdrawCampaignId);
+  // Live, paused and completed campaigns can all be withdrawn from, matching the server.
+  const eligibleCampaigns = viewsByCampaign.filter((c) => c.withdrawable && c.availableToWithdraw > 0);
+  const selectedCampaign = eligibleCampaigns.find((c) => c.id === withdrawCampaignId);
 
   // Referral earnings are a separate balance: held 7 days per conversion, withdrawn per campaign.
   const referral = walletData?.referral;
   const referralCampaigns = referral?.byCampaign ?? [];
   const eligibleReferral = referralCampaigns.filter((c) => c.availableToWithdraw > 0);
   const selectedReferral = eligibleReferral.find((c) => c.id === withdrawCampaignId);
-  const maxWithdrawable = withdrawKind === "referral" ? selectedReferral?.availableToWithdraw : selectedCampaign?.earned;
+  const maxWithdrawable = withdrawKind === "referral" ? selectedReferral?.availableToWithdraw : selectedCampaign?.availableToWithdraw;
 
   const fetchWithdrawals = React.useCallback(async () => {
     try {
@@ -280,22 +281,30 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         )}
       </div>
 
-      {pendingByCampaign.length > 0 && (
+      {viewsByCampaign.length > 0 && (
         <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-stone-500">Pending Balance (non-withdrawable)</span>
-            <span className="font-rethink text-sm font-medium text-stone-900">₦{pending.toLocaleString()}</span>
+            <span className="text-[10px] font-medium text-stone-500">View earnings by campaign</span>
+            {pending > 0 && (
+              <span className="text-[10px] font-medium text-stone-500">
+                ₦{pending.toLocaleString()} waiting on campaign review
+              </span>
+            )}
           </div>
           <div className="space-y-2.5">
-            {pendingByCampaign.map((c) => (
-              <div key={c.id} className="flex items-center justify-between text-sm">
+            {viewsByCampaign.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 text-sm">
                 <div className="min-w-0">
                   <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
                   <p className="font-rethink text-xs text-stone-500">
-                    {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views
+                    {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views · ₦{c.earned.toLocaleString()} earned
+                    {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
                   </p>
                 </div>
-                <span className="font-rethink font-medium text-stone-900">₦{c.earned.toLocaleString()}</span>
+                <div className="text-right shrink-0">
+                  <span className="font-rethink font-medium text-stone-900 block">₦{c.availableToWithdraw.toLocaleString()}</span>
+                  <span className="font-rethink text-[10px] text-stone-500">{c.withdrawable ? "available" : "not yet withdrawable"}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -446,8 +455,8 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   const c = eligibleReferral.find((x) => x.id === e.target.value);
                   setWithdrawAmount(c ? String(c.availableToWithdraw) : "");
                 } else {
-                  const c = pendingByCampaign.find((x) => x.id === e.target.value);
-                  setWithdrawAmount(c ? String(c.earned) : "");
+                  const c = eligibleCampaigns.find((x) => x.id === e.target.value);
+                  setWithdrawAmount(c ? String(c.availableToWithdraw) : "");
                 }
               }}
               className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 outline-none focus:border-stone-400 mt-1 mb-3"
@@ -461,14 +470,15 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   ))
                 : eligibleCampaigns.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title} — ₦{c.earned.toLocaleString()} ({c.views.toLocaleString()} views)
+                      {c.title} — ₦{c.availableToWithdraw.toLocaleString()} ({c.views.toLocaleString()} views)
                     </option>
                   ))}
             </select>
             {withdrawKind === "views" && selectedCampaign && (
               <p className="text-[11px] text-stone-500 mb-3 font-medium">
-                Earned: ₦{selectedCampaign.earned.toLocaleString()} · {selectedCampaign.views.toLocaleString()} /{" "}
-                {selectedCampaign.viewTarget.toLocaleString()} views
+                Earned: ₦{selectedCampaign.earned.toLocaleString()}
+                {selectedCampaign.withdrawn > 0 && ` · ₦${selectedCampaign.withdrawn.toLocaleString()} already withdrawn`} ·{" "}
+                {selectedCampaign.views.toLocaleString()} / {selectedCampaign.viewTarget.toLocaleString()} views
               </p>
             )}
             {withdrawKind === "referral" && selectedReferral && (

@@ -174,6 +174,19 @@ export interface WalletData {
     earned: number;
     status: string;
   }>;
+  // Every campaign with views earnings, computed the same way withdrawals are checked.
+  viewsByCampaign?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    views: number;
+    viewTarget: number;
+    reward: number;
+    earned: number;
+    withdrawn: number;
+    availableToWithdraw: number;
+    withdrawable: boolean;
+  }>;
   hasBankAccount: boolean;
   bankName?: string | null;
   accountName?: string | null;

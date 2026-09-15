@@ -34,4 +34,50 @@ async function campaignEscrowBalance(campaignId, bucket = "views") {
   return escrowBalanceFrom(transactions, bucket);
 }
 
-module.exports = { campaignEscrowBalance, escrowBalanceFrom };
+// Books a campaign payment into escrow exactly once. The Paystack webhook, the brand's
+// payment-status poll and launch can all confirm the same payment at once; the unique
+// {reference, type} index makes every loser a no-op. Returns whether this call booked it.
+async function bookEscrowDeposit({ campaignId, amount, reference }) {
+  try {
+    await Transaction.create({
+      campaignId,
+      type: "escrow_deposit",
+      amount,
+      status: "escrow_deposit",
+      reference,
+      date: new Date(),
+    });
+    return true;
+  } catch (error) {
+    if (error.code === 11000) return false;
+    throw error;
+  }
+}
+
+// Refunds a cancelled campaign's unreleased views escrow once. The fixed reference
+// lets the unique index stop a brand cancel and an admin cancel both refunding.
+// Money already committed to releases (in flight or paid) is not refunded.
+async function refundViewsEscrow(campaignId) {
+  const alreadyRefunded = await Transaction.findOne({ campaignId, type: "refund", bucket: { $ne: "referral" } });
+  if (alreadyRefunded) return 0;
+
+  const balance = await campaignEscrowBalance(campaignId);
+  if (balance <= 0) return 0;
+
+  try {
+    await Transaction.create({
+      campaignId,
+      type: "refund",
+      amount: balance,
+      status: "refunded",
+      reference: `refund_views_${campaignId}`,
+      date: new Date(),
+    });
+    return balance;
+  } catch (error) {
+    if (error.code === 11000) return 0;
+    throw error;
+  }
+}
+
+module.exports = { campaignEscrowBalance, escrowBalanceFrom, bookEscrowDeposit, refundViewsEscrow };

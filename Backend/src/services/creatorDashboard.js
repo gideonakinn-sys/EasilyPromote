@@ -3,6 +3,7 @@ const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
 const { creatorReferralEarnings } = require("../utils/referralEarnings");
+const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const TikTokConnection = require("../models/TikTokConnection");
@@ -409,53 +410,61 @@ async function buildWallet(user, ctx) {
   const { userId, profile } = ctx;
   const handle = profile ? profile.username : user.name;
 
-  const [transactions, submissions, slots, referralEarnings] = await Promise.all([
+  const [transactions, submissions, slots, referralEarnings, viewsEarnings] = await Promise.all([
     Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean(),
-    Submission.find({ creatorId: userId }).lean(),
+    Submission.find({ creatorId: userId }).select("_id").lean(),
     Slot.find({ creatorId: userId })
       .populate({ path: "campaignId", select: "name status targetViews costPerView viewsDelivered referral" })
       .lean(),
     creatorReferralEarnings(userId),
+    creatorViewsEarnings(userId),
   ]);
 
-  const totalReleased = submissions
-    .filter((s) => s.payoutStatus === "released")
-    .reduce((sum, s) => sum + (s.payoutAmount || 0), 0);
+  // Paid views payouts come from the ledger. Older releases carry only a submission;
+  // newer ones also record the creator.
+  const totalReleased = await releasedViewsTotal({
+    $or: [
+      { creatorId: new (require("mongoose").Types.ObjectId)(String(userId)) },
+      { submissionId: { $in: submissions.map((s) => s._id) } },
+    ],
+  });
 
-  // Last one wins here, exactly as the wallet always did.
-  const submissionMap = {};
-  for (const sub of submissions) {
-    submissionMap[sub.campaignId.toString()] = sub;
-  }
+  // Every campaign with views earnings, using the same formula as withdrawals.
+  const viewsByCampaign = [...viewsEarnings.values()]
+    .filter((entry) => entry.views > 0 || entry.withdrawn > 0)
+    .map((entry) => ({
+      id: entry.campaignId,
+      title: entry.title,
+      status: entry.status,
+      views: entry.views,
+      viewTarget: entry.viewTarget,
+      reward: entry.reward,
+      earned: entry.earned,
+      withdrawn: entry.withdrawn,
+      availableToWithdraw: entry.availableToWithdraw,
+      withdrawable: entry.withdrawable,
+    }));
 
-  let withdrawableBalance = 0;
-  const pendingByCampaign = [];
+  const withdrawableBalance = floorKobo(
+    viewsByCampaign.filter((c) => c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+  );
 
-  for (const slot of slots) {
-    const campaign = slot.campaignId;
-    if (!campaign) continue;
-    const submission = submissionMap[campaign._id.toString()];
-    if (!submission) continue;
+  // Kept for older clients: earnings on campaigns that aren't finished yet.
+  const pendingByCampaign = viewsByCampaign
+    .filter((c) => ["live", "paused", "under_review"].includes(c.status))
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      views: c.views,
+      viewTarget: c.viewTarget,
+      earned: c.availableToWithdraw,
+      status: c.status,
+    }));
 
-    const views = submission.viewsDelivered || 0;
-    const costPerView = campaign.costPerView || 0;
-    const earned = views * costPerView;
-
-    if (campaign.status === "completed") {
-      withdrawableBalance += earned;
-    } else if (["live", "paused", "under_review"].includes(campaign.status)) {
-      pendingByCampaign.push({
-        id: campaign._id,
-        title: campaign.name,
-        views,
-        viewTarget: slot.viewTarget,
-        earned,
-        status: campaign.status,
-      });
-    }
-  }
-
-  const pendingBalance = pendingByCampaign.reduce((sum, c) => sum + c.earned, 0);
+  // Earned but not withdrawable until the campaign is approved.
+  const pendingBalance = floorKobo(
+    viewsByCampaign.filter((c) => !c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+  );
   const payout = profile && profile.payoutAccount;
 
   // Referral earnings are their own pot: held 7 days per conversion, then withdrawable.
@@ -489,6 +498,7 @@ async function buildWallet(user, ctx) {
     withdrawableBalance,
     pendingBalance,
     pendingByCampaign,
+    viewsByCampaign,
     hasBankAccount: !!(payout && payout.paystackRecipientCode),
     bankName: payout ? payout.bankName : null,
     accountName: payout ? payout.accountName : null,

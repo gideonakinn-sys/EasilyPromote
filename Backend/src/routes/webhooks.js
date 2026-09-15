@@ -9,6 +9,7 @@ const { settleRelease, revertRelease } = require("../utils/payouts");
 const { creditTopup } = require("../utils/topups");
 const { handleConversionWebhook, handleCodeCheck } = require("../services/conversions");
 const { creditReferralTopup } = require("../utils/referralEarnings");
+const { bookEscrowDeposit } = require("../utils/escrow");
 
 const router = express.Router();
 
@@ -67,22 +68,23 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
           await campaign.save();
           await ensureCampaignSlots(campaign);
 
-          await Transaction.create({
+          // The brand's payment-status poll may book the same payment concurrently;
+          // the unique reference index lets exactly one of them record it.
+          const booked = await bookEscrowDeposit({
             campaignId: campaign._id,
-            type: "escrow_deposit",
             amount: campaign.budget,
-            status: "escrow_deposit",
             reference,
-            date: new Date(),
           });
 
-          await Notification.create({
-            businessId: campaign.businessId,
-            campaignId: campaign._id,
-            type: "campaign_live",
-            title: "Campaign is live",
-            body: "Your campaign is now live. Creators can start claiming placements.",
-          });
+          if (booked) {
+            await Notification.create({
+              businessId: campaign.businessId,
+              campaignId: campaign._id,
+              type: "campaign_live",
+              title: "Campaign is live",
+              body: "Your campaign is now live. Creators can start claiming placements.",
+            });
+          }
 
           emitToUser(campaign.businessId, "payment-success", {
             campaignId: campaign._id,

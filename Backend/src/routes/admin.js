@@ -15,7 +15,7 @@ const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots
 const { emitCampaignUpdate, emitCampaignStatus } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
-const { campaignEscrowBalance } = require("../utils/escrow");
+const { campaignEscrowBalance, refundViewsEscrow } = require("../utils/escrow");
 const { settleRelease } = require("../utils/payouts");
 const { reconcilePayouts } = require("../utils/reconcilePayouts");
 const { recalculateCreator, recalculateAllCreators } = require("../services/creatorScore");
@@ -285,23 +285,7 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     }
 
     if (status === "cancelled") {
-      const alreadyRefunded = await Transaction.findOne({
-        campaignId: campaign._id,
-        type: "refund",
-        bucket: { $ne: "referral" },
-      });
-      if (!alreadyRefunded) {
-        const balance = await campaignEscrowBalance(campaign._id);
-        if (balance > 0) {
-          await Transaction.create({
-            campaignId: campaign._id,
-            type: "refund",
-            amount: balance,
-            status: "refunded",
-            date: new Date(),
-          });
-        }
-      }
+      await refundViewsEscrow(campaign._id);
     }
 
     if (status === "cancelled") {
@@ -720,12 +704,26 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
     const campaign = await Campaign.findById(req.params.id).populate("businessId", "name avatar");
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
-    const [events, submissions] = await Promise.all([
+    const [events, submissions, releasedGroups] = await Promise.all([
       listEventsForCampaign(campaign._id),
       Submission.find({ campaignId: campaign._id }).sort({ submittedAt: 1 }),
+      // payoutAmount was never stored on submissions; settled views releases are the truth.
+      Transaction.aggregate([
+        {
+          $match: {
+            campaignId: campaign._id,
+            type: "release",
+            status: "released",
+            bucket: { $ne: "referral" },
+            submissionId: { $ne: null },
+          },
+        },
+        { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+      ]),
     ]);
 
     const submissionById = new Map(submissions.map((s) => [String(s._id), s]));
+    const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
 
     res.json({
       campaign: {
@@ -747,7 +745,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
         caption: s.caption,
         confidenceScore: s.confidenceScore,
         viewsDelivered: s.viewsDelivered,
-        payoutAmount: s.payoutAmount,
+        payoutAmount: releasedBySubmission.get(String(s._id)) || 0,
         payoutStatus: s.payoutStatus,
         rejectionReason: s.rejectionReason,
         adminNotes: s.adminNotes,

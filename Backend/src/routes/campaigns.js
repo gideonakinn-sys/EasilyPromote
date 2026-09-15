@@ -11,6 +11,8 @@ const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
 const { parseReferralSettings } = require("../utils/referralCodes");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
+const { bookEscrowDeposit, refundViewsEscrow } = require("../utils/escrow");
+const { releasedViewsTotal } = require("../utils/earnings");
 
 const router = express.Router();
 
@@ -202,22 +204,22 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
             await campaign.save();
             await ensureCampaignSlots(campaign);
 
-            await Transaction.create({
+            // The webhook may be booking the same payment right now; only one wins.
+            const booked = await bookEscrowDeposit({
               campaignId: campaign._id,
-              type: "escrow_deposit",
               amount: campaign.budget,
-              status: "escrow_deposit",
               reference: campaign.paymentReference,
-              date: new Date(),
             });
 
-            await Notification.create({
-              businessId: campaign.businessId,
-              campaignId: campaign._id,
-              type: "campaign_live",
-              title: "Campaign is live",
-              body: "Your campaign is now live. Creators can start claiming placements.",
-            });
+            if (booked) {
+              await Notification.create({
+                businessId: campaign.businessId,
+                campaignId: campaign._id,
+                type: "campaign_live",
+                title: "Campaign is live",
+                body: "Your campaign is now live. Creators can start claiming placements.",
+              });
+            }
           }
         } catch {
           // paystack verification failed, status stays pending
@@ -418,14 +420,7 @@ router.post("/:id/launch", protect, async (req, res, next) => {
     await ensureCampaignSlots(campaign);
 
     if (!alreadyBooked) {
-      await Transaction.create({
-        campaignId: campaign._id,
-        type: "escrow_deposit",
-        amount: campaign.budget,
-        status: "escrow_deposit",
-        reference,
-        date: new Date(),
-      });
+      await bookEscrowDeposit({ campaignId: campaign._id, amount: campaign.budget, reference });
     }
 
     await Notification.create({
@@ -618,22 +613,9 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
 
     emitCampaignStatus(campaign);
 
-    // Views escrow only; the referral budget is refunded separately below.
-    const unreleased = await Transaction.aggregate([
-      { $match: { campaignId: campaign._id, status: "escrow_deposit", bucket: { $ne: "referral" } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-
-    const refundAmount = unreleased.length > 0 ? unreleased[0].total : 0;
-    if (refundAmount > 0) {
-      await Transaction.create({
-        campaignId: campaign._id,
-        type: "refund",
-        amount: refundAmount,
-        status: "refunded",
-        date: new Date(),
-      });
-    }
+    // Views escrow once, net of releases already committed to creators (in flight or
+    // paid) — the same rule admin cancellation uses. Referral budget is refunded below.
+    await refundViewsEscrow(campaign._id);
 
     await refundUnusedReferralBudget(campaign._id);
 
@@ -672,6 +654,8 @@ router.get("/:id", protect, async (req, res, next) => {
         }).then((ids) => ids.length),
       ]);
 
+    const viewsReleased = await releasedViewsTotal({ campaignId: campaign._id });
+
     res.json({
       id: campaign._id,
       name: campaign.name,
@@ -701,6 +685,7 @@ router.get("/:id", protect, async (req, res, next) => {
       platformFeePercent: campaign.platformFeePercent,
       platformFee: campaign.platformFee,
       creatorPool: campaign.creatorPool,
+      viewsReleased,
       submissionsReceived,
       submissionsApproved,
       submissionsAwaitingReview,

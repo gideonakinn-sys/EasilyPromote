@@ -378,24 +378,13 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
             ? `You've already withdrawn all your available referral earnings on this campaign (₦${alreadyClaimed.toLocaleString()}).`
             : "You haven't earned anything from referrals on this campaign yet.";
     } else {
-      submission = await Submission.findOne({ campaignId, creatorId: req.user._id });
-      const views = submission ? submission.viewsDelivered || 0 : 0;
-
-      // Cap against this creator's own slot, not the whole creator pool — otherwise
-      // one high-performing creator can claim money owed to everyone else.
-      const slotCeiling = slot.reward || 0;
-      const earned = Math.min(views * (campaign.costPerView || 0), slotCeiling);
-
-      // Anything already requested or paid for this campaign is spent entitlement.
-      // Rejected requests are excluded: that money never left.
-      const priorWithdrawals = await Withdrawal.find({
-        campaignId,
-        creatorId: req.user._id,
-        kind: { $ne: "referral" },
-        status: { $in: ["pending", "processing", "released"] },
-      });
-      alreadyClaimed = priorWithdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
-      available = Math.max(earned - alreadyClaimed, 0);
+      // Same formula as the wallet: reward / viewTarget per view, capped at this
+      // creator's slot reward, minus views withdrawals already requested or paid.
+      const { creatorViewsEarnings } = require("../utils/earnings");
+      const earnings = (await creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] })).get(String(campaign._id));
+      submission = await Submission.findOne({ campaignId, creatorId: req.user._id }).sort({ createdAt: -1 });
+      alreadyClaimed = earnings ? earnings.withdrawn : 0;
+      available = earnings ? earnings.availableToWithdraw : 0;
       nothingAvailableMessage = alreadyClaimed > 0
         ? `You've already withdrawn everything earned so far on this campaign (₦${alreadyClaimed.toLocaleString()}).`
         : "You haven't earned anything on this campaign yet.";

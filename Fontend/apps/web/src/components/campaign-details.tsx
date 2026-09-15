@@ -151,6 +151,7 @@ interface CampaignData {
   platforms?: string[];
   contentStyle?: string[];
   platformFeePercent?: number;
+  viewsReleased?: number;
   platformFee?: number;
   creatorPool?: number;
   creatorCount?: number;
@@ -426,9 +427,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const formattedTarget = `${campaign.targetViews.toLocaleString()} views`;
 
   const totalEscrowed = campaign.budget;
-  const platformFee = campaign.platformFee || Math.round(campaign.budget * (campaign.platformFeePercent || 0.3));
+  // platformFeePercent is stored as a whole percentage (30 means 30%).
+  const feePercent = campaign.platformFeePercent ?? 30;
+  const platformFee = campaign.platformFee || Math.round(campaign.budget * (feePercent / 100));
   const creatorPool = campaign.creatorPool || totalEscrowed - platformFee;
-  const releasedTotal = submissions.reduce((sum, s) => sum + (s.payoutStatus === "released" ? (s.payoutAmount || 0) : 0), 0);
+  // Settled views payouts from the ledger; submissions never stored payout amounts.
+  const releasedTotal = campaign.viewsReleased ?? 0;
   const pendingEscrow = Math.max(0, creatorPool - releasedTotal);
 
   const uniqueCreatorCount = new Set(submissions.map(s => s.creatorId)).size;
@@ -821,7 +825,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             <div className="space-y-0.5">
               <span className="text-[10px] font-medium text-stone-500 block">Platform fee</span>
               <p className="text-[10px] text-stone-400 font-rethink font-medium leading-relaxed">
-                {Math.round((campaign.platformFeePercent || 0.3) * 100)}% of funded budget (₦{platformFee.toLocaleString()}), already deducted from your total.
+                {feePercent}% of funded budget (₦{platformFee.toLocaleString()}), already deducted from your total.
               </p>
             </div>
 

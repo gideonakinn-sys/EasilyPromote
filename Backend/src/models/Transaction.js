@@ -64,6 +64,13 @@ const transactionSchema = new mongoose.Schema(
 // Escrow and refund lookups per campaign.
 transactionSchema.index({ campaignId: 1, type: 1, status: 1 });
 transactionSchema.index({ campaignId: 1, bucket: 1, type: 1, status: 1 });
+// One ledger row per payment reference and type, so concurrent confirmations of the
+// same payment (webhook, polling, launch) can't book it twice. Rows without a
+// reference (older refunds) are not constrained.
+transactionSchema.index(
+  { reference: 1, type: 1 },
+  { unique: true, partialFilterExpression: { reference: { $type: "string" } } }
+);
 // Creator wallet: recent transactions for a handle.
 transactionSchema.index({ creatorHandle: 1, date: -1 });
 

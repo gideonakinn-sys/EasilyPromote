@@ -132,6 +132,23 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
 
     const submissions = await Submission.find(filter).sort({ submittedAt: -1 });
 
+    // payoutAmount was never stored on submissions; report what has actually been paid
+    // for each one from settled views releases in the ledger.
+    const Transaction = require("../models/Transaction");
+    const releasedGroups = await Transaction.aggregate([
+      {
+        $match: {
+          campaignId: campaign._id,
+          type: "release",
+          status: "released",
+          bucket: { $ne: "referral" },
+          submissionId: { $ne: null },
+        },
+      },
+      { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+    ]);
+    const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
+
     const counts = {
       new: await Submission.countDocuments({ campaignId: req.params.campaignId, status: "new" }),
       approved: await Submission.countDocuments({
@@ -164,7 +181,7 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       rejectionReason: s.rejectionReason,
       postedPlatforms: s.postedPlatforms,
       viewsDelivered: s.viewsDelivered,
-      payoutAmount: s.payoutAmount,
+      payoutAmount: releasedBySubmission.get(String(s._id)) || 0,
       payoutStatus: s.payoutStatus,
       submittedAt: s.submittedAt,
       reviewedAt: s.reviewedAt,
@@ -454,8 +471,13 @@ router.post("/:id/sync-stats", protect, async (req, res, next) => {
       await campaign.save();
     }
 
-    const creatorPoolShare = campaign ? campaign.creatorPool / Math.max(campaign.viewsDelivered, 1) : 0;
-    const payoutAmount = Math.round(submission.viewsDelivered * creatorPoolShare);
+    // The creator's views earnings on this campaign so far — the same figure the wallet
+    // shows and withdrawals allow, not a share of the whole pool.
+    const { creatorViewsEarnings } = require("../utils/earnings");
+    const earnings = campaign
+      ? (await creatorViewsEarnings(submission.creatorId, { campaignIds: [campaign._id] })).get(String(campaign._id))
+      : null;
+    const payoutAmount = earnings ? earnings.earned : 0;
 
     res.json({
       id: submission._id,
