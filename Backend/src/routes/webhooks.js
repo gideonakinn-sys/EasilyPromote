@@ -10,6 +10,7 @@ const { creditTopup } = require("../utils/topups");
 const { handleConversionWebhook, handleCodeCheck } = require("../services/conversions");
 const { creditReferralTopup } = require("../utils/referralEarnings");
 const { bookEscrowDeposit } = require("../utils/escrow");
+const { recordUnmatchedPayment, applyRefundEvent } = require("../utils/refunds");
 
 const router = express.Router();
 
@@ -31,6 +32,16 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
       const paidAmount = (data.amount || 0) / 100;
 
       if (metadata.type === "topup" && metadata.campaignId) {
+        if (String(data.currency || "").toUpperCase() !== "NGN") {
+          await recordUnmatchedPayment({
+            campaignId: metadata.campaignId,
+            reference,
+            amount: paidAmount,
+            currency: data.currency,
+            reason: "Top-up paid in a currency other than NGN.",
+          });
+          return res.sendStatus(200);
+        }
         // Credit here rather than relying on the brand's browser making it back
         // to PATCH /topup. creditTopup is idempotent on the reference.
         const result = await creditTopup({
@@ -46,6 +57,16 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
           });
         }
       } else if (metadata.type === "referral_topup" && metadata.campaignId) {
+        if (String(data.currency || "").toUpperCase() !== "NGN") {
+          await recordUnmatchedPayment({
+            campaignId: metadata.campaignId,
+            reference,
+            amount: paidAmount,
+            currency: data.currency,
+            reason: "Referral budget paid in a currency other than NGN.",
+          });
+          return res.sendStatus(200);
+        }
         // Referral budget payments are credited to their own pot; creditReferralTopup
         // is idempotent on the reference, so the brand's browser can race this safely.
         const result = await creditReferralTopup({
@@ -63,10 +84,21 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
         }
       } else if (metadata.campaignId) {
         const campaign = await Campaign.findById(metadata.campaignId);
+        const currency = String(data.currency || "").toUpperCase();
+
         if (campaign && campaign.status === "pending_payment") {
-          campaign.status = "live";
-          await campaign.save();
-          await ensureCampaignSlots(campaign);
+          // Compare paid amount to expected budget and check currency
+          if (currency !== "NGN" || Math.round(paidAmount) !== Math.round(campaign.budget)) {
+            // The campaign stays unpaid; the money waits for an admin to refund it.
+            await recordUnmatchedPayment({
+              campaignId: campaign._id,
+              reference,
+              amount: paidAmount,
+              currency,
+              reason: `Payment doesn't match the campaign budget of ₦${campaign.budget.toLocaleString()} NGN.`,
+            });
+            return res.sendStatus(200);
+          }
 
           // The brand's payment-status poll may book the same payment concurrently;
           // the unique reference index lets exactly one of them record it.
@@ -76,20 +108,47 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
             reference,
           });
 
-          if (booked) {
-            await Notification.create({
-              businessId: campaign.businessId,
-              campaignId: campaign._id,
-              type: "campaign_live",
-              title: "Campaign is live",
-              body: "Your campaign is now live. Creators can start claiming placements.",
+          // Move pending_payment -> live atomically
+          const updated = await Campaign.findOneAndUpdate(
+            { _id: campaign._id, status: "pending_payment" },
+            { $set: { status: "live" } },
+            { new: true }
+          );
+
+          if (updated) {
+            await ensureCampaignSlots(updated);
+
+            if (booked) {
+              await Notification.create({
+                businessId: updated.businessId,
+                campaignId: updated._id,
+                type: "campaign_live",
+                title: "Campaign is live",
+                body: "Your campaign is now live. Creators can start claiming placements.",
+              });
+            }
+
+            emitToUser(updated.businessId, "payment-success", {
+              campaignId: updated._id,
+              status: "live",
             });
           }
-
-          emitToUser(campaign.businessId, "payment-success", {
-            campaignId: campaign._id,
-            status: "live",
-          });
+        } else {
+          // Usually the brand's payment-status check already booked this exact payment and
+          // put the campaign live. Otherwise it's a second checkout or a payment that landed
+          // after the campaign moved on, and an admin needs to refund it.
+          const alreadyBooked = await Transaction.exists({ reference, type: { $in: ["escrow_deposit", "topup"] } });
+          if (!alreadyBooked) {
+            await recordUnmatchedPayment({
+              campaignId: metadata.campaignId,
+              reference,
+              amount: paidAmount,
+              currency,
+              reason: campaign
+                ? `Payment arrived while the campaign was "${campaign.status}".`
+                : "Payment arrived for a campaign that no longer exists.",
+            });
+          }
         }
       }
     }
@@ -109,6 +168,10 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
       });
       const label = event === "transfer.failed" ? "Transfer failed" : "Transfer reversed";
       await revertRelease(transaction, `${label}: ${data.reason || "no reason given by Paystack"}`);
+    }
+
+    if (event === "refund.processed" || event === "refund.failed") {
+      await applyRefundEvent(event, data);
     }
 
     res.sendStatus(200);

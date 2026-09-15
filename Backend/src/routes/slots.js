@@ -47,31 +47,44 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
 
     const activeSlots = await Slot.countDocuments({
       creatorId: req.user._id,
-      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+      status: { $in: ["claimed", "submitted", "verifying"] },
     });
     if (activeSlots >= 3) {
       return res.status(400).json({ error: "Placement limit reached — complete active campaigns to claim more" });
     }
 
     let slot;
+    let targetCampaignId = campaignId;
+
     if (slotId) {
       slot = await Slot.findById(slotId);
-    } else if (campaignId) {
-      const campaign = await Campaign.findById(campaignId);
-      if (!campaign || campaign.status !== "live") {
-        return res.status(404).json({ error: "Campaign not found or not live" });
+      if (!slot) {
+        return res.status(404).json({ error: "Placement not found" });
       }
+      targetCampaignId = slot.campaignId;
+    }
 
-      const alreadyClaimed = await Slot.findOne({
-        campaignId,
-        creatorId: req.user._id,
-        status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
-      });
-      if (alreadyClaimed) {
-        return res.status(400).json({ error: "Campaign already claimed" });
-      }
+    if (!targetCampaignId) {
+      return res.status(400).json({ error: "slotId or campaignId is required" });
+    }
 
-      const availableSlots = await Slot.find({ campaignId, status: "available" }).sort({ createdAt: 1 });
+    const campaign = await Campaign.findById(targetCampaignId);
+    if (!campaign || campaign.status !== "live") {
+      return res.status(404).json({ error: "Campaign not found or not live" });
+    }
+
+    // Check if creator already claimed a placement on this campaign (both for slotId and campaignId paths)
+    const alreadyClaimed = await Slot.findOne({
+      campaignId: campaign._id,
+      creatorId: req.user._id,
+      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+    });
+    if (alreadyClaimed) {
+      return res.status(400).json({ error: "You have already claimed a placement for this campaign" });
+    }
+
+    if (!slot) {
+      const availableSlots = await Slot.find({ campaignId: campaign._id, status: "available" }).sort({ createdAt: 1 });
       if (availableSlots.length === 0) {
         return res.status(404).json({ error: "No available placements for this campaign" });
       }
@@ -82,13 +95,8 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
           code: "RANK_LOCKED",
         });
       }
-    } else {
-      return res.status(400).json({ error: "slotId or campaignId is required" });
     }
 
-    if (!slot) {
-      return res.status(404).json({ error: "Placement not found" });
-    }
     if (slot.status !== "available") {
       return res.status(400).json({ error: "Placement is not available" });
     }
@@ -99,48 +107,116 @@ router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next)
       });
     }
 
-    const campaign = await Campaign.findById(slot.campaignId);
-    if (!campaign) {
-      return res.status(404).json({ error: "Campaign not found" });
+    // Check pool capacity so total claimed rewards cannot exceed creatorPool (H1)
+    const otherClaimed = await Slot.find({
+      campaignId: campaign._id,
+      _id: { $ne: slot._id },
+      status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+    }).select("reward viewTarget");
+
+    const alreadyCommittedPool = otherClaimed.reduce((sum, s) => sum + (s.reward || 0), 0);
+    const alreadyCommittedViews = otherClaimed.reduce((sum, s) => sum + (s.viewTarget || 0), 0);
+    const poolRemaining = Math.max((campaign.creatorPool || 0) - alreadyCommittedPool, 0);
+    const viewsRemaining = Math.max((campaign.targetViews || 0) - alreadyCommittedViews, 0);
+
+    if (poolRemaining <= 0 || viewsRemaining <= 0) {
+      return res.status(400).json({ error: "The creator pool for this campaign is fully claimed" });
     }
+
+    let finalViewTarget = Math.min(slot.viewTarget || Math.ceil(campaign.targetViews / 5), viewsRemaining);
+    let finalReward = Math.min(slot.reward || Math.floor(campaign.creatorPool / 5), poolRemaining);
 
     if (committedViews !== undefined && committedViews !== null && committedViews !== "") {
       const target = campaign.targetViews || 0;
-      const minViews = Math.ceil(target * 0.2);
-      const maxViews = Math.ceil(target * 0.5);
+      const minViews = Math.min(Math.ceil(target * 0.2), viewsRemaining);
+      const maxViews = Math.min(Math.ceil(target * 0.5), viewsRemaining);
       const views = Number(committedViews);
       if (!Number.isFinite(views) || views < minViews || views > maxViews) {
         return res.status(400).json({
-          error: `Committed views must be between ${minViews} and ${maxViews} (20%–50% of the campaign target)`,
+          error: `Committed views must be between ${minViews} and ${maxViews} for the remaining campaign pool`,
         });
       }
-      slot.viewTarget = views;
-      slot.reward = Math.max(1, Math.floor(((campaign.creatorPool || 0) * views) / (campaign.targetViews || 1)));
+      finalViewTarget = views;
+      const calculatedReward = Math.floor(((campaign.creatorPool || 0) * views) / (campaign.targetViews || 1));
+      finalReward = Math.max(1, Math.min(calculatedReward, poolRemaining));
     }
 
-    slot.creatorId = req.user._id;
-    slot.status = "claimed";
-    slot.claimedAt = new Date();
-    await slot.save();
+    // Atomically claim the slot to prevent races (M2)
+    const claimedSlot = await Slot.findOneAndUpdate(
+      { _id: slot._id, status: "available" },
+      {
+        $set: {
+          creatorId: req.user._id,
+          status: "claimed",
+          claimedAt: new Date(),
+          viewTarget: finalViewTarget,
+          reward: finalReward,
+        },
+      },
+      { new: true }
+    );
+
+    if (!claimedSlot) {
+      return res.status(409).json({ error: "This placement was just claimed by another creator" });
+    }
+
+    // The pool check above read other claims before this one was written, so two claims
+    // at the same moment could both fit. Re-check with this claim in place, and give the
+    // placement back if the pool is now over-promised or this creator got two.
+    const [claimedTotals] = await Slot.aggregate([
+      {
+        $match: {
+          campaignId: campaign._id,
+          status: { $in: ["claimed", "submitted", "verifying", "approved", "paid"] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          reward: { $sum: "$reward" },
+          mine: { $sum: { $cond: [{ $eq: ["$creatorId", req.user._id] }, 1, 0] } },
+        },
+      },
+    ]);
+    if (claimedTotals && (claimedTotals.reward > (campaign.creatorPool || 0) || claimedTotals.mine > 1)) {
+      await Slot.updateOne(
+        { _id: claimedSlot._id, creatorId: req.user._id, status: "claimed" },
+        {
+          $set: {
+            creatorId: null,
+            status: "available",
+            claimedAt: null,
+            viewTarget: slot.viewTarget,
+            reward: slot.reward,
+          },
+        }
+      );
+      return res.status(409).json({
+        error:
+          claimedTotals.mine > 1
+            ? "You have already claimed a placement for this campaign"
+            : "This campaign's creator pool just filled up. Refresh to see what's left.",
+      });
+    }
 
     // A code failure must never cost the creator their placement; backfill repairs it.
     let referralCode = null;
     if (campaign.referral && campaign.referral.enabled && campaign.referral.codeSource === "easilypromote") {
       try {
         const { createReferralCode } = require("../utils/referralCodes");
-        const code = await createReferralCode({ slot, campaign });
+        const code = await createReferralCode({ slot: claimedSlot, campaign });
         referralCode = code ? code.code : null;
       } catch (error) {
-        console.error(`[Referral] Code generation failed for slot ${slot._id}:`, error.message);
+        console.error(`[Referral] Code generation failed for slot ${claimedSlot._id}:`, error.message);
       }
     }
 
     res.json({
-      id: slot._id,
-      campaignId: slot.campaignId,
-      status: slot.status,
-      viewTarget: slot.viewTarget,
-      reward: slot.reward,
+      id: claimedSlot._id,
+      campaignId: claimedSlot.campaignId,
+      status: claimedSlot.status,
+      viewTarget: claimedSlot.viewTarget,
+      reward: claimedSlot.reward,
       referralCode,
     });
   } catch (error) {

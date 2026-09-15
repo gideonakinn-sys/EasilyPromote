@@ -84,9 +84,10 @@ function verifyConversionSignature({ secret, header, rawBody, now = Date.now() }
 }
 
 function campaignAcceptsConversions(campaign, now = Date.now()) {
+  if (!campaign.referral || !campaign.referral.enabled) return false;
   if (campaign.status === "live" || campaign.status === "paused") return true;
   if (campaign.status === "completed") {
-    const closedAt = campaign.endDate || campaign.updatedAt;
+    const closedAt = campaign.completedAt || campaign.endDate || campaign.updatedAt;
     return Boolean(closedAt) && now - new Date(closedAt).getTime() <= COMPLETED_GRACE_MS;
   }
   return false;
@@ -111,23 +112,28 @@ async function markConnected(key, now) {
   ]);
 }
 
-// Shared by conversions and code checks: key lookup, rate limit, signature, JSON.
+// Shared by conversions and code checks: key lookup, signature, rate limit, JSON.
 // Returns { key, json } on success or { failure } with the response to send.
 async function authenticateSignedRequest({ headers, rawBody }, context, now) {
   const keyId = headers["x-ep-key-id"];
   if (!keyId) {
     return { failure: reply(401, { error: "Missing X-EP-Key-Id header" }) };
   }
-  if (!allowRequest(String(keyId))) {
-    return { failure: reply(429, { error: "Too many requests for this key. Slow down and retry." }) };
-  }
 
   const key = await WebhookKey.findOne({ keyId: String(keyId) });
   if (!key || !key.isUsable(now)) {
     return { failure: reply(401, { error: "Unknown, revoked or expired key" }) };
   }
+  // Known key: from here every outcome, bad signatures included, lands in the brand's request log.
   context.businessId = key.businessId;
   context.keyId = key.keyId;
+
+  // Check that the key owner is active (M8)
+  const User = require("../models/User");
+  const owner = await User.findById(key.businessId);
+  if (!owner || owner.isActive === false) {
+    return { failure: reply(401, { error: "Account is inactive or disabled" }) };
+  }
 
   const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from("");
   const signature = verifyConversionSignature({
@@ -138,6 +144,11 @@ async function authenticateSignedRequest({ headers, rawBody }, context, now) {
   });
   if (!signature.ok) {
     return { failure: reply(401, { error: signature.reason }) };
+  }
+
+  // Rate limit AFTER signature verification so unauthenticated attackers cannot throttle a brand (M5)
+  if (!allowRequest(String(keyId))) {
+    return { failure: reply(429, { error: "Too many requests for this key. Slow down and retry." }) };
   }
 
   let json;
@@ -162,7 +173,9 @@ async function evaluateCode(businessId, rawCode, now) {
   if (!referralCode) return { value, referralCode: null, campaign: null, reason: "not_found" };
   if (referralCode.status === "disabled") return { value, referralCode, campaign: null, reason: "disabled" };
 
-  const campaign = await Campaign.findById(referralCode.campaignId).select("status endDate updatedAt referral businessId name");
+  const campaign = await Campaign.findById(referralCode.campaignId).select(
+    "status endDate completedAt updatedAt referral businessId name"
+  );
   if (!campaign || !campaignAcceptsConversions(campaign, now.getTime())) {
     return { value, referralCode, campaign, reason: "campaign_not_accepting" };
   }
@@ -358,6 +371,7 @@ async function handleCodeCheck({ headers, rawBody, source = "code_check" }) {
 
 module.exports = {
   EVENT_TYPES,
+  campaignAcceptsConversions,
   handleConversionWebhook,
   handleCodeCheck,
   verifyConversionSignature,

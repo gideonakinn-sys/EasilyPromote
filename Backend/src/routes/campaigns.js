@@ -12,6 +12,7 @@ const { emitCampaignStatus } = require("../utils/campaignUpdates");
 const { parseReferralSettings } = require("../utils/referralCodes");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { bookEscrowDeposit, refundViewsEscrow } = require("../utils/escrow");
+const { recordUnmatchedPayment } = require("../utils/refunds");
 const { releasedViewsTotal } = require("../utils/earnings");
 
 const router = express.Router();
@@ -193,17 +194,26 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
       });
 
       if (transaction) {
-        campaign.status = "live";
-        await campaign.save();
-        await ensureCampaignSlots(campaign);
+        const updated = await Campaign.findOneAndUpdate(
+          { _id: campaign._id, status: "pending_payment" },
+          { $set: { status: "live" } },
+          { new: true }
+        );
+        if (updated) {
+          await ensureCampaignSlots(updated);
+          campaign.status = "live";
+        }
       } else if (campaign.paymentReference) {
         try {
           const paystackData = await verifyTransaction(campaign.paymentReference);
-          if (paystackData.status === "success") {
-            campaign.status = "live";
-            await campaign.save();
-            await ensureCampaignSlots(campaign);
+          const paidAmount = (paystackData.amount || 0) / 100;
+          const currency = String(paystackData.currency || "").toUpperCase();
 
+          if (
+            paystackData.status === "success" &&
+            currency === "NGN" &&
+            Math.round(paidAmount) === Math.round(campaign.budget)
+          ) {
             // The webhook may be booking the same payment right now; only one wins.
             const booked = await bookEscrowDeposit({
               campaignId: campaign._id,
@@ -211,15 +221,34 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
               reference: campaign.paymentReference,
             });
 
-            if (booked) {
-              await Notification.create({
-                businessId: campaign.businessId,
-                campaignId: campaign._id,
-                type: "campaign_live",
-                title: "Campaign is live",
-                body: "Your campaign is now live. Creators can start claiming placements.",
-              });
+            const updated = await Campaign.findOneAndUpdate(
+              { _id: campaign._id, status: "pending_payment" },
+              { $set: { status: "live" } },
+              { new: true }
+            );
+
+            if (updated) {
+              campaign.status = "live";
+              await ensureCampaignSlots(updated);
+              if (booked) {
+                await Notification.create({
+                  businessId: campaign.businessId,
+                  campaignId: campaign._id,
+                  type: "campaign_live",
+                  title: "Campaign is live",
+                  body: "Your campaign is now live. Creators can start claiming placements.",
+                });
+              }
             }
+          } else if (paystackData.status === "success") {
+            // Paid, but not this campaign's price: it stays unpaid and an admin refunds it.
+            await recordUnmatchedPayment({
+              campaignId: campaign._id,
+              reference: campaign.paymentReference,
+              amount: paidAmount,
+              currency,
+              reason: `Payment doesn't match the campaign budget of ₦${campaign.budget.toLocaleString()} NGN.`,
+            });
           }
         } catch {
           // paystack verification failed, status stays pending
@@ -248,6 +277,13 @@ router.patch("/:id", protect, async (req, res, next) => {
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only edit draft campaigns" });
     }
+
+    // A new size mid-checkout is a new price. The campaign goes back to draft so the old
+    // checkout can't put it live; a payment still made on it is recorded for refund.
+    const repriced =
+      campaign.status === "pending_payment" &&
+      req.body.targetViews !== undefined &&
+      Number(req.body.targetViews) !== campaign.targetViews;
 
     const allowedFields = [
       "coverImageUrl",
@@ -296,10 +332,19 @@ router.patch("/:id", protect, async (req, res, next) => {
       updates.costPerView = Math.round((updates.budget / req.body.targetViews) * 1000) / 1000;
     }
 
-    const updated = await Campaign.findByIdAndUpdate(req.params.id, updates, {
+    if (repriced) {
+      updates.status = "draft";
+      updates.paymentReference = null;
+    }
+
+    // Only if the status is still what we checked, so a payment confirmed meanwhile isn't undone.
+    const updated = await Campaign.findOneAndUpdate({ _id: campaign._id, status: campaign.status }, updates, {
       new: true,
       runValidators: true,
     });
+    if (!updated) {
+      return res.status(409).json({ error: "This campaign's payment status just changed. Reload and try again." });
+    }
 
     res.json(updated);
   } catch (error) {
@@ -346,10 +391,23 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.niches !== undefined) updates.niches = data.niches;
     }
 
-    const updated = await Campaign.findByIdAndUpdate(req.params.id, updates, {
+    // As in PATCH /:id: a new size mid-checkout is a new price, so back to draft.
+    if (
+      campaign.status === "pending_payment" &&
+      updates.targetViews !== undefined &&
+      Number(updates.targetViews) !== campaign.targetViews
+    ) {
+      updates.status = "draft";
+      updates.paymentReference = null;
+    }
+
+    const updated = await Campaign.findOneAndUpdate({ _id: campaign._id, status: campaign.status }, updates, {
       new: true,
       runValidators: true,
     });
+    if (!updated) {
+      return res.status(409).json({ error: "This campaign's payment status just changed. Reload and try again." });
+    }
 
     res.json({ id: updated._id, status: updated.status });
   } catch (error) {
@@ -383,68 +441,7 @@ router.get("/:id/review", protect, async (req, res, next) => {
   }
 });
 
-router.post("/:id/launch", protect, async (req, res, next) => {
-  try {
-    const { paystackReference } = req.body;
 
-    const campaign = await Campaign.findById(req.params.id);
-    if (!campaign) {
-      return res.status(404).json({ error: "Campaign not found" });
-    }
-    if (campaign.businessId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: "Not authorized" });
-    }
-    if (campaign.status !== "draft") {
-      return res.status(400).json({ error: "Can only launch draft campaigns" });
-    }
-
-    // A campaign only goes live against a verified payment — never on the
-    // client's say-so.
-    const reference = paystackReference || campaign.paymentReference;
-    if (!reference) {
-      return res.status(400).json({ error: "This campaign has not been paid for" });
-    }
-
-    const verification = await verifyTransaction(reference);
-    if (verification.status !== "success") {
-      return res.status(400).json({ error: "Payment verification failed" });
-    }
-
-    const alreadyBooked = await Transaction.findOne({
-      campaignId: campaign._id,
-      type: "escrow_deposit",
-    });
-
-    campaign.status = "live";
-    await campaign.save();
-    await ensureCampaignSlots(campaign);
-
-    if (!alreadyBooked) {
-      await bookEscrowDeposit({ campaignId: campaign._id, amount: campaign.budget, reference });
-    }
-
-    await Notification.create({
-      businessId: req.user._id,
-      campaignId: campaign._id,
-      type: "campaign_live",
-      title: "Campaign is live",
-      body: "Your campaign is now live. Creators can start claiming placements.",
-    });
-
-    res.json({
-      id: campaign._id,
-      status: campaign.status,
-      message: "Your campaign is now live.",
-      escrow: {
-        totalEscrowed: campaign.budget,
-        platformFee: campaign.platformFee,
-        creatorPool: campaign.creatorPool,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 router.post("/:id/topup-init", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
@@ -522,6 +519,19 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
     const paidForCampaign = verification.metadata && verification.metadata.campaignId;
     if (paidForCampaign && String(paidForCampaign) !== String(campaign._id)) {
       return res.status(400).json({ error: "That payment belongs to a different campaign" });
+    }
+
+    if (verification.metadata?.type !== "topup") {
+      return res.status(400).json({ error: "That payment is not a top-up" });
+    }
+
+    if (String(verification.currency || "").toUpperCase() !== "NGN") {
+      return res.status(400).json({ error: "Payment must be in NGN" });
+    }
+
+    const existingOther = await Transaction.findOne({ reference: paystackReference, type: { $ne: "topup" } });
+    if (existingOther) {
+      return res.status(400).json({ error: "That payment reference has already been used for another transaction" });
     }
 
     const verifiedAmount = (verification.amount || 0) / 100;

@@ -124,6 +124,17 @@ function verifyWebhookSignature(rawBody, signature) {
   return crypto.timingSafeEqual(expected, received);
 }
 
+async function createRefund({ transaction, amount, merchant_note }) {
+  return paystackRequest("/refund", {
+    method: "POST",
+    body: {
+      transaction,
+      amount: amount ? Math.round(amount * 100) : undefined,
+      merchant_note: merchant_note || "EasilyPromote refund",
+    },
+  });
+}
+
 module.exports = {
   fetchBalance,
   fetchTransfer,
@@ -133,5 +144,6 @@ module.exports = {
   listBanks,
   resolveAccountNumber,
   initiateTransfer,
+  createRefund,
   verifyWebhookSignature,
 };

@@ -135,6 +135,14 @@ async function deleteAccount(user) {
     { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } }
   );
 
+  // Disable referral codes and revoke webhook keys (M8)
+  const ReferralCode = require("../models/ReferralCode");
+  const WebhookKey = require("../models/WebhookKey");
+  await Promise.all([
+    ReferralCode.updateMany({ creatorId: user._id }, { $set: { status: "disabled" } }),
+    WebhookKey.updateMany({ businessId: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } }),
+  ]);
+
   await Notification.deleteMany({ $or: [{ creatorId: user._id }, { businessId: user._id }] });
   await CreatorProfile.deleteOne({ userId: user._id });
   await BusinessProfile.deleteOne({ userId: user._id });

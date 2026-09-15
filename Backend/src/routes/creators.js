@@ -399,16 +399,26 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       });
     }
 
-    const withdrawal = await Withdrawal.create({
-      creatorId: req.user._id,
-      campaignId,
-      businessId: campaign.businessId,
-      submissionId: submission ? submission._id : null,
-      kind,
-      amount,
-      status: "pending",
-      requestedAt: new Date(),
-    });
+    let withdrawal;
+    try {
+      withdrawal = await Withdrawal.create({
+        creatorId: req.user._id,
+        campaignId,
+        businessId: campaign.businessId,
+        submissionId: submission ? submission._id : null,
+        kind,
+        amount,
+        status: "pending",
+        requestedAt: new Date(),
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(409).json({
+          error: `You already have a ${kind === "referral" ? "referral " : ""}withdrawal being processed for this campaign`,
+        });
+      }
+      throw err;
+    }
 
     res.status(201).json({
       id: withdrawal._id,

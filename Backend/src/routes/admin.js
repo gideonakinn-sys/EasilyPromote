@@ -273,8 +273,42 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
+    // Transition guards to prevent invalid state jumps (M4)
+    const ALLOWED_TRANSITIONS = {
+      draft: ["cancelled"],
+      pending_payment: ["cancelled"],
+      under_review: ["live", "cancelled"],
+      live: ["paused", "completed", "under_review", "cancelled"],
+      paused: ["live", "completed", "under_review", "cancelled"],
+      completed: [],
+      cancelled: [],
+    };
+
+    const allowedNext = ALLOWED_TRANSITIONS[campaign.status] || [];
+    if (!allowedNext.includes(status)) {
+      return res.status(400).json({
+        error: `Cannot transition campaign from "${campaign.status}" to "${status}"`,
+      });
+    }
+
+    if (status === "live") {
+      const depositExists = await Transaction.exists({
+        campaignId: campaign._id,
+        type: "escrow_deposit",
+        status: "escrow_deposit",
+      });
+      if (!depositExists) {
+        return res.status(400).json({
+          error: "Cannot set campaign to live: no confirmed escrow deposit was found for this campaign",
+        });
+      }
+    }
+
     const prevStatus = campaign.status;
     campaign.status = status;
+    if (status === "completed" && !campaign.completedAt) {
+      campaign.completedAt = new Date();
+    }
     campaign.statusNote = ["under_review", "cancelled", "paused"].includes(status)
       ? String(note || "").trim()
       : null;
@@ -1144,23 +1178,75 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
 router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
   try {
     const { approve, note } = req.body || {};
-    const withdrawal = await Withdrawal.findById(req.params.id)
-      .populate("campaignId")
-      .populate("submissionId");
-    if (!withdrawal) {
-      return res.status(404).json({ error: "Withdrawal not found" });
-    }
-    if (withdrawal.status !== "pending") {
-      return res.status(409).json({ error: "This withdrawal has already been reviewed" });
+
+    // Atomically take the withdrawal out of the queue, so a double click or two admins
+    // reviewing at once can't both act on it.
+    let withdrawal;
+    try {
+      withdrawal = await Withdrawal.findOneAndUpdate(
+        { _id: req.params.id, status: "pending" },
+        { $set: { status: "processing", reviewedAt: new Date() } },
+        { new: true }
+      )
+        .populate("campaignId")
+        .populate("submissionId");
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.status(409).json({ error: "Another payout for this creator on this campaign is already being processed" });
+      }
+      throw err;
     }
 
+    if (!withdrawal) {
+      const exists = await Withdrawal.exists({ _id: req.params.id });
+      return exists
+        ? res.status(409).json({ error: "This withdrawal has already been reviewed" })
+        : res.status(404).json({ error: "Withdrawal not found" });
+    }
+
+    // Puts the withdrawal back in the queue when approval stops before any money moves.
+    const backToPending = () =>
+      Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
+
     if (approve === true) {
+      const { revertRelease } = require("../utils/payouts");
       const campaign = withdrawal.campaignId;
       if (!campaign) {
+        await backToPending();
         return res.status(400).json({ error: "Campaign not found" });
       }
 
+      // An earlier attempt that isn't marked failed may still be moving money. Resolve it
+      // against Paystack before anything new is sent.
+      if (withdrawal.reference) {
+        const previous = await Transaction.findOne({ type: "release", reference: withdrawal.reference });
+        if (previous && previous.status !== "failed") {
+          let prior = null;
+          try {
+            prior = await paystack.fetchTransfer(withdrawal.reference);
+          } catch (err) {
+            if (err.status !== 404) {
+              await backToPending();
+              return res.status(409).json({
+                error: `Couldn't confirm the previous payout attempt with Paystack (${err.message}). Try again shortly.`,
+              });
+            }
+          }
+          const priorStatus = prior && prior.status;
+          if (priorStatus === "success") {
+            await settleRelease(previous);
+            return res.status(409).json({ error: "The previous payout attempt already went through, so nothing more was sent" });
+          }
+          if (["pending", "processing", "otp", "receipt"].includes(priorStatus)) {
+            return res.status(409).json({ error: "The previous payout attempt is still in progress at Paystack" });
+          }
+          await revertRelease(previous, `Previous attempt cleared: Paystack reports ${priorStatus || "no transfer"}`);
+          return res.status(409).json({ error: "The previous payout attempt didn't go through and has been cleared. Approve again to retry." });
+        }
+      }
+
       // Referral withdrawals are paid from the referral budget, views withdrawals from the views escrow.
+      // Cancelled campaigns stay payable: their refund leaves what creators are owed in escrow.
       const bucket = withdrawal.kind === "referral" ? "referral" : "views";
       const pendingInEscrow = await campaignEscrowBalance(campaign._id, bucket);
 
@@ -1174,6 +1260,7 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
         console.error("[Admin Withdrawals] Balance lookup failed:", err.message);
       }
       if (paystackBalance !== null && withdrawal.amount > paystackBalance) {
+        await backToPending();
         return res.status(400).json({
           error:
             `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which does not cover this ` +
@@ -1185,6 +1272,7 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
       }
 
       if (withdrawal.amount > pendingInEscrow) {
+        await backToPending();
         return res.status(400).json({
           error: `Insufficient funds in this campaign's ${bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
         });
@@ -1192,10 +1280,43 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       const profile = await CreatorProfile.findOne({ userId: withdrawal.creatorId });
       if (!profile || !(profile.payoutAccount && profile.payoutAccount.paystackRecipientCode)) {
+        await backToPending();
         return res.status(400).json({ error: "Creator has no bank account on file" });
       }
       const recipient = profile.payoutAccount.paystackRecipientCode;
-      const reference = `WD-${withdrawal._id.toString()}-${Date.now()}`;
+
+      // Each attempt gets its own reference: Paystack rejects a reused one, and a failed
+      // attempt keeps its ledger row as history. It's saved before any transfer is sent.
+      const attempt = (withdrawal.payoutAttempts || 0) + 1;
+      const reference = `wd_${withdrawal._id}_${attempt}`;
+      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { reference, payoutAttempts: attempt } });
+      withdrawal.reference = reference;
+      withdrawal.payoutAttempts = attempt;
+
+      // Reserve the escrow before calling Paystack, so a crash after the transfer is sent
+      // still leaves a record the reconcile job can settle.
+      let releaseTransaction;
+      try {
+        releaseTransaction = await Transaction.create({
+          campaignId: campaign._id,
+          bucket,
+          creatorId: withdrawal.creatorId,
+          submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
+          creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
+          type: "release",
+          amount: withdrawal.amount,
+          reference,
+          status: "escrow_deposit",
+          date: new Date(),
+        });
+      } catch (err) {
+        await backToPending();
+        throw err;
+      }
+
+      if (bucket === "views" && withdrawal.submissionId) {
+        await Submission.updateOne({ _id: withdrawal.submissionId._id }, { payoutStatus: "escrow_deposit" });
+      }
 
       let transfer = null;
       try {
@@ -1206,12 +1327,20 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
           reason: `Creator payout for ${campaign.name || "campaign"}`,
         });
       } catch (err) {
-        // Paystack's own message says whether this is a balance problem, a bad
-        // recipient, or transfers being disabled on the account. Swallowing it
-        // sends admins hunting in the wrong place.
         console.error("[Admin Withdrawals] Transfer failed:", err.message);
+        // A 4xx is Paystack refusing the transfer (balance, recipient, transfers disabled):
+        // nothing moved, so free the escrow and requeue. Anything else — a timeout or a
+        // 5xx — may still have gone through, so it stays processing until the reconcile
+        // job confirms it with Paystack.
+        if (err.status >= 400 && err.status < 500) {
+          await revertRelease(releaseTransaction, `Paystack rejected the transfer: ${err.message}`);
+          return res.status(502).json({
+            error: `Paystack rejected this payout: ${err.message}`,
+            paystackBalance,
+          });
+        }
         return res.status(502).json({
-          error: `Paystack rejected this payout: ${err.message}`,
+          error: `Paystack didn't confirm this payout (${err.message}). It stays in processing and will be checked against Paystack automatically, so don't send it again.`,
           paystackBalance,
         });
       }
@@ -1222,6 +1351,7 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       if (transferStatus === "otp") {
         console.error("[Admin Withdrawals] Transfer requires OTP; aborting", reference);
+        await revertRelease(releaseTransaction, "Paystack required OTP, so the transfer was not sent");
         return res.status(502).json({
           error:
             "Paystack is requiring OTP confirmation for transfers, so this payout did not go through. Disable OTP for transfers in your Paystack dashboard (Settings → Preferences), then approve again.",
@@ -1230,35 +1360,13 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       if (!["success", "pending"].includes(transferStatus)) {
         console.error("[Admin Withdrawals] Unexpected transfer status:", transferStatus, reference);
+        await revertRelease(releaseTransaction, `Paystack returned transfer status ${transferStatus || "unknown"}`);
         return res.status(502).json({
           error: `Paystack did not accept this payout (status: ${transferStatus || "unknown"}). No funds were moved.`,
         });
       }
 
-      const releaseTransaction = await Transaction.create({
-        campaignId: campaign._id,
-        bucket,
-        creatorId: withdrawal.creatorId,
-        submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
-        creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
-        type: "release",
-        amount: withdrawal.amount,
-        reference,
-        status: "escrow_deposit",
-        date: new Date(),
-      });
-
-      if (bucket === "views" && withdrawal.submissionId) {
-        await Submission.updateOne({ _id: withdrawal.submissionId._id }, { payoutStatus: "escrow_deposit" });
-      }
-
-      // "processing" keeps the transfer out of the pending queue so it cannot
-      // be approved (and paid) a second time while it is in flight.
-      withdrawal.status = "processing";
-      withdrawal.reference = reference;
-      withdrawal.adminNotes = note || withdrawal.adminNotes || null;
-      withdrawal.reviewedAt = new Date();
-      await withdrawal.save();
+      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { adminNotes: note || withdrawal.adminNotes || null } });
 
       // Test mode settles instantly; live transfers come back "pending" and are
       // finalised by the transfer.success webhook. settleRelease is idempotent.
@@ -1268,6 +1376,19 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
 
       const settled = await Withdrawal.findById(withdrawal._id);
 
+      // Notify the creator about their payout (M7)
+      await Notification.create({
+        creatorId: withdrawal.creatorId,
+        campaignId: campaign._id,
+        type: "payout",
+        title: settled.status === "released" ? "Payout sent" : "Payout on the way",
+        body:
+          settled.status === "released"
+            ? `₦${withdrawal.amount.toLocaleString()} has been sent to your bank account for "${campaign.name || "campaign"}".`
+            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to your bank account for "${campaign.name || "campaign"}".`,
+      });
+
+      // Notify the brand for ledger awareness
       await Notification.create({
         businessId: withdrawal.businessId,
         campaignId: campaign._id,
@@ -1297,6 +1418,16 @@ router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
       await withdrawal.save();
 
       const campaignName = withdrawal.campaignId && withdrawal.campaignId.name;
+
+      // Notify creator of rejection (M7)
+      await Notification.create({
+        creatorId: withdrawal.creatorId,
+        campaignId: withdrawal.campaignId ? withdrawal.campaignId._id : null,
+        type: "payout_rejected",
+        title: "Withdrawal Rejected",
+        body: `Your withdrawal request for ₦${withdrawal.amount.toLocaleString()} on "${campaignName || "Campaign"}" was rejected.${note ? ` Reason: ${note}` : ""}`,
+      });
+
       await recordAdminActivity(req, {
         action: "withdrawal.rejected",
         targetType: "withdrawal",

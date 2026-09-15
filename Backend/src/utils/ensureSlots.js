@@ -56,4 +56,26 @@ async function syncCampaignSlots(campaign, count) {
   return Slot.insertMany(buildSlots(campaign, target));
 }
 
-module.exports = { ensureCampaignSlots, syncCampaignSlots, DEFAULT_SLOT_COUNT };
+/**
+ * Creates new available slots corresponding to a top-up's extra views and pool.
+ */
+async function addTopupSlots(campaign, extraViews, extraPool) {
+  if (!campaign || extraViews <= 0 || extraPool <= 0) return [];
+  const baseSlots = slotCountFor(campaign);
+  const standardViews = Math.max(1, Math.ceil(campaign.targetViews / baseSlots));
+  const slotsToAdd = Math.max(1, Math.round(extraViews / standardViews));
+  const viewTarget = Math.ceil(extraViews / slotsToAdd);
+  const reward = Math.floor(extraPool / slotsToAdd);
+
+  const slots = Array.from({ length: slotsToAdd }, () => ({
+    campaignId: campaign._id,
+    creatorId: null,
+    rankRequired: null,
+    viewTarget,
+    reward,
+    status: "available",
+  }));
+  return Slot.insertMany(slots);
+}
+
+module.exports = { ensureCampaignSlots, syncCampaignSlots, addTopupSlots, DEFAULT_SLOT_COUNT };

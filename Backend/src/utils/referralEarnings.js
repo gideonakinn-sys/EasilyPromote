@@ -65,6 +65,13 @@ async function creditReferralTopup({ campaignId, reference, amount }) {
   const campaign = await Campaign.findById(campaignId).select("platformFeePercent businessId name referral");
   if (!campaign) return { credited: false, reason: "campaign_not_found" };
 
+  // A reference already used under another transaction type must be rejected
+  const prior = await Transaction.findOne({
+    reference,
+    $or: [{ type: { $ne: "topup" } }, { bucket: { $ne: "referral" } }],
+  });
+  if (prior) return { credited: false, reason: "reference_already_used" };
+
   const existing = await Transaction.findOneAndUpdate(
     { reference, type: "topup", bucket: "referral" },
     {
@@ -106,28 +113,35 @@ async function creditReferralTopup({ campaignId, reference, amount }) {
 // including the platform fee on that unused part. Money creators already earned stays
 // in escrow for them to withdraw.
 async function refundUnusedReferralBudget(campaignId) {
-  const campaign = await Campaign.findById(campaignId).select("platformFeePercent referral");
-  if (!campaign || !campaign.referral || !(campaign.referral.budget > 0)) return 0;
-
-  const alreadyRefunded = await Transaction.findOne({ campaignId, type: "refund", bucket: "referral" });
+  const alreadyRefunded = await Transaction.findOne({
+    campaignId,
+    type: "refund",
+    bucket: "referral",
+  });
   if (alreadyRefunded) return 0;
 
-  const remaining = campaign.referral.poolRemaining || 0;
-  await Campaign.updateOne({ _id: campaignId }, { $set: { "referral.poolRemaining": 0 } });
+  // Atomically claim the remaining pool so concurrent cancels or rewards cannot race it
+  const campaign = await Campaign.findOneAndUpdate(
+    { _id: campaignId, "referral.poolRemaining": { $gt: 0 } },
+    { $set: { "referral.poolRemaining": 0 } },
+    { new: false }
+  ).select("platformFeePercent referral");
 
+  if (!campaign || !campaign.referral || !(campaign.referral.poolRemaining > 0)) return 0;
+
+  const remaining = campaign.referral.poolRemaining;
   const feePercent = Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30;
   const unused = feePercent < 100 ? roundMoney((remaining * 100) / (100 - feePercent)) : 0;
   if (unused <= 0) return 0;
 
-  await Transaction.create({
+  const { refundCampaignBucket } = require("./refunds");
+  const refund = await refundCampaignBucket({
     campaignId,
-    type: "refund",
     bucket: "referral",
     amount: unused,
-    status: "refunded",
-    date: new Date(),
+    note: `Unused referral budget from cancelled campaign ${campaignId}`,
   });
-  return unused;
+  return refund ? unused : 0;
 }
 
 function payoutStatusOf(event, now = new Date()) {

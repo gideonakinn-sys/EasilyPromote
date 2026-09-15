@@ -36,9 +36,14 @@ const withdrawalSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Reference of the latest transfer attempt; each attempt gets a new one.
     reference: {
       type: String,
       default: null,
+    },
+    payoutAttempts: {
+      type: Number,
+      default: 0,
     },
     requestedAt: {
       type: Date,
@@ -66,5 +71,17 @@ const withdrawalSchema = new mongoose.Schema(
 withdrawalSchema.index({ creatorId: 1, status: 1 });
 withdrawalSchema.index({ campaignId: 1, creatorId: 1, status: 1 });
 withdrawalSchema.index({ creatorId: 1, kind: 1, campaignId: 1, status: 1 });
+// At most one pending and one processing withdrawal per creator, campaign and kind, so
+// parallel requests can't both be queued. Two equality filters instead of one $in, which
+// partial indexes only accept on newer MongoDB versions; different key orders keep them
+// distinct indexes.
+withdrawalSchema.index(
+  { creatorId: 1, campaignId: 1, kind: 1 },
+  { name: "one_pending_withdrawal", unique: true, partialFilterExpression: { status: "pending" } }
+);
+withdrawalSchema.index(
+  { campaignId: 1, creatorId: 1, kind: 1 },
+  { name: "one_processing_withdrawal", unique: true, partialFilterExpression: { status: "processing" } }
+);
 
 module.exports = mongoose.model("Withdrawal", withdrawalSchema);

@@ -15,7 +15,10 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       return res.status(403).json({ error: "Not authorized" });
     }
 
-    const allTransactions = await Transaction.find({ campaignId: campaign._id }).sort({ date: -1 });
+    // Unmatched payments wait for an admin refund and were never part of this campaign's budget.
+    const allTransactions = await Transaction.find({ campaignId: campaign._id, type: { $ne: "unmatched_payment" } }).sort({
+      date: -1,
+    });
     // The views escrow and the referral budget are separate pots; these totals are views only.
     const transactions = allTransactions.filter((t) => t.bucket !== "referral");
     const referralTransactions = allTransactions.filter((t) => t.bucket === "referral");
@@ -80,7 +83,9 @@ router.get("/campaign/:campaignId/statement", protect, async (req, res, next) =>
       return res.status(403).json({ error: "Not authorized" });
     }
 
-    const transactions = await Transaction.find({ campaignId: campaign._id }).sort({ date: 1 });
+    const transactions = await Transaction.find({ campaignId: campaign._id, type: { $ne: "unmatched_payment" } }).sort({
+      date: 1,
+    });
 
     const header = "Date,Creator,Views,Amount,Status\n";
     const rows = transactions

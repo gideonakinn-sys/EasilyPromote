@@ -18,7 +18,9 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["escrow_deposit", "release", "refund", "topup"],
+      // unmatched_payment: money Paystack collected that couldn't be applied to a campaign;
+      // it never counts toward escrow and waits for an admin to refund it.
+      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment"],
       required: true,
     },
     views: {
@@ -35,8 +37,30 @@ const transactionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["escrow_deposit", "released", "refunded", "failed"],
+      // Refunds: refund_pending until Paystack confirms every part, refund_failed when any
+      // part needs a manual refund. Unmatched payments sit in under_review.
+      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review"],
       required: true,
+    },
+    adminNotes: {
+      type: String,
+      default: null,
+    },
+    // A refund is sent to Paystack against each payment that funded the campaign.
+    refundParts: {
+      type: [
+        new mongoose.Schema(
+          {
+            chargeReference: { type: String, default: null },
+            amount: { type: Number, required: true },
+            paystackRefundId: { type: String, default: null },
+            status: { type: String, enum: ["pending", "processed", "failed"], default: "pending" },
+            error: { type: String, default: null },
+          },
+          { _id: false }
+        ),
+      ],
+      default: undefined,
     },
     date: {
       type: Date,
@@ -71,6 +95,8 @@ transactionSchema.index(
   { reference: 1, type: 1 },
   { unique: true, partialFilterExpression: { reference: { $type: "string" } } }
 );
+// Paystack refund webhooks name the original payment.
+transactionSchema.index({ "refundParts.chargeReference": 1 }, { sparse: true });
 // Creator wallet: recent transactions for a handle.
 transactionSchema.index({ creatorHandle: 1, date: -1 });
 

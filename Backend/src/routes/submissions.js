@@ -403,7 +403,7 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
   }
 });
 
-router.post("/:id/sync-stats", protect, async (req, res, next) => {
+router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), async (req, res, next) => {
   try {
     const { platform: rawPlatform, views, likes, comments } = req.body;
     const platform = rawPlatform ? rawPlatform.trim().toLowerCase() : "";
@@ -460,6 +460,7 @@ router.post("/:id/sync-stats", protect, async (req, res, next) => {
 
       if (shouldComplete) {
         campaign.status = "completed";
+        campaign.completedAt = new Date();
         await Notification.create({
           businessId: campaign.businessId,
           campaignId: campaign._id,

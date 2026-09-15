@@ -9,7 +9,7 @@ const postedPlatformSchema = new mongoose.Schema(
     },
     postUrl: {
       type: String,
-      required: true,
+      default: "",
     },
     views: {
       type: Number,

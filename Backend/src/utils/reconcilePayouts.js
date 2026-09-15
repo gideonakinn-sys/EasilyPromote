@@ -28,8 +28,10 @@ async function reconcilePayouts() {
 
   for (const withdrawal of stuck) {
     if (!withdrawal.reference) {
-      summary.unknown += 1;
-      console.warn("[Reconcile] Withdrawal", String(withdrawal._id), "is processing with no reference");
+      // A reference is saved before any transfer is sent, so without one no money moved.
+      await Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
+      summary.failed += 1;
+      console.warn("[Reconcile] Requeued", String(withdrawal._id), "— processing with no transfer reference");
       continue;
     }
 
@@ -37,8 +39,20 @@ async function reconcilePayouts() {
     try {
       transfer = await paystack.fetchTransfer(withdrawal.reference);
     } catch (err) {
-      // An unrecognised reference means no transfer was ever created, so the
-      // money never left. Anything else is a lookup problem — leave it alone.
+      if (err.status === 404) {
+        // Paystack has no transfer with this reference, so the attempt never reached it
+        // and no money left. Free the escrow and put the withdrawal back in the queue.
+        const orphan = await Transaction.findOne({ type: "release", reference: withdrawal.reference });
+        if (orphan) {
+          await revertRelease(orphan, "Reconciled: Paystack has no record of this transfer");
+        } else {
+          await Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
+        }
+        summary.failed += 1;
+        console.log("[Reconcile] Requeued", withdrawal.reference, "— Paystack has no such transfer");
+        continue;
+      }
+      // Anything else is a lookup problem — leave it alone and try next run.
       console.error("[Reconcile] Lookup failed for", withdrawal.reference, err.message);
       summary.unknown += 1;
       continue;

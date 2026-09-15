@@ -190,6 +190,10 @@ const campaignSchema = new mongoose.Schema(
         default: null,
       },
     },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -200,7 +204,10 @@ campaignSchema.index({ businessId: 1, status: 1, createdAt: -1 });
 campaignSchema.index({ status: 1, createdAt: -1 });
 
 campaignSchema.pre("save", function (next) {
-  if (this.isModified("targetViews")) {
+  if (this.isModified("status") && this.status === "completed" && !this.completedAt) {
+    this.completedAt = new Date();
+  }
+  if (this.isModified("targetViews") && !this._skipPriceRecalculation) {
     const { getPriceForViews } = require("../config/pricing");
     this.budget = getPriceForViews(this.targetViews);
     this.costPerView = Math.round((this.budget / this.targetViews) * 1000) / 1000;

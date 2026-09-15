@@ -1,6 +1,6 @@
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
-const { ensureCampaignSlots } = require("./ensureSlots");
+const { ensureCampaignSlots, addTopupSlots } = require("./ensureSlots");
 
 // How many extra views a given amount buys on this campaign.
 function viewsForAmount(campaign, amount) {
@@ -23,6 +23,10 @@ async function creditTopup({ campaignId, reference, amount }) {
 
   const campaign = await Campaign.findById(campaignId);
   if (!campaign) return { credited: false, reason: "campaign_not_found" };
+
+  // A reference already used under another transaction type (e.g. escrow_deposit) must be rejected
+  const prior = await Transaction.findOne({ reference, type: { $ne: "topup" } });
+  if (prior) return { credited: false, reason: "reference_already_used" };
 
   // Atomic claim: returns the existing doc if one is already there, null if we
   // inserted it. Only the inserter credits.
@@ -47,9 +51,18 @@ async function creditTopup({ campaignId, reference, amount }) {
 
   const extraViews = viewsForAmount(campaign, amount);
   if (extraViews > 0) {
+    const feePercent = campaign.platformFeePercent || 30;
+    const extraFee = amount * (feePercent / 100);
+    const extraPool = amount - extraFee;
+
+    campaign._skipPriceRecalculation = true;
     campaign.targetViews += extraViews;
+    campaign.budget += amount;
+    campaign.platformFee += extraFee;
+    campaign.creatorPool += extraPool;
     await campaign.save();
-    await ensureCampaignSlots(campaign);
+
+    await addTopupSlots(campaign, extraViews, extraPool);
   }
 
   return { credited: true, campaign, amount, extraViews };
