@@ -467,6 +467,64 @@ async function buildWallet(user, ctx) {
   );
   const payout = profile && profile.payoutAccount;
 
+  // Withdrawals are once a week per campaign: views earnings and referral earnings past
+  // their hold go out together.
+  const Withdrawal = require("../models/Withdrawal");
+  const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
+  const now = new Date();
+  const weekStart = payoutWeekStart(now);
+  const recentWithdrawals = await Withdrawal.find({
+    creatorId: userId,
+    $or: [{ status: { $in: ["pending", "processing"] } }, { status: { $ne: "rejected" }, requestedAt: { $gte: weekStart } }],
+  }).lean();
+
+  const withdrawCampaigns = [];
+  const seenCampaigns = new Set();
+  for (const slot of slots) {
+    const campaign = slot.campaignId;
+    if (!campaign) continue;
+    const key = String(campaign._id);
+    if (seenCampaigns.has(key)) continue;
+    seenCampaigns.add(key);
+
+    const views = viewsEarnings.get(key);
+    const referralTotals = referralEarnings.get(key);
+    const viewsEligible = ["live", "paused", "completed"].includes(campaign.status);
+    const referralEligible = viewsEligible || campaign.status === "cancelled";
+    const viewsAvailable = viewsEligible && views ? views.availableToWithdraw : 0;
+    const referralAvailable = referralEligible && referralTotals ? referralTotals.availableToWithdraw : 0;
+    const referralOnHold = referralTotals ? referralTotals.pending : 0;
+    const total = floorKobo(viewsAvailable + referralAvailable);
+
+    const forCampaign = recentWithdrawals.filter((w) => String(w.campaignId) === key);
+    const inFlight = forCampaign.find((w) => ["pending", "processing"].includes(w.status));
+    const thisWeek = forCampaign.find((w) => new Date(w.requestedAt) >= weekStart);
+    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0) continue;
+
+    withdrawCampaigns.push({
+      id: campaign._id,
+      title: campaign.name,
+      status: campaign.status,
+      viewsAvailable,
+      referralAvailable,
+      referralOnHold,
+      total,
+      // available | below_minimum | nothing_yet | requested | withdrawn_this_week
+      state: inFlight
+        ? "requested"
+        : thisWeek
+          ? "withdrawn_this_week"
+          : total <= 0
+            ? "nothing_yet"
+            : total < MIN_CAMPAIGN_WITHDRAWAL
+              ? "below_minimum"
+              : "available",
+      requested: inFlight
+        ? { amount: inFlight.amount, status: inFlight.status, payoutDate: nextPayoutDate(inFlight.requestedAt) }
+        : null,
+    });
+  }
+
   // Referral earnings are their own pot: held 7 days per conversion, then withdrawable.
   const referralByCampaign = [];
   for (const slot of slots) {
@@ -499,6 +557,8 @@ async function buildWallet(user, ctx) {
     pendingBalance,
     pendingByCampaign,
     viewsByCampaign,
+    withdrawCampaigns,
+    payoutSchedule: { nextPayoutDate: nextPayoutDate(now), minimumPerCampaign: MIN_CAMPAIGN_WITHDRAWAL },
     hasBankAccount: !!(payout && payout.paystackRecipientCode),
     bankName: payout ? payout.bankName : null,
     accountName: payout ? payout.accountName : null,

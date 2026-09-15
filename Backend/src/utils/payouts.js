@@ -4,8 +4,11 @@ const Withdrawal = require("../models/Withdrawal");
 const CreatorProfile = require("../models/CreatorProfile");
 
 async function findWithdrawalFor(transaction) {
-  if (transaction.reference) {
-    const byReference = await Withdrawal.findOne({ reference: transaction.reference });
+  // A withdrawal paid from two pots has a release row per pot, each carrying the shared
+  // transfer reference; older single-pot releases used the transfer reference directly.
+  for (const reference of [transaction.transferReference, transaction.reference]) {
+    if (!reference) continue;
+    const byReference = await Withdrawal.findOne({ reference });
     if (byReference) return byReference;
   }
   if (transaction.submissionId) {

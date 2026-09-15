@@ -315,13 +315,23 @@ router.delete("/bank-account", protect, authorizeRoles("creator"), async (req, r
 });
 
 // ─── POST /creators/withdrawals ──────────────────────────────────────────────
+// Creators withdraw once a week per campaign: views earnings and referral earnings past
+// their hold go out together, and are paid on the Friday that ends the payout week.
 router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const { campaignId, amount } = req.body || {};
-    // Views and referral earnings are separate entitlements, withdrawn separately.
-    const kind = req.body && req.body.kind === "referral" ? "referral" : "views";
-    if (!campaignId || !amount) {
-      return res.status(400).json({ error: "campaignId and amount are required" });
+    const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate, formatPayoutDate } = require("../utils/payoutSchedule");
+    const { creatorViewsEarnings, floorKobo } = require("../utils/earnings");
+    const { creatorReferralEarnings } = require("../utils/referralEarnings");
+
+    const { campaignId } = req.body || {};
+    // Older clients still send a kind and amount; they withdraw only that part.
+    const onlyKind = req.body && ["views", "referral"].includes(req.body.kind) ? req.body.kind : null;
+    const requestedAmount = onlyKind && req.body.amount !== undefined ? Number(req.body.amount) : null;
+    if (!campaignId) {
+      return res.status(400).json({ error: "campaignId is required" });
+    }
+    if (requestedAmount !== null && !(requestedAmount > 0)) {
+      return res.status(400).json({ error: "Amount must be greater than zero" });
     }
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
@@ -331,7 +341,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
 
     const slot = await Slot.findOne({ campaignId, creatorId: req.user._id }).populate({
       path: "campaignId",
-      select: "name status targetViews costPerView viewsDelivered creatorPool businessId",
+      select: "name status businessId",
     });
     if (!slot || !slot.campaignId) {
       return res.status(404).json({ error: "Campaign not found for this creator" });
@@ -339,65 +349,75 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
     const campaign = slot.campaignId;
 
     // Referral earnings stay owed after a cancellation, so they remain withdrawable.
-    const eligibleStatuses = kind === "referral" ? ["completed", "live", "paused", "cancelled"] : ["completed", "live", "paused"];
-    if (!eligibleStatuses.includes(campaign.status)) {
+    const viewsEligible = ["completed", "live", "paused"].includes(campaign.status);
+    const referralEligible = viewsEligible || campaign.status === "cancelled";
+    if (!referralEligible) {
       return res.status(400).json({ error: "This campaign is not eligible for withdrawal yet" });
     }
 
-    if (amount <= 0) {
-      return res.status(400).json({ error: "Amount must be greater than zero" });
-    }
-
+    const now = new Date();
+    const payoutDate = nextPayoutDate(now);
     // Checked before balances: with a request in flight, "nothing left" would mislead.
-    const existing = await Withdrawal.findOne({
-      campaignId,
-      creatorId: req.user._id,
-      kind: kind === "referral" ? "referral" : { $ne: "referral" },
-      status: { $in: ["pending", "processing"] },
-    });
-    if (existing) {
+    const [inFlight, thisWeek] = await Promise.all([
+      Withdrawal.findOne({ campaignId, creatorId: req.user._id, status: { $in: ["pending", "processing"] } }),
+      Withdrawal.findOne({
+        campaignId,
+        creatorId: req.user._id,
+        status: { $ne: "rejected" },
+        requestedAt: { $gte: payoutWeekStart(now) },
+      }),
+    ]);
+    if (inFlight) {
+      return res.status(409).json({ error: "You already have a withdrawal being processed for this campaign" });
+    }
+    if (thisWeek) {
       return res.status(409).json({
-        error: `You already have a ${kind === "referral" ? "referral " : ""}withdrawal being processed for this campaign`,
+        error: `You've already withdrawn from this campaign this week. You can withdraw again from ${formatPayoutDate(payoutDate)}.`,
       });
     }
 
-    let submission = null;
-    let alreadyClaimed = 0;
-    let available = 0;
-    let nothingAvailableMessage;
+    const key = String(campaign._id);
+    const [viewsMap, referralMap] = await Promise.all([
+      creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] }),
+      creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] }),
+    ]);
+    const views = viewsMap.get(key);
+    const referral = referralMap.get(key);
 
-    if (kind === "referral") {
-      const { creatorReferralEarnings } = require("../utils/referralEarnings");
-      const earnings = (await creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] })).get(String(campaign._id));
-      alreadyClaimed = earnings ? earnings.withdrawn : 0;
-      available = earnings ? earnings.availableToWithdraw : 0;
-      nothingAvailableMessage =
-        earnings && earnings.pending > 0
-          ? `₦${earnings.pending.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`
-          : alreadyClaimed > 0
-            ? `You've already withdrawn all your available referral earnings on this campaign (₦${alreadyClaimed.toLocaleString()}).`
-            : "You haven't earned anything from referrals on this campaign yet.";
-    } else {
-      // Same formula as the wallet: reward / viewTarget per view, capped at this
-      // creator's slot reward, minus views withdrawals already requested or paid.
-      const { creatorViewsEarnings } = require("../utils/earnings");
-      const earnings = (await creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] })).get(String(campaign._id));
-      submission = await Submission.findOne({ campaignId, creatorId: req.user._id }).sort({ createdAt: -1 });
-      alreadyClaimed = earnings ? earnings.withdrawn : 0;
-      available = earnings ? earnings.availableToWithdraw : 0;
-      nothingAvailableMessage = alreadyClaimed > 0
-        ? `You've already withdrawn everything earned so far on this campaign (₦${alreadyClaimed.toLocaleString()}).`
-        : "You haven't earned anything on this campaign yet.";
+    let viewsAmount = viewsEligible && onlyKind !== "referral" && views ? views.availableToWithdraw : 0;
+    let referralAmount = onlyKind !== "views" && referral ? referral.availableToWithdraw : 0;
+    if (requestedAmount !== null) {
+      const cap = onlyKind === "referral" ? referralAmount : viewsAmount;
+      if (requestedAmount > cap) {
+        return res.status(400).json({
+          error: `You can only withdraw up to ₦${cap.toLocaleString()} ${onlyKind === "referral" ? "of referral earnings " : ""}for this campaign`,
+        });
+      }
+      if (onlyKind === "referral") referralAmount = floorKobo(requestedAmount);
+      else viewsAmount = floorKobo(requestedAmount);
     }
 
-    if (available <= 0) {
-      return res.status(400).json({ error: nothingAvailableMessage });
-    }
-    if (amount > available) {
+    const amount = floorKobo(viewsAmount + referralAmount);
+    if (amount <= 0) {
+      const onHold = referral ? referral.pending : 0;
+      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0);
       return res.status(400).json({
-        error: `You can only withdraw up to ₦${available.toLocaleString()} ${kind === "referral" ? "of referral earnings " : ""}for this campaign`,
+        error:
+          onHold > 0
+            ? `₦${onHold.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`
+            : withdrawn > 0
+              ? "You've already withdrawn everything earned so far on this campaign."
+              : "You haven't earned anything on this campaign yet.",
       });
     }
+    if (amount < MIN_CAMPAIGN_WITHDRAWAL) {
+      return res.status(400).json({
+        error: `You need at least ₦${MIN_CAMPAIGN_WITHDRAWAL.toLocaleString()} to withdraw from a campaign. You have ₦${amount.toLocaleString()}, which carries over until you reach it.`,
+        code: "BELOW_MINIMUM",
+      });
+    }
+
+    const submission = await Submission.findOne({ campaignId, creatorId: req.user._id }).sort({ createdAt: -1 });
 
     let withdrawal;
     try {
@@ -406,16 +426,16 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
         campaignId,
         businessId: campaign.businessId,
         submissionId: submission ? submission._id : null,
-        kind,
+        kind: "campaign",
         amount,
+        viewsAmount: floorKobo(viewsAmount),
+        referralAmount: floorKobo(referralAmount),
         status: "pending",
-        requestedAt: new Date(),
+        requestedAt: now,
       });
     } catch (err) {
       if (err.code === 11000) {
-        return res.status(409).json({
-          error: `You already have a ${kind === "referral" ? "referral " : ""}withdrawal being processed for this campaign`,
-        });
+        return res.status(409).json({ error: "You already have a withdrawal being processed for this campaign" });
       }
       throw err;
     }
@@ -424,8 +444,11 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       id: withdrawal._id,
       kind: withdrawal.kind,
       amount: withdrawal.amount,
+      viewsAmount: withdrawal.viewsAmount,
+      referralAmount: withdrawal.referralAmount,
       status: withdrawal.status,
-      message: "Withdrawal request received. It is under review — we'll get back to you within 24 hours.",
+      payoutDate,
+      message: `Withdrawal requested. It's paid on ${formatPayoutDate(payoutDate)}.`,
     });
   } catch (error) {
     next(error);
@@ -439,6 +462,7 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
       .sort({ createdAt: -1 })
       .populate("campaignId", "name targetViews");
 
+    const { nextPayoutDate } = require("../utils/payoutSchedule");
     res.json({
       withdrawals: withdrawals.map((w) => ({
         id: w._id,
@@ -446,6 +470,10 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
         campaignName: w.campaignId ? w.campaignId.name : "Campaign",
         kind: w.kind || "views",
         amount: w.amount,
+        viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
+        referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        // Requests are paid on the Friday that ends the week they were made in.
+        payoutDate: ["pending", "processing"].includes(w.status) ? nextPayoutDate(w.requestedAt) : null,
         status: w.status,
         adminNotes: w.adminNotes,
         requestedAt: w.requestedAt,

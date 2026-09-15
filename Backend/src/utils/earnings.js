@@ -66,7 +66,13 @@ async function creatorViewsEarnings(creatorId, { campaignIds = null } = {}) {
           status: { $in: COMMITTED_WITHDRAWAL_STATUSES },
         },
       },
-      { $group: { _id: "$campaignId", withdrawn: { $sum: "$amount" } } },
+      {
+        $group: {
+          _id: "$campaignId",
+          // Weekly campaign withdrawals carry views and referral parts; only the views part counts here.
+          withdrawn: { $sum: { $cond: [{ $eq: ["$kind", "campaign"] }, { $ifNull: ["$viewsAmount", 0] }, "$amount"] } },
+        },
+      },
     ]),
   ]);
   const viewsByCampaign = new Map(viewGroups.map((group) => [String(group._id), group.views]));

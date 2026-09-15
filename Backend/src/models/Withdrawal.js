@@ -27,6 +27,18 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Campaign withdrawals pay views and referral earnings together; each part is
+    // paid from its own pot.
+    viewsAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    referralAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     status: {
       type: String,
       enum: ["pending", "processing", "rejected", "released"],
@@ -57,11 +69,11 @@ const withdrawalSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Views earnings and referral earnings are separate entitlements with separate
-    // escrow. Older withdrawals have no kind and are views withdrawals.
+    // "campaign": the weekly per-campaign withdrawal, views and referral together.
+    // "views" / "referral": older single-pot withdrawals. No kind means views.
     kind: {
       type: String,
-      enum: ["views", "referral"],
+      enum: ["views", "referral", "campaign"],
       default: "views",
     },
   },

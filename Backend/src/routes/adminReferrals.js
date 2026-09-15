@@ -12,7 +12,12 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { EVENT_TYPES } = require("../services/conversions");
 const { paging, pageMeta, isObjectId, searchRegex, parseDate, csvCell } = require("../utils/adminQuery");
-const { payoutStatusOf, voidConversion } = require("../utils/referralEarnings");
+const {
+  payoutStatusOf,
+  voidConversion,
+  payUnpaidConversions,
+  MAX_REWARD_PER_CONVERSION,
+} = require("../utils/referralEarnings");
 
 const router = express.Router();
 
@@ -29,6 +34,13 @@ const QUIET_CAMPAIGN_MIN_AGE_MS = 3 * DAY_MS;
 const HIGH_REJECTION_MIN_REQUESTS = 10;
 const HIGH_REJECTION_RATE = 0.5;
 const STALE_KEY_MS = 30 * DAY_MS;
+// Live referral campaigns our team hasn't set a creator reward for yet.
+const NEEDS_REWARD_FILTER = {
+  "referral.enabled": true,
+  status: { $in: ["live", "paused"] },
+  "referral.rewardPerConversion": { $not: { $gt: 0 } },
+};
+const CONVERSION_NOUNS = { signup: "sign-up", install: "download", purchase: "purchase", deposit: "deposit", custom: "conversion" };
 
 function brandRef(user, fallbackId = null) {
   return user
@@ -175,6 +187,7 @@ router.get("/stats", viewGuard, async (req, res, next) => {
         },
       },
     ]);
+    const campaignsNeedingReward = await Campaign.countDocuments(NEEDS_REWARD_FILTER);
     const round = (value) => Math.round((value || 0) * 100) / 100;
     const budgetTotals = {
       funded: round(budgetGroup && budgetGroup.funded),
@@ -187,6 +200,7 @@ router.get("/stats", viewGuard, async (req, res, next) => {
       brandsConnected,
       activeKeys,
       campaignsTracking,
+      campaignsNeedingReward,
       codes: { total: totalCodes, active: activeCodes },
       conversions: { today: conversionsToday, last7Days: conversions7d, allTime: conversionsAll },
       requests: { last24h: requests24h, rejectedLast24h: rejected24h },
@@ -397,6 +411,7 @@ router.get("/campaigns", viewGuard, async (req, res, next) => {
     if (isObjectId(req.query.brandId)) filter.businessId = req.query.brandId;
     const rx = searchRegex(req.query.q);
     if (rx) filter.name = rx;
+    if (req.query.needsReward === "1") Object.assign(filter, NEEDS_REWARD_FILTER);
 
     const [campaigns, total] = await Promise.all([
       Campaign.find(filter)
@@ -420,6 +435,18 @@ router.get("/campaigns", viewGuard, async (req, res, next) => {
       },
     ]);
     const codesByCampaign = new Map(codeGroups.map((group) => [String(group._id), group]));
+    // Sign-ups recorded while there was no reward; they're paid when admin sets one.
+    const unpaidGroups = await ConversionEvent.aggregate([
+      {
+        $match: {
+          campaignId: { $in: campaigns.map((campaign) => campaign._id) },
+          unpaidReason: "rate_not_set",
+          voidedAt: null,
+        },
+      },
+      { $group: { _id: "$campaignId", count: { $sum: 1 } } },
+    ]);
+    const unpaidByCampaign = countMap(unpaidGroups);
 
     res.json({
       campaigns: campaigns.map((campaign) => {
@@ -433,6 +460,10 @@ router.get("/campaigns", viewGuard, async (req, res, next) => {
           codeSource: campaign.referral.codeSource,
           conversions: campaign.referral.conversions,
           rewardPerConversion: campaign.referral.rewardPerConversion || 0,
+          needsReward: ["live", "paused"].includes(campaign.status) && !(campaign.referral.rewardPerConversion > 0),
+          unpaidConversions: unpaidByCampaign.get(String(campaign._id)) || 0,
+          pool: campaign.referral.pool || 0,
+          platformFee: campaign.referral.platformFee || 0,
           referralBudget: campaign.referral.budget || 0,
           earnedByCreators: campaign.referral.earned || 0,
           poolRemaining: campaign.referral.poolRemaining || 0,
@@ -757,6 +788,76 @@ router.post("/keys/:id/revoke", actGuard, async (req, res, next) => {
     });
 
     res.json({ success: true, key: { id: key._id, keyId: key.keyId, status: key.status } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PATCH /api/admin/referrals/campaigns/:id/reward ──────────────────────────
+// Brands fund the referral budget; our team decides what creators earn per conversion.
+router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
+  try {
+    if (!isObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const amount = Math.round(Number(req.body && req.body.rewardPerConversion) * 100) / 100;
+    if (!Number.isFinite(amount) || amount < 1 || amount > MAX_REWARD_PER_CONVERSION) {
+      return res.status(400).json({ error: `Enter a reward between ₦1 and ₦${MAX_REWARD_PER_CONVERSION.toLocaleString()}` });
+    }
+
+    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral");
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+    if (!(campaign.referral && campaign.referral.enabled)) {
+      return res.status(400).json({ error: "Referral tracking isn't on for this campaign" });
+    }
+    if (campaign.status === "cancelled") {
+      return res.status(400).json({ error: "This campaign is cancelled" });
+    }
+
+    const previous = campaign.referral.rewardPerConversion || 0;
+    const note = String((req.body && req.body.note) || "").trim().slice(0, 1000) || null;
+    await Campaign.updateOne({ _id: campaign._id }, { $set: { "referral.rewardPerConversion": amount } });
+
+    // The first reward also pays conversions recorded while there wasn't one. Later
+    // changes apply to new conversions only; each keeps what it earned.
+    const backPay = previous > 0 ? { paid: 0, unpaid: 0 } : await payUnpaidConversions(campaign._id);
+
+    const noun = CONVERSION_NOUNS[campaign.referral.eventType] || "conversion";
+    const reward = `₦${amount.toLocaleString()}`;
+    const creatorIds = await ReferralCode.distinct("creatorId", { campaignId: campaign._id });
+    await Notification.insertMany([
+      {
+        businessId: campaign.businessId,
+        campaignId: campaign._id,
+        type: "referral_reward",
+        title: previous > 0 ? "Creator reward updated" : "Creator reward set",
+        body: `Creators on "${campaign.name}" now earn ${reward} per ${noun} from your referral budget.`,
+      },
+      ...creatorIds.map((creatorId) => ({
+        creatorId,
+        campaignId: campaign._id,
+        type: "referral_reward",
+        title: previous > 0 ? "Referral reward updated" : "Your referral code is earning",
+        body: `Your code on "${campaign.name}" now earns ${reward} per ${noun}.`,
+      })),
+    ]);
+
+    await recordAdminActivity(req, {
+      action: previous > 0 ? "referral.reward_changed" : "referral.reward_set",
+      targetType: "campaign",
+      targetId: campaign._id,
+      targetLabel: campaign.name,
+      businessId: campaign.businessId,
+      note,
+      metadata: { from: previous, to: amount, paidEarlierConversions: backPay.paid, stillUnpaid: backPay.unpaid },
+    });
+
+    const updated = await Campaign.findById(campaign._id).select("referral").lean();
+    res.json({
+      rewardPerConversion: amount,
+      previous,
+      paidEarlierConversions: backPay.paid,
+      stillUnpaid: backPay.unpaid,
+      poolRemaining: (updated.referral && updated.referral.poolRemaining) || 0,
+    });
   } catch (err) {
     next(err);
   }

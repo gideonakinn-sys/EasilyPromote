@@ -43,7 +43,9 @@ function serializeSettings(campaign) {
     eventType: referral.eventType || "signup",
     codeSource: referral.codeSource || "easilypromote",
     conversions: referral.conversions || 0,
+    // Set by admin; 0 means our team hasn't set it yet.
     rewardPerConversion: referral.rewardPerConversion || 0,
+    requestedBudget: referral.requestedBudget || 0,
     budget: referral.budget || 0,
     platformFee: referral.platformFee || 0,
     platformFeePercent: Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30,
@@ -188,6 +190,9 @@ router.patch("/:id/referral", ...businessOnly, async (req, res, next) => {
     for (const [key, value] of Object.entries(parsed.value)) {
       campaign.set(`referral.${key}`, value);
     }
+    if (parsed.value.enabled !== undefined) {
+      campaign.objective = parsed.value.enabled ? "actions" : "views";
+    }
     await campaign.save();
 
     let codesCreated = 0;
@@ -213,6 +218,13 @@ router.post("/:id/referral-budget/init", ...businessOnly, async (req, res, next)
     if (!campaign) return;
     if (!["live", "paused", "under_review"].includes(campaign.status)) {
       return res.status(400).json({ error: "You can add a referral budget once the campaign is live." });
+    }
+    const { brandAppVerified } = require("../utils/campaignPayments");
+    if (!(await brandAppVerified(req.user._id))) {
+      return res.status(409).json({
+        error: "Connect your app before adding a referral budget. We need a code check and a test conversion from your server.",
+        code: "INTEGRATION_REQUIRED",
+      });
     }
 
     const amount = Math.round(Number(req.body && req.body.amount));

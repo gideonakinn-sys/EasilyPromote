@@ -5,11 +5,11 @@ const Notification = require("../models/Notification");
 const { verifyWebhookSignature } = require("../services/paystack");
 const { emitToUser } = require("../config/socket");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
-const { settleRelease, revertRelease } = require("../utils/payouts");
+const { settleTransfer, revertTransfer } = require("../services/withdrawalPayouts");
+const { expectedPaymentAmount, bookCampaignPayment } = require("../utils/campaignPayments");
 const { creditTopup } = require("../utils/topups");
 const { handleConversionWebhook, handleCodeCheck } = require("../services/conversions");
 const { creditReferralTopup } = require("../utils/referralEarnings");
-const { bookEscrowDeposit } = require("../utils/escrow");
 const { recordUnmatchedPayment, applyRefundEvent } = require("../utils/refunds");
 
 const router = express.Router();
@@ -88,25 +88,21 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
 
         if (campaign && campaign.status === "pending_payment") {
           // Compare paid amount to expected budget and check currency
-          if (currency !== "NGN" || Math.round(paidAmount) !== Math.round(campaign.budget)) {
+          if (currency !== "NGN" || Math.round(paidAmount) !== Math.round(expectedPaymentAmount(campaign))) {
             // The campaign stays unpaid; the money waits for an admin to refund it.
             await recordUnmatchedPayment({
               campaignId: campaign._id,
               reference,
               amount: paidAmount,
               currency,
-              reason: `Payment doesn't match the campaign budget of ₦${campaign.budget.toLocaleString()} NGN.`,
+              reason: `Payment doesn't match the checkout total of ₦${expectedPaymentAmount(campaign).toLocaleString()} NGN.`,
             });
             return res.sendStatus(200);
           }
 
           // The brand's payment-status poll may book the same payment concurrently;
           // the unique reference index lets exactly one of them record it.
-          const booked = await bookEscrowDeposit({
-            campaignId: campaign._id,
-            amount: campaign.budget,
-            reference,
-          });
+          const booked = await bookCampaignPayment(campaign, reference);
 
           // Move pending_payment -> live atomically
           const updated = await Campaign.findOneAndUpdate(
@@ -153,21 +149,14 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
       }
     }
 
+    // A transfer can carry several release rows (views and referral parts of one withdrawal).
     if (event === "transfer.success") {
-      const transaction = await Transaction.findOne({
-        type: "release",
-        reference: data.reference,
-      });
-      await settleRelease(transaction);
+      await settleTransfer(data.reference);
     }
 
     if (event === "transfer.failed" || event === "transfer.reversed") {
-      const transaction = await Transaction.findOne({
-        type: "release",
-        reference: data.reference,
-      });
       const label = event === "transfer.failed" ? "Transfer failed" : "Transfer reversed";
-      await revertRelease(transaction, `${label}: ${data.reason || "no reason given by Paystack"}`);
+      await revertTransfer(data.reference, `${label}: ${data.reason || "no reason given by Paystack"}`);
     }
 
     if (event === "refund.processed" || event === "refund.failed") {

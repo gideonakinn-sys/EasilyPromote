@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { Skeleton } from "../../../../../../components/ui/skeleton";
 import { getUser, isAuthenticated } from "../../../../../../lib/api";
+import { ConnectAppChecklist } from "../../../../../../components/connect-app-checklist";
 import {
   DEVELOPER_DOCS_URL,
+  REFERRAL_HOW_IT_WORKS,
+  buildDeveloperMessage,
   formatWhen,
   referralApi,
   type ReferralStatus,
@@ -216,6 +219,8 @@ function ReferralSettingsContent() {
   const [generating, setGenerating] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<{ keyId: string; secret: string; rotated: boolean } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "rotate" | "revoke"; key: WebhookKey } | null>(null);
+  const cancelConfirmRef = useRef<HTMLButtonElement>(null);
   const [savedConfirmed, setSavedConfirmed] = useState(false);
   const [language, setLanguage] = useState<SnippetLanguage>("node");
   const [events, setEvents] = useState<WebhookDeliveryLog[]>([]);
@@ -255,6 +260,22 @@ function ReferralSettingsContent() {
     load();
   }, [router, load]);
 
+  // Until the app is connected, check every 10 seconds so the checklist ticks by itself.
+  const verified = Boolean(status?.verified);
+  useEffect(() => {
+    if (loading || error || verified) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await referralApi.status();
+        setStatus(next);
+        if (next.verified) toast("Your app is connected", "success");
+      } catch {
+        // The next check tries again.
+      }
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [loading, error, verified, toast]);
+
   const copy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -282,8 +303,18 @@ function ReferralSettingsContent() {
     }
   };
 
+  // Focus Cancel when the confirmation opens, and let Escape close it.
+  useEffect(() => {
+    if (!confirmAction) return;
+    cancelConfirmRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmAction(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmAction]);
+
   const handleRotate = async (key: WebhookKey) => {
-    if (!window.confirm(`Rotate ${key.keyId}? The current key keeps working for 24 hours while you swap in the new one.`)) return;
     setBusyKeyId(key.id);
     try {
       const result = await referralApi.rotateKey(key.id);
@@ -297,7 +328,6 @@ function ReferralSettingsContent() {
   };
 
   const handleRevoke = async (key: WebhookKey) => {
-    if (!window.confirm(`Revoke ${key.keyId}? Requests signed with it will be rejected immediately.`)) return;
     setBusyKeyId(key.id);
     try {
       await referralApi.revokeKey(key.id);
@@ -308,6 +338,14 @@ function ReferralSettingsContent() {
     } finally {
       setBusyKeyId(null);
     }
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return;
+    const { type, key } = confirmAction;
+    setConfirmAction(null);
+    if (type === "rotate") await handleRotate(key);
+    else await handleRevoke(key);
   };
 
   const handleRefreshStatus = async () => {
@@ -366,6 +404,9 @@ function ReferralSettingsContent() {
     "}",
   ].join("\n");
 
+  const hasKey = keys.some((key) => key.status === "active" || key.status === "expiring");
+  const verification = status?.verification;
+
   return (
     <div className="min-h-dvh bg-stone-50 text-stone-900 font-rethink">
       <header className="flex items-center gap-3 px-5 h-14 border-b border-stone-200 bg-stone-50">
@@ -410,25 +451,76 @@ function ReferralSettingsContent() {
           </div>
         ) : (
           <>
+            {/* How it works */}
+            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="how-heading">
+              <h2 id="how-heading" className="font-semibold text-sm text-stone-900">How referral tracking works</h2>
+              <ol className="space-y-3">
+                {REFERRAL_HOW_IT_WORKS.map((item, index) => (
+                  <li key={item.title} className="flex gap-3">
+                    <span
+                      className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#1C1917] text-xs font-semibold flex items-center justify-center"
+                      aria-hidden="true"
+                    >
+                      {index + 1}
+                    </span>
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium text-stone-900">{item.title}</p>
+                      <p className="text-xs text-stone-500 font-medium leading-relaxed">{item.body}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-stone-900">What you need</p>
+                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                    A developer adds two small requests to your app. &quot;Send to your developer&quot; below gives them everything.
+                  </p>
+                </div>
+                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-stone-900">What we never see</p>
+                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                    Names, emails or phone numbers. Only the code and what happened.
+                  </p>
+                </div>
+              </div>
+            </section>
+
             {/* Connection */}
             <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="connection-heading">
               <div className="flex items-center justify-between gap-3">
-                <h2 id="connection-heading" className="font-semibold text-sm text-stone-900">Connection</h2>
+                <h2 id="connection-heading" className="font-semibold text-sm text-stone-900">Connect your app</h2>
                 <span
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1.5",
-                    status?.connected ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-600"
+                    verified ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-600"
                   )}
                 >
-                  <span className={cn("w-1.5 h-1.5 rounded-full", status?.connected ? "bg-[#176448]" : "bg-stone-400")} />
-                  {status?.connected ? "Connected" : "Not connected"}
+                  <span className={cn("w-1.5 h-1.5 rounded-full", verified ? "bg-[#176448]" : "bg-stone-400")} />
+                  {verified ? "Connected" : "Not connected yet"}
                 </span>
               </div>
               <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                {status?.connected
-                  ? `Last signed request ${formatWhen(status.lastEventAt).toLowerCase()}.`
-                  : "Generate a key, then send a test event. You'll show as connected once it arrives."}
+                {verified
+                  ? `Connected ${formatWhen(verification?.verifiedAt).toLowerCase()}. Last request ${formatWhen(status?.lastEventAt).toLowerCase()}.`
+                  : 'Your app counts as connected once both requests below arrive from your server. The "Try a request" button on this page only checks your key.'}
               </p>
+
+              <ConnectAppChecklist status={status} hasKey={hasKey} />
+
+              {!verified && (
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => copy(buildDeveloperMessage(status, sampleKeyId), "Setup message")}
+                    className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold"
+                  >
+                    Send to your developer
+                  </button>
+                  <p className="text-[11px] text-stone-500 font-medium leading-relaxed">
+                    Copies the steps, both URLs and your key ID. Share your secret with them privately.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Webhook URL</span>
@@ -496,7 +588,7 @@ function ReferralSettingsContent() {
                         <div className="flex gap-2">
                           {key.status === "active" && (
                             <button
-                              onClick={() => handleRotate(key)}
+                              onClick={() => setConfirmAction({ type: "rotate", key })}
                               disabled={busyKeyId === key.id || keys.length >= MAX_KEYS}
                               className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
                             >
@@ -504,7 +596,7 @@ function ReferralSettingsContent() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleRevoke(key)}
+                            onClick={() => setConfirmAction({ type: "revoke", key })}
                             disabled={busyKeyId === key.id}
                             className="px-3 py-1.5 bg-red-50 border border-red-200 rounded-full text-xs font-semibold text-red-600 disabled:opacity-50"
                           >
@@ -523,7 +615,8 @@ function ReferralSettingsContent() {
               <div className="space-y-1">
                 <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Try a request</h2>
                 <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  We sign a request with your newest key and run it through the real checks. Nothing is recorded.
+                  We sign a request with your newest key and run it through the real checks. Nothing is recorded, and it
+                  doesn&apos;t connect your app: that needs requests from your own server.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Request type">
@@ -734,8 +827,9 @@ function ReferralSettingsContent() {
               <div className="bg-[#EBF3FF] border border-dashed border-blue-200 rounded-2xl p-4 space-y-1">
                 <p className="text-sm font-medium text-blue-900">Test before going live</p>
                 <p className="text-xs text-blue-900/80 font-medium leading-relaxed">
-                  Send any event with <code className="font-mono">&quot;test&quot;: true</code>. We check the key and
-                  signature and mark you connected, without counting a conversion. The code doesn&apos;t need to exist yet.
+                  Send any event with <code className="font-mono">&quot;test&quot;: true</code> from your server. We check
+                  the key and signature without counting a conversion, and it ticks the test conversion step above. The code
+                  doesn&apos;t need to exist yet.
                 </p>
               </div>
 
@@ -754,6 +848,58 @@ function ReferralSettingsContent() {
           </>
         )}
       </main>
+
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          onClick={() => setConfirmAction(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-key-heading"
+            aria-describedby="confirm-key-body"
+            className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1">
+              <h2 id="confirm-key-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+                {confirmAction.type === "rotate" ? "Rotate this key?" : "Revoke this key?"}
+              </h2>
+              <p id="confirm-key-body" className="text-xs text-stone-500 font-medium leading-relaxed">
+                {confirmAction.type === "rotate"
+                  ? "We'll create a new key and secret. The current key keeps working for 24 hours while you swap in the new one."
+                  : "Requests signed with this key will be rejected immediately. This can't be undone."}
+              </p>
+            </div>
+
+            <code className="block font-mono text-xs text-stone-900 bg-stone-100 px-3 py-2 rounded-lg break-all">
+              {confirmAction.key.keyId}
+            </code>
+
+            <div className="flex gap-2">
+              <button
+                ref={cancelConfirmRef}
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAction}
+                className={cn(
+                  "flex-1 py-3 font-semibold text-sm rounded-full text-white",
+                  confirmAction.type === "rotate" ? "bg-stone-900" : "bg-red-600"
+                )}
+              >
+                {confirmAction.type === "rotate" ? "Rotate key" : "Revoke key"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {revealed && (
         <div

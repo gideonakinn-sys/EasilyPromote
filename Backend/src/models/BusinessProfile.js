@@ -43,10 +43,18 @@ const businessProfileSchema = new mongoose.Schema(
       type: String,
       maxlength: 500,
     },
-    // Set when the first validly signed conversion webhook (test or real) arrives.
+    // Set when the first validly signed request arrives from the brand's own server.
     referralConnectedAt: {
       type: Date,
       default: null,
+    },
+    // Proof the brand's app is wired up: a signed code check and a signed conversion
+    // (test or real) from their server. Our dashboard's test sender never counts.
+    // Verification is per brand and unlocks paying for referral campaigns.
+    referralVerification: {
+      codeCheckAt: { type: Date, default: null },
+      conversionAt: { type: Date, default: null },
+      verifiedAt: { type: Date, default: null },
     },
   },
   { timestamps: true }

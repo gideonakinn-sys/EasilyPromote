@@ -187,6 +187,19 @@ export interface WalletData {
     availableToWithdraw: number;
     withdrawable: boolean;
   }>;
+  // Weekly per-campaign withdrawals: views and referral earnings past their hold together.
+  withdrawCampaigns?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    viewsAvailable: number;
+    referralAvailable: number;
+    referralOnHold: number;
+    total: number;
+    state: "available" | "below_minimum" | "nothing_yet" | "requested" | "withdrawn_this_week";
+    requested: { amount: number; status: string; payoutDate: string } | null;
+  }>;
+  payoutSchedule?: { nextPayoutDate: string; minimumPerCampaign: number };
   hasBankAccount: boolean;
   bankName?: string | null;
   accountName?: string | null;
@@ -227,8 +240,12 @@ export interface WithdrawalItem {
   id: string;
   campaignId: string;
   campaignName: string;
-  kind?: "views" | "referral";
+  kind?: "views" | "referral" | "campaign";
   amount: number;
+  viewsAmount?: number;
+  referralAmount?: number;
+  // The Friday a pending or processing withdrawal is paid.
+  payoutDate?: string | null;
   status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   requestedAt: string;

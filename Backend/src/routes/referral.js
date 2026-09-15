@@ -214,7 +214,7 @@ router.get("/events", async (req, res, next) => {
 router.get("/status", async (req, res, next) => {
   try {
     const [profile, keys] = await Promise.all([
-      BusinessProfile.findOne({ userId: req.user._id }).select("referralConnectedAt").lean(),
+      BusinessProfile.findOne({ userId: req.user._id }).select("referralConnectedAt referralVerification").lean(),
       WebhookKey.find(usableKeysFilter(req.user._id)).select("lastUsedAt").lean(),
     ]);
 
@@ -223,7 +223,15 @@ router.get("/status", async (req, res, next) => {
       return !latest || key.lastUsedAt > latest ? key.lastUsedAt : latest;
     }, null);
 
+    const verification = (profile && profile.referralVerification) || {};
     res.json({
+      // Verified: a code check and a conversion arrived from the brand's own server.
+      verified: Boolean(verification.verifiedAt),
+      verification: {
+        codeCheckAt: verification.codeCheckAt || null,
+        conversionAt: verification.conversionAt || null,
+        verifiedAt: verification.verifiedAt || null,
+      },
       connected: Boolean(profile && profile.referralConnectedAt),
       connectedAt: profile ? profile.referralConnectedAt : null,
       lastEventAt,

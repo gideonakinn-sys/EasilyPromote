@@ -18,6 +18,7 @@ interface Stats {
   brandsConnected: number;
   activeKeys: number;
   campaignsTracking: number;
+  campaignsNeedingReward: number;
   codes: { total: number; active: number };
   conversions: { today: number; last7Days: number; allTime: number };
   requests: { last24h: number; rejectedLast24h: number };
@@ -95,6 +96,11 @@ interface CampaignRow {
   codes: number;
   activeCodes: number;
   rewardPerConversion: number;
+  // Live campaign with a referral budget but no creator reward yet.
+  needsReward: boolean;
+  unpaidConversions: number;
+  pool: number;
+  platformFee: number;
   referralBudget: number;
   earnedByCreators: number;
   poolRemaining: number;
@@ -376,6 +382,146 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
   );
 }
 
+const CONVERSION_NOUNS: Record<string, [string, string]> = {
+  signup: ["sign-up", "sign-ups"],
+  install: ["download", "downloads"],
+  purchase: ["purchase", "purchases"],
+  deposit: ["deposit", "deposits"],
+  custom: ["conversion", "conversions"],
+};
+
+function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState(campaign.rewardPerConversion > 0 ? String(campaign.rewardPerConversion) : "");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState<{ paidEarlierConversions: number; stillUnpaid: number } | null>(null);
+  const [singular, plural] = CONVERSION_NOUNS[campaign.eventType] || CONVERSION_NOUNS.custom;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !submitting && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, submitting]);
+
+  const reward = Number(amount);
+  const covered = reward > 0 ? Math.floor(campaign.poolRemaining / reward) : 0;
+  const firstReward = !(campaign.rewardPerConversion > 0);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!(reward >= 1)) {
+      setError("Enter a reward of at least ₦1.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await apiRequest<{ paidEarlierConversions: number; stillUnpaid: number }>(
+        `/admin/referrals/campaigns/${campaign.id}/reward`,
+        { method: "PATCH", body: JSON.stringify({ rewardPerConversion: reward, note: note.trim() || undefined }) }
+      );
+      setDone(result);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save the reward");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4" onClick={() => !submitting && onClose()}>
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reward-heading"
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-5"
+      >
+        <div className="space-y-1.5">
+          <h3 id="reward-heading" className="font-medium text-lg text-stone-900">
+            {firstReward ? "Set" : "Change"} the reward for {campaign.name}
+          </h3>
+          <p className="text-xs text-stone-500 font-medium leading-relaxed">
+            What each creator earns per {singular}, paid from the brand&apos;s referral budget. Creators and the brand are notified.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          {[
+            ["Budget", campaign.referralBudget],
+            ["Creator pool", campaign.pool],
+            ["Left", campaign.poolRemaining],
+          ].map(([label, value]) => (
+            <div key={label as string} className="bg-stone-50 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-semibold text-stone-500 block">{label}</span>
+              <span className="font-mono text-stone-900">₦{numberFormat.format(value as number)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="reward-amount" className="text-xs font-medium text-stone-500">
+            Reward per {singular} (₦)
+          </label>
+          <input
+            id="reward-amount"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+            placeholder="500"
+            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 font-mono focus:outline-none focus:border-stone-400"
+          />
+          <p className="text-[11px] text-stone-500">
+            {reward > 0
+              ? `The ₦${numberFormat.format(campaign.poolRemaining)} left covers about ${numberFormat.format(covered)} ${covered === 1 ? singular : plural}.`
+              : "Enter an amount to see how many the budget covers."}
+            {firstReward && campaign.unpaidConversions > 0 &&
+              ` ${numberFormat.format(campaign.unpaidConversions)} ${campaign.unpaidConversions === 1 ? singular : plural} recorded without a reward will be paid now, oldest first.`}
+            {!firstReward && " Applies to new ones only; earlier ones keep what they earned."}
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="reward-note" className="text-xs font-medium text-stone-500">
+            Note (optional)
+          </label>
+          <textarea
+            id="reward-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={1000}
+            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:border-stone-400 resize-none"
+            placeholder="Saved in the activity log"
+          />
+        </div>
+
+        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+        {done && (
+          <p role="status" className="text-xs font-medium text-green-700">
+            Saved.{done.paidEarlierConversions > 0 && ` ${done.paidEarlierConversions} earlier ${done.paidEarlierConversions === 1 ? singular : plural} paid.`}
+            {done.stillUnpaid > 0 && ` ${done.stillUnpaid} couldn't be paid: the budget ran out.`}
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-medium text-xs disabled:opacity-50">
+            {done ? "Close" : "Cancel"}
+          </button>
+          {!done && (
+            <button type="submit" disabled={submitting} className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-stone-950 disabled:opacity-50">
+              {submitting ? "Saving…" : firstReward ? "Set reward" : "Change reward"}
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function CodesPanel({
   campaign,
   canAct,
@@ -614,9 +760,11 @@ function BrandPanel({
 function OverviewTab({
   onOpenBrand,
   onOpenCampaign,
+  onShowNeedsReward,
 }: {
   onOpenBrand: (id: string) => void;
   onOpenCampaign: (campaign: { id: string; name: string }) => void;
+  onShowNeedsReward: () => void;
 }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [flags, setFlags] = useState<Flags | null>(null);
@@ -638,6 +786,20 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {stats.campaignsNeedingReward > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">
+              {numberFormat.format(stats.campaignsNeedingReward)} live campaign{stats.campaignsNeedingReward === 1 ? "" : "s"}
+            </span>{" "}
+            {stats.campaignsNeedingReward === 1 ? "has" : "have"} a referral budget but no creator reward yet. Their sign-ups are recorded and paid once you set one.
+          </p>
+          <button onClick={onShowNeedsReward} className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white">
+            Set rewards
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Conversions today" value={numberFormat.format(stats.conversions.today)} hint={`${numberFormat.format(stats.conversions.last7Days)} in 7 days · ${numberFormat.format(stats.conversions.allTime)} all time`} />
         <StatCard label="Brands connected" value={numberFormat.format(stats.brandsConnected)} hint={`${numberFormat.format(stats.activeKeys)} active signing keys`} />
@@ -851,10 +1013,22 @@ function BrandsTab({ onOpenBrand }: { onOpenBrand: (id: string) => void }) {
   );
 }
 
-function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: string; name: string }) => void }) {
+function CampaignsTab({
+  onOpenCampaign,
+  canAct,
+  onSetReward,
+  refreshKey,
+  initialNeedsReward,
+}: {
+  onOpenCampaign: (campaign: { id: string; name: string }) => void;
+  canAct: boolean;
+  onSetReward: (campaign: CampaignRow) => void;
+  refreshKey: number;
+  initialNeedsReward: boolean;
+}) {
   const [rows, setRows] = useState<CampaignRow[]>([]);
   const [meta, setMeta] = useState<PageMeta>({ total: 0, page: 1, pages: 1 });
-  const [query, setQuery] = useState({ q: "", status: "all", page: 1 });
+  const [query, setQuery] = useState({ q: "", status: "all", page: 1, needsReward: initialNeedsReward });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -863,6 +1037,7 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
     setError("");
     const params = new URLSearchParams({ page: String(query.page), limit: "20", status: query.status });
     if (query.q) params.set("q", query.q);
+    if (query.needsReward) params.set("needsReward", "1");
     apiRequest<{ campaigns: CampaignRow[] } & PageMeta>(`/admin/referrals/campaigns?${params}`)
       .then((data) => {
         setRows(data.campaigns);
@@ -870,7 +1045,7 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load campaigns"))
       .finally(() => setLoading(false));
-  }, [query]);
+  }, [query, refreshKey]);
 
   return (
     <div className="space-y-4">
@@ -888,6 +1063,16 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
               {status}
             </button>
           ))}
+          <button
+            type="button"
+            aria-pressed={query.needsReward}
+            onClick={() => setQuery((prev) => ({ ...prev, needsReward: !prev.needsReward, page: 1 }))}
+            className={`px-4 py-2 rounded-full text-xs font-semibold ${
+              query.needsReward ? "bg-amber-600 text-white" : "bg-white border border-amber-300 text-amber-800"
+            }`}
+          >
+            Needs a reward
+          </button>
         </div>
       </SearchForm>
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -917,21 +1102,40 @@ function CampaignsTab({ onOpenCampaign }: { onOpenCampaign: (campaign: { id: str
                       {numberFormat.format(campaign.conversions)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <p className="font-mono text-stone-800">
-                        {campaign.rewardPerConversion > 0 ? `₦${numberFormat.format(campaign.rewardPerConversion)} each` : "No reward"}
-                      </p>
+                      {campaign.needsReward ? (
+                        <p className="font-semibold text-amber-700">
+                          Needs a reward
+                          {campaign.unpaidConversions > 0 && ` · ${numberFormat.format(campaign.unpaidConversions)} unpaid`}
+                        </p>
+                      ) : (
+                        <p className="font-mono text-stone-800">
+                          {campaign.rewardPerConversion > 0 ? `₦${numberFormat.format(campaign.rewardPerConversion)} each` : "No reward"}
+                        </p>
+                      )}
                       <p className="text-[11px] text-stone-400">
                         ₦{numberFormat.format(campaign.earnedByCreators)} earned · ₦{numberFormat.format(campaign.poolRemaining)} left of ₦{numberFormat.format(campaign.referralBudget)}
                       </p>
                     </td>
                     <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.viewsDelivered)}</td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => onOpenCampaign({ id: campaign.id, name: campaign.name })}
-                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-stone-200 text-stone-900 whitespace-nowrap"
-                      >
-                        View codes
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        {canAct && campaign.status !== "cancelled" && (
+                          <button
+                            onClick={() => onSetReward(campaign)}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
+                              campaign.needsReward ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-900"
+                            }`}
+                          >
+                            {campaign.rewardPerConversion > 0 ? "Change reward" : "Set reward"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onOpenCampaign({ id: campaign.id, name: campaign.name })}
+                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-stone-200 text-stone-900 whitespace-nowrap"
+                        >
+                          View codes
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1110,6 +1314,9 @@ export default function AdminReferralsPage() {
   const [openBrandId, setOpenBrandId] = useState<string | null>(null);
   const [openCampaign, setOpenCampaign] = useState<{ id: string; name: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [rewardCampaign, setRewardCampaign] = useState<CampaignRow | null>(null);
+  const [campaignsRefreshKey, setCampaignsRefreshKey] = useState(0);
+  const [showNeedsReward, setShowNeedsReward] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -1148,9 +1355,26 @@ export default function AdminReferralsPage() {
           ))}
         </div>
 
-        {tab === "overview" && <OverviewTab onOpenBrand={setOpenBrandId} onOpenCampaign={setOpenCampaign} />}
+        {tab === "overview" && (
+          <OverviewTab
+            onOpenBrand={setOpenBrandId}
+            onOpenCampaign={setOpenCampaign}
+            onShowNeedsReward={() => {
+              setShowNeedsReward(true);
+              setTab("campaigns");
+            }}
+          />
+        )}
         {tab === "brands" && <BrandsTab onOpenBrand={setOpenBrandId} />}
-        {tab === "campaigns" && <CampaignsTab onOpenCampaign={setOpenCampaign} />}
+        {tab === "campaigns" && (
+          <CampaignsTab
+            onOpenCampaign={setOpenCampaign}
+            canAct={canAct}
+            onSetReward={setRewardCampaign}
+            refreshKey={campaignsRefreshKey}
+            initialNeedsReward={showNeedsReward}
+          />
+        )}
         {tab === "conversions" && <ConversionsTab canAct={canAct} onAction={setPendingAction} />}
       </main>
 
@@ -1167,6 +1391,13 @@ export default function AdminReferralsPage() {
         <CodesPanel campaign={openCampaign} canAct={canAct} onAction={setPendingAction} onClose={() => setOpenCampaign(null)} />
       )}
       {pendingAction && <ActionDialog action={pendingAction} onClose={() => setPendingAction(null)} />}
+      {rewardCampaign && (
+        <RewardDialog
+          campaign={rewardCampaign}
+          onClose={() => setRewardCampaign(null)}
+          onDone={() => setCampaignsRefreshKey((key) => key + 1)}
+        />
+      )}
     </div>
   );
 }

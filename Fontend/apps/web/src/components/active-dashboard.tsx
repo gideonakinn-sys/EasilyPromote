@@ -26,6 +26,9 @@ export interface BrandCampaign {
   progressPercent: number;
   coverImageUrl?: string;
   contentBrief?: string;
+  objective?: "views" | "actions";
+  // A referral campaign draft that can't be paid for until the brand's app is connected.
+  needsAppConnection?: boolean;
 }
 
 interface ActiveDashboardProps {
@@ -174,6 +177,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               targetViews={camp.targetViews.toLocaleString()}
               onClick={() => handleCardClick(camp.id, camp.status)}
               onResume={() => handleCardClick(camp.id, camp.status)}
+              notice={camp.needsAppConnection ? "Connect your app to launch" : undefined}
             />
           </div>
         ))}

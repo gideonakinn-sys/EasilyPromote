@@ -50,8 +50,9 @@ router.get("/stats", adminGuard, async (req, res, next) => {
         { $match: { status: { $in: ["live", "under_review", "paused"] } } },
         { $group: { _id: null, total: { $sum: "$budget" } } },
       ]),
+      // Creator payouts only; Paystack transfer fees are also "released" rows.
       Transaction.aggregate([
-        { $match: { status: "released" } },
+        { $match: { type: "release", status: "released" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Submission.countDocuments({ status: { $in: ["new", "verifying", "posted"] } }),
@@ -1160,8 +1161,11 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
             ? w.campaignId.viewsDelivered
             : 0,
         kind: w.kind || "views",
-        // Each withdrawal is paid from its own pot, so show the balance that will fund it.
+        viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
+        referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        // Each part is paid from its own pot, so show the balances that will fund it.
         escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId, w.kind === "referral" ? "referral" : "views") : 0,
+        referralEscrowBalance: w.campaignId && w.kind === "campaign" ? await campaignEscrowBalance(w.campaignId, "referral") : null,
         requestedAt: w.requestedAt,
         reviewedAt: w.reviewedAt,
         releasedAt: w.releasedAt,
@@ -1175,271 +1179,154 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
 });
 
 // ─── POST /api/admin/withdrawals/:id/review ──────────────────────────────────
+const { payWithdrawal, rejectWithdrawal, withdrawalParts, estimateTransferFee } = require("../services/withdrawalPayouts");
+const { payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
+
 router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
   try {
     const { approve, note } = req.body || {};
+    const result =
+      approve === true
+        ? await payWithdrawal({ withdrawalId: req.params.id, note, req })
+        : await rejectWithdrawal({ withdrawalId: req.params.id, note, req });
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    // Atomically take the withdrawal out of the queue, so a double click or two admins
-    // reviewing at once can't both act on it.
-    let withdrawal;
+// ─── Weekly payout run ───────────────────────────────────────────────────────
+// Everything requested before this payout week began is due, grouped by campaign so each
+// brand's payouts and Paystack fees are reviewed together.
+async function buildPayoutRun(now) {
+  const dueBefore = payoutWeekStart(now);
+  const [due, upcomingGroups] = await Promise.all([
+    Withdrawal.find({ status: "pending", requestedAt: { $lt: dueBefore } })
+      .sort({ requestedAt: 1 })
+      .populate("campaignId", "name status")
+      .populate("businessId", "name")
+      .populate("creatorId", "name"),
+    Withdrawal.aggregate([
+      { $match: { status: "pending", requestedAt: { $gte: dueBefore } } },
+      { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: "$amount" } } },
+    ]),
+  ]);
+
+  const groups = new Map();
+  for (const w of due) {
+    const campaign = w.campaignId;
+    const key = campaign ? String(campaign._id) : "none";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        campaignId: campaign ? campaign._id : null,
+        campaignName: campaign ? campaign.name : "Campaign",
+        campaignStatus: campaign ? campaign.status : null,
+        brandName: w.businessId ? w.businessId.name : "Brand",
+        viewsEscrow: campaign ? await campaignEscrowBalance(campaign._id, "views") : 0,
+        referralEscrow: campaign ? await campaignEscrowBalance(campaign._id, "referral") : 0,
+        lines: [],
+      });
+    }
+    const parts = withdrawalParts(w);
+    groups.get(key).lines.push({
+      id: w._id,
+      creatorName: w.creatorId ? w.creatorId.name : "Creator",
+      kind: w.kind || "views",
+      viewsAmount: parts.filter((p) => p.bucket === "views").reduce((sum, p) => sum + p.amount, 0),
+      referralAmount: parts.filter((p) => p.bucket === "referral").reduce((sum, p) => sum + p.amount, 0),
+      amount: w.amount,
+      estimatedFee: estimateTransferFee(w.amount),
+      requestedAt: w.requestedAt,
+      attempts: w.payoutAttempts || 0,
+      adminNotes: w.adminNotes,
+    });
+  }
+
+  const list = [...groups.values()].map((group) => ({
+    ...group,
+    amount: Math.round(group.lines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100,
+    estimatedFees: group.lines.reduce((sum, line) => sum + line.estimatedFee, 0),
+  }));
+  const upcoming = upcomingGroups[0] || { count: 0, amount: 0 };
+
+  return {
+    dueBefore,
+    nextPayoutDate: nextPayoutDate(now),
+    groups: list,
+    totals: {
+      count: due.length,
+      amount: Math.round(list.reduce((sum, group) => sum + group.amount, 0) * 100) / 100,
+      estimatedFees: list.reduce((sum, group) => sum + group.estimatedFees, 0),
+    },
+    upcoming: { count: upcoming.count, amount: upcoming.amount },
+  };
+}
+
+// ─── GET /api/admin/payout-run ────────────────────────────────────────────────
+router.get("/payout-run", adminGuard, async (req, res, next) => {
+  try {
+    const run = await buildPayoutRun(new Date());
+    let paystackBalance = null;
     try {
-      withdrawal = await Withdrawal.findOneAndUpdate(
-        { _id: req.params.id, status: "pending" },
-        { $set: { status: "processing", reviewedAt: new Date() } },
-        { new: true }
-      )
-        .populate("campaignId")
-        .populate("submissionId");
+      paystackBalance = await paystack.fetchBalance("NGN");
     } catch (err) {
-      if (err.code === 11000) {
-        return res.status(409).json({ error: "Another payout for this creator on this campaign is already being processed" });
-      }
-      throw err;
+      console.error("[Payout run] Balance lookup failed:", err.message);
+    }
+    res.json({ ...run, paystackBalance });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/payout-run/approve ───────────────────────────────────────
+// Pays the chosen due withdrawals one by one after one Paystack balance check for the total.
+router.post("/payout-run/approve", adminGuard, async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.withdrawalIds) ? req.body.withdrawalIds.map(String) : [];
+    if (ids.length === 0) return res.status(400).json({ error: "Choose at least one withdrawal to pay" });
+    if (ids.length > 200) return res.status(400).json({ error: "Pay at most 200 withdrawals at a time" });
+
+    const due = await Withdrawal.find({
+      _id: { $in: ids.filter((id) => /^[a-f0-9]{24}$/i.test(id)) },
+      status: "pending",
+      requestedAt: { $lt: payoutWeekStart(new Date()) },
+    }).select("_id amount");
+    if (due.length === 0) return res.status(400).json({ error: "None of those withdrawals are due in this payout run" });
+
+    const total = due.reduce((sum, w) => sum + w.amount, 0);
+    let paystackBalance = null;
+    try {
+      paystackBalance = await paystack.fetchBalance("NGN");
+    } catch (err) {
+      console.error("[Payout run] Balance lookup failed:", err.message);
+    }
+    if (paystackBalance !== null && total > paystackBalance) {
+      return res.status(400).json({
+        error: `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which doesn't cover this ₦${total.toLocaleString()} run. Fund the balance or pay fewer withdrawals.`,
+        code: "INSUFFICIENT_PAYSTACK_BALANCE",
+        paystackBalance,
+      });
     }
 
-    if (!withdrawal) {
-      const exists = await Withdrawal.exists({ _id: req.params.id });
-      return exists
-        ? res.status(409).json({ error: "This withdrawal has already been reviewed" })
-        : res.status(404).json({ error: "Withdrawal not found" });
+    const note = String((req.body && req.body.note) || "").trim() || "Weekly payout run";
+    const results = [];
+    for (const w of due) {
+      const result = await payWithdrawal({ withdrawalId: w._id, note, req, skipBalanceCheck: true });
+      results.push({
+        id: w._id,
+        ok: result.status === 200,
+        status: result.status === 200 ? result.body.withdrawal.status : "failed",
+        error: result.status === 200 ? null : result.body.error,
+      });
     }
 
-    // Puts the withdrawal back in the queue when approval stops before any money moves.
-    const backToPending = () =>
-      Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
-
-    if (approve === true) {
-      const { revertRelease } = require("../utils/payouts");
-      const campaign = withdrawal.campaignId;
-      if (!campaign) {
-        await backToPending();
-        return res.status(400).json({ error: "Campaign not found" });
-      }
-
-      // An earlier attempt that isn't marked failed may still be moving money. Resolve it
-      // against Paystack before anything new is sent.
-      if (withdrawal.reference) {
-        const previous = await Transaction.findOne({ type: "release", reference: withdrawal.reference });
-        if (previous && previous.status !== "failed") {
-          let prior = null;
-          try {
-            prior = await paystack.fetchTransfer(withdrawal.reference);
-          } catch (err) {
-            if (err.status !== 404) {
-              await backToPending();
-              return res.status(409).json({
-                error: `Couldn't confirm the previous payout attempt with Paystack (${err.message}). Try again shortly.`,
-              });
-            }
-          }
-          const priorStatus = prior && prior.status;
-          if (priorStatus === "success") {
-            await settleRelease(previous);
-            return res.status(409).json({ error: "The previous payout attempt already went through, so nothing more was sent" });
-          }
-          if (["pending", "processing", "otp", "receipt"].includes(priorStatus)) {
-            return res.status(409).json({ error: "The previous payout attempt is still in progress at Paystack" });
-          }
-          await revertRelease(previous, `Previous attempt cleared: Paystack reports ${priorStatus || "no transfer"}`);
-          return res.status(409).json({ error: "The previous payout attempt didn't go through and has been cleared. Approve again to retry." });
-        }
-      }
-
-      // Referral withdrawals are paid from the referral budget, views withdrawals from the views escrow.
-      // Cancelled campaigns stay payable: their refund leaves what creators are owed in escrow.
-      const bucket = withdrawal.kind === "referral" ? "referral" : "views";
-      const pendingInEscrow = await campaignEscrowBalance(campaign._id, bucket);
-
-      // Our ledger says the campaign is covered; the Paystack balance is what
-      // actually funds the transfer. If settlements sweep to the bank these two
-      // drift apart, and the transfer fails after we have already committed.
-      let paystackBalance = null;
-      try {
-        paystackBalance = await paystack.fetchBalance("NGN");
-      } catch (err) {
-        console.error("[Admin Withdrawals] Balance lookup failed:", err.message);
-      }
-      if (paystackBalance !== null && withdrawal.amount > paystackBalance) {
-        await backToPending();
-        return res.status(400).json({
-          error:
-            `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which does not cover this ` +
-            `₦${withdrawal.amount.toLocaleString()} payout. Fund the Paystack balance, or switch settlement ` +
-            `to manual so collections stay there, then approve again.`,
-          code: "INSUFFICIENT_PAYSTACK_BALANCE",
-          paystackBalance,
-        });
-      }
-
-      if (withdrawal.amount > pendingInEscrow) {
-        await backToPending();
-        return res.status(400).json({
-          error: `Insufficient funds in this campaign's ${bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
-        });
-      }
-
-      const profile = await CreatorProfile.findOne({ userId: withdrawal.creatorId });
-      if (!profile || !(profile.payoutAccount && profile.payoutAccount.paystackRecipientCode)) {
-        await backToPending();
-        return res.status(400).json({ error: "Creator has no bank account on file" });
-      }
-      const recipient = profile.payoutAccount.paystackRecipientCode;
-
-      // Each attempt gets its own reference: Paystack rejects a reused one, and a failed
-      // attempt keeps its ledger row as history. It's saved before any transfer is sent.
-      const attempt = (withdrawal.payoutAttempts || 0) + 1;
-      const reference = `wd_${withdrawal._id}_${attempt}`;
-      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { reference, payoutAttempts: attempt } });
-      withdrawal.reference = reference;
-      withdrawal.payoutAttempts = attempt;
-
-      // Reserve the escrow before calling Paystack, so a crash after the transfer is sent
-      // still leaves a record the reconcile job can settle.
-      let releaseTransaction;
-      try {
-        releaseTransaction = await Transaction.create({
-          campaignId: campaign._id,
-          bucket,
-          creatorId: withdrawal.creatorId,
-          submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
-          creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
-          type: "release",
-          amount: withdrawal.amount,
-          reference,
-          status: "escrow_deposit",
-          date: new Date(),
-        });
-      } catch (err) {
-        await backToPending();
-        throw err;
-      }
-
-      if (bucket === "views" && withdrawal.submissionId) {
-        await Submission.updateOne({ _id: withdrawal.submissionId._id }, { payoutStatus: "escrow_deposit" });
-      }
-
-      let transfer = null;
-      try {
-        transfer = await paystack.initiateTransfer({
-          amount: withdrawal.amount,
-          recipient,
-          reference,
-          reason: `Creator payout for ${campaign.name || "campaign"}`,
-        });
-      } catch (err) {
-        console.error("[Admin Withdrawals] Transfer failed:", err.message);
-        // A 4xx is Paystack refusing the transfer (balance, recipient, transfers disabled):
-        // nothing moved, so free the escrow and requeue. Anything else — a timeout or a
-        // 5xx — may still have gone through, so it stays processing until the reconcile
-        // job confirms it with Paystack.
-        if (err.status >= 400 && err.status < 500) {
-          await revertRelease(releaseTransaction, `Paystack rejected the transfer: ${err.message}`);
-          return res.status(502).json({
-            error: `Paystack rejected this payout: ${err.message}`,
-            paystackBalance,
-          });
-        }
-        return res.status(502).json({
-          error: `Paystack didn't confirm this payout (${err.message}). It stays in processing and will be checked against Paystack automatically, so don't send it again.`,
-          paystackBalance,
-        });
-      }
-
-      // Paystack returns the transfer's own state. Anything other than
-      // success/pending means no money moved, so nothing may be marked paid.
-      const transferStatus = transfer && transfer.status;
-
-      if (transferStatus === "otp") {
-        console.error("[Admin Withdrawals] Transfer requires OTP; aborting", reference);
-        await revertRelease(releaseTransaction, "Paystack required OTP, so the transfer was not sent");
-        return res.status(502).json({
-          error:
-            "Paystack is requiring OTP confirmation for transfers, so this payout did not go through. Disable OTP for transfers in your Paystack dashboard (Settings → Preferences), then approve again.",
-        });
-      }
-
-      if (!["success", "pending"].includes(transferStatus)) {
-        console.error("[Admin Withdrawals] Unexpected transfer status:", transferStatus, reference);
-        await revertRelease(releaseTransaction, `Paystack returned transfer status ${transferStatus || "unknown"}`);
-        return res.status(502).json({
-          error: `Paystack did not accept this payout (status: ${transferStatus || "unknown"}). No funds were moved.`,
-        });
-      }
-
-      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { adminNotes: note || withdrawal.adminNotes || null } });
-
-      // Test mode settles instantly; live transfers come back "pending" and are
-      // finalised by the transfer.success webhook. settleRelease is idempotent.
-      if (transferStatus === "success") {
-        await settleRelease(releaseTransaction);
-      }
-
-      const settled = await Withdrawal.findById(withdrawal._id);
-
-      // Notify the creator about their payout (M7)
-      await Notification.create({
-        creatorId: withdrawal.creatorId,
-        campaignId: campaign._id,
-        type: "payout",
-        title: settled.status === "released" ? "Payout sent" : "Payout on the way",
-        body:
-          settled.status === "released"
-            ? `₦${withdrawal.amount.toLocaleString()} has been sent to your bank account for "${campaign.name || "campaign"}".`
-            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to your bank account for "${campaign.name || "campaign"}".`,
-      });
-
-      // Notify the brand for ledger awareness
-      await Notification.create({
-        businessId: withdrawal.businessId,
-        campaignId: campaign._id,
-        type: "payout",
-        title: settled.status === "released" ? "Payout released" : "Payout on the way",
-        body:
-          settled.status === "released"
-            ? `Creators have been paid ₦${withdrawal.amount.toLocaleString()} for this campaign.`
-            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to the creator.`,
-      });
-
-      await recordAdminActivity(req, {
-        action: "withdrawal.approved",
-        targetType: "withdrawal",
-        targetId: withdrawal._id,
-        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaign.name || "campaign"}`,
-        businessId: withdrawal.businessId,
-        note,
-        metadata: { amount: withdrawal.amount, reference, status: settled.status, creatorId: withdrawal.creatorId },
-      });
-
-      res.json({ success: true, withdrawal: settled, transfer });
-    } else {
-      withdrawal.status = "rejected";
-      withdrawal.adminNotes = note || null;
-      withdrawal.reviewedAt = new Date();
-      await withdrawal.save();
-
-      const campaignName = withdrawal.campaignId && withdrawal.campaignId.name;
-
-      // Notify creator of rejection (M7)
-      await Notification.create({
-        creatorId: withdrawal.creatorId,
-        campaignId: withdrawal.campaignId ? withdrawal.campaignId._id : null,
-        type: "payout_rejected",
-        title: "Withdrawal Rejected",
-        body: `Your withdrawal request for ₦${withdrawal.amount.toLocaleString()} on "${campaignName || "Campaign"}" was rejected.${note ? ` Reason: ${note}` : ""}`,
-      });
-
-      await recordAdminActivity(req, {
-        action: "withdrawal.rejected",
-        targetType: "withdrawal",
-        targetId: withdrawal._id,
-        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaignName || "campaign"}`,
-        businessId: withdrawal.businessId,
-        note,
-        metadata: { amount: withdrawal.amount, creatorId: withdrawal.creatorId },
-      });
-
-      res.json({ success: true, withdrawal });
-    }
+    res.json({
+      paid: results.filter((r) => r.ok && r.status === "released").length,
+      processing: results.filter((r) => r.ok && r.status !== "released").length,
+      failed: results.filter((r) => !r.ok).length,
+      skipped: ids.length - due.length,
+      results,
+    });
   } catch (err) {
     next(err);
   }

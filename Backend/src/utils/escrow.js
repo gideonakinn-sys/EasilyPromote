@@ -85,7 +85,12 @@ async function refundViewsEscrow(campaignId) {
         status: "pending",
       },
     },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: { $cond: [{ $eq: ["$kind", "campaign"] }, { $ifNull: ["$viewsAmount", 0] }, "$amount"] } },
+      },
+    },
   ]);
   const refundable = Math.round(Math.max(balance - (awaiting ? awaiting.total : 0), 0) * 100) / 100;
   if (refundable <= 0) return 0;

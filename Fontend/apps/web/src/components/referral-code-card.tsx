@@ -75,6 +75,13 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
 
       <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">{copy.hint}</p>
 
+      {rate === 0 && referral.code && (
+        <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+          Easily Promote is setting your reward per {conversionNoun(referral.eventType, 1)}. Ones through your code already
+          count and are paid once it&apos;s set.
+        </p>
+      )}
+
       {rate > 0 && (
         <p className="font-rethink text-xs font-medium text-stone-900 tracking-[-0.01em]">
           You earn {formatNaira(rate)} per {conversionNoun(referral.eventType, 1)} through your code.

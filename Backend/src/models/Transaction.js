@@ -20,7 +20,9 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       // unmatched_payment: money Paystack collected that couldn't be applied to a campaign;
       // it never counts toward escrow and waits for an admin to refund it.
-      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment"],
+      // transfer_fee: Paystack's fee on a creator payout, paid by the platform and kept
+      // against the campaign for its books; never part of escrow.
+      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment", "transfer_fee"],
       required: true,
     },
     views: {
@@ -32,6 +34,12 @@ const transactionSchema = new mongoose.Schema(
       required: true,
     },
     reference: {
+      type: String,
+      default: null,
+    },
+    // The Paystack transfer a release belongs to. A campaign withdrawal is one transfer
+    // with a release row per pot, so the rows share this.
+    transferReference: {
       type: String,
       default: null,
     },
@@ -95,6 +103,8 @@ transactionSchema.index(
   { reference: 1, type: 1 },
   { unique: true, partialFilterExpression: { reference: { $type: "string" } } }
 );
+// Transfer webhooks and reconciliation find every release row of one transfer.
+transactionSchema.index({ transferReference: 1 }, { sparse: true });
 // Paystack refund webhooks name the original payment.
 transactionSchema.index({ "refundParts.chargeReference": 1 }, { sparse: true });
 // Creator wallet: recent transactions for a handle.

@@ -19,11 +19,13 @@ import { apiRequest, getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { Spinner } from "./ui/spinner";
 import { AVAILABLE_NICHES } from "./constants";
-import { ReferralSettingsFields } from "./campaign-referrals";
+import { ConnectAppChecklist, useReferralConnection } from "./connect-app-checklist";
 import {
-  CODE_SOURCE_OPTIONS,
+  MIN_REFERRAL_BUDGET,
   REFERRAL_EVENT_TYPES,
-  type ReferralCodeSource,
+  REFERRAL_HOW_IT_WORKS,
+  conversionNoun,
+  formatNaira,
   type ReferralEventType,
 } from "../lib/referral";
 
@@ -51,11 +53,26 @@ interface CampaignData {
   scriptUrl: string;
   scriptFileName: string;
   coverImageUrl: string;
-  referralEnabled: boolean;
+  // "views": views only. "actions": people taking an action in the brand's app, tracked with referral codes.
+  objective: "views" | "actions";
   referralEventType: ReferralEventType;
-  referralCodeSource: ReferralCodeSource;
-  referralRewardPerConversion: string;
+  referralBudget: string;
 }
+
+const PLATFORM_FEE_SHARE = 0.3;
+
+const OBJECTIVE_OPTIONS: { value: CampaignData["objective"]; title: string; body: string }[] = [
+  {
+    value: "views",
+    title: "Views and engagement",
+    body: "Creators post about you and you pay for the views they deliver.",
+  },
+  {
+    value: "actions",
+    title: "People taking action in my app",
+    body: "Sign-ups, downloads or purchases, tracked with a referral code per creator. You still get the views.",
+  },
+];
 
 interface CampaignWizardProps {
   onClose: () => void;
@@ -175,11 +192,11 @@ function Combobox({ options, selected, inputValue, setInputValue, onSelect, onAd
 }
 
 export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: CampaignWizardProps) {
-  const [createStep, setCreateStep] = useState<1 | 2 | 3>(1);
+  const [createStep, setCreateStep] = useState<1 | 2 | 3 | 4>(1);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState("");
   const [tiers, setTiers] = useState<TierPoint[]>(DEFAULT_TIERS);
-  const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean }>({ step1: false, step2: false });
+  const [touchedStep, setTouchedStep] = useState<{ step1: boolean; step2: boolean; step3: boolean }>({ step1: false, step2: false, step3: false });
   const [saving, setSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [nicheOptions, setNicheOptions] = useState<string[]>([...AVAILABLE_NICHES]);
@@ -231,7 +248,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; referral?: { enabled: boolean; eventType: ReferralEventType; codeSource: ReferralCodeSource; rewardPerConversion?: number } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; objective?: "views" | "actions"; referral?: { enabled: boolean; eventType: ReferralEventType; requestedBudget?: number } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -251,14 +268,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           scriptUrl: data.scriptUrl || "",
           scriptFileName: data.scriptFileName || "",
           coverImageUrl: data.coverImageUrl || "",
-          referralEnabled: Boolean(data.referral?.enabled),
+          objective: data.objective || (data.referral?.enabled ? "actions" : "views"),
           referralEventType: data.referral?.eventType || "signup",
-          referralCodeSource: data.referral?.codeSource || "easilypromote",
-          referralRewardPerConversion: data.referral?.rewardPerConversion ? String(data.referral.rewardPerConversion) : "",
+          referralBudget: data.referral?.requestedBudget ? String(data.referral.requestedBudget) : "",
         });
 
         const hasBrief = data.contentBrief && data.keyMessageCta;
-        setCreateStep(hasBrief ? 3 : 1);
+        setCreateStep(hasBrief ? 4 : 1);
 
         setViewsInput((data.targetViews || 1000000).toLocaleString());
       })
@@ -289,10 +305,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     scriptUrl: "",
     scriptFileName: "",
     coverImageUrl: "",
-    referralEnabled: false,
+    objective: "views",
     referralEventType: "signup",
-    referralCodeSource: "easilypromote",
-    referralRewardPerConversion: "",
+    referralBudget: "",
   });
 
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -305,6 +320,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   const [viewsInput, setViewsInput] = useState(() => campaign.views.toLocaleString());
+
+  const referralBudgetValue = Math.round(Number(campaign.referralBudget) || 0);
+  const referralBudgetValid = referralBudgetValue >= MIN_REFERRAL_BUDGET;
+  // Referral campaigns can't be paid for until the brand's app is connected, so the Launch
+  // step checks, and keeps checking until it is.
+  const connection = useReferralConnection(campaign.objective === "actions" && createStep === 4);
+  const needsConnection = campaign.objective === "actions" && !connection.verified;
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -344,10 +366,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             scriptUrl: parsed.campaign.scriptUrl || "",
             scriptFileName: parsed.campaign.scriptFileName || "",
             coverImageUrl: parsed.campaign.coverImageUrl || "",
-            referralEnabled: Boolean(parsed.campaign.referralEnabled),
+            objective: parsed.campaign.objective === "actions" || parsed.campaign.referralEnabled ? "actions" : "views",
             referralEventType: parsed.campaign.referralEventType || "signup",
-            referralCodeSource: parsed.campaign.referralCodeSource || "easilypromote",
-            referralRewardPerConversion: parsed.campaign.referralRewardPerConversion || "",
+            referralBudget: parsed.campaign.referralBudget || "",
           });
           if (parsed.createStep) setCreateStep(parsed.createStep);
           if (parsed.viewsInput) setViewsInput(parsed.viewsInput);
@@ -534,11 +555,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     scriptUrl: campaign.scriptUrl || undefined,
     scriptFileName: campaign.scriptFileName || undefined,
     coverImageUrl: campaign.coverImageUrl || undefined,
+    objective: campaign.objective,
     referral: {
-      enabled: campaign.referralEnabled,
       eventType: campaign.referralEventType,
-      codeSource: campaign.referralCodeSource,
-      rewardPerConversion: Number(campaign.referralRewardPerConversion) || 0,
+      // The server accepts ₦1,000 or more; anything less is saved as not set yet.
+      requestedBudget: campaign.objective === "actions" && referralBudgetValid ? referralBudgetValue : 0,
     },
   });
 
@@ -562,6 +583,16 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     }
 
     if (createStep === 3) {
+      if (campaign.objective === "actions" && !referralBudgetValid) {
+        setTouchedStep(prev => ({ ...prev, step3: true }));
+        return;
+      }
+      setCreateStep(4);
+      return;
+    }
+
+    if (createStep === 4) {
+      if (needsConnection) return;
       setLaunching(true);
       setLaunchError("");
       try {
@@ -582,6 +613,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         window.location.href = payData.authorization_url;
       } catch (err: unknown) {
         setLaunchError(err instanceof Error ? err.message : "Failed to create campaign");
+        // The server refuses payment for an unconnected app; show the checklist again.
+        if (campaign.objective === "actions") connection.refresh();
       } finally {
         setLaunching(false);
       }
@@ -616,18 +649,18 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const handleBackStep = () => {
     if (createStep > 1) {
-      setCreateStep((prev) => (prev - 1) as 1 | 2 | 3);
+      setCreateStep((prev) => (prev - 1) as 1 | 2 | 3 | 4);
     }
   };
 
-  const getStepClasses = (step: 1 | 2 | 3) => {
+  const getStepClasses = (step: 1 | 2 | 3 | 4) => {
     if (createStep > step) {
       return "rounded-full border-green-600 bg-green-600 text-white";
     }
     return "";
   };
 
-  const getStepLabelClasses = (step: 1 | 2 | 3) => {
+  const getStepLabelClasses = (step: 1 | 2 | 3 | 4) => {
     return createStep === step ? "text-stone-900" : "text-stone-400";
   };
 
@@ -687,11 +720,22 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <div className="flex flex-col items-center gap-1.5 flex-1">
               <button
                 onClick={() => createStep >= 3 && setCreateStep(3)}
+                className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0", createStep > 3 ? getStepClasses(3) : "")}
+              >
+                {createStep > 3 ? <HugeiconsIcon icon={CheckIcon} size={16} /> : <HugeiconsIcon icon={CircleDashedIcon} size={20} className={createStep === 3 ? "text-stone-900" : "text-stone-500"} />}
+              </button>
+              <span className={cn("text-[10px] font-medium font-rethink", getStepLabelClasses(3))}>Goal</span>
+            </div>
+            <div className={cn("h-[1px] mt-4 w-12 flex-shrink-0", createStep > 3 ? "bg-green-600" : "bg-stone-200")} />
+            {/* Step 4 */}
+            <div className="flex flex-col items-center gap-1.5 flex-1">
+              <button
+                onClick={() => createStep >= 4 && setCreateStep(4)}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
               >
-                <HugeiconsIcon icon={CircleDashedIcon} size={20} className={createStep === 3 ? "text-stone-900" : "text-stone-500"} />
+                <HugeiconsIcon icon={CircleDashedIcon} size={20} className={createStep === 4 ? "text-stone-900" : "text-stone-500"} />
               </button>
-              <span className={cn("text-[10px] font-medium font-rethink", getStepLabelClasses(3))}>Launch</span>
+              <span className={cn("text-[10px] font-medium font-rethink", getStepLabelClasses(4))}>Launch</span>
             </div>
           </div>
         )}
@@ -770,14 +814,40 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   )}
                 >
                   <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
+                    className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold",
+                      createStep > 3 ? getStepClasses(3) : ""
+                    )}
                   >
-                    <HugeiconsIcon icon={CircleDashedIcon} size={16} className={createStep === 3 ? "text-stone-900" : "text-stone-500"} />
+                    {createStep > 3 ? <HugeiconsIcon icon={CheckIcon} size={14} /> : <HugeiconsIcon icon={CircleDashedIcon} size={16} className={createStep === 3 ? "text-stone-900" : "text-stone-500"} />}
                   </div>
                   <span
                     className={cn(
                       "text-sm font-medium font-rethink",
                       getStepLabelClasses(3)
+                    )}
+                  >
+                    Campaign goal
+                  </span>
+                </button>
+
+                {/* Step 4 Indicator */}
+                <button
+                  onClick={() => createStep >= 4 && setCreateStep(4)}
+                  className={cn(
+                    "flex items-center gap-3 w-full text-left",
+                    createStep >= 4 ? "cursor-pointer" : "cursor-default"
+                  )}
+                >
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold"
+                  >
+                    <HugeiconsIcon icon={CircleDashedIcon} size={16} className={createStep === 4 ? "text-stone-900" : "text-stone-500"} />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-sm font-medium font-rethink",
+                      getStepLabelClasses(4)
                     )}
                   >
                     Review & launch
@@ -786,21 +856,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               </div>
             </div>
 
-            <div className="text-xs text-stone-400 font-medium">Step {createStep} of 3</div>
+            <div className="text-xs text-stone-400 font-medium">Step {createStep} of 4</div>
 
             {draftId && (
               <button
-                onClick={async () => {
-                  if (!window.confirm("Delete this draft campaign?")) return;
-                  try {
-                    await apiRequest(`/campaigns/${draftId}`, { method: "DELETE", token: getToken() || undefined });
-                    clearAutoSave();
-                    onSuccess();
-                    onClose();
-                  } catch {
-                    toast("Failed to delete draft", "error");
-                  }
-                }}
+                onClick={() => setShowDeleteConfirm(true)}
                 className="mt-3 text-xs font-medium text-red-500 font-rethink"
               >
                 Delete draft
@@ -1244,76 +1304,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   />
                 </div>
 
-                {/* Referral tracking */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <label htmlFor="referral-enabled" className="text-xs font-medium text-stone-500">
-                        Track conversions with referral codes
-                      </label>
-                      <InfoTooltip text="Each creator gets a unique code. Your servers tell us when someone converts with it, so you see results per creator." />
-                    </div>
-                    <button
-                      id="referral-enabled"
-                      type="button"
-                      role="switch"
-                      aria-checked={campaign.referralEnabled}
-                      onClick={() => {
-                        isModified.current = true;
-                        setCampaign(prev => ({ ...prev, referralEnabled: !prev.referralEnabled }));
-                      }}
-                      className={cn(
-                        "relative w-10 h-6 rounded-full transition-colors shrink-0",
-                        campaign.referralEnabled ? "bg-stone-900" : "bg-stone-200"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform",
-                          campaign.referralEnabled && "translate-x-4"
-                        )}
-                      />
-                    </button>
-                  </div>
-                  {campaign.referralEnabled && (
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
-                      <ReferralSettingsFields
-                        eventType={campaign.referralEventType}
-                        codeSource={campaign.referralCodeSource}
-                        onEventTypeChange={(value) => {
-                          isModified.current = true;
-                          setCampaign(prev => ({ ...prev, referralEventType: value }));
-                        }}
-                        onCodeSourceChange={(value) => {
-                          isModified.current = true;
-                          setCampaign(prev => ({ ...prev, referralCodeSource: value }));
-                        }}
-                      />
-                      <div className="space-y-1.5">
-                        <label htmlFor="referral-reward-wizard" className="text-xs font-medium text-stone-500 font-rethink block">
-                          Creators earn per conversion (optional)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
-                          <input
-                            id="referral-reward-wizard"
-                            inputMode="decimal"
-                            value={campaign.referralRewardPerConversion}
-                            onChange={(e) => {
-                              isModified.current = true;
-                              setCampaign(prev => ({ ...prev, referralRewardPerConversion: e.target.value.replace(/[^0-9.]/g, "") }));
-                            }}
-                            placeholder="500"
-                            className="w-full pl-8 pr-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-stone-400 font-medium font-rethink leading-relaxed">
-                        Rewards are paid from a separate referral budget you add once the campaign is live. Creators can start posting straight away; connect your servers any time from the campaign&apos;s Referrals tab.
-                      </p>
-                    </div>
-                  )}
-                </div>
 
               {/* Bottom Navigation */}
               <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-50 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
@@ -1335,8 +1325,149 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </div>
           )}
 
-          {/* Wizard Step 3: Review & Launch */}
+          {/* Wizard Step 3: Campaign goal */}
           {createStep === 3 && (
+            <div data-reveal className={cn("space-y-8 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
+              <fieldset className="space-y-3">
+                <legend className="text-xs font-medium text-stone-500 font-rethink mb-3">What do you want from this campaign?</legend>
+                {OBJECTIVE_OPTIONS.map((option) => {
+                  const selected = campaign.objective === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        isModified.current = true;
+                        setCampaign(prev => ({ ...prev, objective: option.value }));
+                      }}
+                      className={cn(
+                        "w-full text-left px-4 py-3.5 rounded-2xl border bg-white transition-colors",
+                        selected ? "border-stone-900" : "border-stone-200"
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-stone-900 font-rethink">{option.title}</span>
+                        <span
+                          className={cn("w-4 h-4 rounded-full border flex items-center justify-center shrink-0", selected ? "border-stone-900" : "border-stone-300")}
+                          aria-hidden="true"
+                        >
+                          {selected && <span className="w-2 h-2 rounded-full bg-stone-900" />}
+                        </span>
+                      </span>
+                      <span className="block text-xs font-medium text-stone-500 font-rethink mt-1 leading-relaxed">{option.body}</span>
+                    </button>
+                  );
+                })}
+              </fieldset>
+
+              {campaign.objective === "actions" && (
+                <>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">What should count?</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {REFERRAL_EVENT_TYPES.filter((option) => option.value !== "custom").map((option) => {
+                        const selected = campaign.referralEventType === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => {
+                              isModified.current = true;
+                              setCampaign(prev => ({ ...prev, referralEventType: option.value }));
+                            }}
+                            className={cn(
+                              "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors",
+                              selected ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="referral-budget" className="text-xs font-medium text-stone-500 font-rethink block">
+                      Referral budget
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+                      <input
+                        id="referral-budget"
+                        inputMode="numeric"
+                        value={campaign.referralBudget}
+                        onChange={(e) => {
+                          isModified.current = true;
+                          setCampaign(prev => ({ ...prev, referralBudget: e.target.value.replace(/\D/g, "") }));
+                        }}
+                        placeholder="100000"
+                        className={cn(
+                          "w-full pl-8 pr-4 py-3 bg-white border rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0",
+                          touchedStep.step3 && !referralBudgetValid ? "border-red-400" : "border-stone-200"
+                        )}
+                      />
+                    </div>
+                    <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
+                      {referralBudgetValid
+                        ? `Creators get ${formatNaira(Math.round(referralBudgetValue * (1 - PLATFORM_FEE_SHARE)))} after the 30% platform fee. Our team sets what they earn per ${conversionNoun(campaign.referralEventType, 1)} once your campaign is live.`
+                        : `Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views budget.`}
+                    </p>
+                    {touchedStep.step3 && !referralBudgetValid && (
+                      <p className="text-xs text-red-500 font-medium">Enter a referral budget of at least {formatNaira(MIN_REFERRAL_BUDGET)}.</p>
+                    )}
+                  </div>
+
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-stone-900 font-rethink">How referral tracking works</h4>
+                    <ol className="space-y-3">
+                      {REFERRAL_HOW_IT_WORKS.map((item, index) => (
+                        <li key={item.title} className="flex gap-3">
+                          <span
+                            className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#1C1917] text-xs font-semibold flex items-center justify-center font-rethink"
+                            aria-hidden="true"
+                          >
+                            {index + 1}
+                          </span>
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-stone-900 font-rethink">{item.title}</p>
+                            <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">{item.body}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed border-t border-stone-100 pt-3">
+                      Before you pay, your developer connects your app: two small requests, and we give them the code. We never see
+                      names, emails or phone numbers.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Bottom Navigation */}
+              <div className={cn("flex gap-4 pt-6", isMobile && "sticky bottom-0 bg-stone-50 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+                <button
+                  onClick={isMobile ? handleSaveDraft : handleBackStep}
+                  disabled={saving}
+                  className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
+                >
+                  {isMobile ? (saving ? "Saving..." : "Save and Close") : "Back"}
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  disabled={campaign.objective === "actions" && !referralBudgetValid}
+                  className="flex-1 py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Wizard Step 4: Review & Launch */}
+          {createStep === 4 && (
             <div data-reveal className={cn("space-y-10 flex-1", isMobile ? "w-full" : "w-[350px] mx-auto")}>
               {/* Section 1: image, name, badge */}
               <div className="space-y-4">
@@ -1408,11 +1539,35 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <span className="text-[11px] font-medium text-stone-400 block">Target views</span>
                   <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">{campaign.views.toLocaleString()}</span>
                 </div>
-                <div>
-                  <span className="text-[11px] font-medium text-stone-400 block">Budget</span>
-                  <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">₦{campaign.budget.toLocaleString()}</span>
-                </div>
+                {/* Referral campaigns show the full breakdown below instead. */}
+                {campaign.objective !== "actions" && (
+                  <div>
+                    <span className="text-[11px] font-medium text-stone-400 block">Budget</span>
+                    <span className="text-lg font-medium text-stone-900 font-rethink tracking-tighter">₦{campaign.budget.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
+
+              {campaign.objective === "actions" && (
+                <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-medium text-stone-500">Views budget</span>
+                    <span className="font-medium text-stone-900 tabular-nums">{formatNaira(campaign.budget)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="font-medium text-stone-500">Referral budget</span>
+                    <span className="font-medium text-stone-900 tabular-nums">{formatNaira(referralBudgetValue)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-stone-100 pt-2">
+                    <span className="font-semibold text-stone-900">Total to pay</span>
+                    <span className="font-semibold text-stone-900 tabular-nums">{formatNaira(campaign.budget + referralBudgetValue)}</span>
+                  </div>
+                  <p className="text-[11px] text-stone-500 font-medium leading-relaxed pt-1">
+                    Creators get {formatNaira(Math.round(referralBudgetValue * (1 - PLATFORM_FEE_SHARE)))} of the referral budget. Our team
+                    sets the reward per {conversionNoun(campaign.referralEventType, 1)} once your campaign is live.
+                  </p>
+                </div>
+              )}
 
               {/* Details container */}
               <div className="bg-stone-50 rounded-[18px] py-4 space-y-6">
@@ -1431,12 +1586,42 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-medium text-stone-500">Referral tracking</span>
                   <span className="font-medium text-stone-800">
-                    {campaign.referralEnabled
-                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · ${CODE_SOURCE_OPTIONS.find((o) => o.value === campaign.referralCodeSource)?.shortLabel || ""}${Number(campaign.referralRewardPerConversion) > 0 ? ` · ₦${Number(campaign.referralRewardPerConversion).toLocaleString()} each` : ""}`
+                    {campaign.objective === "actions"
+                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · reward set by Easily Promote`
                       : "Off"}
                   </span>
                 </div>
               </div>
+
+              {campaign.objective === "actions" &&
+                (connection.verified ? (
+                  <p className="bg-[#CBF5E5] text-[#176448] rounded-[18px] px-4 py-3 text-xs font-medium font-rethink leading-relaxed">
+                    Your app is connected. Paying puts the campaign live and starts tracking {conversionNoun(campaign.referralEventType, 2)}.
+                  </p>
+                ) : (
+                  <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">
+                    <div className="space-y-1">
+                      <h5 className="text-sm font-semibold text-stone-900 font-rethink">Connect your app to launch</h5>
+                      <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+                        A referral campaign can&apos;t be paid for until your app is connected, so your budget never waits on setup.
+                        Save this draft and finish setup; this checklist updates by itself.
+                      </p>
+                    </div>
+                    {connection.loading ? (
+                      <p className="text-xs text-stone-500 font-medium font-rethink">Checking your app connection…</p>
+                    ) : (
+                      <ConnectAppChecklist status={connection.status} hasKey={connection.hasKey} />
+                    )}
+                    <a
+                      href="/dashboard/brand/settings/referral"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink"
+                    >
+                      Open setup guide
+                    </a>
+                  </div>
+                ))}
 
               {/* Warning Info Box */}
               <div className="flex items-center gap-3 bg-[#EBF3FF] border border-dashed border-blue-200 rounded-[20px] py-2 pr-2">
@@ -1459,10 +1644,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 </button>
                 <button
                   onClick={handleNextStep}
-                  disabled={launching}
+                  disabled={launching || needsConnection}
                   className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed"
                 >
-                  {launching ? <Spinner className="size-4" /> : "Pay and Launch Campaign"}
+                  {launching ? <Spinner className="size-4" /> : needsConnection ? "Connect your app to launch" : "Pay and Launch Campaign"}
                 </button>
               </div>
               {launchError && (
@@ -1473,8 +1658,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
       </div>
 
-      {/* Delete confirmation modal (mobile) */}
-      {showDeleteConfirm && isMobile && (
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
         <div className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6">
           <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
             <h3 className="font-rethink font-semibold text-base text-stone-900 text-center tracking-tighter">Delete this draft?</h3>
@@ -1493,6 +1678,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     await apiRequest(`/campaigns/${draftId}`, { method: "DELETE", token: getToken() || undefined });
                     clearAutoSave();
                     toast("Draft deleted", "success");
+                    onSuccess();
                     onClose();
                   } catch {
                     toast("Failed to delete draft", "error");

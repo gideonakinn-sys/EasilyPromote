@@ -6,6 +6,7 @@ const ConversionEvent = require("../models/ConversionEvent");
 const WebhookDelivery = require("../models/WebhookDelivery");
 const Campaign = require("../models/Campaign");
 const BusinessProfile = require("../models/BusinessProfile");
+const Notification = require("../models/Notification");
 const { decrypt } = require("../utils/crypto");
 const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
@@ -102,14 +103,44 @@ function invalidPayload(error) {
   return reply(400, { error: "Invalid payload", details });
 }
 
-async function markConnected(key, now) {
-  await Promise.all([
-    WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } }),
-    BusinessProfile.updateOne(
-      { userId: key.businessId, referralConnectedAt: null },
-      { $set: { referralConnectedAt: now } }
-    ),
-  ]);
+// Every signed request marks its key as used. Only requests from the brand's own server
+// count toward verification: our dashboard's test sender signs with the brand's key too,
+// so it proves the key works, not that their app is wired up.
+async function markConnected(key, now, { kind, source }) {
+  const updates = [WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } })];
+  const fromBrandServer = source !== "dashboard_test";
+  if (fromBrandServer) {
+    const field = kind === "code_check" ? "referralVerification.codeCheckAt" : "referralVerification.conversionAt";
+    updates.push(
+      BusinessProfile.updateOne({ userId: key.businessId, referralConnectedAt: null }, { $set: { referralConnectedAt: now } }),
+      BusinessProfile.updateOne({ userId: key.businessId, [field]: null }, { $set: { [field]: now } })
+    );
+  }
+  await Promise.all(updates);
+  if (fromBrandServer) await completeVerification(key.businessId, now);
+}
+
+// Verified once both proofs have arrived. The conditional update makes the first request
+// to complete the pair the only one that notifies the brand.
+async function completeVerification(businessId, now) {
+  const result = await BusinessProfile.updateOne(
+    {
+      userId: businessId,
+      "referralVerification.verifiedAt": null,
+      "referralVerification.codeCheckAt": { $ne: null },
+      "referralVerification.conversionAt": { $ne: null },
+    },
+    { $set: { "referralVerification.verifiedAt": now } }
+  );
+  if (result.modifiedCount !== 1) return;
+
+  await Notification.create({
+    businessId,
+    type: "referral_connected",
+    title: "Your app is connected",
+    body: "We received a code check and a conversion from your server. You can now launch referral campaigns.",
+  });
+  emitToUser(businessId, "referral-verified", { verifiedAt: now });
 }
 
 // Shared by conversions and code checks: key lookup, signature, rate limit, JSON.
@@ -229,7 +260,7 @@ async function logDelivery(context, result, source) {
   }
 }
 
-async function processConversion(request, context) {
+async function processConversion(request, context, source) {
   const now = new Date();
   const auth = await authenticateSignedRequest(request, context, now);
   if (auth.failure) return auth.failure;
@@ -249,7 +280,7 @@ async function processConversion(request, context) {
   // Test events prove the key and signing work. They don't need a real code yet,
   // but report whether the code would match so a brand can check its setup.
   if (payload.test) {
-    await markConnected(key, now);
+    await markConnected(key, now, { kind: "conversion", source });
     return reply(200, {
       status: "test_ok",
       code: {
@@ -308,7 +339,7 @@ async function processConversion(request, context) {
       }
     ),
     activateIfPending(referralCode, now),
-    markConnected(key, now),
+    markConnected(key, now, { kind: "conversion", source }),
   ]);
 
   const update = {
@@ -328,7 +359,7 @@ async function processConversion(request, context) {
 
 // Called by a brand's sign-up flow when a user enters a code, so brands never have to
 // load or sync creators' codes. Records nothing; the conversion comes later.
-async function processCodeCheck(request, context) {
+async function processCodeCheck(request, context, source) {
   const now = new Date();
   const auth = await authenticateSignedRequest(request, context, now);
   if (auth.failure) return auth.failure;
@@ -337,7 +368,9 @@ async function processCodeCheck(request, context) {
   const parsed = codeCheckSchema.safeParse(json);
   if (!parsed.success) return invalidPayload(parsed.error);
 
-  const [evaluation] = await Promise.all([evaluateCode(key.businessId, parsed.data.code, now), markConnected(key, now)]);
+  const [evaluation] = await Promise.all([evaluateCode(key.businessId, parsed.data.code, now),
+    markConnected(key, now, { kind: "code_check", source }),
+  ]);
   if (evaluation.reason) {
     return reply(200, { valid: false, code: evaluation.value, reason: evaluation.reason });
   }
@@ -357,14 +390,14 @@ function emptyContext() {
 
 async function handleConversionWebhook({ headers, rawBody, source = "webhook" }) {
   const context = emptyContext();
-  const result = await processConversion({ headers, rawBody }, context);
+  const result = await processConversion({ headers, rawBody }, context, source);
   await logDelivery(context, result, source);
   return result;
 }
 
 async function handleCodeCheck({ headers, rawBody, source = "code_check" }) {
   const context = emptyContext();
-  const result = await processCodeCheck({ headers, rawBody }, context);
+  const result = await processCodeCheck({ headers, rawBody }, context, source);
   await logDelivery(context, result, source);
   return result;
 }

@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS: ReferralSettings = {
   codeSource: "easilypromote",
   conversions: 0,
   rewardPerConversion: 0,
+  requestedBudget: 0,
   budget: 0,
   platformFee: 0,
   platformFeePercent: 30,
@@ -52,6 +53,8 @@ interface ReferralSettingsFieldsProps {
   onEventTypeChange: (value: ReferralEventType) => void;
   onCodeSourceChange: (value: ReferralCodeSource) => void;
   disabled?: boolean;
+  // New campaigns always use Easily Promote codes; the choice stays for campaigns already on their own codes.
+  showCodeSource?: boolean;
 }
 
 export function ReferralSettingsFields({
@@ -60,6 +63,7 @@ export function ReferralSettingsFields({
   onEventTypeChange,
   onCodeSourceChange,
   disabled,
+  showCodeSource = false,
 }: ReferralSettingsFieldsProps) {
   return (
     <div className="space-y-5">
@@ -86,6 +90,7 @@ export function ReferralSettingsFields({
         </div>
       </fieldset>
 
+      {showCodeSource && (
       <fieldset className="space-y-2" disabled={disabled}>
         <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">Who creates the codes?</legend>
         <div className="grid gap-2">
@@ -111,6 +116,7 @@ export function ReferralSettingsFields({
           })}
         </div>
       </fieldset>
+      )}
     </div>
   );
 }
@@ -150,10 +156,6 @@ export function CampaignReferrals({
   const [importCsv, setImportCsv] = useState("");
   const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
-  const [rewardInput, setRewardInput] = useState(
-    initialSettings?.rewardPerConversion ? String(initialSettings.rewardPerConversion) : ""
-  );
-  const [savingReward, setSavingReward] = useState(false);
   const [fundAmount, setFundAmount] = useState("");
   const [funding, setFunding] = useState(false);
 
@@ -167,7 +169,6 @@ export function CampaignReferrals({
       setSettings(payload.referral);
       setDraftEventType(payload.referral.eventType);
       setDraftCodeSource(payload.referral.codeSource);
-      setRewardInput(payload.referral.rewardPerConversion ? String(payload.referral.rewardPerConversion) : "");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load referral codes");
     } finally {
@@ -235,23 +236,6 @@ export function CampaignReferrals({
     } finally {
       setSavingSettings(false);
     }
-  };
-
-  const handleSaveReward = async (e: FormEvent) => {
-    e.preventDefault();
-    const amount = Number(rewardInput || 0);
-    if (!Number.isFinite(amount) || amount < 0) {
-      toast("Enter a reward of ₦0 or more", "error");
-      return;
-    }
-    setSavingReward(true);
-    await saveSettings(
-      { rewardPerConversion: amount },
-      amount > 0
-        ? `Creators now earn ${formatNaira(amount)} per ${conversionNoun(settings.eventType, 1)}.`
-        : "Creator rewards are off."
-    );
-    setSavingReward(false);
   };
 
   const handleFund = async (e: FormEvent) => {
@@ -415,6 +399,7 @@ export function CampaignReferrals({
               onEventTypeChange={setDraftEventType}
               onCodeSourceChange={setDraftCodeSource}
               disabled={savingSettings}
+              showCodeSource={settings.codeSource === "business"}
             />
             <button
               onClick={() =>
@@ -485,38 +470,23 @@ export function CampaignReferrals({
             ))}
         </div>
 
-        <form onSubmit={handleSaveReward} className="space-y-2">
-          <label htmlFor="referral-reward" className="text-xs font-medium text-stone-500 font-rethink block">
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-stone-500 font-rethink block">
             Creators earn per {conversionNoun(settings.eventType, 1)}
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">
-                ₦
-              </span>
-              <input
-                id="referral-reward"
-                inputMode="decimal"
-                value={rewardInput}
-                onChange={(e) => setRewardInput(e.target.value.replace(/[^0-9.]/g, ""))}
-                placeholder="500"
-                disabled={isCancelled}
-                className="w-full pl-8 pr-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-rethink text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 disabled:opacity-50"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={savingReward || isCancelled || Number(rewardInput || 0) === settings.rewardPerConversion}
-              className="px-4 py-2.5 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink disabled:opacity-40"
-            >
-              {savingReward ? "Saving…" : "Save"}
-            </button>
-          </div>
+          </span>
+          {settings.rewardPerConversion > 0 ? (
+            <p className="font-rethink text-lg font-medium text-stone-900 tabular-nums">
+              {formatNaira(settings.rewardPerConversion)}
+            </p>
+          ) : (
+            <p className="font-rethink text-sm font-medium text-stone-900">Being set by our team</p>
+          )}
           <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
-            Applies to new {conversionNoun(settings.eventType, 2)}; each one keeps the reward it earned. Creators can withdraw
-            rewards 7 days after the conversion.
+            {settings.rewardPerConversion > 0
+              ? `Set by Easily Promote from your referral budget. Creators can withdraw rewards 7 days after each ${conversionNoun(settings.eventType, 1)}.`
+              : `We set this from your referral budget once the campaign is live. ${conversionNoun(settings.eventType, 2).replace(/^./, (c) => c.toUpperCase())} recorded before then are paid once it's set.`}
           </p>
-        </form>
+        </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-stone-100 pt-4">
           {[
@@ -769,6 +739,7 @@ export function CampaignReferrals({
             onEventTypeChange={setDraftEventType}
             onCodeSourceChange={setDraftCodeSource}
             disabled={savingSettings}
+            showCodeSource={settings.codeSource === "business"}
           />
           {settingsChanged && (
             <button

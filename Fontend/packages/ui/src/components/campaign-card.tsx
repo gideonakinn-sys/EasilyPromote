@@ -13,6 +13,8 @@ export interface CampaignCardProps {
   onResume?: () => void;
   onClick?: () => void;
   className?: string;
+  // Something the brand needs to do before this campaign can move on, e.g. connect their app.
+  notice?: string;
 }
 
 export function CampaignCard({
@@ -27,6 +29,7 @@ export function CampaignCard({
   onResume,
   onClick,
   className,
+  notice,
 }: CampaignCardProps) {
   // Determine badge colors and labels
   const getBadges = () => {
@@ -108,6 +111,12 @@ export function CampaignCard({
         </h3>
         {description && (
           <p className="font-rethink text-xs text-stone-500 font-medium truncate mt-1 mb-5 tracking-[-0.01em]">{description}</p>
+        )}
+        {notice && (
+          <p className="inline-flex items-center gap-1.5 mb-4 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-medium font-rethink tracking-[-0.01em]">
+            <span className="w-1 h-1 rounded-full bg-amber-600" aria-hidden="true" />
+            {notice}
+          </p>
         )}
       </div>
 

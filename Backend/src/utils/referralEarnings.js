@@ -58,17 +58,19 @@ async function reserveConversionReward(campaign, counted, now = new Date()) {
 
 // Credits a verified referral-budget payment exactly once, keyed on the Paystack
 // reference. `amount` must come from Paystack, never from the client.
-async function creditReferralTopup({ campaignId, reference, amount }) {
+async function creditReferralTopup({ campaignId, reference, amount, fromCampaignPayment = false }) {
   if (!reference) return { credited: false, reason: "missing_reference" };
   if (!(amount > 0)) return { credited: false, reason: "invalid_amount" };
 
   const campaign = await Campaign.findById(campaignId).select("platformFeePercent businessId name referral");
   if (!campaign) return { credited: false, reason: "campaign_not_found" };
 
-  // A reference already used under another transaction type must be rejected
+  // A reference already used for something else must be rejected. A campaign checkout
+  // pays the views deposit and the referral budget with one reference, so that pair is allowed.
+  const allowedTypes = fromCampaignPayment ? ["topup", "escrow_deposit"] : ["topup"];
   const prior = await Transaction.findOne({
     reference,
-    $or: [{ type: { $ne: "topup" } }, { bucket: { $ne: "referral" } }],
+    $or: [{ type: { $nin: allowedTypes } }, { type: "topup", bucket: { $ne: "referral" } }],
   });
   if (prior) return { credited: false, reason: "reference_already_used" };
 
@@ -155,7 +157,12 @@ function payoutStatusOf(event, now = new Date()) {
 async function creatorReferralEarnings(creatorId, { campaignIds = null, now = new Date() } = {}) {
   const creator = toObjectId(creatorId);
   const eventMatch = { creatorId: creator, rewardAmount: { $gt: 0 }, voidedAt: null };
-  const withdrawalMatch = { creatorId: creator, kind: "referral", status: { $in: ["pending", "processing", "released"] } };
+  // Referral withdrawals and the referral part of weekly campaign withdrawals.
+  const withdrawalMatch = {
+    creatorId: creator,
+    $or: [{ kind: "referral" }, { kind: "campaign", referralAmount: { $gt: 0 } }],
+    status: { $in: ["pending", "processing", "released"] },
+  };
   if (campaignIds) {
     const ids = campaignIds.map(toObjectId);
     eventMatch.campaignId = { $in: ids };
@@ -174,7 +181,15 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
         },
       },
     ]),
-    Withdrawal.aggregate([{ $match: withdrawalMatch }, { $group: { _id: "$campaignId", withdrawn: { $sum: "$amount" } } }]),
+    Withdrawal.aggregate([
+      { $match: withdrawalMatch },
+      {
+        $group: {
+          _id: "$campaignId",
+          withdrawn: { $sum: { $cond: [{ $eq: ["$kind", "campaign"] }, { $ifNull: ["$referralAmount", 0] }, "$amount"] } },
+        },
+      },
+    ]),
   ]);
 
   const withdrawnByCampaign = new Map(withdrawals.map((w) => [String(w._id), roundMoney(w.withdrawn)]));
@@ -248,7 +263,47 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
   return { ok: true, event: previous, campaign, refundedToPool: previous.rewardAmount > 0 ? previous.rewardAmount : 0 };
 }
 
+// Sign-ups recorded before admin set a reward are paid once it's set, oldest first, while
+// the referral pool lasts. Each gets a fresh hold from now, so it can still be voided.
+async function payUnpaidConversions(campaignId, now = new Date()) {
+  const campaign = await Campaign.findById(campaignId).select("name businessId referral");
+  if (!campaign || !(campaign.referral && campaign.referral.rewardPerConversion > 0)) return { paid: 0, unpaid: 0 };
+
+  const events = await ConversionEvent.find({
+    campaignId: campaign._id,
+    counted: true,
+    voidedAt: null,
+    unpaidReason: "rate_not_set",
+  })
+    .sort({ occurredAt: 1, createdAt: 1 })
+    .select("_id");
+
+  let paid = 0;
+  for (let i = 0; i < events.length; i += 1) {
+    // Claim the event first so two admins setting the reward can't both pay it.
+    const claimed = await ConversionEvent.findOneAndUpdate(
+      { _id: events[i]._id, unpaidReason: "rate_not_set", voidedAt: null },
+      { $set: { unpaidReason: null } }
+    );
+    if (!claimed) continue;
+
+    const reward = await reserveConversionReward(campaign, true, now);
+    if (!(reward.rewardAmount > 0)) {
+      const rest = events.slice(i).map((event) => event._id);
+      await ConversionEvent.updateMany({ _id: { $in: rest } }, { $set: { unpaidReason: "budget_exhausted" } });
+      return { paid, unpaid: rest.length };
+    }
+    await ConversionEvent.updateOne(
+      { _id: events[i]._id },
+      { $set: { rewardAmount: reward.rewardAmount, availableAt: reward.availableAt } }
+    );
+    paid += 1;
+  }
+  return { paid, unpaid: 0 };
+}
+
 module.exports = {
+  payUnpaidConversions,
   REFERRAL_HOLD_MS,
   MIN_REFERRAL_TOPUP,
   MAX_REFERRAL_TOPUP,

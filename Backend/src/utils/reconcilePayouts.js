@@ -1,7 +1,7 @@
 const Transaction = require("../models/Transaction");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
-const { settleRelease, revertRelease } = require("./payouts");
+const { releasesForTransfer, settleTransfer, revertTransfer } = require("../services/withdrawalPayouts");
 
 const RECONCILE_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -42,9 +42,8 @@ async function reconcilePayouts() {
       if (err.status === 404) {
         // Paystack has no transfer with this reference, so the attempt never reached it
         // and no money left. Free the escrow and put the withdrawal back in the queue.
-        const orphan = await Transaction.findOne({ type: "release", reference: withdrawal.reference });
-        if (orphan) {
-          await revertRelease(orphan, "Reconciled: Paystack has no record of this transfer");
+        if ((await releasesForTransfer(withdrawal.reference)).length > 0) {
+          await revertTransfer(withdrawal.reference, "Reconciled: Paystack has no record of this transfer");
         } else {
           await Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
         }
@@ -59,16 +58,12 @@ async function reconcilePayouts() {
     }
 
     const status = transfer && transfer.status;
-    const transaction = await Transaction.findOne({
-      type: "release",
-      reference: withdrawal.reference,
-    });
 
     if (status === "success") {
-      if (await settleRelease(transaction)) summary.settled += 1;
+      if (await settleTransfer(withdrawal.reference)) summary.settled += 1;
       console.log("[Reconcile] Settled", withdrawal.reference, "— webhook never arrived");
     } else if (["failed", "reversed", "abandoned"].includes(status)) {
-      if (await revertRelease(transaction, `Reconciled: Paystack reports transfer ${status}`)) {
+      if (await revertTransfer(withdrawal.reference, `Reconciled: Paystack reports transfer ${status}`)) {
         summary.failed += 1;
       }
       console.log("[Reconcile] Reverted", withdrawal.reference, "— Paystack reports", status);

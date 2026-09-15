@@ -36,12 +36,16 @@ function parseReferralSettings(input) {
     }
     value.codeSource = input.codeSource;
   }
-  if (input.rewardPerConversion !== undefined) {
-    const amount = Number(input.rewardPerConversion);
-    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000) {
-      return { error: "referral.rewardPerConversion must be a number between 0 and 1,000,000" };
+  // rewardPerConversion is ignored here: brands fund the budget, admin sets the reward.
+  if (input.requestedBudget !== undefined) {
+    const { MIN_REFERRAL_TOPUP, MAX_REFERRAL_TOPUP } = require("./referralEarnings");
+    const amount = Math.round(Number(input.requestedBudget));
+    if (!Number.isFinite(amount) || (amount !== 0 && (amount < MIN_REFERRAL_TOPUP || amount > MAX_REFERRAL_TOPUP))) {
+      return {
+        error: `referral.requestedBudget must be between ₦${MIN_REFERRAL_TOPUP.toLocaleString()} and ₦${MAX_REFERRAL_TOPUP.toLocaleString()}`,
+      };
     }
-    value.rewardPerConversion = Math.round(amount * 100) / 100;
+    value.requestedBudget = amount;
   }
   return { value };
 }

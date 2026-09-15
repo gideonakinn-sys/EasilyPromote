@@ -133,7 +133,19 @@ const campaignSchema = new mongoose.Schema(
       default: 5,
       min: 1,
     },
-    // Referral tracking runs alongside the views campaign and never gates going live.
+    // What the brand wants: views only, or people taking an action in their app, which
+    // adds referral tracking funded by a referral budget.
+    objective: {
+      type: String,
+      enum: ["views", "actions"],
+      default: "views",
+    },
+    // Total the current checkout charges: views price plus the referral budget.
+    paymentAmount: {
+      type: Number,
+      default: 0,
+    },
+    // Referral tracking runs alongside the views campaign.
     referral: {
       enabled: {
         type: Boolean,
@@ -148,6 +160,12 @@ const campaignSchema = new mongoose.Schema(
         type: String,
         enum: ["easilypromote", "business"],
         default: "easilypromote",
+      },
+      // Referral budget the brand entered in the wizard, paid with the views price at checkout.
+      requestedBudget: {
+        type: Number,
+        default: 0,
+        min: 0,
       },
       conversions: {
         type: Number,
