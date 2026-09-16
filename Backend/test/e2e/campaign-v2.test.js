@@ -138,8 +138,8 @@ test("hybrid pay and objectives that aren't ready are refused with a reason", as
   assert.equal(sales.status, 400);
   assert.match(sales.body.error, /available yet/);
 
-  const noPay = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { ...contentCampaign, contentPay: undefined } });
-  assert.equal(noPay.status, 400);
+  const badPay = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { ...contentCampaign, contentPay: { ratePerDeliverable: 0, deliverables: 3 } } });
+  assert.equal(badPay.status, 400);
 });
 
 test("editing a draft content campaign's pay reprices it; a draft can't switch to a rate it doesn't own", async () => {

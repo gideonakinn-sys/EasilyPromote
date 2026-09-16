@@ -113,10 +113,12 @@ async function startMongod() {
 // Replaces services/paystack in the require cache before the app loads it.
 function stubPaystack() {
   const checkouts = new Map();
+  const checkoutMetadata = new Map();
   const paid = new Map();
   const stub = {
-    async initializeTransaction({ amount, reference }) {
+    async initializeTransaction({ amount, reference, metadata }) {
       checkouts.set(reference, amount);
+      checkoutMetadata.set(reference, metadata);
       return { authorization_url: `https://checkout.paystack.test/${reference}`, access_code: `ac_${reference}`, reference };
     },
     async verifyTransaction(reference) {
@@ -156,6 +158,8 @@ function stubPaystack() {
   return {
     // Naira amount the checkout for this reference asked Paystack to charge.
     charged: (reference) => checkouts.get(reference),
+    // Metadata the checkout for this reference sent to Paystack.
+    metadata: (reference) => checkoutMetadata.get(reference),
     // Makes Paystack report the checkout as paid; defaults to the amount it was opened for.
     markPaid(reference, { amount, currency = "NGN" } = {}) {
       paid.set(reference, { amount: amount !== undefined ? amount : checkouts.get(reference), currency });

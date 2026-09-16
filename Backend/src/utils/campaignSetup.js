@@ -18,7 +18,9 @@ const textList = (maxItems, maxLength) => z.array(shortText(maxLength).min(1)).m
 const setupSchema = z.object({
   campaignObjective: z.enum(OBJECTIVE_NAMES).optional(),
   payShape: z.enum(["fixed", "performance", "hybrid"]).optional(),
-  contentPay: z.object({ ratePerDeliverable: z.number(), deliverables: z.number() }).optional(),
+  // null clears a draft's pay.
+  contentPay: z.object({ ratePerDeliverable: z.number(), deliverables: z.number() }).nullable().optional(),
+  wizardStep: z.number().int().min(1).max(6).optional(),
   contentDestination: z.enum(["creator_page", "brand_page", "both"]).optional(),
   creatorAccess: z.enum(["open_call", "application_required"]).optional(),
   audienceTargeting: z
@@ -88,12 +90,14 @@ function resolveCampaignSetup(body, current = null) {
         })
       : current.campaignObjective);
   const definition = OBJECTIVES[objective];
+  // Sending back the objective a campaign already has isn't choosing one.
+  const objectiveChosen = Boolean(input.campaignObjective) && !(current && current.campaignObjective === input.campaignObjective);
   // Older clients can still create what they always could (e.g. purchase tracking); only
   // an objective chosen in the new setup has to be one that's open.
-  if (!definition.available && input.campaignObjective) {
+  if (!definition.available && objectiveChosen) {
     return badRequest(`${objective[0].toUpperCase()}${objective.slice(1)} campaigns aren't available yet`);
   }
-  if (definition.rateAuthority !== "brand" && input.contentPay !== undefined) {
+  if (definition.rateAuthority !== "brand" && input.contentPay !== undefined && input.contentPay !== null) {
     return rateError("Only content campaigns let the brand set what creators earn");
   }
 
@@ -103,12 +107,16 @@ function resolveCampaignSetup(body, current = null) {
     return badRequest(isContent ? "Content campaigns pay a fixed rate per deliverable" : "Performance campaigns pay per verified result");
   }
 
-  const contentPay = isContent ? input.contentPay || (current && current.contentPay && current.contentPay.ratePerDeliverable ? current.contentPay : undefined) : undefined;
+  const storedPay = current && current.contentPay && current.contentPay.ratePerDeliverable ? current.contentPay : undefined;
+  const contentPay = isContent ? (input.contentPay === null ? undefined : input.contentPay || storedPay) : undefined;
   const targetViews = body.targetViews !== undefined ? body.targetViews : current ? current.targetViews : undefined;
   const referralBudget =
     referralInput.requestedBudget !== undefined ? referralInput.requestedBudget : current && current.referral ? current.referral.requestedBudget : 0;
 
-  const priced = quoteCampaign({
+  // A content draft can be saved before the brand sets its pay; it's unpriced until then
+  // and checkout refuses it.
+  const unpriced = isContent && !contentPay;
+  const priced = unpriced ? { quote: null } : quoteCampaign({
     objective,
     payShape,
     contentPay: contentPay && { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables },
@@ -138,7 +146,12 @@ function resolveCampaignSetup(body, current = null) {
   // Content: the quote as-is. Performance: `budget` stays the views price (the referral
   // budget is booked separately at payment), with the fee inside it.
   const money = {};
-  if (isContent) {
+  if (unpriced) {
+    money.budget = 0;
+    money.creatorPool = 0;
+    money.platformFee = 0;
+    money.costPerView = 0;
+  } else if (isContent) {
     money.contentPay = { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables };
     money.budget = quote.total;
     money.creatorPool = quote.creatorBudget;
@@ -160,8 +173,9 @@ function resolveCampaignSetup(body, current = null) {
     quote,
     legacyObjective: usesReferralTracking(objective) ? "actions" : "views",
     // Only a newly chosen objective sets conversion types; older clients keep the ones they sent or stored.
+    unpriced,
     referralEventTypes:
-      input.campaignObjective && REFERRAL_EVENT_FOR[objective] && !referralInput.eventTypes && !referralInput.eventType
+      objectiveChosen && REFERRAL_EVENT_FOR[objective] && !referralInput.eventTypes && !referralInput.eventType
         ? [REFERRAL_EVENT_FOR[objective]]
         : null,
   };
@@ -187,7 +201,7 @@ function editSetupUpdates(body, campaign) {
   const referral = body.referral || {};
 
   const objectiveChanged =
-    body.campaignObjective !== undefined ||
+    (body.campaignObjective !== undefined && body.campaignObjective !== campaign.campaignObjective) ||
     body.objective !== undefined ||
     referral.enabled !== undefined ||
     referral.eventTypes !== undefined ||
@@ -215,7 +229,7 @@ function editSetupUpdates(body, campaign) {
   }
   if (moneyChanged) {
     Object.assign(updates, setup.money);
-    if (isContent) updates.$unset = { targetViews: 1 };
+    if (isContent) updates.$unset = { targetViews: 1, ...(setup.unpriced && { contentPay: 1 }) };
     else if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
   }
 

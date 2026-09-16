@@ -62,7 +62,7 @@ test("the quote refuses what the brand can't set and incomplete pay, and is for 
   assert.equal(rate.status, 400);
   assert.equal(rate.body.code, "RATE_NOT_BRAND_SET");
 
-  const noPay = await harness.api("POST", "/api/campaigns/quote", { token: brand.token, body: { ...content, contentPay: undefined } });
+  const noPay = await harness.api("POST", "/api/campaigns/quote", { token: brand.token, body: { ...content, contentPay: { ratePerDeliverable: 15000, deliverables: 0 } } });
   assert.equal(noPay.status, 400);
   assert.ok(noPay.body.error);
 

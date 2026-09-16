@@ -26,6 +26,11 @@ test("content campaign needs a positive whole-naira rate and at least one delive
   }
 });
 
+test("content campaign pays for at most 100 deliverables", () => {
+  assert.ok(quoteCampaign({ objective: "content", contentPay: { ratePerDeliverable: 1000, deliverables: 100 } }).quote);
+  assert.match(quoteCampaign({ objective: "content", contentPay: { ratePerDeliverable: 1000, deliverables: 101 } }).error, /100 deliverables/);
+});
+
 test("hybrid pay isn't available yet", () => {
   const result = quoteCampaign({ objective: "content", payShape: "hybrid", contentPay: { ratePerDeliverable: 5000, deliverables: 4 } });
   assert.match(result.error, /Hybrid/);

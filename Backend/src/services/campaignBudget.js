@@ -6,6 +6,7 @@ const { OBJECTIVES, usesReferralTracking } = require("../utils/campaignObjective
 const { roundMoney } = require("../utils/referralEarnings");
 
 const DEFAULT_PLATFORM_FEE_PERCENT = 30;
+const MAX_DELIVERABLES = 100;
 
 // Returns { quote: { creatorBudget, performanceBudget, platformFee, total } } or { error }.
 // - content: brand's rate × deliverables for creators; the fee is added on top (D2)
@@ -33,6 +34,10 @@ function quoteCampaign({
     if (!Number.isInteger(deliverables) || deliverables <= 0) {
       return { error: "Set how many deliverables you're paying for" };
     }
+    // Each deliverable is a placement, and a campaign holds at most 100.
+    if (deliverables > MAX_DELIVERABLES) {
+      return { error: `You can pay for up to ${MAX_DELIVERABLES} deliverables` };
+    }
     const creatorBudget = rate * deliverables;
     const platformFee = roundMoney(creatorBudget * feeRate);
     return { quote: { creatorBudget, performanceBudget: 0, platformFee, total: roundMoney(creatorBudget + platformFee) } };
@@ -56,4 +61,4 @@ function quoteCampaign({
   };
 }
 
-module.exports = { quoteCampaign, DEFAULT_PLATFORM_FEE_PERCENT };
+module.exports = { quoteCampaign, DEFAULT_PLATFORM_FEE_PERCENT, MAX_DELIVERABLES };

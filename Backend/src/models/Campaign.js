@@ -141,6 +141,12 @@ const campaignSchema = new mongoose.Schema(
       default: 5,
       min: 1,
     },
+    // The brand wizard step a draft was last saved on, so it reopens there.
+    wizardStep: {
+      type: Number,
+      min: 1,
+      max: 6,
+    },
     // ── Campaign engine (ADR 0001): new fields beside the older ones below. ──
     campaignObjective: {
       type: String,

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
@@ -18,6 +19,16 @@ const { MIN_REFERRAL_TOPUP } = require("../utils/referralEarnings");
 
 function sendSetupError(res, setup) {
   return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+}
+
+// Top-ups buy more views, which content campaigns don't have. Returns true when it refused.
+function refuseContentTopup(res, campaign) {
+  if (campaign.campaignModel !== "content") return false;
+  res.status(409).json({
+    error: "Top-ups buy more views, so they aren't available for content campaigns.",
+    code: "TOPUP_NOT_FOR_CONTENT",
+  });
+  return true;
 }
 
 // True when an edit changes what the brand's open checkout should charge.
@@ -161,6 +172,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       objective: campaignObjective,
       referral: referralValues,
       status: "draft",
+      wizardStep: req.body.wizardStep,
     });
 
     res.status(201).json({
@@ -176,10 +188,23 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
 });
 
 // What the wizard shows the brand before saving: the same calculator checkout charges from.
-router.post("/quote", protect, authorizeRoles("business"), (req, res) => {
-  const setup = resolveCampaignSetup(req.body || {});
-  if (setup.error) return sendSetupError(res, setup);
-  res.json({ quote: setup.quote });
+// With a campaignId, the setup is quoted as an edit of that campaign, at its own platform fee.
+router.post("/quote", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    const { campaignId, ...body } = req.body || {};
+    let current = null;
+    if (campaignId !== undefined) {
+      current = mongoose.isValidObjectId(campaignId) ? await Campaign.findById(campaignId) : null;
+      if (!current || current.businessId.toString() !== req.user._id.toString()) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+    }
+    const setup = resolveCampaignSetup(body, current);
+    if (setup.error) return sendSetupError(res, setup);
+    res.json({ quote: setup.quote });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, next) => {
@@ -193,6 +218,10 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     }
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Campaign cannot be paid" });
+    }
+    const isContent = campaign.campaignModel === "content";
+    if (isContent && !(campaign.contentPay && campaign.contentPay.ratePerDeliverable)) {
+      return res.status(400).json({ error: "Set what creators earn per deliverable before paying.", code: "CONTENT_PAY_REQUIRED" });
     }
     // Referral campaigns pay their referral budget in the same checkout, and only once the
     // brand's app is connected: Paystack can't hold the money while they finish setup.
@@ -212,14 +241,18 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         });
       }
     }
-    // Checkout charges the calculator's total for the campaign as it stands, so a draft priced
-    // under an older price table pays what the wizard quotes today.
-    const setup = resolveCampaignSetup({}, campaign);
-    if (setup.error) return sendSetupError(res, setup);
-    for (const [field, value] of Object.entries(setup.money)) {
-      if (field !== "contentPay") campaign[field] = value;
+    // A draft is charged the calculator's total as it stands, so one priced under an older
+    // price table pays what the wizard quotes today. An open checkout keeps its price: a
+    // payment still arriving from an earlier checkout tab must match it.
+    let total = campaign.budget + referralAmount;
+    if (campaign.status === "draft") {
+      const setup = resolveCampaignSetup({}, campaign);
+      if (setup.error) return sendSetupError(res, setup);
+      for (const [field, value] of Object.entries(setup.money)) {
+        if (field !== "contentPay") campaign[field] = value;
+      }
+      total = setup.quote.total;
     }
-    const total = setup.quote.total;
 
     const reference = `ep_${campaign._id}_${Date.now()}`;
 
@@ -234,7 +267,10 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         campaignId: campaign._id.toString(),
         businessId: req.user._id.toString(),
         campaignName: campaign.name,
-        viewsAmount: campaign.budget,
+        // The campaign's own price (views price, or a content campaign's pay plus fee) and the
+        // referral budget. viewsAmount stays for performance campaigns' older readers.
+        campaignAmount: campaign.budget,
+        ...(!isContent && { viewsAmount: campaign.budget }),
         referralAmount,
       },
       callback_url,
@@ -376,6 +412,7 @@ router.patch("/:id", protect, async (req, res, next) => {
       "platforms",
       "contentStyle",
       "niches",
+      "wizardStep",
     ];
     const updates = {};
     for (const field of allowedFields) {
@@ -563,12 +600,7 @@ router.post("/:id/topup-init", protect, authorizeRoles("business"), async (req, 
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
-    if (campaign.campaignModel === "content") {
-      return res.status(409).json({
-        error: "Top-ups buy more views, so they aren't available for content campaigns.",
-        code: "TOPUP_NOT_FOR_CONTENT",
-      });
-    }
+    if (refuseContentTopup(res, campaign)) return;
 
     const reference = `ep_topup_${campaign._id}_${Date.now()}`;
 
@@ -611,12 +643,7 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
-    if (campaign.campaignModel === "content") {
-      return res.status(409).json({
-        error: "Top-ups buy more views, so they aren't available for content campaigns.",
-        code: "TOPUP_NOT_FOR_CONTENT",
-      });
-    }
+    if (refuseContentTopup(res, campaign)) return;
 
     // The callback URL carries `amount` in the query string, so the request body
     // is not evidence of anything. Only Paystack decides what was paid, and only
@@ -818,6 +845,7 @@ router.get("/:id", protect, async (req, res, next) => {
       objective: campaign.objective || "views",
       ...campaignSetupView(campaign),
       paymentAmount: campaign.paymentAmount || 0,
+      wizardStep: campaign.wizardStep || null,
       referral: {
         requestedBudget: campaign.referral ? campaign.referral.requestedBudget || 0 : 0,
         enabled: Boolean(campaign.referral && campaign.referral.enabled),
