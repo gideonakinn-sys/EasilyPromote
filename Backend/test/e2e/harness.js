@@ -1,5 +1,6 @@
 // End-to-end test harness: a throwaway MongoDB, the real Express app, and a Paystack stub.
-// It never reads Backend/.env, so tests can't reach the real database or Paystack.
+// It never reads Backend/.env and clears outside-service keys, so tests can't reach the real
+// database, Paystack, email, file storage or social APIs.
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -8,6 +9,25 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const SRC = path.join(__dirname, "..", "..", "src");
+
+// Credentials for real outside services, cleared so a developer's shell can't make a test
+// send email, upload files or call social APIs.
+const OUTSIDE_SERVICE_ENV = [
+  "BREVO_API_KEY",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_REGION",
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+  "TIKTOK_CLIENT_KEY",
+  "TIKTOK_CLIENT_SECRET",
+  "INSTAGRAM_APP_ID",
+  "INSTAGRAM_APP_SECRET",
+  "FACEBOOK_APP_ID",
+  "FACEBOOK_APP_SECRET",
+  "PAYSTACK_CALLBACK_URL",
+];
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -36,46 +56,58 @@ function mongodBinary() {
   return "mongod";
 }
 
+function canConnect(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect(port, "127.0.0.1", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on("error", () => resolve(false));
+  });
+}
+
 async function startMongod() {
   const port = await freePort();
   const dbPath = fs.mkdtempSync(path.join(os.tmpdir(), "ep-e2e-"));
   const proc = spawn(mongodBinary(), ["--dbpath", dbPath, "--port", String(port), "--bind_ip", "127.0.0.1", "--quiet"], {
     stdio: "ignore",
   });
-  let exited = null;
-  proc.on("exit", (code) => {
-    exited = code;
-  });
-  proc.on("error", (error) => {
-    exited = error;
+
+  let exited = false;
+  let exitReason = null;
+  const exitedPromise = new Promise((resolve) => {
+    proc.on("exit", (code, signal) => {
+      exited = true;
+      exitReason = signal || code;
+      resolve();
+    });
+    proc.on("error", (error) => {
+      exited = true;
+      exitReason = error.message;
+      resolve();
+    });
   });
 
+  async function stop() {
+    if (!exited) proc.kill();
+    await exitedPromise;
+    fs.rmSync(dbPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+
   const deadline = Date.now() + 20000;
-  while (Date.now() < deadline) {
-    if (exited !== null) throw new Error(`mongod exited before starting (${exited}). Set MONGOD_PATH if it isn't on PATH.`);
-    const up = await new Promise((resolve) => {
-      const socket = net.connect(port, "127.0.0.1", () => {
-        socket.destroy();
-        resolve(true);
-      });
-      socket.on("error", () => resolve(false));
-    });
-    if (up) break;
+  while (!(await canConnect(port))) {
+    if (exited) {
+      await stop();
+      throw new Error(`mongod exited before starting (${exitReason}). Set MONGOD_PATH if it isn't on PATH.`);
+    }
+    if (Date.now() > deadline) {
+      await stop();
+      throw new Error("mongod didn't accept connections within 20 seconds");
+    }
     await new Promise((r) => setTimeout(r, 100));
   }
 
-  return {
-    uri: `mongodb://127.0.0.1:${port}/ep_e2e`,
-    async stop() {
-      if (exited === null) {
-        await new Promise((resolve) => {
-          proc.once("exit", resolve);
-          proc.kill();
-        });
-      }
-      fs.rmSync(dbPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    },
-  };
+  return { uri: `mongodb://127.0.0.1:${port}/ep_e2e`, stop };
 }
 
 // Replaces services/paystack in the require cache before the app loads it.
@@ -122,7 +154,7 @@ function stubPaystack() {
   require.cache[modulePath] = { id: modulePath, filename: modulePath, loaded: true, exports: stub };
 
   return {
-    // Naira amount the last checkout for this reference asked Paystack to charge.
+    // Naira amount the checkout for this reference asked Paystack to charge.
     charged: (reference) => checkouts.get(reference),
     // Makes Paystack report the checkout as paid; defaults to the amount it was opened for.
     markPaid(reference, { amount, currency = "NGN" } = {}) {
@@ -133,25 +165,34 @@ function stubPaystack() {
 
 async function startHarness() {
   const mongod = await startMongod();
-
-  process.env.NODE_ENV = "test";
-  process.env.MONGODB_URI = mongod.uri;
-  process.env.JWT_SECRET = "e2e-jwt-secret";
-  process.env.JWT_REFRESH_SECRET = "e2e-jwt-refresh-secret";
-  process.env.TOKEN_ENCRYPTION_KEY = crypto.randomBytes(32).toString("hex");
-  process.env.PAYSTACK_SECRET_KEY = "sk_test_e2e";
-  delete process.env.RESEND_API_KEY;
-  delete process.env.SMTP_HOST;
-
-  const paystack = stubPaystack();
-
   const mongoose = require("mongoose");
-  await mongoose.connect(mongod.uri);
+  let server;
+  let paystack;
 
-  const app = require(path.join(SRC, "app"));
-  const server = await new Promise((resolve) => {
-    const s = app.listen(0, "127.0.0.1", () => resolve(s));
-  });
+  try {
+    for (const name of OUTSIDE_SERVICE_ENV) delete process.env[name];
+    process.env.NODE_ENV = "test";
+    process.env.MONGODB_URI = mongod.uri;
+    process.env.JWT_SECRET = "e2e-jwt-secret";
+    process.env.JWT_REFRESH_SECRET = "e2e-jwt-refresh-secret";
+    process.env.TOKEN_ENCRYPTION_KEY = crypto.randomBytes(32).toString("hex");
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_e2e";
+
+    paystack = stubPaystack();
+    await mongoose.connect(mongod.uri);
+
+    const app = require(path.join(SRC, "app"));
+    server = await new Promise((resolve, reject) => {
+      const s = app.listen(0, "127.0.0.1", () => resolve(s));
+      s.on("error", reject);
+    });
+  } catch (error) {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    await mongoose.disconnect();
+    await mongod.stop();
+    throw error;
+  }
+
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
   async function api(method, urlPath, { token, body } = {}) {
@@ -176,13 +217,16 @@ async function startHarness() {
   let counter = 0;
   const unique = (prefix) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
-  async function registerBrand({ companyName = "Test Brand" } = {}) {
+  async function register(fields) {
+    const res = await api("POST", "/api/auth/register", { body: { password: "password123", ...fields } });
+    if (res.status !== 201) throw new Error(`Registering a ${fields.role} failed: ${res.status} ${JSON.stringify(res.body)}`);
+    return { id: res.body.user.id, token: res.body.token };
+  }
+
+  async function registerBrand() {
     const email = `${unique("brand")}@e2e.test`;
-    const res = await api("POST", "/api/auth/register", {
-      body: { email, password: "password123", role: "business", businessName: companyName },
-    });
-    if (res.status !== 201) throw new Error(`Brand registration failed: ${res.status} ${JSON.stringify(res.body)}`);
-    return { id: res.body.user.id, email, token: res.body.token };
+    const { id, token } = await register({ email, role: "business", businessName: "Test Brand" });
+    return { id, email, token };
   }
 
   // A creator who can take placements: a connected TikTok account and chosen niches.
@@ -190,15 +234,11 @@ async function startHarness() {
   async function registerCreator({ niches = ["Music"] } = {}) {
     const username = unique("creator");
     const email = `${username}@e2e.test`;
-    const res = await api("POST", "/api/auth/register", {
-      body: { email, password: "password123", role: "creator", firstName: "Test", lastName: "Creator", username },
-    });
-    if (res.status !== 201) throw new Error(`Creator registration failed: ${res.status} ${JSON.stringify(res.body)}`);
-    const token = res.body.token;
+    const { id, token } = await register({ email, role: "creator", firstName: "Test", lastName: "Creator", username });
 
     const TikTokConnection = require(path.join(SRC, "models", "TikTokConnection"));
     await TikTokConnection.create({
-      userId: res.body.user.id,
+      userId: id,
       openId: unique("open"),
       username,
       accessTokenEnc: "e2e",
@@ -208,7 +248,7 @@ async function startHarness() {
     const nicheRes = await api("POST", "/api/creators/profile/niches", { token, body: { niches } });
     if (nicheRes.status !== 200) throw new Error(`Setting niches failed: ${nicheRes.status} ${JSON.stringify(nicheRes.body)}`);
 
-    return { id: res.body.user.id, email, username, token };
+    return { id, email, username, token };
   }
 
   return {
