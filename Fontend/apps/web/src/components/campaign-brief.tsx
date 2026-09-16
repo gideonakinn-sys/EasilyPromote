@@ -2,10 +2,10 @@
 
 // The full Brief, shown once a creator holds a placement.
 import * as React from "react";
-import type { CampaignBrief } from "./types";
+import type { CreatorBrief } from "./types";
 
 interface CampaignBriefDetailsProps {
-  brief: CampaignBrief | undefined;
+  brief: CreatorBrief | undefined;
   showSummary?: boolean;
 }
 
@@ -45,7 +45,7 @@ function BriefText({ title, text }: BriefTextProps) {
   );
 }
 
-export function hasBriefDetails(brief: CampaignBrief | undefined): boolean {
+export function hasBriefDetails(brief: CreatorBrief | undefined): boolean {
   if (!brief) return false;
   return Boolean(
     brief.dos.length ||

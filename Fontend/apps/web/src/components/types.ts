@@ -440,5 +440,5 @@ export interface JoinResult {
   viewTarget?: number;
   referralCode: string | null;
   placesLeft: number;
-  brief: CampaignBrief;
+  brief: CreatorBrief;
 }
