@@ -317,3 +317,128 @@ export interface CampaignQuote {
   platformFee: number;
   total: number;
 }
+
+// Campaign engine: creator marketplace (tickets 01/04/05)
+// Interface declarations below merge into the ones above.
+
+export type ProfileSection = ProfileFocusSection | "audience" | "portfolio";
+
+export type PayShape = "fixed" | "performance" | "hybrid";
+
+// What one unit of work earns. amount is null while EasilyPromote is still setting a sign-up reward.
+export interface PayPerUnit {
+  amount: number | null;
+  unit: string;
+}
+
+export interface CreatorBrief {
+  summary: string;
+  dos: string[];
+  donts: string[];
+  hashtags: string[];
+  soundUrl: string | null;
+  referenceVideos: string[];
+  tone: string | null;
+  keyMessages: string[];
+  productInfo: string | null;
+  approvalRequirements: string | null;
+}
+
+export interface EligibilityFailure {
+  criterion: string;
+  message: string;
+}
+
+export interface MarketplaceCampaign {
+  campaignModel?: "content" | "performance";
+  payShape?: PayShape;
+  creatorAccess?: CreatorAccess;
+  pay?: PayPerUnit;
+  targetPlatforms?: string[];
+  targetLocations?: string[];
+  placesLeft?: number;
+  briefSummary?: string;
+  publishedAt?: string;
+  eligible?: boolean;
+  ineligibleReasons?: string[];
+  matchScore?: number;
+  recommended?: boolean;
+}
+
+export interface CampaignItem {
+  kind?: "views" | "deliverable";
+  brief?: CreatorBrief;
+  pay?: PayPerUnit;
+}
+
+export interface SocialAccount {
+  followers?: number | null;
+}
+
+export interface AudienceLocation {
+  name: string;
+  percentage: number;
+}
+
+export interface AudienceAge {
+  range: string;
+  percentage: number;
+}
+
+export interface AudienceGenders {
+  female: number;
+  male: number;
+  other: number;
+}
+
+export interface CreatorAudience {
+  locations: AudienceLocation[];
+  ages: AudienceAge[];
+  genders: AudienceGenders | null;
+  source: "self_reported" | "api";
+  proofUrl: string | null;
+  updatedAt: string | null;
+}
+
+export interface PortfolioItem {
+  url: string;
+  thumbnailUrl: string | null;
+  platform: string;
+  title: string;
+  views: number;
+  category: string | null;
+}
+
+export interface CreatorStats {
+  avgViews: number;
+  engagementRate: number | null;
+  pastCampaigns: number;
+  totalCampaignViews: number;
+  updatedAt: string | null;
+}
+
+export interface CreatorProfile {
+  city?: string;
+  state?: string;
+  legalName?: string;
+  phone?: string;
+  categories?: string[];
+  audience?: CreatorAudience | null;
+  portfolio?: PortfolioItem[];
+  verified?: boolean;
+  badges?: string[];
+  stats?: CreatorStats;
+}
+
+// POST /campaigns/:id/join
+export interface JoinResult {
+  id: string;
+  campaignId: string;
+  status: string;
+  kind: "views" | "deliverable";
+  reward: number;
+  viewTarget?: number;
+  referralCode: string | null;
+  placesLeft: number;
+  brief: CampaignBrief;
+}

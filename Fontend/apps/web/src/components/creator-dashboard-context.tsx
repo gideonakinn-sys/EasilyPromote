@@ -4,9 +4,9 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
-import { API_URL, apiRequest, clearAuth, getToken, getUser } from "../lib/api";
+import { API_URL, ApiRequestError, apiRequest, apiRequestWithBody, clearAuth, getToken, getUser } from "../lib/api";
 import { readCache, writeCache, updateCache } from "../lib/cache";
-import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
+import { useCampaignPlaces, useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type {
   CreatorProfile,
   ActiveTab,
@@ -14,7 +14,9 @@ import type {
   MarketplaceCampaign,
   WalletData,
   ProfileForm,
-  ProfileFocusSection,
+  ProfileSection,
+  EligibilityFailure,
+  JoinResult,
   TikTokStatus,
   MetaStatus,
   MetaProvider,
@@ -29,8 +31,8 @@ interface CreatorDashboardValue {
   navigateTab: (tab: ActiveTab) => void;
   isMobile: boolean;
   showProfile: boolean;
-  profileFocus: ProfileFocusSection | null;
-  openProfile: (section: ProfileFocusSection) => void;
+  profileFocus: ProfileSection | null;
+  openProfile: (section: ProfileSection) => void;
   closeProfile: () => void;
   showAllSet: boolean;
   profileComplete: boolean;
@@ -59,7 +61,14 @@ interface CreatorDashboardValue {
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => Promise<void>;
   refreshCampaigns: () => Promise<void>;
+  handleJoinCampaign: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
+  refreshProfile: () => Promise<void>;
+  applyProfileUpdate: (data: Partial<CreatorProfile>) => void;
 }
+
+export type JoinOutcome =
+  | { ok: true; result: JoinResult }
+  | { ok: false; message: string; failures: EligibilityFailure[] };
 
 // One response for the whole dashboard (GET /creators/dashboard).
 interface DashboardPayload {
@@ -92,6 +101,16 @@ function mapProfile(data: Record<string, unknown>): CreatorProfile {
     creatorScore: (data.creatorScore as number) || 0,
     lifetimeEarnings: (data.lifetimeEarnings as number) || 0,
     completionRate: (data.completionRate as number) || 0,
+    city: (data.city as string) || "",
+    state: (data.state as string) || "",
+    legalName: (data.legalName as string) || "",
+    phone: (data.phone as string) || "",
+    categories: (data.categories as string[]) || [],
+    audience: (data.audience as CreatorProfile["audience"]) ?? null,
+    portfolio: (data.portfolio as CreatorProfile["portfolio"]) || [],
+    verified: Boolean(data.verified),
+    badges: (data.badges as string[]) || [],
+    stats: data.stats as CreatorProfile["stats"],
   };
 }
 
@@ -136,6 +155,9 @@ function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): Cam
     scriptFileName: c.scriptFileName as string | undefined,
     timeline: (c.timeline as CampaignItem["timeline"]) || [],
     referral: (c.referral as CampaignItem["referral"]) ?? null,
+    kind: c.kind as CampaignItem["kind"],
+    brief: c.brief as CampaignItem["brief"],
+    pay: c.pay as CampaignItem["pay"],
   }));
 }
 
@@ -160,6 +182,19 @@ function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): 
     maxViews: (c.maxViews as number) || undefined,
     viewTarget: (c.viewTarget as number) || undefined,
     description: (c.description as string) || "",
+    campaignModel: c.campaignModel as MarketplaceCampaign["campaignModel"],
+    payShape: c.payShape as MarketplaceCampaign["payShape"],
+    creatorAccess: c.creatorAccess as MarketplaceCampaign["creatorAccess"],
+    pay: c.pay as MarketplaceCampaign["pay"],
+    targetPlatforms: (c.targetPlatforms as string[]) || undefined,
+    targetLocations: (c.targetLocations as string[]) || [],
+    placesLeft: c.placesLeft as number | undefined,
+    briefSummary: (c.briefSummary as string) || "",
+    publishedAt: c.publishedAt as string | undefined,
+    eligible: c.eligible as boolean | undefined,
+    ineligibleReasons: (c.ineligibleReasons as string[]) || [],
+    matchScore: c.matchScore as number | undefined,
+    recommended: Boolean(c.recommended),
   }));
 }
 
@@ -203,7 +238,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   const [showAllSet, setShowAllSet] = React.useState(false);
   const [showProfile, setShowProfile] = React.useState(false);
-  const [profileFocus, setProfileFocus] = React.useState<ProfileFocusSection | null>(null);
+  const [profileFocus, setProfileFocus] = React.useState<ProfileSection | null>(null);
   const [campaignsFilter, setCampaignsFilter] = React.useState<string>("all");
   const [campaigns, setCampaigns] = React.useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
@@ -612,7 +647,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
-  const openProfile = (section: ProfileFocusSection) => {
+  const openProfile = (section: ProfileSection) => {
     setProfileFocus(section);
     setShowProfile(true);
   };
@@ -788,6 +823,44 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
+  // Open Call join. Returns every failed rule when the creator can't join yet.
+  const handleJoinCampaign = async (campaignId: string, committedViews?: number): Promise<JoinOutcome> => {
+    try {
+      const result = await apiRequestWithBody<JoinResult>(`/campaigns/${campaignId}/join`, {
+        method: "POST",
+        token: getToken() || undefined,
+        ...(committedViews !== undefined && { body: JSON.stringify({ committedViews }) }),
+      });
+      setMarketplaceCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
+      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
+      return { ok: true, result };
+    } catch (err) {
+      const failures = err instanceof ApiRequestError && Array.isArray(err.body.failures)
+        ? (err.body.failures as EligibilityFailure[])
+        : [];
+      const message = err instanceof Error ? err.message : "Could not join this campaign. Try again.";
+      fetchMarketplace();
+      return { ok: false, message, failures };
+    }
+  };
+
+  // Places left change live as other creators join.
+  useCampaignPlaces(({ campaignId, placesLeft }) => {
+    setMarketplaceCampaigns((prev) =>
+      prev
+        .map((c) => (c.id === campaignId ? { ...c, placesLeft, slotsLeft: placesLeft } : c))
+        .filter((c) => c.id !== campaignId || placesLeft > 0)
+    );
+  });
+
+  const applyProfileUpdate = (data: Partial<CreatorProfile>) => {
+    setProfile((prev) => {
+      const next = { ...prev, ...data };
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { profile: next as unknown as Record<string, unknown> });
+      return next;
+    });
+  };
+
   const handleSelectCampaign = (camp: CampaignItem) => {
     if (isMobile) {
       router.push(`/dashboard/creator/campaign/${camp.id}`);
@@ -857,6 +930,9 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
     refreshCampaigns,
+    handleJoinCampaign,
+    refreshProfile: fetchProfile,
+    applyProfileUpdate,
   };
 
   return (

@@ -16,7 +16,15 @@ import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import avatarSvg from "@ep/ui/assets/illustrations/Avatar [1.0].svg";
 import { AVAILABLE_NICHES } from "./constants";
-import type { CreatorProfile, MetaProvider, MetaStatus, ProfileFocusSection, ProfileForm, TikTokStatus } from "./types";
+import type { CreatorProfile, MetaProvider, MetaStatus, ProfileForm, ProfileSection, TikTokStatus } from "./types";
+import {
+  AudienceSection,
+  FollowerCountsSection,
+  PortfolioSection,
+  PrivateDetailsSection,
+  ProfileStandingSection,
+  PublicDetailsSection,
+} from "./creator-profile-sections";
 import { API_URL, apiRequest, getToken } from "../lib/api";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { useReveal } from "../hooks/use-reveal";
@@ -25,7 +33,7 @@ interface ProfileViewProps {
   profile: CreatorProfile;
   profileForm: ProfileForm;
   onProfileFormChange: (form: ProfileForm) => void;
-  focusSection: ProfileFocusSection | null;
+  focusSection: ProfileSection | null;
   onClose: () => void;
   onRemoveSocial: (platform: string) => void;
   onSaveNiches: (niches: string[]) => void;
@@ -36,6 +44,7 @@ interface ProfileViewProps {
   metaStatus: MetaStatus;
   onConnectMeta: (provider: MetaProvider) => void;
   onDisconnectMeta: (provider: MetaProvider) => void;
+  onProfileUpdated: (data: Partial<CreatorProfile>) => void;
 }
 
 const PLATFORM_STYLES: Record<string, { icon: typeof TiktokIcon; iconBg: string; iconColor: string }> = {
@@ -62,6 +71,7 @@ export function ProfileView({
   metaStatus,
   onConnectMeta,
   onDisconnectMeta,
+  onProfileUpdated,
 }: ProfileViewProps) {
   useReveal();
 
@@ -113,6 +123,8 @@ export function ProfileView({
   const detailsRef = useRef<HTMLDivElement>(null);
   const nichesRef = useRef<HTMLDivElement>(null);
   const socialRef = useRef<HTMLDivElement>(null);
+  const audienceRef = useRef<HTMLElement>(null);
+  const portfolioRef = useRef<HTMLElement>(null);
 
   const platformLabels: Record<string, string> = {
     tiktok: "TikTok",
@@ -198,8 +210,8 @@ export function ProfileView({
 
   useEffect(() => {
     if (!focusSection) return;
-    const target =
-      focusSection === "details" ? detailsRef : focusSection === "niches" ? nichesRef : socialRef;
+    const targets = { details: detailsRef, niches: nichesRef, social: socialRef, audience: audienceRef, portfolio: portfolioRef };
+    const target = targets[focusSection];
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [focusSection]);
 
@@ -327,27 +339,15 @@ export function ProfileView({
                 className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Email address</label>
-              <input
-                type="email"
-                value={profileForm.email}
-                onChange={(e) => onProfileFormChange({ ...profileForm, email: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Phone number</label>
-              <input
-                type="tel"
-                value={profileForm.phone}
-                onChange={(e) => onProfileFormChange({ ...profileForm, phone: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
-              />
-            </div>
           </div>
 
         </section>
+
+        <ProfileStandingSection profile={profile} />
+        <PublicDetailsSection profile={profile} onUpdated={onProfileUpdated} />
+        <PrivateDetailsSection profile={profile} onUpdated={onProfileUpdated} email={profileForm.email} />
+        <AudienceSection ref={audienceRef} profile={profile} onUpdated={onProfileUpdated} />
+        <PortfolioSection ref={portfolioRef} profile={profile} onUpdated={onProfileUpdated} />
 
         <section data-reveal ref={nichesRef} className="scroll-mt-24 bg-stone-50 border border-stone-200 rounded-3xl p-6">
           <div className="mb-5">
@@ -475,6 +475,16 @@ export function ProfileView({
             </ul>
           )}
         </section>
+
+        <FollowerCountsSection
+          profile={profile}
+          onUpdated={onProfileUpdated}
+          connectedHandles={{
+            ...(tiktokConnected && { tiktok: tiktokStatus.username || tiktokStatus.displayName || "tiktok" }),
+            ...(metaStatus?.instagram?.connected && { instagram: metaStatus.instagram.username || "instagram" }),
+            ...(metaStatus?.facebook?.connected && { facebook: metaStatus.facebook.displayName || "facebook" }),
+          }}
+        />
 
         <section data-reveal className="bg-white border border-red-200 rounded-3xl p-6">
           <h3 className="font-rethink font-medium text-sm text-stone-900 mb-1">Delete account</h3>

@@ -74,6 +74,36 @@ export function useCampaignUpdates(onUpdate?: (data: CampaignUpdate) => void) {
   return socket;
 }
 
+// Campaign engine: creator marketplace (tickets 01/04/05)
+// Places left on a campaign, broadcast to everyone whenever a creator joins.
+export interface CampaignPlacesUpdate {
+  campaignId: string;
+  placesLeft: number;
+}
+
+export function useCampaignPlaces(onUpdate?: (data: CampaignPlacesUpdate) => void) {
+  const updateRef = useRef(onUpdate);
+  updateRef.current = onUpdate;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    if (!socket) {
+      socket = io(SOCKET_URL, {
+        auth: { token },
+        transports: ["websocket", "polling"],
+      });
+    }
+
+    const handleUpdate = (data: CampaignPlacesUpdate) => updateRef.current?.(data);
+    socket.on("campaign-places", handleUpdate);
+    return () => {
+      socket?.off("campaign-places", handleUpdate);
+    };
+  }, []);
+}
+
 export function useSocket(
   onPaymentSuccess?: (data: { campaignId: string; status: string }) => void,
   onCampaignStatus?: (data: { campaignId: string; status: string; viewsDelivered?: number; targetViews?: number }) => void

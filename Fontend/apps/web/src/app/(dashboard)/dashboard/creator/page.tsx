@@ -4,6 +4,7 @@ import { useCreatorDashboard } from "../../../../components/creator-dashboard-co
 import { OnboardingView } from "../../../../components/onboarding-view";
 import { OnboardingComplete } from "../../../../components/onboarding-complete";
 import { CampaignFeed } from "../../../../components/campaign-feed";
+import { AudienceDataPrompt } from "../../../../components/creator-profile-sections";
 
 function CreatorHome() {
   const {
@@ -34,14 +35,17 @@ function CreatorHome() {
   }
 
   return (
-    <CampaignFeed
-      profile={profile}
-      campaigns={filteredCampaigns}
-      filter={campaignsFilter}
-      onFilterChange={setCampaignsFilter}
-      onSelectCampaign={handleSelectCampaign}
-      onBrowseCampaign={handleBrowseCampaigns}
-    />
+    <div className="w-full">
+      <AudienceDataPrompt profile={profile} onAddAudience={() => openProfile("audience")} />
+      <CampaignFeed
+        profile={profile}
+        campaigns={filteredCampaigns}
+        filter={campaignsFilter}
+        onFilterChange={setCampaignsFilter}
+        onSelectCampaign={handleSelectCampaign}
+        onBrowseCampaign={handleBrowseCampaigns}
+      />
+    </div>
   );
 }
 
