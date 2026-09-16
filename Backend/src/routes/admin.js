@@ -733,6 +733,53 @@ router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── PATCH /api/admin/creators/:id/verification ──────────────────────────────
+// Verified means admin checked the creator's identity and they have at least one
+// connected social account (decision D13).
+router.patch("/creators/:id/verification", adminGuard, async (req, res, next) => {
+  try {
+    const { verified } = req.body || {};
+    if (typeof verified !== "boolean") {
+      return res.status(400).json({ error: "verified must be true or false" });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.params.id });
+    if (!profile) return res.status(404).json({ error: "Creator not found" });
+
+    if (verified) {
+      const TikTokConnection = require("../models/TikTokConnection");
+      const MetaConnection = require("../models/MetaConnection");
+      const [tiktok, meta] = await Promise.all([
+        TikTokConnection.exists({ userId: profile.userId }),
+        MetaConnection.exists({ userId: profile.userId }),
+      ]);
+      if (!tiktok && !meta) {
+        return res.status(409).json({
+          error: "This creator needs a connected TikTok, Instagram or Facebook account before they can be verified",
+          code: "SOCIAL_ACCOUNT_REQUIRED",
+        });
+      }
+      profile.verifiedAt = profile.verifiedAt || new Date();
+      profile.verifiedBy = req.user._id;
+    } else {
+      profile.verifiedAt = null;
+      profile.verifiedBy = null;
+    }
+    await profile.save();
+
+    await recordAdminActivity(req, {
+      action: verified ? "creator.verified" : "creator.unverified",
+      targetType: "user",
+      targetId: profile.userId,
+      targetLabel: profile.displayName || profile.username,
+    });
+
+    res.json({ verified: Boolean(profile.verifiedAt), verifiedAt: profile.verifiedAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/admin/campaigns/:id/activity ───────────────────────────────────
 router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
   try {

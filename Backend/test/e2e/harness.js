@@ -229,21 +229,33 @@ async function startHarness() {
     return { id, email, token };
   }
 
+  // Admins can't sign up through the API, so the account is written directly, then logs in.
+  async function registerAdmin({ role = "admin" } = {}) {
+    const User = require(path.join(SRC, "models", "User"));
+    const email = `${unique("admin")}@e2e.test`;
+    const user = await User.create({ name: "Test Admin", email, password: "password123", role, emailVerified: true });
+    const res = await api("POST", "/api/auth/login", { body: { email, password: "password123" } });
+    if (res.status !== 200) throw new Error(`Admin login failed: ${res.status} ${JSON.stringify(res.body)}`);
+    return { id: String(user._id), email, token: res.body.token };
+  }
+
   // A creator who can take placements: a connected TikTok account and chosen niches.
   // The TikTok connection is written directly because the real one needs TikTok's OAuth.
-  async function registerCreator({ niches = ["Music"] } = {}) {
+  async function registerCreator({ niches = ["Music"], connected = true } = {}) {
     const username = unique("creator");
     const email = `${username}@e2e.test`;
     const { id, token } = await register({ email, role: "creator", firstName: "Test", lastName: "Creator", username });
 
-    const TikTokConnection = require(path.join(SRC, "models", "TikTokConnection"));
-    await TikTokConnection.create({
-      userId: id,
-      openId: unique("open"),
-      username,
-      accessTokenEnc: "e2e",
-      refreshTokenEnc: "e2e",
-    });
+    if (connected) {
+      const TikTokConnection = require(path.join(SRC, "models", "TikTokConnection"));
+      await TikTokConnection.create({
+        userId: id,
+        openId: unique("open"),
+        username,
+        accessTokenEnc: "e2e",
+        refreshTokenEnc: "e2e",
+      });
+    }
 
     const nicheRes = await api("POST", "/api/creators/profile/niches", { token, body: { niches } });
     if (nicheRes.status !== 200) throw new Error(`Setting niches failed: ${nicheRes.status} ${JSON.stringify(nicheRes.body)}`);
@@ -254,6 +266,7 @@ async function startHarness() {
   return {
     api,
     paystack,
+    registerAdmin,
     registerBrand,
     registerCreator,
     async stop() {

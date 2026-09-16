@@ -54,6 +54,8 @@ async function loadContext(userId) {
   };
 }
 
+const { publicAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
+
 function buildProfile(user, ctx) {
   const profile = ctx.profile;
   if (!profile) return null;
@@ -64,6 +66,18 @@ function buildProfile(user, ctx) {
     username: profile.username,
     bio: profile.bio || "",
     country: profile.country || "",
+    city: profile.city || "",
+    state: profile.state || "",
+    legalName: profile.legalName || "",
+    phone: profile.phone || "",
+    categories: profile.categories || [],
+    portfolio: publicPortfolio(profile.portfolio),
+    verified: Boolean(profile.verifiedAt),
+    badges: profile.badges || [],
+    stats: publicStats(profile),
+    audience: profile.audience && profile.audience.source
+      ? { ...publicAudience(profile.audience), proofUrl: profile.audience.proofUrl || null }
+      : null,
     socialAccounts: profile.socialAccounts || [],
     niches: profile.niches || [],
     rank: profile.rank,

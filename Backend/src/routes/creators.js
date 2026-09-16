@@ -16,6 +16,14 @@ const {
   buildDashboard,
 } = require("../services/creatorDashboard");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const {
+  audienceSchema,
+  categoriesSchema,
+  portfolioSchema,
+  publicAudience,
+  publicPortfolio,
+  brandSafeProfile,
+} = require("../utils/creatorProfile");
 
 const router = express.Router();
 
@@ -48,10 +56,13 @@ router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, ne
 
 router.post("/profile/socials", protect, async (req, res, next) => {
   try {
-    const { platform, handle } = req.body;
+    const { platform, handle, followers } = req.body;
 
     if (!platform || !handle) {
       return res.status(400).json({ error: "Platform and handle are required" });
+    }
+    if (followers !== undefined && (!Number.isInteger(followers) || followers < 0)) {
+      return res.status(400).json({ error: "Followers must be a whole number" });
     }
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
@@ -65,11 +76,13 @@ router.post("/profile/socials", protect, async (req, res, next) => {
     if (existing) {
       existing.handle = handle;
       existing.verified = false;
+      if (followers !== undefined) existing.followers = followers;
     } else {
       profile.socialAccounts.push({
         platform: platform.toLowerCase(),
         handle,
         verified: false,
+        followers,
       });
     }
 
@@ -121,9 +134,25 @@ router.post("/profile/niches", protect, async (req, res, next) => {
   }
 });
 
+const basicsSchema = z.object({
+  displayName: z.string().trim().max(100).nullish(),
+  bio: z.string().max(300).nullish(),
+  country: z.string().trim().max(60).nullish(),
+  city: z.string().trim().max(60).nullish(),
+  state: z.string().trim().max(60).nullish(),
+  legalName: z.string().trim().max(150).nullish(),
+  phone: z.string().trim().max(30).nullish(),
+  avatar: z.string().nullish(),
+  categories: categoriesSchema.optional(),
+});
+
 router.put("/profile/me", protect, async (req, res, next) => {
   try {
-    const { displayName, bio, country, avatar } = req.body;
+    const parsed = basicsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+    const { displayName, bio, country, city, state, legalName, phone, avatar, categories } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -133,6 +162,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
     if (displayName !== undefined) profile.displayName = displayName;
     if (bio !== undefined) profile.bio = bio;
     if (country !== undefined) profile.country = country;
+    if (city !== undefined) profile.city = city;
+    if (state !== undefined) profile.state = state;
+    if (legalName !== undefined) profile.legalName = legalName;
+    if (phone !== undefined) profile.phone = phone;
+    if (categories !== undefined) profile.categories = categories;
 
     await profile.save();
 
@@ -147,6 +181,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
       displayName: profile.displayName,
       bio: profile.bio,
       country: profile.country,
+      city: profile.city || "",
+      state: profile.state || "",
+      legalName: profile.legalName || "",
+      phone: profile.phone || "",
+      categories: profile.categories || [],
       avatar: avatar !== undefined ? avatar : undefined,
     });
   } catch (error) {
@@ -154,10 +193,60 @@ router.put("/profile/me", protect, async (req, res, next) => {
   }
 });
 
+// Replaces the creator's audience breakdown. Each part sent overwrites that part only.
+router.put("/profile/audience", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = audienceSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    const { locations, ages, genders, proofUrl } = parsed.data;
+    if (locations !== undefined) profile.set("audience.locations", locations);
+    if (ages !== undefined) profile.set("audience.ages", ages);
+    if (genders !== undefined) profile.set("audience.genders", genders);
+    if (proofUrl !== undefined) profile.set("audience.proofUrl", proofUrl);
+    profile.set("audience.source", "self_reported");
+    profile.set("audience.updatedAt", new Date());
+    await profile.save();
+
+    res.json({ audience: { ...publicAudience(profile.audience), proofUrl: profile.audience.proofUrl || null } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Replaces the whole portfolio, so one call adds, removes or reorders items.
+router.put("/profile/portfolio", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = portfolioSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    profile.portfolio = parsed.data.items;
+    await profile.save();
+
+    res.json({ portfolio: publicPortfolio(profile.portfolio) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/", async (req, res, next) => {
   try {
-    const creators = await CreatorProfile.find().populate("userId", "name email");
-    res.json(creators);
+    const creators = await CreatorProfile.find().populate("userId", "name avatar");
+    res.json(creators.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -168,8 +257,8 @@ router.get("/leaderboard", async (req, res, next) => {
     const leaderboard = await CreatorProfile.find()
       .sort({ creatorScore: -1 })
       .limit(50)
-      .populate("userId", "name");
-    res.json(leaderboard);
+      .populate("userId", "name avatar");
+    res.json(leaderboard.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -488,14 +577,13 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
 
 router.get("/:id", async (req, res, next) => {
   try {
-    const creator = await CreatorProfile.findById(req.params.id).populate(
-      "userId",
-      "name email"
-    );
+    const creator = req.params.id.match(/^[a-f0-9]{24}$/i)
+      ? await CreatorProfile.findById(req.params.id).populate("userId", "name avatar")
+      : null;
     if (!creator) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
-    res.json(creator);
+    res.json(brandSafeProfile(creator, creator.userId));
   } catch (error) {
     next(error);
   }
