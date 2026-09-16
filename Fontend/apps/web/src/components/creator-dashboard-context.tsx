@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
-import { API_URL, ApiRequestError, apiRequest, apiRequestWithBody, clearAuth, getToken, getUser } from "../lib/api";
+import { API_URL, ApiRequestError, apiRequest, clearAuth, getToken, getUser } from "../lib/api";
 import { readCache, writeCache, updateCache } from "../lib/cache";
 import { useCampaignPlaces, useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type {
@@ -43,11 +43,10 @@ interface CreatorDashboardValue {
   handleBrowseCampaigns: () => void;
   handleLogout: () => void;
   marketplaceCampaigns: MarketplaceCampaign[];
-  marketplaceMeta: { activeSlots: number; maxSlots: number; canClaim: boolean };
+  marketplaceMeta: MarketplaceMeta;
   walletData: WalletData | null;
   selectedCampaign: CampaignItem | null;
   setSelectedCampaign: (camp: CampaignItem | null) => void;
-  handleClaimSlot: (campaignId: string, views: number) => void;
   handleRemoveSocial: (platform: string) => void;
   handleSaveNiches: (niches: string[]) => void;
   handleSaveProfile: () => void;
@@ -66,6 +65,15 @@ interface CreatorDashboardValue {
   applyProfileUpdate: (data: Partial<CreatorProfile>) => void;
 }
 
+// canClaim is false when the creator can't take placements at all; lockReason says why
+// (no social account or niches) and a full placement limit shows as activeSlots >= maxSlots.
+export interface MarketplaceMeta {
+  activeSlots: number;
+  maxSlots: number;
+  canClaim: boolean;
+  lockReason: string | null;
+}
+
 export type JoinOutcome =
   | { ok: true; result: JoinResult }
   | { ok: false; message: string; failures: EligibilityFailure[] };
@@ -79,6 +87,7 @@ interface DashboardPayload {
     activeSlots: number;
     maxSlots: number;
     canClaim: boolean;
+    lockReason?: string | null;
   };
   wallet: WalletData;
   tiktok: TikTokStatus;
@@ -242,7 +251,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   const [campaignsFilter, setCampaignsFilter] = React.useState<string>("all");
   const [campaigns, setCampaigns] = React.useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
-  const [marketplaceMeta, setMarketplaceMeta] = React.useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
+  const [marketplaceMeta, setMarketplaceMeta] = React.useState<MarketplaceMeta>({ activeSlots: 0, maxSlots: 3, canClaim: true, lockReason: null });
   const [walletData, setWalletData] = React.useState<WalletData | null>(null);
   const [tiktokStatus, setTiktokStatus] = React.useState<TikTokStatus>({ connected: false });
   const [metaStatus, setMetaStatus] = React.useState<MetaStatus>({ instagram: { connected: false }, facebook: { connected: false } });
@@ -471,6 +480,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       activeSlots: data.activeSlots || 0,
       maxSlots: data.maxSlots || 3,
       canClaim: data.canClaim ?? true,
+      lockReason: data.lockReason ?? null,
     });
   };
 
@@ -797,7 +807,8 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     );
 
     if (data.status === "delivered") {
-      toast("Campaign delivered — you hit your view target!", "success");
+      const deliverable = campaigns.find((c) => c.id === data.campaignId)?.kind === "deliverable";
+      toast(deliverable ? "Content delivered." : "Campaign delivered — you hit your view target!", "success");
       fetchWallet();
     } else if (data.status === "cancelled") {
       toast("Campaign cancelled", "error");
@@ -807,26 +818,10 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   useCampaignUpdates(handleCampaignUpdate);
 
-  const handleClaimSlot = async (campaignId: string, views: number) => {
-    try {
-      await apiRequest("/slots/claim", {
-        method: "POST",
-        token: getToken() || undefined,
-        body: JSON.stringify({ campaignId, committedViews: views }),
-      });
-
-      toast("Placement claimed! Check Home for your campaign.", "success");
-      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to claim placement";
-      toast(message, "error");
-      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
-    }
-  };
-
   // Open Call join. Returns every failed rule when the creator can't join yet.
   const handleJoinCampaign = async (campaignId: string, committedViews?: number): Promise<JoinOutcome> => {
     try {
-      const result = await apiRequestWithBody<JoinResult>(`/campaigns/${campaignId}/join`, {
+      const result = await apiRequest<JoinResult>(`/campaigns/${campaignId}/join`, {
         method: "POST",
         token: getToken() || undefined,
         ...(committedViews !== undefined && { body: JSON.stringify({ committedViews }) }),
@@ -916,7 +911,6 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     walletData,
     selectedCampaign,
     setSelectedCampaign,
-    handleClaimSlot,
     handleRemoveSocial,
     handleSaveNiches,
     handleSaveProfile,

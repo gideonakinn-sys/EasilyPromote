@@ -5,7 +5,11 @@ import type { MarketplaceCampaign } from "./types";
 import { ACCESS_LABELS, accessOf } from "../lib/campaign-pay";
 
 // Open Call (green) or Application Required (blue).
-export function AccessBadge({ campaign }: { campaign: MarketplaceCampaign }) {
+interface AccessBadgeProps {
+  campaign: MarketplaceCampaign;
+}
+
+export function AccessBadge({ campaign }: AccessBadgeProps) {
   const access = accessOf(campaign);
   const open = access === "open_call";
   return (

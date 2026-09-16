@@ -14,7 +14,7 @@ export function platformLabel(platform: string): string {
   return PLATFORM_LABELS[platform.toLowerCase()] || platform;
 }
 
-// "₦15,000 / approved video", "₦250 / sign-up", or "Reward being set" while EasilyPromote sets it.
+// "₦15,000 / approved deliverable", "₦250 / sign-up", or "Reward being set" while EasilyPromote sets it.
 export function formatPay(pay: PayPerUnit | undefined, fallbackReward?: number): string {
   if (!pay) return fallbackReward ? formatNaira(fallbackReward) : "";
   if (pay.amount === null) return "Reward being set";

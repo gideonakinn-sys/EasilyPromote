@@ -6,7 +6,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import type { MarketplaceCampaign } from "./types";
-import type { JoinOutcome } from "./creator-dashboard-context";
+import type { JoinOutcome, MarketplaceMeta } from "./creator-dashboard-context";
 import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useReveal } from "../hooks/use-reveal";
@@ -16,7 +16,7 @@ import { MarketplaceDetailsDrawer } from "./campaign-marketplace-drawer";
 
 interface CampaignMarketplaceProps {
   campaigns: MarketplaceCampaign[];
-  meta: { activeSlots: number; maxSlots: number; canClaim: boolean };
+  meta: MarketplaceMeta;
   onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
   onViewMyCampaigns: () => void;
 }
@@ -118,7 +118,12 @@ function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
   );
 }
 
-function CardGrid({ campaigns, onOpen }: { campaigns: MarketplaceCampaign[]; onOpen: (c: MarketplaceCampaign) => void }) {
+interface CardGridProps {
+  campaigns: MarketplaceCampaign[];
+  onOpen: (campaign: MarketplaceCampaign) => void;
+}
+
+function CardGrid({ campaigns, onOpen }: CardGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
       {campaigns.map((campaign) => (
@@ -144,7 +149,10 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
   const others = filtered.filter((c) => !c.recommended).sort(newestFirst);
 
   const selected = (selectedId && campaigns.find((c) => c.id === selectedId)) || selectedSnapshot;
-  const isAtLimit = !meta.canClaim;
+  const isAtLimit = meta.activeSlots >= meta.maxSlots;
+  // The server refuses joins for these too; say why before the creator tries.
+  const joinBlockedReason = meta.lockReason
+    || (isAtLimit || !meta.canClaim ? `You have ${meta.activeSlots} active placements. Finish one to join another` : null);
 
   const open = (campaign: MarketplaceCampaign) => {
     setSelectedId(campaign.id);
@@ -230,7 +238,7 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
           if (!isOpen) close();
         }}
         onJoin={onJoin}
-        isAtLimit={isAtLimit}
+        joinBlockedReason={joinBlockedReason}
         onViewMyCampaigns={() => {
           close();
           onViewMyCampaigns();

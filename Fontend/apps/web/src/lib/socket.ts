@@ -20,6 +20,23 @@ const SOCKET_URL = (() => {
 
 let socket: Socket | null = null;
 
+// The one shared connection, opened on first use.
+function ensureSocket(token: string): Socket {
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socket.on("connect", () => {
+      console.log("[Socket] Connected");
+    });
+    socket.on("disconnect", () => {
+      console.log("[Socket] Disconnected");
+    });
+  }
+  return socket;
+}
+
 export interface CampaignUpdate {
   campaignId: string;
   slotId?: string | null;
@@ -75,7 +92,7 @@ export function useCampaignUpdates(onUpdate?: (data: CampaignUpdate) => void) {
 }
 
 // Campaign engine: creator marketplace (tickets 01/04/05)
-// Places left on a campaign, broadcast to everyone whenever a creator joins.
+// Places left on a campaign, sent to creators whenever it changes.
 export interface CampaignPlacesUpdate {
   campaignId: string;
   placesLeft: number;
@@ -89,17 +106,11 @@ export function useCampaignPlaces(onUpdate?: (data: CampaignPlacesUpdate) => voi
     const token = getToken();
     if (!token) return;
 
-    if (!socket) {
-      socket = io(SOCKET_URL, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-      });
-    }
-
+    const connection = ensureSocket(token);
     const handleUpdate = (data: CampaignPlacesUpdate) => updateRef.current?.(data);
-    socket.on("campaign-places", handleUpdate);
+    connection.on("campaign-places", handleUpdate);
     return () => {
-      socket?.off("campaign-places", handleUpdate);
+      connection.off("campaign-places", handleUpdate);
     };
   }, []);
 }

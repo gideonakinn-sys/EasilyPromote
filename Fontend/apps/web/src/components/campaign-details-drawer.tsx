@@ -520,7 +520,7 @@ export function CampaignDetailsDrawer({
           {uploadOpen && !isMobile && displayCampaign.status === "live_tracking" && renderInlineUploadPanel()}
 
           {/* Views stats */}
-          {(displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
+          {displayCampaign.kind !== "deliverable" && (displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
             <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
               <div className="space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Total views</span>
@@ -621,7 +621,9 @@ export function CampaignDetailsDrawer({
               <div className="space-y-1">
                 <h4 className="font-rethink font-medium text-sm text-green-800 tracking-[-0.01em]">Delivered</h4>
                 <p className="font-rethink text-sm font-medium leading-normal text-green-800 tracking-[-0.01em]">
-                  Target reached and verified. ₦{displayCampaign.reward.toLocaleString()} was paid to your wallet
+                  {displayCampaign.kind === "deliverable"
+                    ? `Content posted. We'll add ₦${displayCampaign.reward.toLocaleString()} to your wallet once it's confirmed`
+                    : `Target reached and verified. ₦${displayCampaign.reward.toLocaleString()} was paid to your wallet`}
                 </p>
               </div>
             </div>
@@ -851,7 +853,7 @@ export function CampaignDetailsDrawer({
                 <span className="text-stone-500">{displayCampaign.kind === "deliverable" ? "Deliverable" : "Target"}</span>
                 <span className="text-stone-800">
                   {displayCampaign.kind === "deliverable"
-                    ? "1 approved video"
+                    ? "1 approved deliverable"
                     : `${(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views`}
                 </span>
               </div>

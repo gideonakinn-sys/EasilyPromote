@@ -15,7 +15,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
 import type { AudienceAge, AudienceLocation, CreatorProfile, PortfolioItem } from "./types";
-import { apiRequest, getToken } from "../lib/api";
+import { apiRequest, getToken, getUser } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
 
 // Must match Backend/src/utils/creatorProfile.js.
@@ -70,8 +70,12 @@ interface ProfileSectionProps {
   onUpdated: (data: Partial<CreatorProfile>) => void;
 }
 
+interface ProfileStandingSectionProps {
+  profile: CreatorProfile;
+}
+
 // Verified badge, earned badges and stats: all read-only.
-export function ProfileStandingSection({ profile }: { profile: CreatorProfile }) {
+export function ProfileStandingSection({ profile }: ProfileStandingSectionProps) {
   const stats = profile.stats;
   const rows: Array<[string, string]> = [
     ["Average views", (stats?.avgViews ?? 0).toLocaleString()],
@@ -218,7 +222,11 @@ export function PublicDetailsSection({ profile, onUpdated }: ProfileSectionProps
 }
 
 // Legal name, phone and email: never shown to brands.
-export function PrivateDetailsSection({ profile, onUpdated, email }: ProfileSectionProps & { email: string }) {
+interface PrivateDetailsSectionProps extends ProfileSectionProps {
+  email: string;
+}
+
+export function PrivateDetailsSection({ profile, onUpdated, email }: PrivateDetailsSectionProps) {
   const { toast } = useToast();
   const [legalName, setLegalName] = React.useState(profile.legalName || "");
   const [phone, setPhone] = React.useState(profile.phone || "");
@@ -281,7 +289,11 @@ export function PrivateDetailsSection({ profile, onUpdated, email }: ProfileSect
 }
 
 // Follower counts per social account (self-reported until read from the platforms).
-export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: ProfileSectionProps & { connectedHandles: Record<string, string> }) {
+interface FollowerCountsSectionProps extends ProfileSectionProps {
+  connectedHandles: Record<string, string>;
+}
+
+export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: FollowerCountsSectionProps) {
   const { toast } = useToast();
   const accounts = React.useMemo(() => {
     const list = (profile.socialAccounts || []).map((a) => ({ platform: a.platform, handle: a.handle, followers: a.followers ?? null }));
@@ -550,10 +562,41 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
   );
 });
 
+interface AudienceDataPromptProps {
+  profile: CreatorProfile;
+  onAddAudience: () => void;
+}
+
+// "Later" is remembered per creator on this device. Storage can be unavailable (private
+// windows, blocked site data); the prompt then just shows again next visit.
+function audiencePromptKey(): string | null {
+  const user = getUser();
+  return user?.id ? `ep:audience-prompt-dismissed:${user.id}` : null;
+}
+
+function readPromptDismissed(): boolean {
+  try {
+    const key = audiencePromptKey();
+    return Boolean(key && window.localStorage.getItem(key));
+  } catch {
+    return false;
+  }
+}
+
+function rememberPromptDismissed() {
+  try {
+    const key = audiencePromptKey();
+    if (key) window.localStorage.setItem(key, "1");
+  } catch {
+    // Storage unavailable: dismissed for this visit only.
+  }
+}
+
 // Dashboard nudge for creators who haven't said where their audience is yet.
 // `audience` is undefined until the profile loads, so nothing flashes on first paint.
-export function AudienceDataPrompt({ profile, onAddAudience }: { profile: CreatorProfile; onAddAudience: () => void }) {
-  const [dismissed, setDismissed] = React.useState(false);
+export function AudienceDataPrompt({ profile, onAddAudience }: AudienceDataPromptProps) {
+  const [dismissed, setDismissed] = React.useState(true);
+  React.useEffect(() => setDismissed(readPromptDismissed()), []);
   if (profile.audience !== null || dismissed) return null;
 
   return (
@@ -565,7 +608,14 @@ export function AudienceDataPrompt({ profile, onAddAudience }: { profile: Creato
         </p>
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={() => setDismissed(true)} className={secondaryButton}>
+        <button
+          type="button"
+          onClick={() => {
+            rememberPromptDismissed();
+            setDismissed(true);
+          }}
+          className={secondaryButton}
+        >
           Later
         </button>
         <button type="button" onClick={onAddAudience} className={primaryButton}>

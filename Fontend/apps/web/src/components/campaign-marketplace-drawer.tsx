@@ -11,13 +11,15 @@ import type { JoinOutcome } from "./creator-dashboard-context";
 import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { ACCESS_LABELS, accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
+import { useCampaignPlaces } from "../lib/socket";
 
 interface MarketplaceDetailsDrawerProps {
   campaign: MarketplaceCampaign | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
-  isAtLimit: boolean;
+  // Why this creator can't take placements at all (no social account, no niches, at the limit).
+  joinBlockedReason: string | null;
   onViewMyCampaigns: () => void;
 }
 
@@ -39,7 +41,11 @@ function formatViews(n: number): string {
   return n.toString();
 }
 
-function CloseButton({ onClick }: { onClick: () => void }) {
+interface CloseButtonProps {
+  onClick: () => void;
+}
+
+function CloseButton({ onClick }: CloseButtonProps) {
   return (
     <button onClick={onClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -49,7 +55,12 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+interface DetailRowProps {
+  label: string;
+  children: React.ReactNode;
+}
+
+function DetailRow({ label, children }: DetailRowProps) {
   return (
     <div className="flex justify-between items-center gap-4 font-rethink text-sm font-medium">
       <span className="text-stone-500">{label}</span>
@@ -58,7 +69,12 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function ReasonList({ title, reasons }: { title: string; reasons: string[] }) {
+interface ReasonListProps {
+  title: string;
+  reasons: string[];
+}
+
+function ReasonList({ title, reasons }: ReasonListProps) {
   if (reasons.length === 0) return null;
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
@@ -74,21 +90,23 @@ function ReasonList({ title, reasons }: { title: string; reasons: string[] }) {
   );
 }
 
-function CampaignDrawerContent({
-  campaign,
-  onJoin,
-  isAtLimit,
-  isMobile,
-  onClose,
-  onViewMyCampaigns,
-}: {
+interface CampaignDrawerContentProps {
   campaign: MarketplaceCampaign;
   onJoin: MarketplaceDetailsDrawerProps["onJoin"];
-  isAtLimit: boolean;
+  joinBlockedReason: string | null;
   isMobile: boolean;
   onClose: () => void;
   onViewMyCampaigns: () => void;
-}) {
+}
+
+function CampaignDrawerContent({
+  campaign,
+  onJoin,
+  joinBlockedReason,
+  isMobile,
+  onClose,
+  onViewMyCampaigns,
+}: CampaignDrawerContentProps) {
   const targetViews = campaign.targetViews || 0;
   // Content campaigns pay per deliverable, so there's no views share to commit to.
   const commitsViews = campaign.campaignModel !== "content" && targetViews > 0;
@@ -108,10 +126,16 @@ function CampaignDrawerContent({
   const access = accessOf(campaign);
   const openCall = access === "open_call";
   const reasons = campaign.ineligibleReasons || [];
-  const places = placesLeftOf(campaign);
+  // Places left change live while the drawer is open, even after the list drops a full campaign.
+  const [livePlaces, setLivePlaces] = useState<number | null>(null);
+  useCampaignPlaces(({ campaignId, placesLeft }) => {
+    if (campaignId === campaign.id) setLivePlaces(placesLeft);
+  });
+  useEffect(() => setLivePlaces(null), [campaign.id, campaign.placesLeft]);
+  const places = livePlaces ?? placesLeftOf(campaign);
   const creatorPool = campaign.creatorPool ?? 0;
   const viewsReward = commitsViews && selectedViews ? Math.floor((creatorPool * selectedViews) / targetViews) : 0;
-  const canJoin = openCall && reasons.length === 0 && !isAtLimit && places > 0 && !joining;
+  const canJoin = openCall && reasons.length === 0 && !joinBlockedReason && places > 0 && !joining;
 
   const join = async () => {
     setJoining(true);
@@ -128,8 +152,8 @@ function CampaignDrawerContent({
         <CloseButton onClick={onClose} />
       </div>
 
-      <div className={`flex-1 overflow-y-auto ${isMobile ? "p-5 pb-[env(safe-area-inset-bottom)]" : "pt-16 pb-12 px-10"}`} data-lenis-prevent>
-        <div className={`space-y-8 ${isMobile ? "w-full" : "w-[350px] mx-auto"}`}>
+      <div className={cn("flex-1 overflow-y-auto", isMobile ? "p-5 pb-[env(safe-area-inset-bottom)]" : "pt-16 pb-12 px-10")} data-lenis-prevent>
+        <div className={cn("space-y-8", isMobile ? "w-full" : "w-[350px] mx-auto")}>
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200 flex-shrink-0 overflow-hidden">
               {campaign.coverImageUrl ? (
@@ -202,7 +226,7 @@ function CampaignDrawerContent({
 
               {commitsViews && openCall && (
                 <div className="space-y-4">
-                  <h3 className="font-rethink font-semibold text-base text-stone-900">Commit to deliver</h3>
+                  <h3 className="font-rethink font-medium text-base text-stone-900">Commit to deliver</h3>
                   <p className="text-xs font-medium text-stone-500">Choose how many views you can deliver</p>
                   <div className="flex flex-wrap gap-2">
                     {presets.map((views) => (
@@ -225,7 +249,7 @@ function CampaignDrawerContent({
                 </div>
               )}
 
-              <ReasonList title="You can't join yet" reasons={reasons} />
+              <ReasonList title="You can't join yet" reasons={openCall && joinBlockedReason ? [joinBlockedReason, ...reasons] : reasons} />
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
@@ -251,7 +275,7 @@ function CampaignDrawerContent({
                     canJoin ? "bg-[#FEB604] text-[#1C1917] border border-stone-100" : "bg-stone-200 text-stone-400 cursor-not-allowed"
                   )}
                 >
-                  {joining ? "Joining…" : isAtLimit ? "At placement limit" : places === 0 ? "Campaign full" : "Join Campaign"}
+                  {joining ? "Joining…" : places === 0 ? "Campaign full" : "Join Campaign"}
                 </button>
               ) : (
                 <div className="space-y-2">
@@ -280,7 +304,7 @@ export function MarketplaceDetailsDrawer({
   open,
   onOpenChange,
   onJoin,
-  isAtLimit,
+  joinBlockedReason,
   onViewMyCampaigns,
 }: MarketplaceDetailsDrawerProps) {
   const isMobile = useIsMobile();
@@ -291,7 +315,7 @@ export function MarketplaceDetailsDrawer({
     <CampaignDrawerContent
       campaign={campaign}
       onJoin={onJoin}
-      isAtLimit={isAtLimit}
+      joinBlockedReason={joinBlockedReason}
       isMobile={isMobile}
       onClose={() => onOpenChange(false)}
       onViewMyCampaigns={onViewMyCampaigns}

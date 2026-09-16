@@ -9,7 +9,12 @@ interface CampaignBriefDetailsProps {
   showSummary?: boolean;
 }
 
-function BriefList({ title, items }: { title: string; items: string[] }) {
+interface BriefListProps {
+  title: string;
+  items: string[];
+}
+
+function BriefList({ title, items }: BriefListProps) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
@@ -25,7 +30,12 @@ function BriefList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function BriefText({ title, text }: { title: string; text: string | null }) {
+interface BriefTextProps {
+  title: string;
+  text: string | null;
+}
+
+function BriefText({ title, text }: BriefTextProps) {
   if (!text) return null;
   return (
     <div className="space-y-1.5">
