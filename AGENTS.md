@@ -37,7 +37,15 @@ npm run start            # node src/server.js (production)
 ```
 
 ### Testing
-No test framework configured. Run `npx tsc --noEmit` for type checking.
+Frontend: no test framework; run `npx tsc --noEmit` for type checking.
+
+Backend end-to-end tests (run from `Backend/`):
+```bash
+npm run test:e2e         # node:test against a throwaway local mongod, Paystack stubbed
+```
+- Needs `mongod` installed locally (set `MONGOD_PATH` if it isn't found). Tests never read `Backend/.env`.
+- Tests live in `Backend/test/e2e/*.test.js` and drive the HTTP API through `test/e2e/harness.js` (`api`, `registerBrand`, `registerCreator`, `paystack.markPaid`).
+- `views-campaign.test.js` is the regression guard for live campaigns; keep it passing.
 
 ## Key Ports
 
