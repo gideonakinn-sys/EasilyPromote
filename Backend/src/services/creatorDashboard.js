@@ -14,6 +14,8 @@ const meta = require("./meta");
 const { rankAtLeast } = require("./creatorScore");
 const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
+const { campaignTerms, payPerUnit, briefSummary, fullBrief } = require("../utils/campaignPay");
+const { joinEligibility, campaignFailures } = require("./joinRules");
 
 // Everything the creator dashboard shows is derived from the same handful of
 // documents. Loading them once per request (instead of once per endpoint, and
@@ -43,9 +45,15 @@ async function loadContext(userId) {
   const hasNiches = niches.length > 0;
   const lockReason = lockReasonFor({ hasSocial, hasNiches });
 
+  const connectedPlatforms = [
+    ...(tiktok ? ["tiktok"] : []),
+    ...metaConnections.map((c) => c.provider).filter(Boolean),
+  ];
+
   return {
     userId,
     profile,
+    connectedPlatforms,
     tiktok,
     metaConnections,
     hasSocial,
@@ -292,7 +300,7 @@ async function buildMyCampaigns(ctx) {
     Slot.find({ creatorId: userId })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective",
         populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 })
@@ -395,6 +403,10 @@ async function buildMyCampaigns(ctx) {
         contentStyle: campaign.contentStyle,
         scriptUrl: campaign.scriptUrl,
         scriptFileName: campaign.scriptFileName,
+        // Campaign engine: the full brief unlocks once the creator holds a placement.
+        kind: slot.kind || "views",
+        brief: fullBrief(campaign),
+        pay: payPerUnit(campaign, slot),
         brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
         brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
         delivery: slot.status === "claimed"

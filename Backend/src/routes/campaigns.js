@@ -777,6 +777,17 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
   }
 });
 
+// Open Call join: runs the creator's eligibility and reserves a placement in one step.
+router.post("/:id/join", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { joinCampaign } = require("../services/placements");
+    const result = await joinCampaign({ user: req.user, campaignId: req.params.id });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id", protect, async (req, res, next) => {
   try {
     const campaign = await Campaign.findById(req.params.id);

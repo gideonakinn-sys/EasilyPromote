@@ -80,4 +80,10 @@ slotSchema.index({ creatorId: 1, status: 1 });
 // Marketplace: open slots per live campaign, newest first.
 slotSchema.index({ campaignId: 1, status: 1, createdAt: -1 });
 
+// A creator holds at most one placement per campaign; a released placement has no creator.
+slotSchema.index(
+  { campaignId: 1, creatorId: 1 },
+  { unique: true, partialFilterExpression: { creatorId: { $type: "objectId" } } }
+);
+
 module.exports = mongoose.model("Slot", slotSchema);

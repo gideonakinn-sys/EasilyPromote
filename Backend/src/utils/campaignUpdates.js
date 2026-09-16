@@ -1,6 +1,6 @@
 const Slot = require("../models/Slot");
 const Campaign = require("../models/Campaign");
-const { emitToUser } = require("../config/socket");
+const { emitToUser, getIO } = require("../config/socket");
 
 function mapStatusToCreator(submission, campaign) {
   if (!submission) return "needs_content";
@@ -110,4 +110,13 @@ async function emitCampaignStatus(campaign) {
   }
 }
 
-module.exports = { emitCampaignUpdate, emitCampaignStatus, mapStatusToCreator, buildCampaignUpdate };
+// Places left on a campaign, sent to everyone connected so every open marketplace and
+// campaign view updates as creators join. Carries nothing private. Returns the count.
+async function emitPlacesLeft(campaignId) {
+  const placesLeft = await Slot.countDocuments({ campaignId, status: "available" });
+  const io = getIO();
+  if (io) io.emit("campaign-places", { campaignId: String(campaignId), placesLeft });
+  return placesLeft;
+}
+
+module.exports = { emitCampaignUpdate, emitCampaignStatus, emitPlacesLeft, mapStatusToCreator, buildCampaignUpdate };
