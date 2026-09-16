@@ -1,0 +1,417 @@
+import type {
+  CampaignBrief,
+  CampaignObjective,
+  CampaignSetup,
+  ContentDestination,
+  CreatorAccess,
+} from "../types";
+import { MIN_REFERRAL_BUDGET } from "../../lib/referral";
+
+// The five setup steps, then review and payment.
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+
+export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] = [
+  { step: 1, title: "Objective", short: "Objective" },
+  { step: 2, title: "Destination and access", short: "Access" },
+  { step: 3, title: "Audience and creators", short: "Audience" },
+  { step: 4, title: "Pay and budget", short: "Budget" },
+  { step: 5, title: "Brief", short: "Brief" },
+  { step: 6, title: "Review and launch", short: "Launch" },
+];
+
+export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body: string; available: boolean }[] = [
+  { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve.", available: true },
+  { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver.", available: true },
+  { value: "downloads", title: "Downloads", body: "Pay for app installs, tracked with a code for each creator.", available: true },
+  { value: "signups", title: "Sign-ups", body: "Pay for people who sign up, tracked with a code for each creator.", available: true },
+  { value: "engagement", title: "Engagement", body: "Pay for likes, comments and shares.", available: false },
+  { value: "leads", title: "Leads", body: "Pay for people who show interest in what you sell.", available: false },
+  { value: "sales", title: "Sales", body: "Pay for purchases made through creators.", available: false },
+  { value: "other", title: "Other", body: "Pay for another action that matters to you.", available: false },
+];
+
+export const DESTINATION_OPTIONS: { value: ContentDestination; title: string; body: string }[] = [
+  { value: "creator_page", title: "Creator's page", body: "Creators post the content on their own accounts." },
+  { value: "brand_page", title: "Your page", body: "Creators send you the content and you post it on your accounts." },
+  { value: "both", title: "Both", body: "Creators post on their accounts and you can post it on yours too." },
+];
+
+// Standard usage rights for content that goes to the brand's page (decision D6).
+export const USAGE_RIGHTS_TEXT =
+  "You get the standard usage rights: you can use the content on your own social channels, in posts and in paid ads, for as long as you like. The rights aren't exclusive, so the creator can still show the work they made.";
+
+export const ACCESS_OPTIONS: { value: CreatorAccess; title: string; body: string }[] = [
+  {
+    value: "open_call",
+    title: "Open Call",
+    body: "Any creator who meets your requirements can join straight away. Good when you want to move fast.",
+  },
+  {
+    value: "application_required",
+    title: "Application Required",
+    body: "Creators apply and you choose who takes part. Good when you want to pick each creator yourself.",
+  },
+];
+
+export const PLATFORM_OPTIONS = [
+  { value: "tiktok", label: "TikTok" },
+  { value: "instagram", label: "Instagram" },
+  { value: "youtube", label: "YouTube" },
+  { value: "facebook", label: "Facebook" },
+  { value: "twitter", label: "X (Twitter)" },
+];
+
+export const AGE_RANGE_OPTIONS = ["13-17", "18-24", "25-34", "35-44", "45-54", "55+"];
+
+export const GENDER_OPTIONS = [
+  { value: "all", label: "Everyone" },
+  { value: "female", label: "Women" },
+  { value: "male", label: "Men" },
+];
+
+// Must match the creator categories the API accepts.
+export const CREATOR_CATEGORIES = [
+  "Fashion",
+  "Beauty",
+  "Music",
+  "Comedy",
+  "Lifestyle",
+  "Finance",
+  "Gaming",
+  "Food",
+  "Sports",
+  "Tech",
+  "Education",
+  "Business",
+  "Other",
+];
+
+export const RANK_OPTIONS = [
+  { value: "", label: "Any rank" },
+  { value: "rank1", label: "Rank 1 or higher" },
+  { value: "rank2", label: "Rank 2 or higher" },
+  { value: "rank3", label: "Rank 3 or higher" },
+  { value: "rank4", label: "Rank 4 or higher" },
+  { value: "rank5", label: "Rank 5 or higher" },
+  { value: "elite", label: "Elite" },
+];
+
+export const BADGE_OPTIONS = [
+  { value: "top_creator", label: "Top Creator" },
+  { value: "high_performer", label: "High Performer" },
+  { value: "reliable_creator", label: "Reliable Creator" },
+  { value: "campaign_pro", label: "Campaign Pro" },
+];
+
+export const MIN_VIEWS = 100000;
+export const MAX_DELIVERABLES = 100;
+const DEFAULT_VIEWS = 1000000;
+const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads"];
+
+export interface WizardBrief {
+  summary: string;
+  dos: string[];
+  donts: string[];
+  hashtags: string[];
+  soundUrl: string;
+  referenceVideos: string[];
+  tone: string;
+  keyMessages: string[];
+  productInfo: string;
+  approvalRequirements: string;
+}
+
+export interface WizardData {
+  name: string;
+  category: string;
+  coverImageUrl: string;
+  objective: CampaignObjective;
+  contentDestination: ContentDestination;
+  creatorAccess: CreatorAccess;
+  locations: string[];
+  minLocationShare: string;
+  ageRanges: string[];
+  genders: string[];
+  interests: string[];
+  platforms: string[];
+  minFollowers: string;
+  minEngagementRate: string;
+  categories: string[];
+  verifiedOnly: boolean;
+  minRank: string;
+  requiredBadges: string[];
+  // Content: the brand sets the rate (ADR 0003). Prefilled so a draft can be saved early.
+  ratePerDeliverable: string;
+  deliverables: string;
+  // Views and referral objectives: views from the price table.
+  views: number;
+  referralBudget: string;
+  brief: WizardBrief;
+  scriptUrl: string;
+  scriptFileName: string;
+}
+
+export const EMPTY_BRIEF: WizardBrief = {
+  summary: "",
+  dos: [],
+  donts: [],
+  hashtags: [],
+  soundUrl: "",
+  referenceVideos: [],
+  tone: "",
+  keyMessages: [],
+  productInfo: "",
+  approvalRequirements: "",
+};
+
+export const INITIAL_WIZARD_DATA: WizardData = {
+  name: "",
+  category: "Music",
+  coverImageUrl: "",
+  objective: "content",
+  contentDestination: "creator_page",
+  creatorAccess: "open_call",
+  locations: [],
+  minLocationShare: "",
+  ageRanges: [],
+  genders: ["all"],
+  interests: [],
+  platforms: ["tiktok", "instagram"],
+  minFollowers: "",
+  minEngagementRate: "",
+  categories: [],
+  verifiedOnly: false,
+  minRank: "",
+  requiredBadges: [],
+  ratePerDeliverable: "10000",
+  deliverables: "5",
+  views: DEFAULT_VIEWS,
+  referralBudget: "",
+  brief: EMPTY_BRIEF,
+  scriptUrl: "",
+  scriptFileName: "",
+};
+
+export function usesReferralBudget(objective: CampaignObjective): boolean {
+  return REFERRAL_OBJECTIVES.includes(objective);
+}
+
+export function isObjectiveAvailable(objective: CampaignObjective): boolean {
+  return OBJECTIVE_OPTIONS.some((option) => option.value === objective && option.available);
+}
+
+const wholeNumber = (value: string) => {
+  const trimmed = value.trim();
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+};
+
+const isUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+export function referralBudgetValue(data: WizardData): number {
+  return Math.round(Number(data.referralBudget) || 0);
+}
+
+// Returns what's missing on a step, or an empty list when it's complete.
+export function stepProblems(data: WizardData, step: WizardStep): string[] {
+  const problems: string[] = [];
+  if (step === 1) {
+    if (!data.name.trim()) problems.push("Give your campaign a name.");
+    if (!data.coverImageUrl) problems.push("Upload a cover image.");
+    if (!isObjectiveAvailable(data.objective)) problems.push("Choose an objective that's available now.");
+  }
+  if (step === 3) {
+    if (data.platforms.length === 0) problems.push("Choose at least one platform.");
+    const share = data.minLocationShare.trim();
+    if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
+    if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
+    const engagement = data.minEngagementRate.trim();
+    if (engagement && !(Number(engagement) >= 0 && Number(engagement) <= 100)) problems.push("Engagement rate must be from 0 to 100.");
+  }
+  if (step === 4) {
+    if (data.objective === "content") {
+      const rate = wholeNumber(data.ratePerDeliverable);
+      const count = wholeNumber(data.deliverables);
+      if (!rate) problems.push("Set what creators earn for each approved deliverable, in whole naira.");
+      if (!count) problems.push("Set how many deliverables you're paying for.");
+      else if (count > MAX_DELIVERABLES) problems.push(`You can pay for up to ${MAX_DELIVERABLES} deliverables.`);
+    } else {
+      if (!(data.views >= MIN_VIEWS)) problems.push(`Choose at least ${MIN_VIEWS.toLocaleString()} views.`);
+      if (usesReferralBudget(data.objective) && referralBudgetValue(data) < MIN_REFERRAL_BUDGET) {
+        problems.push(`Add a referral budget of at least ₦${MIN_REFERRAL_BUDGET.toLocaleString()}.`);
+      }
+    }
+  }
+  if (step === 5) {
+    if (!data.brief.summary.trim()) problems.push("Tell creators what the campaign is about.");
+    if (data.brief.soundUrl.trim() && !isUrl(data.brief.soundUrl.trim())) problems.push("The sound link must be a full web address.");
+    if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference videos must be full web addresses.");
+  }
+  return problems;
+}
+
+// Where a saved draft picks up: the first step that still needs something.
+export function resumeStep(data: WizardData): WizardStep {
+  for (const { step } of WIZARD_STEPS) {
+    if (step < 6 && stepProblems(data, step).length > 0) return step;
+  }
+  return 6;
+}
+
+// A saved campaign as GET /campaigns/:id returns it, including fields from the older wizard.
+export interface SavedCampaign extends Partial<CampaignSetup> {
+  name?: string;
+  category?: string;
+  coverImageUrl?: string;
+  targetViews?: number;
+  contentBrief?: string;
+  keyMessageCta?: string;
+  whatToAvoid?: string;
+  platforms?: string[];
+  niches?: string[];
+  scriptUrl?: string;
+  scriptFileName?: string;
+  objective?: "views" | "actions";
+  referral?: { enabled?: boolean; eventTypes?: string[]; eventType?: string; requestedBudget?: number };
+}
+
+function legacyObjective(saved: SavedCampaign): CampaignObjective {
+  if (saved.objective !== "actions") return "views";
+  const types = saved.referral?.eventTypes?.length ? saved.referral.eventTypes : [saved.referral?.eventType];
+  return types.includes("install") && !types.includes("signup") ? "downloads" : "signups";
+}
+
+const list = (value: string[] | undefined) => (Array.isArray(value) ? value.filter(Boolean) : []);
+
+// Drafts from the older wizard have no v2 brief, so their description, key message and
+// things to avoid carry over.
+export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
+  const targeting = saved.audienceTargeting || {};
+  const eligibility = saved.creatorEligibility || {};
+  const brief: CampaignBrief = saved.brief || {};
+  const hasBrief = Object.keys(brief).length > 0;
+
+  return {
+    ...INITIAL_WIZARD_DATA,
+    name: saved.name || "",
+    category: saved.category || INITIAL_WIZARD_DATA.category,
+    coverImageUrl: saved.coverImageUrl || "",
+    objective: saved.campaignObjective || legacyObjective(saved),
+    contentDestination: saved.contentDestination || "creator_page",
+    creatorAccess: saved.creatorAccess || "open_call",
+    locations: list(targeting.locations),
+    minLocationShare: targeting.minLocationShare !== undefined ? String(targeting.minLocationShare) : "",
+    ageRanges: list(targeting.ageRanges),
+    genders: targeting.genders?.length ? targeting.genders : ["all"],
+    interests: list(targeting.interests),
+    platforms: targeting.platforms?.length ? targeting.platforms : list(saved.platforms),
+    minFollowers: eligibility.minFollowers !== undefined ? String(eligibility.minFollowers) : "",
+    minEngagementRate: eligibility.minEngagementRate !== undefined ? String(eligibility.minEngagementRate) : "",
+    categories: eligibility.categories?.length
+      ? eligibility.categories
+      : list(saved.niches).filter((niche) => CREATOR_CATEGORIES.includes(niche)),
+    verifiedOnly: Boolean(eligibility.verifiedOnly),
+    minRank: eligibility.minRank || "",
+    requiredBadges: list(eligibility.requiredBadges),
+    ratePerDeliverable: saved.contentPay ? String(saved.contentPay.ratePerDeliverable) : INITIAL_WIZARD_DATA.ratePerDeliverable,
+    deliverables: saved.contentPay ? String(saved.contentPay.deliverables) : INITIAL_WIZARD_DATA.deliverables,
+    views: saved.targetViews || DEFAULT_VIEWS,
+    referralBudget: saved.referral?.requestedBudget ? String(saved.referral.requestedBudget) : "",
+    brief: hasBrief
+      ? {
+          summary: brief.summary || "",
+          dos: list(brief.dos),
+          donts: list(brief.donts),
+          hashtags: list(brief.hashtags),
+          soundUrl: brief.soundUrl || "",
+          referenceVideos: list(brief.referenceVideos),
+          tone: brief.tone || "",
+          keyMessages: list(brief.keyMessages),
+          productInfo: brief.productInfo || "",
+          approvalRequirements: brief.approvalRequirements || "",
+        }
+      : {
+          ...EMPTY_BRIEF,
+          summary: saved.contentBrief || "",
+          keyMessages: saved.keyMessageCta ? [saved.keyMessageCta] : [],
+          donts: saved.whatToAvoid ? [saved.whatToAvoid] : [],
+        },
+    scriptUrl: saved.scriptUrl || "",
+    scriptFileName: saved.scriptFileName || "",
+  };
+}
+
+const optionalWhole = (value: string) => (wholeNumber(value) !== null ? Number(value.trim()) : undefined);
+const optionalNumber = (value: string) => (value.trim() && Number.isFinite(Number(value)) ? Number(value) : undefined);
+
+// The pay part of the setup, which is also what the quote needs.
+export function pricingPayload(data: WizardData): Record<string, unknown> {
+  if (data.objective === "content") {
+    return {
+      campaignObjective: data.objective,
+      contentPay: { ratePerDeliverable: Number(data.ratePerDeliverable) || 0, deliverables: Number(data.deliverables) || 0 },
+    };
+  }
+  return {
+    campaignObjective: data.objective,
+    targetViews: data.views,
+    ...(usesReferralBudget(data.objective) && {
+      // The API takes ₦1,000 or more; anything less is saved as not set yet.
+      referral: { requestedBudget: referralBudgetValue(data) >= MIN_REFERRAL_BUDGET ? referralBudgetValue(data) : 0 },
+    }),
+  };
+}
+
+export function campaignPayload(data: WizardData): Record<string, unknown> {
+  const brief = data.brief;
+  return {
+    name: data.name.trim(),
+    category: data.category,
+    coverImageUrl: data.coverImageUrl || undefined,
+    ...pricingPayload(data),
+    contentDestination: data.contentDestination,
+    creatorAccess: data.creatorAccess,
+    audienceTargeting: {
+      locations: data.locations,
+      minLocationShare: optionalWhole(data.minLocationShare),
+      ageRanges: data.ageRanges,
+      genders: data.genders,
+      interests: data.interests,
+      platforms: data.platforms,
+    },
+    creatorEligibility: {
+      minFollowers: optionalWhole(data.minFollowers),
+      minEngagementRate: optionalNumber(data.minEngagementRate),
+      categories: data.categories,
+      verifiedOnly: data.verifiedOnly,
+      minRank: data.minRank || undefined,
+      requiredBadges: data.requiredBadges,
+    },
+    brief: {
+      summary: brief.summary.trim() || undefined,
+      dos: brief.dos,
+      donts: brief.donts,
+      hashtags: brief.hashtags,
+      soundUrl: brief.soundUrl.trim() || undefined,
+      referenceVideos: brief.referenceVideos,
+      tone: brief.tone.trim() || undefined,
+      keyMessages: brief.keyMessages,
+      productInfo: brief.productInfo.trim() || undefined,
+      approvalRequirements: brief.approvalRequirements.trim() || undefined,
+    },
+    // Screens built before the campaign engine still read these.
+    contentBrief: brief.summary.trim(),
+    keyMessageCta: brief.keyMessages.join(" · "),
+    whatToAvoid: brief.donts.join(" · "),
+    platforms: data.platforms,
+    niches: data.categories,
+    scriptUrl: data.scriptUrl || undefined,
+    scriptFileName: data.scriptFileName || undefined,
+  };
+}

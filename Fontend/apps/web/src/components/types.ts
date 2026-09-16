@@ -254,3 +254,66 @@ export interface WithdrawalItem {
   reviewedAt?: string | null;
   releasedAt?: string | null;
 }
+
+// Campaign engine: brand wizard (ticket 03)
+export type CampaignObjective = "content" | "views" | "downloads" | "signups" | "engagement" | "leads" | "sales" | "other";
+export type ContentDestination = "creator_page" | "brand_page" | "both";
+export type CreatorAccess = "open_call" | "application_required";
+
+export interface ContentPay {
+  ratePerDeliverable: number;
+  deliverables: number;
+}
+
+export interface AudienceTargeting {
+  locations?: string[];
+  minLocationShare?: number;
+  ageRanges?: string[];
+  genders?: string[];
+  interests?: string[];
+  platforms?: string[];
+}
+
+export interface CreatorEligibility {
+  minFollowers?: number;
+  minEngagementRate?: number;
+  categories?: string[];
+  verifiedOnly?: boolean;
+  minRank?: string;
+  requiredBadges?: string[];
+}
+
+export interface CampaignBrief {
+  summary?: string;
+  dos?: string[];
+  donts?: string[];
+  hashtags?: string[];
+  soundUrl?: string;
+  referenceVideos?: string[];
+  tone?: string;
+  keyMessages?: string[];
+  productInfo?: string;
+  approvalRequirements?: string;
+}
+
+// The Campaign v2 setup as GET /campaigns/:id returns it.
+export interface CampaignSetup {
+  campaignObjective: CampaignObjective | null;
+  campaignModel: "content" | "performance" | null;
+  payShape: "fixed" | "performance" | "hybrid" | null;
+  rateAuthority: "brand" | "admin" | "platform" | null;
+  contentPay: ContentPay | null;
+  contentDestination: ContentDestination | null;
+  creatorAccess: CreatorAccess | null;
+  audienceTargeting: AudienceTargeting;
+  creatorEligibility: CreatorEligibility;
+  brief: CampaignBrief;
+}
+
+// What a brand pays, from the same calculator checkout charges with.
+export interface CampaignQuote {
+  creatorBudget: number;
+  performanceBudget: number;
+  platformFee: number;
+  total: number;
+}

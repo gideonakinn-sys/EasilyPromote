@@ -41,3 +41,13 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
 export { getToken, getUser, isAuthenticated, clearAuth, saveAuth } from "./auth";
 export type { User } from "./auth";
+
+// Campaign engine: brand wizard (ticket 03)
+// Prices a campaign setup without saving it; the numbers match what checkout charges.
+export function quoteCampaign(setup: Record<string, unknown>, token?: string) {
+  return apiRequest<{ quote: import("../components/types").CampaignQuote }>("/campaigns/quote", {
+    method: "POST",
+    token,
+    body: JSON.stringify(setup),
+  });
+}
