@@ -19,6 +19,7 @@ const { joinEligibility, campaignFailures } = require("./joinRules");
 const { recommendation, sortRecommended } = require("./recommendations");
 const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
+const { buildMyApplications } = require("./applications"); // Campaign engine: applications (ticket 06)
 
 // Everything the creator dashboard shows is derived from the same handful of
 // documents. Loading them once per request (instead of once per endpoint, and
@@ -617,9 +618,6 @@ async function buildDashboard(user) {
   const ctx = await loadContext(user._id);
   const profile = buildProfile(user, ctx);
   if (!profile) return null;
-
-  // Campaign engine: applications (ticket 06)
-  const { buildMyApplications } = require("./applications");
 
   const [campaigns, marketplace, wallet, applications] = await Promise.all([
     buildMyCampaigns(ctx),

@@ -91,42 +91,88 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
     return refuse(403, "APPLICATION_REQUIRED", "This campaign needs an application. The brand picks who takes part");
   }
 
-  return reserve({ creatorId, campaign, requested, committedViews });
+  return takePlacement({ creatorId, campaign, requested, committedViews });
 }
 
-// Campaign engine: applications (ticket 06). Approving an application reserves the creator's
-// place through the same guarded path as joining; only the Open Call access check is skipped
-// because the brand picked this creator. Returns { status, body } like joinCampaign.
+// Campaign engine: applications (ticket 06)
+// Seams for tests only: `afterTake` runs right after a place is taken, to prove a failure
+// there gives the place back.
+const testHooks = { afterTake: null };
+
+// Everything joining or applying needs to know about this creator and campaign.
+// `requested` limits the open places to one (older clients).
+async function loadJoinContext({ creatorId, campaign, requested = null }) {
+  const [joiner, activeSlots, heldSlot, openSlots] = await Promise.all([
+    loadJoiner(creatorId),
+    Slot.countDocuments({ creatorId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
+    Slot.findOne({ campaignId: campaign._id, creatorId, status: { $in: HELD_PLACEMENT_STATUSES } }).lean(),
+    requested ? Promise.resolve(null) : Slot.find({ campaignId: campaign._id, status: "available" }).sort(JOIN_ORDER).lean(),
+  ]);
+  const available = requested ? (requested.status === "available" ? [requested] : []) : openSlots;
+  return { joiner, activeSlots, heldSlot, available };
+}
+
+// The join eligibility check. A creator the brand picked isn't held to a place's rank
+// requirement; the campaign's own Creator Eligibility and account-wide limits still apply.
+function checkJoiner({ context, campaign, pickedByBrand = false }) {
+  const slots = pickedByBrand ? context.available.map((s) => ({ ...s, rankRequired: null })) : context.available;
+  return joinEligibility({
+    profile: context.joiner.profile,
+    connectedPlatforms: context.joiner.connectedPlatforms,
+    hasSocial: context.joiner.hasSocial,
+    activeSlots: context.activeSlots,
+    campaign,
+    availableSlots: slots,
+  });
+}
+
+async function placementBody(slot, campaign, referralCode) {
+  let code = referralCode;
+  if (code === undefined) {
+    const ReferralCode = require("../models/ReferralCode");
+    const existing = await ReferralCode.findOne({ slotId: slot._id }).select("code").lean();
+    code = existing ? existing.code : null;
+  }
+  return {
+    id: slot._id,
+    campaignId: slot.campaignId,
+    status: slot.status,
+    kind: slot.kind || "views",
+    viewTarget: slot.viewTarget,
+    reward: slot.reward,
+    referralCode: code,
+    placesLeft: await Slot.countDocuments({ campaignId: campaign._id, status: "available" }),
+    brief: fullBrief(campaign),
+  };
+}
+
+// Approving an application takes the creator's place through the same guarded path as
+// joining; the Open Call access check and place rank requirements are skipped because the
+// brand picked this creator. A place the creator already holds here is returned as theirs
+// (e.g. left by an earlier approval that failed part-way). Returns { status, body }.
 async function reservePlacementFor({ creatorId, campaignId }) {
   const campaign = await Campaign.findById(campaignId).lean();
   if (!campaign || campaign.status !== "live") return refuse(404, "CAMPAIGN_NOT_LIVE", "Campaign not found or not live");
-  return reserve({ creatorId, campaign, requested: null, committedViews: undefined });
+  const result = await takePlacement({ creatorId, campaign, pickedByBrand: true });
+  if (result.status === 409 && result.body.code === "ALREADY_JOINED") {
+    const held = await Slot.findOne({ campaignId: campaign._id, creatorId, status: { $in: HELD_PLACEMENT_STATUSES } }).lean();
+    if (held) return { status: 200, body: await placementBody(held, campaign) };
+  }
+  return result;
 }
 
-async function reserve({ creatorId, campaign, requested, committedViews }) {
-  const [ctx, activeSlots, alreadyHeld, openSlots] = await Promise.all([
-    loadJoiner(creatorId),
-    Slot.countDocuments({ creatorId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
-    Slot.exists({ campaignId: campaign._id, creatorId, status: { $in: HELD_PLACEMENT_STATUSES } }),
-    requested ? Promise.resolve(null) : Slot.find({ campaignId: campaign._id, status: "available" }).sort(JOIN_ORDER).lean(),
-  ]);
-  if (alreadyHeld) return refuse(409, "ALREADY_JOINED", "You already have a place in this campaign");
+async function takePlacement({ creatorId, campaign, requested = null, committedViews, pickedByBrand = false }) {
+  const context = await loadJoinContext({ creatorId, campaign, requested });
+  if (context.heldSlot) return refuse(409, "ALREADY_JOINED", "You already have a place in this campaign");
+  const { available } = context;
 
-  const available = requested ? (requested.status === "available" ? [requested] : []) : openSlots;
   if (available.length === 0) {
     return requested
       ? refuse(409, "CAMPAIGN_FULL", "This place was just taken by another creator")
       : refuse(409, "CAMPAIGN_FULL", "This campaign just filled up");
   }
 
-  const check = joinEligibility({
-    profile: ctx.profile,
-    connectedPlatforms: ctx.connectedPlatforms,
-    hasSocial: ctx.hasSocial,
-    activeSlots,
-    campaign,
-    availableSlots: available,
-  });
+  const check = checkJoiner({ context, campaign, pickedByBrand });
   if (!check.eligible) {
     return refuse(403, "NOT_ELIGIBLE", check.failures[0].message, { failures: check.failures });
   }
@@ -168,49 +214,61 @@ async function reserve({ creatorId, campaign, requested, committedViews }) {
     return refuse(409, "CAMPAIGN_FULL", requested ? "This place was just taken by another creator" : "This campaign just filled up");
   }
 
-  // The pool check read other reservations before this one was written, so two joins at the
-  // same moment could both fit. Re-check with this one in place and give it back if the
-  // pool is now over-promised or this creator somehow holds two.
-  const [totals] = await Slot.aggregate([
-    { $match: { campaignId: campaign._id, status: { $in: HELD_PLACEMENT_STATUSES } } },
-    { $group: { _id: null, reward: { $sum: "$reward" }, mine: { $sum: { $cond: [{ $eq: ["$creatorId", creatorId] }, 1, 0] } } } },
-  ]);
-  if (totals && (totals.reward > (campaign.creatorPool || 0) || totals.mine > 1)) {
-    await release(claimed, original, creatorId);
-    await emitPlacesLeft(campaign._id);
-    return totals.mine > 1
-      ? refuse(409, "ALREADY_JOINED", "You already have a place in this campaign")
-      : refuse(409, "CAMPAIGN_FULL", "This campaign's creator pool just filled up. Refresh to see what's left.");
-  }
+  // From here the place is taken: anything that throws gives it back before rethrowing, so
+  // a failure can never leave a creator holding a place nobody knows about.
+  let body;
+  try {
+    if (testHooks.afterTake) await testHooks.afterTake({ slot: claimed, creatorId, campaign });
 
-  // A code failure must never cost the creator their placement; backfill repairs it.
-  let referralCode = null;
-  if (campaign.referral && campaign.referral.enabled && campaign.referral.codeSource === "easilypromote") {
-    try {
-      const { createReferralCode } = require("../utils/referralCodes");
-      const code = await createReferralCode({ slot: claimed, campaign });
-      referralCode = code ? code.code : null;
-    } catch (error) {
-      console.error(`[Referral] Code generation failed for slot ${claimed._id}:`, error.message);
+    // The pool check read other reservations before this one was written, so two joins at the
+    // same moment could both fit. Re-check with this one in place and give it back if the
+    // pool is now over-promised or this creator somehow holds two.
+    const [totals] = await Slot.aggregate([
+      { $match: { campaignId: campaign._id, status: { $in: HELD_PLACEMENT_STATUSES } } },
+      { $group: { _id: null, reward: { $sum: "$reward" }, mine: { $sum: { $cond: [{ $eq: ["$creatorId", creatorId] }, 1, 0] } } } },
+    ]);
+    if (totals && (totals.reward > (campaign.creatorPool || 0) || totals.mine > 1)) {
+      await release(claimed, original, creatorId);
+      announcePlacesLeft(campaign._id);
+      return totals.mine > 1
+        ? refuse(409, "ALREADY_JOINED", "You already have a place in this campaign")
+        : refuse(409, "CAMPAIGN_FULL", "This campaign's creator pool just filled up. Refresh to see what's left.");
     }
+
+    // A code failure must never cost the creator their placement; backfill repairs it.
+    let referralCode = null;
+    if (campaign.referral && campaign.referral.enabled && campaign.referral.codeSource === "easilypromote") {
+      try {
+        const { createReferralCode } = require("../utils/referralCodes");
+        const code = await createReferralCode({ slot: claimed, campaign });
+        referralCode = code ? code.code : null;
+      } catch (error) {
+        console.error(`[Referral] Code generation failed for slot ${claimed._id}:`, error.message);
+      }
+    }
+
+    body = await placementBody(claimed, campaign, referralCode);
+  } catch (error) {
+    await release(claimed, original, creatorId);
+    announcePlacesLeft(campaign._id);
+    throw error;
   }
 
-  const placesLeft = await emitPlacesLeft(campaign._id);
-
-  return {
-    status: 200,
-    body: {
-      id: claimed._id,
-      campaignId: claimed.campaignId,
-      status: claimed.status,
-      kind: claimed.kind || "views",
-      viewTarget: claimed.viewTarget,
-      reward: claimed.reward,
-      referralCode,
-      placesLeft,
-      brief: fullBrief(campaign),
-    },
-  };
+  announcePlacesLeft(campaign._id);
+  return { status: 200, body };
 }
 
-module.exports = { joinCampaign, reservePlacementFor, loadJoiner, JOIN_ORDER };
+// Live places-left update for creators; never allowed to fail a join.
+function announcePlacesLeft(campaignId) {
+  emitPlacesLeft(campaignId).catch((error) => console.error(`[Placements] Places-left update for ${campaignId} failed:`, error.message));
+}
+
+module.exports = {
+  joinCampaign,
+  reservePlacementFor,
+  loadJoinContext,
+  checkJoiner,
+  refuse,
+  testHooks,
+  JOIN_ORDER,
+};

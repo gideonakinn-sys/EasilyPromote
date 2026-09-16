@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const BREVO_API = "https://api.brevo.com/v3/smtp/email";
+const EMAIL_TIMEOUT_MS = 10000;
 
 let logoDataUri = null;
 try {
@@ -30,15 +31,28 @@ async function sendEmail({ to, subject, html, text }) {
     ...(text && { textContent: text }),
   };
 
-  const res = await fetch(BREVO_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-      accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  // A slow email provider must never hang the request or job that sent the email.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EMAIL_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(BREVO_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const reason = error.name === "AbortError" ? `timed out after ${EMAIL_TIMEOUT_MS}ms` : error.message;
+    console.error(`[Email] Send failed: ${reason}`);
+    return { sent: false, error: reason };
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const err = await res.text();

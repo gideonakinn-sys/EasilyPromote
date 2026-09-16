@@ -114,6 +114,13 @@ test("several rules together: location, then performance, then portfolio", () =>
   assert.deepEqual(keys(ordered), ["audience", "performance", "portfolio", "platforms", "categories", "badges"]);
 });
 
+test("with no required categories, the campaign's own category puts matching portfolio items first", () => {
+  const ordered = orderSnapshot({ campaignModel: "content", category: "Beauty" }, buildApplicantSnapshot(profile(), user));
+  assert.equal(keys(ordered)[0], "portfolio");
+  assert.deepEqual(ordered.sections[0].data.items.map((i) => i.title), ["Makeup", "Outfit", "Vlog"]);
+  assert.deepEqual(ordered.sections[0].data.categories, ["Beauty"]);
+});
+
 test("a creator with no audience data still gets an audience section with nothing in it", () => {
   const snapshot = buildApplicantSnapshot(profile({ audience: undefined }), user);
   const ordered = orderSnapshot({ audienceTargeting: { locations: ["Lagos"] } }, snapshot);

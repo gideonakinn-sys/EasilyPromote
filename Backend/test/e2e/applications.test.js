@@ -303,3 +303,191 @@ test("pending applications remind the brand on day 3 once and expire after 7 day
   const approve = await harness.api("POST", `/api/campaigns/${id}/applications/${applied.body.id}/approve`, { token: brand.token });
   assert.equal(approve.status, 409);
 });
+
+// ── Review fixes ─────────────────────────────────────────────────────────────────────────
+
+const approveUrl = (id, applicationId) => `/api/campaigns/${id}/applications/${applicationId}/approve`;
+
+test("approve returns the brief so the creator's screen can unlock it", async () => {
+  const { brand, id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+  const approved = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+  assert.equal(approved.status, 200);
+  assert.deepEqual(approved.body.brief.dos, brief.dos);
+});
+
+test("approving a creator who already holds a place here links to that place", async () => {
+  const Slot = require("../../src/models/Slot");
+  const { brand, id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+  // As an earlier approval that failed part-way could have left it.
+  const slot = await Slot.findOneAndUpdate(
+    { campaignId: id, status: "available" },
+    { $set: { creatorId: creator.id, status: "claimed", claimedAt: new Date() } },
+    { new: true }
+  );
+
+  const approved = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+  assert.equal(String(approved.body.placement.id), String(slot._id));
+  assert.equal((await heldPlacements(id)).length, 1);
+});
+
+test("a failure after the place is taken gives the place back and leaves the application pending", async () => {
+  const { testHooks } = require("../../src/services/placements");
+  const { brand, id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+
+  testHooks.afterTake = async () => {
+    throw new Error("database hiccup");
+  };
+  try {
+    const failed = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+    assert.equal(failed.status, 500);
+  } finally {
+    testHooks.afterTake = null;
+  }
+  assert.equal((await heldPlacements(id)).length, 0);
+  const detail = await harness.api("GET", `/api/campaigns/${id}/applications/${applied.body.id}`, { token: brand.token });
+  assert.equal(detail.body.status, "pending");
+
+  const retried = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+  assert.equal(retried.status, 200, JSON.stringify(retried.body));
+  assert.equal((await heldPlacements(id)).length, 1);
+});
+
+test("the deadline job puts an approved application with no place back to pending", async () => {
+  const { processApplicationDeadlines } = require("../../src/services/applications");
+  const CampaignApplication = require("../../src/models/CampaignApplication");
+  const { id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+  const now = Date.now();
+  await CampaignApplication.updateOne({ _id: applied.body.id }, { $set: { status: "approved", reviewedAt: new Date(now - 60 * 60 * 1000) } });
+
+  await processApplicationDeadlines({ now: new Date(now) });
+  assert.equal((await CampaignApplication.findById(applied.body.id).lean()).status, "pending");
+});
+
+test("an approval still in progress isn't repaired by the deadline job", async () => {
+  const { processApplicationDeadlines } = require("../../src/services/applications");
+  const CampaignApplication = require("../../src/models/CampaignApplication");
+  const { id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+  const now = Date.now();
+  await CampaignApplication.updateOne({ _id: applied.body.id }, { $set: { status: "approved", reviewedAt: new Date(now - 1000) } });
+
+  await processApplicationDeadlines({ now: new Date(now) });
+  assert.equal((await CampaignApplication.findById(applied.body.id).lean()).status, "approved");
+});
+
+test("no reminders for campaigns that aren't live; closed campaigns expire their pending applications", async () => {
+  const { processApplicationDeadlines } = require("../../src/services/applications");
+  const CampaignApplication = require("../../src/models/CampaignApplication");
+  const Campaign = require("../../src/models/Campaign");
+
+  const paused = await liveCampaign();
+  const pausedCreator = await harness.registerCreator();
+  const pausedApp = await apply(paused.id, pausedCreator, {});
+  await Campaign.updateOne({ _id: paused.id }, { $set: { status: "paused" } });
+  const appliedAt = (await CampaignApplication.findById(pausedApp.body.id).lean()).appliedAt.getTime();
+  await processApplicationDeadlines({ now: new Date(appliedAt + 4 * DAY) });
+  const pausedNotes = (await notificationsFor(paused.brand.token)).filter((n) => n.type === "applications_reminder");
+  assert.equal(pausedNotes.length, 0);
+  const pausedAfter = await CampaignApplication.findById(pausedApp.body.id).lean();
+  assert.equal(pausedAfter.remindedAt, null);
+  assert.equal(pausedAfter.status, "pending");
+
+  const cancelled = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const cancelledApp = await apply(cancelled.id, creator, {});
+  await Campaign.updateOne({ _id: cancelled.id }, { $set: { status: "cancelled" } });
+  await processApplicationDeadlines({ now: new Date() });
+  assert.equal((await CampaignApplication.findById(cancelledApp.body.id).lean()).status, "expired");
+  assert.ok((await notificationsFor(creator.token)).some((n) => n.type === "application_expired"));
+});
+
+test("a brand-picked creator skips a place's rank requirement but not the campaign's rules or account limits", async () => {
+  const Slot = require("../../src/models/Slot");
+
+  const ranked = await liveCampaign();
+  await Slot.updateMany({ campaignId: ranked.id }, { $set: { rankRequired: "rank3" } });
+  const creator = await harness.registerCreator();
+  const applied = await apply(ranked.id, creator, {});
+  assert.equal(applied.status, 201, JSON.stringify(applied.body));
+  const approved = await harness.api("POST", approveUrl(ranked.id, applied.body.id), { token: ranked.brand.token });
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+
+  const minRank = await liveCampaign({ creatorEligibility: { minRank: "rank2" } });
+  const refused = await apply(minRank.id, await harness.registerCreator(), {});
+  assert.equal(refused.status, 403);
+  assert.deepEqual(refused.body.failures.map((f) => f.criterion), ["minRank"]);
+
+  const busy = await liveCampaign();
+  const busyCreator = await harness.registerCreator();
+  const busyApp = await apply(busy.id, busyCreator, {});
+  for (let i = 0; i < 3; i += 1) {
+    const open = await liveCampaign({ creatorAccess: "open_call" });
+    assert.equal((await harness.api("POST", `/api/campaigns/${open.id}/join`, { token: busyCreator.token })).status, 200);
+  }
+  const atLimit = await harness.api("POST", approveUrl(busy.id, busyApp.body.id), { token: busy.brand.token });
+  assert.equal(atLimit.status, 409);
+  assert.equal(atLimit.body.code, "CREATOR_CANNOT_JOIN");
+  assert.deepEqual(atLimit.body.failures.map((f) => f.criterion), ["placementLimit"]);
+});
+
+test("brands only see their own campaigns' applications and creators only their own", async () => {
+  const mine = await liveCampaign();
+  const theirs = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const other = await harness.registerCreator();
+  const applied = await apply(mine.id, creator, {});
+
+  const readOther = await harness.api("GET", `/api/campaigns/${mine.id}/applications/${applied.body.id}`, { token: theirs.brand.token });
+  assert.equal(readOther.status, 403);
+  const viaOwnCampaign = await harness.api("GET", `/api/campaigns/${theirs.id}/applications/${applied.body.id}`, { token: theirs.brand.token });
+  assert.equal(viaOwnCampaign.status, 404);
+  const listOther = await harness.api("GET", `/api/campaigns/${mine.id}/applications`, { token: theirs.brand.token });
+  assert.equal(listOther.status, 403);
+  const approveOther = await harness.api("POST", approveUrl(theirs.id, applied.body.id), { token: theirs.brand.token });
+  assert.equal(approveOther.status, 404);
+
+  const creatorRead = await harness.api("GET", `/api/campaigns/${mine.id}/applications/${applied.body.id}`, { token: other.token });
+  assert.equal(creatorRead.status, 403);
+  const otherWithdraw = await harness.api("POST", `/api/campaigns/${mine.id}/apply/withdraw`, { token: other.token });
+  assert.equal(otherWithdraw.status, 404);
+  const dashboard = await harness.api("GET", "/api/creators/dashboard", { token: other.token });
+  assert.ok(!dashboard.body.applications.some((a) => String(a.campaignId) === mine.id));
+
+  const stillPending = await harness.api("GET", `/api/campaigns/${mine.id}/applications/${applied.body.id}`, { token: mine.brand.token });
+  assert.equal(stillPending.body.status, "pending");
+});
+
+test("approve and withdraw at the same moment: exactly one wins and no place is stranded", async () => {
+  const CampaignApplication = require("../../src/models/CampaignApplication");
+  for (let round = 0; round < 4; round += 1) {
+    const { brand, id } = await liveCampaign();
+    const creator = await harness.registerCreator();
+    const applied = await apply(id, creator, {});
+
+    const [approved, withdrawn] = await Promise.all([
+      harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token }),
+      harness.api("POST", `/api/campaigns/${id}/apply/withdraw`, { token: creator.token }),
+    ]);
+    assert.equal([approved.status, withdrawn.status].filter((s) => s === 200).length, 1, JSON.stringify([approved.body, withdrawn.body]));
+
+    const status = (await CampaignApplication.findById(applied.body.id).lean()).status;
+    const held = await heldPlacements(id);
+    if (approved.status === 200) {
+      assert.equal(status, "approved");
+      assert.equal(held.length, 1);
+    } else {
+      assert.equal(status, "withdrawn");
+      assert.equal(held.length, 0);
+    }
+  }
+});

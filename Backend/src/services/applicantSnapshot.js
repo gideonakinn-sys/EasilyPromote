@@ -55,7 +55,9 @@ function buildApplicantSnapshot(profile, user) {
 function orderSnapshot(campaign, snapshot) {
   const targeting = (campaign && campaign.audienceTargeting) || {};
   const targetLocations = targeting.locations || [];
-  const targetCategories = ((campaign && campaign.creatorEligibility) || {}).categories || [];
+  // Required categories, or the campaign's own category when the brand set none.
+  const required = ((campaign && campaign.creatorEligibility) || {}).categories || [];
+  const targetCategories = required.length ? required : campaign && campaign.category ? [campaign.category] : [];
   const performance = campaignTerms(campaign || {}).campaignModel === "performance";
 
   const audience = (snapshot && snapshot.audience) || {};
