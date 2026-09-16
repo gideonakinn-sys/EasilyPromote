@@ -25,6 +25,8 @@ const metaRoutes = require("./routes/meta");
 const waitlistRoutes = require("./routes/waitlist");
 const referralRoutes = require("./routes/referral");
 const referralCodeRoutes = require("./routes/referralCodes");
+// Campaign engine: applications (ticket 06)
+const applicationRoutes = require("./routes/applications");
 
 const app = express();
 
@@ -79,6 +81,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
 app.use("/api/creators", creatorRoutes);
 app.use("/api/campaigns", referralCodeRoutes);
+app.use("/api/campaigns", applicationRoutes); // Campaign engine: applications (ticket 06)
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/upload", uploadRoutes);

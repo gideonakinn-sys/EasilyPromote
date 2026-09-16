@@ -618,10 +618,14 @@ async function buildDashboard(user) {
   const profile = buildProfile(user, ctx);
   if (!profile) return null;
 
-  const [campaigns, marketplace, wallet] = await Promise.all([
+  // Campaign engine: applications (ticket 06)
+  const { buildMyApplications } = require("./applications");
+
+  const [campaigns, marketplace, wallet, applications] = await Promise.all([
     buildMyCampaigns(ctx),
     buildMarketplace(ctx),
     buildWallet(user, ctx),
+    buildMyApplications(ctx.userId),
   ]);
 
   return {
@@ -629,6 +633,7 @@ async function buildDashboard(user) {
     campaigns,
     marketplace,
     wallet,
+    applications,
     tiktok: buildTikTokStatus(ctx),
     meta: buildMetaStatus(ctx),
   };

@@ -9,6 +9,8 @@ const { startTikTokSync } = require("./utils/syncTiktokViews");
 const { startMetaSync } = require("./utils/syncMetaViews");
 const { startRankRecalc } = require("./utils/rankRecalc");
 const { startPayoutReconciliation } = require("./utils/reconcilePayouts");
+// Campaign engine: applications (ticket 06)
+const { startApplicationDeadlines } = require("./utils/applicationDeadlines");
 
 const PORT = process.env.PORT || 5000;
 
@@ -20,6 +22,7 @@ const start = async () => {
   startMetaSync();
   startRankRecalc();
   startPayoutReconciliation();
+  startApplicationDeadlines(); // Campaign engine: applications (ticket 06)
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, () => {

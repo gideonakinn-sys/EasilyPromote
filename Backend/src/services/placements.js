@@ -91,6 +91,19 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
     return refuse(403, "APPLICATION_REQUIRED", "This campaign needs an application. The brand picks who takes part");
   }
 
+  return reserve({ creatorId, campaign, requested, committedViews });
+}
+
+// Campaign engine: applications (ticket 06). Approving an application reserves the creator's
+// place through the same guarded path as joining; only the Open Call access check is skipped
+// because the brand picked this creator. Returns { status, body } like joinCampaign.
+async function reservePlacementFor({ creatorId, campaignId }) {
+  const campaign = await Campaign.findById(campaignId).lean();
+  if (!campaign || campaign.status !== "live") return refuse(404, "CAMPAIGN_NOT_LIVE", "Campaign not found or not live");
+  return reserve({ creatorId, campaign, requested: null, committedViews: undefined });
+}
+
+async function reserve({ creatorId, campaign, requested, committedViews }) {
   const [ctx, activeSlots, alreadyHeld, openSlots] = await Promise.all([
     loadJoiner(creatorId),
     Slot.countDocuments({ creatorId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
@@ -200,4 +213,4 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
   };
 }
 
-module.exports = { joinCampaign, JOIN_ORDER };
+module.exports = { joinCampaign, reservePlacementFor, loadJoiner, JOIN_ORDER };
