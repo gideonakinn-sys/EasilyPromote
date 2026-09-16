@@ -8,8 +8,44 @@ const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("../services/contentApproval");
+const { fullBrief } = require("../utils/campaignPay");
 
 const router = express.Router();
+
+// Campaign engine: content approval (ticket 07)
+// Loads a submission and its campaign for a content-campaign action by the brand or the
+// creator. Sends the error response and returns null when the action isn't allowed.
+async function loadContentSubmission(req, res, who) {
+  const submission = await Submission.findById(req.params.id);
+  if (!submission) {
+    res.status(404).json({ error: "Submission not found" });
+    return null;
+  }
+  const campaign = await Campaign.findById(submission.campaignId);
+  const owner = who === "brand" ? campaign && String(campaign.businessId) : String(submission.creatorId);
+  if (!campaign || owner !== String(req.user._id)) {
+    res.status(403).json({ error: "Not authorized" });
+    return null;
+  }
+  if (!contentApproval.isContentCampaign(campaign)) {
+    res.status(400).json({ error: "This only applies to content campaigns", code: "NOT_CONTENT_CAMPAIGN" });
+    return null;
+  }
+  return { submission, campaign };
+}
+
+function sendContentError(res, error, next) {
+  if (error instanceof contentApproval.ContentApprovalError) {
+    return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+  }
+  return next(error);
+}
+
+function contentResponse(submission, campaign) {
+  return { id: submission._id, ...contentApproval.contentApprovalView(submission, campaign) };
+}
 
 router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
@@ -22,6 +58,16 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
     const campaign = await Campaign.findById(campaignId);
     if (!campaign || campaign.status !== "live") {
       return res.status(400).json({ error: "Campaign is not available for submissions" });
+    }
+
+    // Campaign engine: content approval (ticket 07)
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const created = await contentApproval.submitContent({ user: req.user, campaign, videoUrl, caption, durationSeconds });
+        return res.status(201).json({ id: created._id, status: created.status, campaignId: created.campaignId });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
     }
 
     const user = await User.findById(req.user._id);
@@ -79,6 +125,18 @@ router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) =>
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const updated = await contentApproval.resubmit({ submission, campaign: contentCampaign, user: req.user, videoUrl, caption });
+        return res.json({ ...contentResponse(updated, contentCampaign), videoUrl: updated.videoUrl, caption: updated.caption });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (!["new", "rejected"].includes(submission.status)) {
       return res.status(400).json({ error: "Content can only be updated before approval" });
     }
@@ -169,6 +227,24 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       }),
     };
 
+    // Campaign engine: content approval (ticket 07)
+    const isContent = contentApproval.isContentCampaign(campaign);
+    if (isContent) {
+      const byStatus = await Submission.aggregate([
+        { $match: { campaignId: campaign._id } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]);
+      const count = (value) => (byStatus.find((group) => group._id === value) || { count: 0 }).count;
+      Object.assign(counts, {
+        changesRequested: count("changes_requested"),
+        awaitingDelivery: count("awaiting_delivery"),
+        delivered: count("delivered"),
+        verifying: count("verifying"),
+        completed: count("completed"),
+        appealed: count("appealed"),
+      });
+    }
+
     const submissionsResponse = submissions.map((s) => ({
       id: s._id,
       creatorId: s.creatorId,
@@ -186,9 +262,23 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       submittedAt: s.submittedAt,
       reviewedAt: s.reviewedAt,
       postedAt: s.postedAt,
+      // Campaign engine: content approval (ticket 07)
+      ...(isContent && contentApproval.contentApprovalView(s, campaign)),
     }));
 
-    res.json({ counts, submissions: submissionsResponse });
+    res.json({
+      counts,
+      submissions: submissionsResponse,
+      // Campaign engine: content approval (ticket 07)
+      ...(isContent && {
+        contentApproval: {
+          destination: contentApproval.destinationOf(campaign),
+          maxChangeRequests: contentApproval.MAX_CHANGE_REQUESTS,
+          licence: contentApproval.USAGE_RIGHTS_LICENCE,
+          brief: fullBrief(campaign),
+        },
+      }),
+    });
   } catch (error) {
     next(error);
   }
@@ -205,6 +295,17 @@ router.patch("/:id/approve", protect, async (req, res, next) => {
     if (!campaign || campaign.businessId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const approved = await contentApproval.approveContent({ submission, campaign, actor: { kind: "brand", user: req.user } });
+        return res.json(contentResponse(approved, campaign));
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (submission.status !== "new") {
       return res.status(400).json({ error: "Can only approve new submissions" });
     }
@@ -300,6 +401,24 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const posted = await contentApproval.markContentPosted({
+          submission,
+          campaign: contentCampaign,
+          user: req.user,
+          posts: Array.isArray(posts) ? posts : [{ platform, postUrl: url }],
+          caption: req.body.caption,
+        });
+        return res.json({ ...contentResponse(posted, contentCampaign), postedPlatforms: posted.postedPlatforms });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     // "posted" and "verifying" are allowed so a creator can add a second
     // platform's link later — they often post to TikTok first and Instagram
     // hours afterwards, by which point the sync jobs have already moved the
@@ -402,6 +521,54 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     next(error);
   }
 });
+
+// ── Campaign engine: content approval (ticket 07) ──────────────────────────────
+// Content campaigns only; each route answers NOT_CONTENT_CAMPAIGN for views campaigns.
+
+function contentRoute(who, action) {
+  return async (req, res, next) => {
+    try {
+      const loaded = await loadContentSubmission(req, res, who);
+      if (!loaded) return;
+      const updated = await action({ ...loaded, user: req.user, body: req.body || {} });
+      res.json(contentResponse(updated, loaded.campaign));
+    } catch (error) {
+      sendContentError(res, error, next);
+    }
+  };
+}
+
+router.patch(
+  "/:id/request-changes",
+  protect,
+  contentRoute("brand", ({ body, ...ctx }) => contentApproval.requestChanges({ ...ctx, notes: body.notes }))
+);
+
+router.patch(
+  "/:id/appeal",
+  protect,
+  authorizeRoles("creator"),
+  contentRoute("creator", ({ body, ...ctx }) => contentApproval.appealRejection({ ...ctx, reason: body.reason }))
+);
+
+router.patch(
+  "/:id/deliver",
+  protect,
+  authorizeRoles("creator"),
+  contentRoute("creator", ({ body, ...ctx }) =>
+    contentApproval.shareDelivery({ ...ctx, url: body.url, acceptUsageRights: body.acceptUsageRights })
+  )
+);
+
+router.patch("/:id/confirm-receipt", protect, contentRoute("brand", ({ body, ...ctx }) => contentApproval.confirmReceipt(ctx)));
+
+router.patch("/:id/confirm-post", protect, contentRoute("brand", ({ body, ...ctx }) => contentApproval.confirmPost(ctx)));
+
+router.patch(
+  "/:id/dispute-post",
+  protect,
+  contentRoute("brand", ({ body, ...ctx }) => contentApproval.disputePost({ ...ctx, notes: body.notes }))
+);
 
 router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), async (req, res, next) => {
   try {

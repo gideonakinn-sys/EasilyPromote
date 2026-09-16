@@ -12,6 +12,9 @@ const { startPayoutReconciliation } = require("./utils/reconcilePayouts");
 // Campaign engine: applications (ticket 06)
 const { startApplicationDeadlines } = require("./utils/applicationDeadlines");
 
+// Campaign engine: content approval (ticket 07)
+const { startContentAutoApprove } = require("./services/contentApproval");
+
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
@@ -23,6 +26,9 @@ const start = async () => {
   startRankRecalc();
   startPayoutReconciliation();
   startApplicationDeadlines(); // Campaign engine: applications (ticket 06)
+
+  // Campaign engine: content approval (ticket 07)
+  startContentAutoApprove();
   const server = http.createServer(app);
   initSocket(server);
   server.listen(PORT, () => {

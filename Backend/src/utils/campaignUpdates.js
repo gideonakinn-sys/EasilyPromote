@@ -21,6 +21,16 @@ function mapStatusToCreator(submission, campaign, slot = null) {
       return "live_tracking";
     case "rejected":
       return "changes_requested";
+    // Campaign engine: content approval (ticket 07). The exact step is in contentApproval.status.
+    case "changes_requested":
+      return "changes_requested";
+    case "awaiting_delivery":
+    case "delivered":
+      return "approved_post";
+    case "verifying":
+      return isDeliverable(slot) ? "approved_post" : "under_review";
+    case "completed":
+      return "delivered";
     default:
       return "under_review";
   }

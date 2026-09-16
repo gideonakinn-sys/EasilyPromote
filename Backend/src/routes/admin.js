@@ -24,6 +24,8 @@ const { timeAgo } = require("../utils/timeAgo");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { hasConnectedSocial } = require("../utils/creatorVerification");
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("../services/contentApproval");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -442,7 +444,12 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
-    submission.status = status === "approved" ? "awaiting_post" : "rejected";
+    // Campaign engine: content approval (ticket 07): approved content goes where its campaign says.
+    const reviewedCampaign = await Campaign.findById(submission.campaignId);
+    const approvedStatus = contentApproval.isContentCampaign(reviewedCampaign)
+      ? contentApproval.statusAfterApproval(reviewedCampaign)
+      : "awaiting_post";
+    submission.status = status === "approved" ? approvedStatus : "rejected";
     if (rejectionReason) submission.rejectionReason = rejectionReason;
     if (adminNotes) submission.adminNotes = adminNotes;
     submission.reviewedAt = new Date();
@@ -456,6 +463,10 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
       reason: status === "rejected" ? rejectionReason : null,
       metadata: adminNotes ? { adminNotes } : {},
     });
+    // Campaign engine: content approval (ticket 07): D1, brand-page fixed pay is due on approval.
+    if (status === "approved" && approvedStatus === "awaiting_delivery" && contentApproval.destinationOf(reviewedCampaign) === "brand_page") {
+      await contentApproval.fixedPayDue(submission, reviewedCampaign, { trigger: "admin_approved" });
+    }
 
     const campaign = await Campaign.findById(submission.campaignId);
     await Notification.create({
@@ -490,8 +501,11 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
+    // Campaign engine: content approval (ticket 07): an upheld appeal sends content where its campaign says.
+    const appealCampaign = await Campaign.findById(submission.campaignId);
+    const isContentAppeal = contentApproval.isContentCampaign(appealCampaign);
     if (decision === "approve") {
-      submission.status = "awaiting_post";
+      submission.status = isContentAppeal ? contentApproval.statusAfterApproval(appealCampaign) : "awaiting_post";
       submission.adminNotes = notes || "Appeal approved by Admin";
     } else {
       submission.status = "rejected";
@@ -506,6 +520,22 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
       actorName: req.user.name,
       reason: notes || null,
     });
+
+    // Campaign engine: content approval (ticket 07)
+    if (isContentAppeal) {
+      if (decision === "approve" && contentApproval.destinationOf(appealCampaign) === "brand_page") {
+        await contentApproval.fixedPayDue(submission, appealCampaign, { trigger: "appeal_approved" });
+      }
+      await Notification.create({
+        creatorId: submission.creatorId,
+        campaignId: submission.campaignId,
+        type: decision === "approve" ? "content_appeal_approved" : "content_appeal_rejected",
+        title: decision === "approve" ? "Appeal approved" : "Appeal rejected",
+        body: decision === "approve"
+          ? `Your appeal for "${appealCampaign.name}" was approved. Your content is approved.`
+          : `Your appeal for "${appealCampaign.name}" was rejected.${notes ? ` ${notes}` : ""}`,
+      });
+    }
 
     emitCampaignUpdate(submission);
 

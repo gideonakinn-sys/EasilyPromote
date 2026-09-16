@@ -12,6 +12,14 @@ const EVENT_TYPES = [
   "appeal_approved",
   "appeal_rejected",
   "paid",
+  // Campaign engine: content approval (ticket 07)
+  "changes_requested",
+  "delivery_shared",
+  "receipt_confirmed",
+  "post_verified",
+  "post_disputed",
+  "fixed_pay_due",
+  "completed",
 ];
 
 const submissionEventSchema = new mongoose.Schema(

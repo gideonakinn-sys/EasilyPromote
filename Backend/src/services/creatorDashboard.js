@@ -21,6 +21,10 @@ const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENT
 const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
 const { buildMyApplications } = require("./applications"); // Campaign engine: applications (ticket 06)
 
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("./contentApproval");
+const { contentLabelFor } = require("./submissionEvents");
+
 // Everything the creator dashboard shows is derived from the same handful of
 // documents. Loading them once per request (instead of once per endpoint, and
 // again inside every helper) is where most of the round trips went.
@@ -316,6 +320,27 @@ function buildCreatorReferral(campaign, code, earnings) {
   };
 }
 
+// Campaign engine: content approval (ticket 07)
+// Content campaigns carry where their approval and delivery stand; a creator with no
+// submission yet still learns the destination and the brief's required hashtags.
+function contentApprovalFields(campaign, submission, timeline) {
+  if (!contentApproval.isContentCampaign(campaign)) return {};
+  const view = submission
+    ? contentApproval.contentApprovalView(submission, campaign)
+    : {
+        status: null,
+        destination: contentApproval.destinationOf(campaign),
+        maxChangeRequests: contentApproval.MAX_CHANGE_REQUESTS,
+        changeRequestsLeft: contentApproval.MAX_CHANGE_REQUESTS,
+        changeRequests: [],
+        licence: contentApproval.destinationOf(campaign) === "creator_page" ? null : contentApproval.USAGE_RIGHTS_LICENCE,
+      };
+  return {
+    contentApproval: { ...view, requiredHashtags: (campaign.brief && campaign.brief.hashtags) || [] },
+    timeline: timeline.map((event) => ({ ...event, label: contentLabelFor(event.type, event.metadata) })),
+  };
+}
+
 async function buildMyCampaigns(ctx) {
   const { userId } = ctx;
 
@@ -323,7 +348,7 @@ async function buildMyCampaigns(ctx) {
     Slot.find({ creatorId: userId })
       .populate({
         path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective",
+        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective contentDestination",
         populate: { path: "businessId", select: "name avatar" },
       })
       .sort({ createdAt: -1 })
@@ -425,6 +450,8 @@ async function buildMyCampaigns(ctx) {
           referralBySlot.get(slot._id.toString()),
           referralEarnings.get(campaign._id.toString())
         ),
+        // Campaign engine: content approval (ticket 07)
+        ...contentApprovalFields(campaign, submission, submission ? eventsBySubmission[submission._id.toString()] || [] : []),
       };
     });
 

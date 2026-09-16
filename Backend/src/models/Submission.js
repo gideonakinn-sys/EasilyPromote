@@ -27,6 +27,21 @@ const postedPlatformSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Campaign engine: content approval (ticket 07)
+const changeRequestSchema = new mongoose.Schema(
+  {
+    round: { type: Number, required: true },
+    notes: { type: String, required: true, maxlength: 2000 },
+    requestedAt: { type: Date, required: true },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // The content the brand was looking at when it asked.
+    videoUrl: String,
+    caption: String,
+    resubmittedAt: Date,
+  },
+  { _id: false }
+);
+
 const submissionSchema = new mongoose.Schema(
   {
     campaignId: {
@@ -56,7 +71,21 @@ const submissionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["new", "approved", "rejected", "awaiting_post", "posted", "verifying", "appealed"],
+      // Campaign engine: content approval (ticket 07) adds changes_requested, awaiting_delivery,
+      // delivered and completed; views campaigns never use them.
+      enum: [
+        "new",
+        "approved",
+        "rejected",
+        "awaiting_post",
+        "posted",
+        "verifying",
+        "appealed",
+        "changes_requested",
+        "awaiting_delivery",
+        "delivered",
+        "completed",
+      ],
       default: "new",
     },
     rejectionReason: {
@@ -103,6 +132,45 @@ const submissionSchema = new mongoose.Schema(
     postedAt: {
       type: Date,
     },
+
+    // ── Campaign engine: content approval (ticket 07). Content campaigns only. ──
+    // When the content last went to the brand for review: the 72-hour auto-approve clock (D10).
+    awaitingReviewSince: {
+      type: Date,
+    },
+    // One entry per change-request round, oldest first: what the brand reviewed, its notes,
+    // and when the creator resubmitted (D11).
+    changeRequests: {
+      type: [changeRequestSchema],
+      default: undefined,
+    },
+    autoApproved: {
+      type: Boolean,
+    },
+    // Brand page / both: the download link the creator shared (D12).
+    delivery: {
+      url: String,
+      sharedAt: Date,
+      confirmedAt: Date,
+      confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+    // Brand page / both: the standard licence the creator accepted (D6).
+    usageRights: {
+      licence: String,
+      acceptedAt: Date,
+      acceptedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+    // Creator page / both: the caption the creator says the live post went out with.
+    postedCaption: {
+      type: String,
+      maxlength: 5000,
+    },
+    postVerifiedAt: {
+      type: Date,
+    },
+    completedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
@@ -113,5 +181,7 @@ submissionSchema.index({ creatorId: 1, createdAt: -1 });
 // submission on one campaign.
 submissionSchema.index({ campaignId: 1, status: 1 });
 submissionSchema.index({ campaignId: 1, creatorId: 1 });
+// Auto-approve job: content waiting on the brand, oldest first.
+submissionSchema.index({ status: 1, awaitingReviewSince: 1 });
 
 module.exports = mongoose.model("Submission", submissionSchema);

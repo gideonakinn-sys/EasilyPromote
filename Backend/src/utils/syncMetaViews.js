@@ -47,6 +47,9 @@ function extractFacebookVideoId(url) {
 async function updateCampaignFromSubmission(submission) {
   const campaign = await Campaign.findById(submission.campaignId);
   if (!campaign) return;
+  // Campaign engine: content approval (ticket 07). Content campaigns have no view target, and
+  // their live posts sit in "verifying"; views never complete them.
+  if (campaign.campaignModel === "content") return;
 
   const totalViews = await Submission.aggregate([
     { $match: { campaignId: campaign._id, status: { $in: ["posted", "verifying"] } } },
