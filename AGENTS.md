@@ -41,6 +41,8 @@ Frontend: no test framework; run `npx tsc --noEmit` for type checking.
 
 Backend end-to-end tests (run from `Backend/`):
 ```bash
+npm test                 # unit then end-to-end
+npm run test:unit        # pure calculations (budget, eligibility), no database
 npm run test:e2e         # node:test against a throwaway local mongod, Paystack stubbed
 ```
 - Needs `mongod` installed locally (set `MONGOD_PATH` if it isn't found). Tests never read `Backend/.env` and clear outside-service keys (email, S3, Cloudinary, social APIs).

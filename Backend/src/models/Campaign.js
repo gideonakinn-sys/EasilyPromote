@@ -79,14 +79,22 @@ const campaignSchema = new mongoose.Schema(
     endDate: {
       type: Date,
     },
+    // Content campaigns pay per deliverable, so only performance campaigns need views.
     targetViews: {
       type: Number,
-      required: [true, "Target views is required"],
+      required: [
+        function () {
+          // Update validators run against the query, not the document; edits keep what's stored.
+          if (typeof this.getUpdate === "function") return false;
+          return this.campaignModel !== "content";
+        },
+        "Target views is required",
+      ],
       min: 1,
     },
     costPerView: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
     budget: {
@@ -132,6 +140,71 @@ const campaignSchema = new mongoose.Schema(
       type: Number,
       default: 5,
       min: 1,
+    },
+    // ── Campaign engine (ADR 0001): new fields beside the older ones below. ──
+    campaignObjective: {
+      type: String,
+      enum: ["content", "views", "engagement", "downloads", "signups", "leads", "sales", "other"],
+    },
+    campaignModel: {
+      type: String,
+      enum: ["content", "performance"],
+    },
+    payShape: {
+      type: String,
+      enum: ["fixed", "performance", "hybrid"],
+    },
+    // Who sets what a creator earns per unit (ADR 0003).
+    rateAuthority: {
+      type: String,
+      enum: ["brand", "admin", "platform"],
+    },
+    performanceMetric: {
+      type: String,
+      enum: ["views", "clicks", "downloads", "signups", "sales", "leads", "engagement", null],
+      default: undefined,
+    },
+    // Content campaigns only: set by the brand.
+    contentPay: {
+      ratePerDeliverable: Number,
+      deliverables: Number,
+    },
+    contentDestination: {
+      type: String,
+      enum: ["creator_page", "brand_page", "both"],
+    },
+    creatorAccess: {
+      type: String,
+      enum: ["open_call", "application_required"],
+    },
+    audienceTargeting: {
+      locations: { type: [String], default: undefined },
+      // Share of a creator's audience that must be in the locations above, combined.
+      minLocationShare: Number,
+      ageRanges: { type: [String], default: undefined },
+      genders: { type: [String], default: undefined },
+      interests: { type: [String], default: undefined },
+      platforms: { type: [String], default: undefined },
+    },
+    creatorEligibility: {
+      minFollowers: Number,
+      minEngagementRate: Number,
+      categories: { type: [String], default: undefined },
+      verifiedOnly: Boolean,
+      minRank: String,
+      requiredBadges: { type: [String], default: undefined },
+    },
+    brief: {
+      summary: String,
+      dos: { type: [String], default: undefined },
+      donts: { type: [String], default: undefined },
+      hashtags: { type: [String], default: undefined },
+      soundUrl: String,
+      referenceVideos: { type: [String], default: undefined },
+      tone: String,
+      keyMessages: { type: [String], default: undefined },
+      productInfo: String,
+      approvalRequirements: String,
     },
     // What the brand wants: views only, or people taking an action in their app, which
     // adds referral tracking funded by a referral budget.
@@ -230,12 +303,13 @@ campaignSchema.pre("save", function (next) {
   if (this.isModified("status") && this.status === "completed" && !this.completedAt) {
     this.completedAt = new Date();
   }
-  if (this.isModified("targetViews") && !this._skipPriceRecalculation) {
+  if (this.campaignModel !== "content" && this.isModified("targetViews") && !this._skipPriceRecalculation) {
     const { getPriceForViews } = require("../config/pricing");
     this.budget = getPriceForViews(this.targetViews);
     this.costPerView = Math.round((this.budget / this.targetViews) * 1000) / 1000;
   }
-  if (this.isModified("budget") || this.isModified("platformFeePercent")) {
+  // Content campaigns add the fee on top of the creator budget (D2); their route sets all three.
+  if (this.campaignModel !== "content" && (this.isModified("budget") || this.isModified("platformFeePercent"))) {
     this.platformFee = this.budget * (this.platformFeePercent / 100);
     this.creatorPool = this.budget - this.platformFee;
   }

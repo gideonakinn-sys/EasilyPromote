@@ -50,6 +50,7 @@ function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
   return nextObjective === "actions" && requestedBudget !== undefined && Math.round(Number(requestedBudget)) !== currentBudget;
 }
 const { releasedViewsTotal } = require("../utils/earnings");
+const { resolveCampaignSetup, campaignSetupView } = require("../utils/campaignSetup");
 
 const router = express.Router();
 
@@ -130,28 +131,32 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
   try {
     const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral, objective } = req.body;
 
+    const setup = resolveCampaignSetup(req.body);
+    if (setup.error) {
+      return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+    }
+
     const referralSettings = parseReferralSettings(referral);
     if (referralSettings.error) {
       return res.status(400).json({ error: referralSettings.error });
     }
-    // Older clients send referral.enabled without an objective.
-    const campaignObjective =
-      objective !== undefined ? (objective === "actions" ? "actions" : "views") : referralSettings.value.enabled ? "actions" : "views";
+    // Older clients send only `objective` (or referral.enabled); the setup maps both ways.
+    const campaignObjective = setup.legacyObjective;
     const referralValues = { ...referralSettings.value, enabled: campaignObjective === "actions" };
+    if (setup.referralEventTypes) {
+      referralValues.eventTypes = setup.referralEventTypes;
+      referralValues.eventType = setup.referralEventTypes[0];
+    }
     if (campaignObjective === "views") referralValues.requestedBudget = 0;
-
-    const { getPriceForViews } = require("../config/pricing");
-    const budget = getPriceForViews(targetViews);
-    const costPerView = Math.round((budget / targetViews) * 1000) / 1000;
+    const isContent = setup.updates.campaignModel === "content";
 
     const campaign = await Campaign.create({
       businessId: req.user._id,
       coverImageUrl: coverImageUrl || null,
       name,
       category,
-      targetViews,
-      costPerView,
-      budget,
+      targetViews: isContent ? undefined : targetViews,
+      ...setup.updates,
       contentBrief: contentBrief || null,
       keyMessageCta: keyMessageCta || null,
       whatToAvoid: whatToAvoid || null,
@@ -174,6 +179,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       status: campaign.status,
       budget: campaign.budget,
       costPerView: campaign.costPerView,
+      quote: setup.quote,
     });
   } catch (error) {
     next(error);
@@ -191,6 +197,13 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     }
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Campaign cannot be paid" });
+    }
+    // Content campaigns need places per deliverable, which arrive with the new checkout (ticket 03).
+    if (campaign.campaignModel === "content") {
+      return res.status(409).json({
+        error: "Content campaigns can't be paid for yet. Save it as a draft and we'll let you know when checkout opens.",
+        code: "CONTENT_CHECKOUT_NOT_READY",
+      });
     }
 
     // Referral campaigns pay their referral budget in the same checkout, and only once the
@@ -346,13 +359,19 @@ router.patch("/:id", protect, async (req, res, next) => {
 
     // A new size or referral budget mid-checkout is a new price. The campaign goes back to
     // draft so the old checkout can't put it live; a payment still made on it is recorded for refund.
+    const setup = resolveCampaignSetup(req.body, campaign);
+    if (setup.error) {
+      return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+    }
+
     const repriced =
       campaign.status === "pending_payment" &&
-      changesPrice(campaign, {
-        targetViews: req.body.targetViews,
-        objective: req.body.objective,
-        requestedBudget: req.body.referral ? req.body.referral.requestedBudget : undefined,
-      });
+      (setup.updates.budget !== campaign.budget ||
+        changesPrice(campaign, {
+          targetViews: req.body.targetViews,
+          objective: req.body.objective !== undefined ? req.body.objective : setup.legacyObjective,
+          requestedBudget: req.body.referral ? req.body.referral.requestedBudget : undefined,
+        }));
 
     const allowedFields = [
       "coverImageUrl",
@@ -395,15 +414,18 @@ router.patch("/:id", protect, async (req, res, next) => {
       }
     }
 
-    if (req.body.objective !== undefined) {
-      Object.assign(updates, objectiveUpdates(req.body.objective));
+    if (req.body.objective !== undefined || req.body.campaignObjective !== undefined) {
+      Object.assign(updates, objectiveUpdates(setup.legacyObjective));
+      if (setup.referralEventTypes) {
+        updates["referral.eventTypes"] = setup.referralEventTypes;
+        updates["referral.eventType"] = setup.referralEventTypes[0];
+      }
     }
 
-    if (req.body.targetViews !== undefined) {
-      const { getPriceForViews } = require("../config/pricing");
-      updates.budget = getPriceForViews(req.body.targetViews);
-      updates.costPerView = Math.round((updates.budget / req.body.targetViews) * 1000) / 1000;
-    }
+    // Price, fee and creator pool from one quote, so an edit never leaves the pool stale
+    // (findOneAndUpdate skips the model's save hook that used to derive them).
+    Object.assign(updates, setup.updates);
+    if (setup.updates.campaignModel === "content") updates.$unset = { targetViews: 1 };
 
     if (repriced) {
       updates.status = "draft";
@@ -449,10 +471,12 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.startDate !== undefined) updates.startDate = data.startDate;
       if (data.endDate !== undefined) updates.endDate = data.endDate;
       if (data.targetViews !== undefined) {
+        const setup = resolveCampaignSetup({ targetViews: data.targetViews }, campaign);
+        if (setup.error) {
+          return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+        }
         updates.targetViews = data.targetViews;
-        const { getPriceForViews } = require("../config/pricing");
-        updates.budget = getPriceForViews(data.targetViews);
-        updates.costPerView = Math.round((updates.budget / data.targetViews) * 1000) / 1000;
+        for (const key of ["budget", "costPerView", "platformFee", "creatorPool"]) updates[key] = setup.updates[key];
       }
       if (data.scriptUrl !== undefined) updates.scriptUrl = data.scriptUrl;
       if (data.scriptFileName !== undefined) updates.scriptFileName = data.scriptFileName;
@@ -464,6 +488,13 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.contentStyle !== undefined) updates.contentStyle = data.contentStyle;
       if (data.niches !== undefined) updates.niches = data.niches;
     } else if (step === 3) {
+      if (data.objective !== undefined || data.referral !== undefined) {
+        const setup = resolveCampaignSetup({ objective: data.objective, referral: data.referral }, campaign);
+        if (setup.error) {
+          return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+        }
+        Object.assign(updates, setup.updates);
+      }
       if (data.objective !== undefined) Object.assign(updates, objectiveUpdates(data.objective));
       if (data.referral !== undefined) {
         const referralSettings = parseReferralSettings(data.referral);
@@ -790,6 +821,7 @@ router.get("/:id", protect, async (req, res, next) => {
       submissionsAwaitingReview,
       creatorCount,
       objective: campaign.objective || "views",
+      ...campaignSetupView(campaign),
       paymentAmount: campaign.paymentAmount || 0,
       referral: {
         requestedBudget: campaign.referral ? campaign.referral.requestedBudget || 0 : 0,
