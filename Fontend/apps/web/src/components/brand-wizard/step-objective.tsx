@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ChevronDownIcon } from "@hugeicons/core-free-icons";
+import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
 import {
@@ -67,7 +68,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
           )}
         </div>
         <div className="flex-1 space-y-2">
-          <p className="text-xs font-medium text-stone-900 font-rethink">Campaign cover</p>
+          <p className="text-xs font-medium text-stone-900 font-rethink">Campaign Cover</p>
           <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
           {uploading ? (
             <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress}>
@@ -86,7 +87,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
         </div>
       </div>
 
-      <Field label="Campaign name" htmlFor="campaign-name" tooltip="The name creators see for this campaign">
+      <Field label="Campaign Name" htmlFor="campaign-name" tooltip="The name creators see for this campaign">
         <input
           id="campaign-name"
           type="text"
@@ -101,7 +102,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
       <Field label="Industry" tooltip="The industry your brand is in">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={`${TEXT_INPUT_CLASS} text-left flex items-center justify-between`}>
+            <button type="button" className={cn(TEXT_INPUT_CLASS, "text-left flex items-center justify-between")}>
               <span>{data.category}</span>
               <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
             </button>
@@ -111,7 +112,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
               <DropdownMenuItem
                 key={category}
                 onSelect={() => update({ category })}
-                className={data.category === category ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                className={cn("font-medium", data.category === category ? "text-stone-900" : "text-stone-700")}
               >
                 {category}
               </DropdownMenuItem>

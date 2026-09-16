@@ -11,7 +11,8 @@ import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken, quoteCampaign } from "../lib/api";
 import { useReferralConnection } from "./connect-app-checklist";
-import type { CampaignQuote } from "./types";
+import type { CampaignObjective, CampaignQuote } from "./types";
+import { ConfirmDeleteModal } from "./confirm-delete-modal";
 import { StepObjective } from "./brand-wizard/step-objective";
 import { StepDestination } from "./brand-wizard/step-destination";
 import { StepAudience } from "./brand-wizard/step-audience";
@@ -25,6 +26,7 @@ import {
   isObjectiveAvailable,
   pricingPayload,
   resumeStep,
+  savedWizardStep,
   stepProblems,
   usesReferralBudget,
   wizardDataFromCampaign,
@@ -54,6 +56,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   // Set once the campaign exists, so a failed payment doesn't create a second campaign.
   const [campaignId, setCampaignId] = useState<string | undefined>(draftId);
   const [loadingDraft, setLoadingDraft] = useState(Boolean(draftId));
+  // While a draft can't be loaded there's no form, so nothing can save over the real draft.
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [savedObjective, setSavedObjective] = useState<CampaignObjective | null>(null);
   const [saving, setSaving] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState("");
@@ -93,20 +99,24 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       .catch(() => {});
   }, []);
 
-  // A saved draft opens at the first step that still needs something, from either wizard.
+  // A saved draft opens on the step the brand last saved it on. Drafts from the older wizard
+  // have no step, so they open at the first step that still needs something.
   useEffect(() => {
     if (!draftId) return;
+    setLoadingDraft(true);
+    setLoadError("");
     apiRequest<SavedCampaign>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((saved) => {
         const loaded = wizardDataFromCampaign(saved);
-        const resume = resumeStep(loaded);
+        const resume = savedWizardStep(saved) || resumeStep(loaded);
         setData(loaded);
+        setSavedObjective(saved.campaignObjective || null);
         setStep(resume);
         setFurthestStep(resume);
       })
-      .catch(() => setLaunchError("We couldn't load this draft. Close and try again."))
+      .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : "We couldn't load this draft."))
       .finally(() => setLoadingDraft(false));
-  }, [draftId]);
+  }, [draftId, loadAttempt]);
 
   useEffect(() => {
     if (draftId) return;
@@ -147,13 +157,15 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   }, [storageKey]);
 
   // The pay and launch steps show the API's quote, so the numbers match what checkout charges.
-  const pricingKey = JSON.stringify(pricingPayload(data));
+  // A saved campaign is quoted at its own platform fee.
+  const pricingKey = JSON.stringify({ ...pricingPayload(data), ...(campaignId && { campaignId }) });
   const payReady = stepProblems(data, 4).length === 0;
   useEffect(() => {
     if (step !== 4 && step !== LAST_STEP) return;
     if (!payReady) {
       setQuote(null);
       setQuoteError("");
+      setQuoteLoading(false);
       return;
     }
     let cancelled = false;
@@ -177,20 +189,24 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      setQuoteLoading(false);
     };
   }, [step, pricingKey, payReady]);
 
-  // Creates the campaign the first time, then updates it.
+  // Creates the campaign the first time, then updates it, remembering the step it's saved on.
   const saveCampaign = async (): Promise<string> => {
-    const body = JSON.stringify(campaignPayload(data));
+    const body = JSON.stringify(campaignPayload(data, { savedObjective, wizardStep: step }));
     const token = getToken() || undefined;
-    if (campaignId) {
-      await apiRequest(`/campaigns/${campaignId}`, { method: "PATCH", token, body });
-      return campaignId;
+    let id = campaignId;
+    if (id) {
+      await apiRequest(`/campaigns/${id}`, { method: "PATCH", token, body });
+    } else {
+      const created = await apiRequest<{ id: string }>("/campaigns", { method: "POST", token, body });
+      id = created.id;
+      setCampaignId(id);
     }
-    const created = await apiRequest<{ id: string }>("/campaigns", { method: "POST", token, body });
-    setCampaignId(created.id);
-    return created.id;
+    setSavedObjective(data.objective);
+    return id;
   };
 
   const handleSaveDraft = async () => {
@@ -280,7 +296,19 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const primaryLabel =
     step < LAST_STEP ? "Continue" : needsConnection ? "Connect your app to launch" : "Pay and launch campaign";
 
-  const stepContent = loadingDraft ? (
+  const stepContent = loadError ? (
+    <div className="bg-white border border-red-200 rounded-2xl p-5 space-y-3" role="alert">
+      <p className="text-sm font-medium text-stone-900 font-rethink">We couldn&apos;t load this draft</p>
+      <p className="text-xs text-stone-500 font-medium font-rethink">{loadError}</p>
+      <button
+        type="button"
+        onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+        className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink"
+      >
+        Try again
+      </button>
+    </div>
+  ) : loadingDraft ? (
     <div className="space-y-6">
       <Skeleton className="h-7 w-2/3" />
       <Skeleton className="h-20 w-full rounded-2xl" />
@@ -312,7 +340,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <h3 className="font-rethink font-semibold text-base text-stone-900 truncate flex-1">{draftId ? "Edit draft" : "Create a campaign"}</h3>
+          <h3 className="font-rethink font-medium text-base text-stone-900 truncate flex-1">{draftId ? "Edit draft" : "Create a campaign"}</h3>
           {campaignId && (
             <button
               type="button"
@@ -354,7 +382,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           <div>
             <button
               type="button"
-              onClick={data.name.trim() ? handleSaveDraft : onClose}
+              onClick={data.name.trim() && !loadError && !loadingDraft ? handleSaveDraft : onClose}
               disabled={saving}
               className="text-stone-500 text-xs font-medium font-rethink mb-10 block disabled:opacity-50"
             >
@@ -403,14 +431,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       >
         {!isMobile && (
           <div className="text-center mb-8">
-            <h3 className="font-rethink font-semibold tracking-tight text-lg text-stone-900">{draftId ? "Edit draft" : "Create a campaign"}</h3>
+            <h3 className="font-rethink font-medium tracking-tight text-lg text-stone-900">{draftId ? "Edit draft" : "Create a campaign"}</h3>
           </div>
         )}
 
         <div data-reveal key={step} className={cn("flex-1 space-y-8", isMobile ? "w-full" : "w-[380px] mx-auto")}>
           {stepContent}
 
-          {touched[step] && problems.length > 0 && (
+          {!loadError && touched[step] && problems.length > 0 && (
             <ul className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 space-y-1" role="alert">
               {problems.map((problem) => (
                 <li key={problem} className="text-xs text-red-600 font-medium font-rethink">
@@ -425,7 +453,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               <button
                 type="button"
                 onClick={isMobile ? handleSaveDraft : handleBack}
-                disabled={saving || loadingDraft}
+                disabled={saving || loadingDraft || Boolean(loadError)}
                 className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
               >
                 {isMobile ? (saving ? "Saving…" : "Save and close") : "Back"}
@@ -434,7 +462,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <button
               type="button"
               onClick={handleNext}
-              disabled={loadingDraft || launching || (step === LAST_STEP && needsConnection)}
+              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection)}
               className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {launching ? <Spinner className="size-4" /> : primaryLabel}
@@ -444,33 +472,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         </div>
       </div>
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6" role="dialog" aria-modal="true" aria-labelledby="delete-draft-title">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
-            <h3 id="delete-draft-title" className="font-rethink font-semibold text-base text-stone-900 text-center tracking-tight">
-              Delete this draft?
-            </h3>
-            <p className="font-rethink text-xs text-stone-500 font-medium text-center">You can&apos;t undo this.</p>
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full font-rethink"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="flex-1 py-2.5 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDeleteModal
+        open={showDeleteConfirm}
+        title="Delete this draft?"
+        busy={deleting}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

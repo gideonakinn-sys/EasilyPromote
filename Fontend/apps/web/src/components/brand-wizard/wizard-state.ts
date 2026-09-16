@@ -140,7 +140,8 @@ export interface WizardData {
   verifiedOnly: boolean;
   minRank: string;
   requiredBadges: string[];
-  // Content: the brand sets the rate (ADR 0003). Prefilled so a draft can be saved early.
+  // Content: the brand sets the rate (ADR 0003), so it's never prefilled. A draft can be
+  // saved without it.
   ratePerDeliverable: string;
   deliverables: string;
   // Views and referral objectives: views from the price table.
@@ -149,6 +150,8 @@ export interface WizardData {
   brief: WizardBrief;
   scriptUrl: string;
   scriptFileName: string;
+  // Niches from the older wizard that aren't creator categories; kept on save.
+  otherNiches: string[];
 }
 
 export const EMPTY_BRIEF: WizardBrief = {
@@ -183,13 +186,14 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   verifiedOnly: false,
   minRank: "",
   requiredBadges: [],
-  ratePerDeliverable: "10000",
-  deliverables: "5",
+  ratePerDeliverable: "",
+  deliverables: "",
   views: DEFAULT_VIEWS,
   referralBudget: "",
   brief: EMPTY_BRIEF,
   scriptUrl: "",
   scriptFileName: "",
+  otherNiches: [],
 };
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
@@ -256,7 +260,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
   return problems;
 }
 
-// Where a saved draft picks up: the first step that still needs something.
+// Where a draft saved without a wizard step picks up: the first step that still needs something.
 export function resumeStep(data: WizardData): WizardStep {
   for (const { step } of WIZARD_STEPS) {
     if (step < 6 && stepProblems(data, step).length > 0) return step;
@@ -277,14 +281,8 @@ export interface SavedCampaign extends Partial<CampaignSetup> {
   niches?: string[];
   scriptUrl?: string;
   scriptFileName?: string;
-  objective?: "views" | "actions";
-  referral?: { enabled?: boolean; eventTypes?: string[]; eventType?: string; requestedBudget?: number };
-}
-
-function legacyObjective(saved: SavedCampaign): CampaignObjective {
-  if (saved.objective !== "actions") return "views";
-  const types = saved.referral?.eventTypes?.length ? saved.referral.eventTypes : [saved.referral?.eventType];
-  return types.includes("install") && !types.includes("signup") ? "downloads" : "signups";
+  referral?: { requestedBudget?: number };
+  wizardStep?: number | null;
 }
 
 const list = (value: string[] | undefined) => (Array.isArray(value) ? value.filter(Boolean) : []);
@@ -302,7 +300,8 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     name: saved.name || "",
     category: saved.category || INITIAL_WIZARD_DATA.category,
     coverImageUrl: saved.coverImageUrl || "",
-    objective: saved.campaignObjective || legacyObjective(saved),
+    // The API derives every campaign's objective, including older drafts', so it's never re-derived here.
+    objective: saved.campaignObjective || INITIAL_WIZARD_DATA.objective,
     contentDestination: saved.contentDestination || "creator_page",
     creatorAccess: saved.creatorAccess || "open_call",
     locations: list(targeting.locations),
@@ -344,7 +343,13 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
         },
     scriptUrl: saved.scriptUrl || "",
     scriptFileName: saved.scriptFileName || "",
+    otherNiches: list(saved.niches).filter((niche) => !CREATOR_CATEGORIES.includes(niche)),
   };
+}
+
+export function savedWizardStep(saved: SavedCampaign): WizardStep | null {
+  const step = saved.wizardStep;
+  return typeof step === "number" && step >= 1 && step <= 6 ? (step as WizardStep) : null;
 }
 
 const optionalWhole = (value: string) => (wholeNumber(value) !== null ? Number(value.trim()) : undefined);
@@ -353,9 +358,12 @@ const optionalNumber = (value: string) => (value.trim() && Number.isFinite(Numbe
 // The pay part of the setup, which is also what the quote needs.
 export function pricingPayload(data: WizardData): Record<string, unknown> {
   if (data.objective === "content") {
+    const rate = wholeNumber(data.ratePerDeliverable);
+    const count = wholeNumber(data.deliverables);
     return {
       campaignObjective: data.objective,
-      contentPay: { ratePerDeliverable: Number(data.ratePerDeliverable) || 0, deliverables: Number(data.deliverables) || 0 },
+      // null saves the draft without pay until both are set.
+      contentPay: rate && count ? { ratePerDeliverable: rate, deliverables: count } : null,
     };
   }
   return {
@@ -368,13 +376,23 @@ export function pricingPayload(data: WizardData): Record<string, unknown> {
   };
 }
 
-export function campaignPayload(data: WizardData): Record<string, unknown> {
+interface CampaignPayloadOptions {
+  // The objective the saved campaign already has. It's only sent when the brand changes it,
+  // because choosing an objective resets what an older draft counts as a conversion.
+  savedObjective: CampaignObjective | null;
+  wizardStep: WizardStep;
+}
+
+export function campaignPayload(data: WizardData, { savedObjective, wizardStep }: CampaignPayloadOptions): Record<string, unknown> {
   const brief = data.brief;
+  const { campaignObjective, ...pricing } = pricingPayload(data);
   return {
     name: data.name.trim(),
     category: data.category,
     coverImageUrl: data.coverImageUrl || undefined,
-    ...pricingPayload(data),
+    ...(campaignObjective !== savedObjective && { campaignObjective }),
+    ...pricing,
+    wizardStep,
     contentDestination: data.contentDestination,
     creatorAccess: data.creatorAccess,
     audienceTargeting: {
@@ -410,7 +428,7 @@ export function campaignPayload(data: WizardData): Record<string, unknown> {
     keyMessageCta: brief.keyMessages.join(" · "),
     whatToAvoid: brief.donts.join(" · "),
     platforms: data.platforms,
-    niches: data.categories,
+    niches: [...data.otherNiches, ...data.categories],
     scriptUrl: data.scriptUrl || undefined,
     scriptFileName: data.scriptFileName || undefined,
   };

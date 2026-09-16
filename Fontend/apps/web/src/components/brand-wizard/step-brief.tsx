@@ -47,7 +47,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
     <div className="space-y-8">
       <StepHeading title="Your brief" body="Everything a creator needs to make the content. Creators see this before they join or apply." />
 
-      <Field label="What the campaign is about" htmlFor="brief-summary">
+      <Field label="Summary" htmlFor="brief-summary">
         <textarea
           id="brief-summary"
           maxLength={2000}
@@ -66,7 +66,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         <ListInput id="brief-donts" items={brief.donts} onChange={(donts) => setBrief({ donts })} placeholder="No other brands in frame" maxItems={10} />
       </Field>
 
-      <Field label="Key messages" htmlFor="brief-key-messages" tooltip="What every creator should say or get across">
+      <Field label="Key Messages" htmlFor="brief-key-messages" tooltip="What every creator should say or get across">
         <ListInput
           id="brief-key-messages"
           items={brief.keyMessages}
@@ -112,7 +112,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="Reference videos" htmlFor="brief-references" hint="Links to videos that show what you're after.">
+      <Field label="Reference Videos" htmlFor="brief-references" hint="Links to videos that show what you're after.">
         <ListInput
           id="brief-references"
           items={brief.referenceVideos}
@@ -123,7 +123,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="Product info" htmlFor="brief-product">
+      <Field label="Product Info" htmlFor="brief-product">
         <textarea
           id="brief-product"
           maxLength={1000}
@@ -134,7 +134,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="Approval requirements" htmlFor="brief-approval" hint="What content must include before you approve it.">
+      <Field label="Approval Requirements" htmlFor="brief-approval" hint="What content must include before you approve it.">
         <textarea
           id="brief-approval"
           maxLength={500}
@@ -145,7 +145,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="Brief document (optional)" hint="Attach a PDF if you have a longer brief.">
+      <Field label="Brief Document" hint="Optional. Attach a PDF if you have a longer brief.">
         <input ref={scriptInputRef} type="file" accept=".pdf" onChange={handleScriptUpload} className="hidden" />
         {data.scriptFileName ? (
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-stone-100 rounded-full">

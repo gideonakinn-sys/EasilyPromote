@@ -14,6 +14,7 @@ import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pric
 import { codeFormatText, conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
 import { CampaignReferrals } from "./campaign-referrals";
 import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
+import { ConfirmDeleteModal } from "./confirm-delete-modal";
 import type { CampaignSetup } from "./types";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
@@ -224,6 +225,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const [paying, setPaying] = useState(false);
   const [topupSuccess, setTopupSuccess] = useState(false);
   const [topupError, setTopupError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useReveal(activeTab);
 
@@ -346,7 +348,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       onClose?.();
     } catch (err: unknown) {
       setShowDeleteConfirm(false);
-      setTopupError(err instanceof Error ? err.message : "We couldn't delete this campaign.");
+      setActionError(err instanceof Error ? err.message : "We couldn't delete this campaign.");
     } finally {
       setDeleting(false);
     }
@@ -394,7 +396,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       });
       window.location.href = data.authorization_url;
     } catch (err: unknown) {
-      setTopupError(err instanceof Error ? err.message : "Failed to initialize payment");
+      setActionError(err instanceof Error ? err.message : "Failed to initialize payment");
       setPaying(false);
     }
   }, [campaignId, additionalViews, additionalCost]);
@@ -463,7 +465,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const totalEscrowed = campaign.budget;
   // platformFeePercent is stored as a whole percentage (30 means 30%).
   const feePercent = campaign.platformFeePercent ?? 30;
-  const platformFee = campaign.platformFee || Math.round(campaign.budget * (feePercent / 100));
+  // Content campaigns add the fee on top of creators' pay (D2); views campaigns take it from inside the price.
+  const platformFee =
+    campaign.platformFee ||
+    (isContent
+      ? Math.round(campaign.budget - campaign.budget / (1 + feePercent / 100))
+      : Math.round(campaign.budget * (feePercent / 100)));
   const creatorPool = campaign.creatorPool || totalEscrowed - platformFee;
   // Settled views payouts from the ledger; submissions never stored payout amounts.
   const releasedTotal = campaign.viewsReleased ?? 0;
@@ -993,6 +1000,19 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         </div>
       )}
 
+      {/* Delete and payment errors */}
+      {actionError && (
+        <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3" role="alert">
+          <div className="space-y-1">
+            <p className="font-rethink font-medium text-sm text-red-800">Something went wrong</p>
+            <p className="font-rethink text-xs text-red-600 font-medium">{actionError}</p>
+          </div>
+          <button onClick={() => setActionError("")} aria-label="Dismiss" className="text-red-400 ml-auto">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      )}
+
       {/* Topup error banner */}
       {topupError && (
         <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
@@ -1000,7 +1020,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           </div>
           <div className="space-y-1">
-            <p className="font-rethink font-medium text-sm text-red-800">Something went wrong</p>
+            <p className="font-rethink font-medium text-sm text-red-800">Payment verification failed</p>
             <p className="font-rethink text-xs text-red-600 font-medium">{topupError}</p>
           </div>
           <button onClick={() => setTopupError("")} className="text-red-400 ml-auto">
@@ -1009,31 +1029,13 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         </div>
       )}
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6" role="dialog" aria-modal="true" aria-labelledby="delete-campaign-title">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
-            <h3 id="delete-campaign-title" className="font-rethink font-semibold text-base text-stone-900 text-center tracking-tight">
-              Delete this campaign?
-            </h3>
-            <p className="font-rethink text-xs text-stone-500 font-medium text-center">You can&apos;t undo this.</p>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full font-rethink"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteDraft}
-                disabled={deleting}
-                className="flex-1 py-2.5 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink disabled:opacity-50"
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDeleteModal
+        open={showDeleteConfirm}
+        title="Delete this campaign?"
+        busy={deleting}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteDraft}
+      />
     </div>
   );
 }

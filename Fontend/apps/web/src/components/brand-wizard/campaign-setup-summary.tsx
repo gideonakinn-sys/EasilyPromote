@@ -119,26 +119,26 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
 
   return (
     <div className="space-y-6">
-      <Section title="Objective and pay">
+      <Section title="Objective and Pay">
         <SummaryRow label="Objective" value={objective?.title || "Not set"} />
         {setup.contentPay ? (
           <>
-            <SummaryRow label="Creator pay per deliverable" value={formatNaira(setup.contentPay.ratePerDeliverable)} />
+            <SummaryRow label="Creator Pay Per Deliverable" value={formatNaira(setup.contentPay.ratePerDeliverable)} />
             <SummaryRow label="Deliverables" value={setup.contentPay.deliverables.toLocaleString()} />
           </>
         ) : (
-          setup.targetViews !== undefined && <SummaryRow label="Target views" value={setup.targetViews.toLocaleString()} />
+          setup.targetViews !== undefined && <SummaryRow label="Target Views" value={setup.targetViews.toLocaleString()} />
         )}
         {referral && (
           <>
-            <SummaryRow label="Referral budget" value={formatNaira(setup.referralBudget)} />
-            <SummaryRow label={`Reward per ${actionNoun}`} value="Set by our team" />
+            <SummaryRow label="Referral Budget" value={formatNaira(setup.referralBudget)} />
+            <SummaryRow label={actionNoun === "download" ? "Reward Per Download" : "Reward Per Sign-up"} value="Set by our team" />
           </>
         )}
       </Section>
 
-      <Section title="Destination and access">
-        <SummaryRow label="Content goes to" value={destination?.title || "Creator's page"} />
+      <Section title="Destination and Access">
+        <SummaryRow label="Content Destination" value={destination?.title || "Creator's page"} />
         {(setup.contentDestination === "brand_page" || setup.contentDestination === "both") && (
           <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
         )}
@@ -161,25 +161,25 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
       </Section>
 
       <Section title="Creator Eligibility">
-        <SummaryRow label="Minimum followers" value={eligibility.minFollowers ? eligibility.minFollowers.toLocaleString() : "Any"} />
-        <SummaryRow label="Minimum engagement" value={eligibility.minEngagementRate ? `${eligibility.minEngagementRate}%` : "Any"} />
+        <SummaryRow label="Minimum Followers" value={eligibility.minFollowers ? eligibility.minFollowers.toLocaleString() : "Any"} />
+        <SummaryRow label="Minimum Engagement" value={eligibility.minEngagementRate ? `${eligibility.minEngagementRate}%` : "Any"} />
         <SummaryRow label="Categories" value={joined(eligibility.categories) || "Any"} />
         <SummaryRow label="Rank" value={eligibility.minRank ? labelFor(RANK_OPTIONS, eligibility.minRank) : "Any rank"} />
         <SummaryRow label="Badges" value={joined(eligibility.requiredBadges?.map((value) => labelFor(BADGE_OPTIONS, value))) || "None needed"} />
-        <SummaryRow label="Verified creators only" value={eligibility.verifiedOnly ? "Yes" : "No"} />
+        <SummaryRow label="Verified Creators Only" value={eligibility.verifiedOnly ? "Yes" : "No"} />
       </Section>
 
       <Section title="Brief">
-        <BriefText label="What the campaign is about" text={brief.summary} />
+        <BriefText label="Summary" text={brief.summary} />
         <BriefList label="Do's" items={brief.dos} />
         <BriefList label="Don'ts" items={brief.donts} />
-        <BriefList label="Key messages" items={brief.keyMessages} />
+        <BriefList label="Key Messages" items={brief.keyMessages} />
         <BriefText label="Hashtags" text={joined(brief.hashtags) || undefined} />
         <BriefText label="Tone" text={brief.tone} />
         <BriefText label="Sound" text={brief.soundUrl} link />
         {brief.referenceVideos && brief.referenceVideos.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-stone-500 font-rethink">Reference videos</p>
+            <p className="text-xs font-medium text-stone-500 font-rethink">Reference Videos</p>
             {brief.referenceVideos.map((link) => (
               <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-stone-900 font-rethink underline underline-offset-2 break-all">
                 {link}
@@ -187,8 +187,8 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
             ))}
           </div>
         )}
-        <BriefText label="Product info" text={brief.productInfo} />
-        <BriefText label="Approval requirements" text={brief.approvalRequirements} />
+        <BriefText label="Product Info" text={brief.productInfo} />
+        <BriefText label="Approval Requirements" text={brief.approvalRequirements} />
         {!brief.summary && <p className="text-xs text-stone-400 font-medium font-rethink">No brief yet.</p>}
       </Section>
     </div>

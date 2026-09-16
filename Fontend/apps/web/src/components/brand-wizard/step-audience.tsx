@@ -45,7 +45,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           />
         </Field>
 
-        <Field label="Audience locations" htmlFor="audience-locations" hint="Where a creator's followers are, not where the creator lives.">
+        <Field label="Audience Locations" htmlFor="audience-locations" hint="Where a creator's followers are, not where the creator lives.">
           <ListInput
             id="audience-locations"
             items={data.locations}
@@ -58,7 +58,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
 
         {data.locations.length > 0 && (
           <Field
-            label="Minimum audience share in these locations"
+            label="Minimum Audience Share"
             htmlFor="location-share"
             hint="For example, 40 means at least 40% of a creator's followers are in the places above."
           >
@@ -104,7 +104,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
       <div className="space-y-6">
         <StepHeading title="Which creators can take part?" body="Creator Eligibility sets the requirements a creator must meet to join or apply. Leave anything blank to allow everyone." />
 
-        <Field label="Minimum followers" htmlFor="min-followers">
+        <Field label="Minimum Followers" htmlFor="min-followers">
           <input
             id="min-followers"
             inputMode="numeric"
@@ -115,7 +115,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           />
         </Field>
 
-        <Field label="Minimum engagement rate" htmlFor="min-engagement">
+        <Field label="Minimum Engagement Rate" htmlFor="min-engagement">
           <div className="relative">
             <input
               id="min-engagement"
@@ -129,27 +129,27 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           </div>
         </Field>
 
-        <Field label="Creator categories">
+        <Field label="Creator Categories">
           <ChipGroup
-            label="Creator categories"
+            label="Creator Categories"
             options={CREATOR_CATEGORIES.map((category) => ({ value: category, label: category }))}
             selected={data.categories}
             onToggle={(value) => update({ categories: toggleValue(data.categories, value) })}
           />
         </Field>
 
-        <Field label="Minimum rank">
+        <Field label="Minimum Rank">
           <ChipGroup
-            label="Minimum rank"
+            label="Minimum Rank"
             options={RANK_OPTIONS}
             selected={[data.minRank]}
             onToggle={(value) => update({ minRank: value })}
           />
         </Field>
 
-        <Field label="Required badges">
+        <Field label="Required Badges">
           <ChipGroup
-            label="Required badges"
+            label="Required Badges"
             options={BADGE_OPTIONS}
             selected={data.requiredBadges}
             onToggle={(value) => update({ requiredBadges: toggleValue(data.requiredBadges, value) })}
@@ -164,7 +164,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
             className="mt-0.5 h-4 w-4 accent-stone-900"
           />
           <span className="space-y-0.5">
-            <span className="block text-sm font-medium text-stone-900 font-rethink">Verified creators only</span>
+            <span className="block text-sm font-medium text-stone-900 font-rethink">Verified Creators Only</span>
             <span className="block text-xs text-stone-500 font-medium font-rethink leading-relaxed">
               Only creators with a connected social account whose identity our team has checked.
             </span>

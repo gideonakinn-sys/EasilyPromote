@@ -23,9 +23,9 @@ interface QuoteSummaryProps {
 // Numbers come from the API's calculator, the same one checkout charges with.
 export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
   const rows: { label: string; value: number | undefined }[] = [
-    { label: "Creator budget", value: quote?.creatorBudget },
-    { label: "Performance budget", value: quote?.performanceBudget },
-    { label: "Platform fee", value: quote?.platformFee },
+    { label: "Creator Budget", value: quote?.creatorBudget },
+    { label: "Performance Budget", value: quote?.performanceBudget },
+    { label: "Platform Fee", value: quote?.platformFee },
   ];
   return (
     <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
@@ -38,8 +38,8 @@ export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
         </div>
       ))}
       <div className="flex justify-between gap-3 border-t border-stone-100 pt-2">
-        <span className="font-semibold text-stone-900">Total to pay</span>
-        <span className={cn("font-semibold tabular-nums", loading ? "text-stone-300" : "text-stone-900")}>
+        <span className="font-medium text-stone-900">Total to Pay</span>
+        <span className={cn("font-medium tabular-nums", loading ? "text-stone-300" : "text-stone-900")}>
           {quote ? formatNaira(quote.total) : "—"}
         </span>
       </div>
@@ -61,7 +61,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
   }, [views]);
 
   return (
-    <Field label="How many views do you want?" htmlFor="target-views" hint={`${MIN_VIEWS.toLocaleString()} views minimum. The price comes from our price table.`}>
+    <Field label="Target Views" htmlFor="target-views" hint={`${MIN_VIEWS.toLocaleString()} views minimum. The price comes from our price table.`}>
       <input
         id="target-views"
         type="text"
@@ -123,7 +123,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
 
       {isContent && (
         <>
-          <Field label="Creator pay per approved deliverable" htmlFor="rate-per-deliverable" hint="A deliverable is one piece of content, such as one video.">
+          <Field label="Creator Pay Per Approved Deliverable" htmlFor="rate-per-deliverable" hint="A deliverable is one piece of content, such as one video.">
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
               <input
@@ -137,7 +137,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             </div>
           </Field>
           <Field
-            label="Number of deliverables"
+            label="Number of Deliverables"
             htmlFor="deliverables"
             hint={`Each deliverable is one Placement a creator can take. Up to ${MAX_DELIVERABLES}.`}
           >
@@ -146,7 +146,10 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
               inputMode="numeric"
               placeholder="10"
               value={data.deliverables}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ deliverables: digitsOnly(e.target.value).slice(0, 3) })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const digits = digitsOnly(e.target.value).slice(0, 3);
+                update({ deliverables: digits && Number(digits) > MAX_DELIVERABLES ? String(MAX_DELIVERABLES) : digits });
+              }}
               className={TEXT_INPUT_CLASS}
             />
           </Field>
@@ -156,7 +159,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
       {!isContent && <ViewsPicker views={data.views} onChange={(views) => update({ views })} />}
 
       {referral && (
-        <Field label="Referral budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views.`}>
+        <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views.`}>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
             <input

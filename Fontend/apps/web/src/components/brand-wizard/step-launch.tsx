@@ -49,7 +49,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
         ) : (
           <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">
             <div className="space-y-1">
-              <h5 className="text-sm font-semibold text-stone-900 font-rethink">Connect your app to launch</h5>
+              <h5 className="text-sm font-medium text-stone-900 font-rethink">Connect your app to launch</h5>
               <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
                 You can&apos;t pay for this campaign until your app is connected, so your budget never waits on setup. Save this draft and
                 finish setup; this checklist updates by itself.
@@ -78,7 +78,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
         <p className="font-rethink text-xs text-stone-600 leading-normal">
           {isContent
             ? "Creators are paid your rate for each deliverable you approve. Unused budget is refunded when the campaign ends, minus payment fees."
-            : "You only pay for results. Creators get paid when their results are verified."}
+            : "You pay up front. Creators are paid from your budget as their results are verified, and unused budget is refunded when the campaign ends, minus payment fees."}
         </p>
       </div>
     </div>
