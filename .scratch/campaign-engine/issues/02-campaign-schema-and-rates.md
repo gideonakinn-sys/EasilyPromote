@@ -13,7 +13,10 @@
 - **Additive only.** The existing `objective` (views | actions) and `referral` fields stay; live campaigns, the admin panel and the payout code read them. New fields sit beside them.
 - **Two of three rate authorities already exist**: views are priced by the EasilyPromote price table (with per-industry overrides), and admin sets the sign-up reward. This ticket adds the brand-set content rate and puts all three behind one rule.
 - **Hybrid is modelled but not sellable at launch.** The schema allows it; creating a Hybrid campaign is switched off until ticket 10.
-- Existing campaigns are migrated to: performance model, views metric, open call access.
+- Existing campaigns are migrated to: performance model, open call access, creator page, and the objective their settings stand for (views, sign-ups, downloads, sales or other).
+- Audience targeting uses one **combined** minimum share across the targeted locations (e.g. 50% in Lagos + Abuja together), not a minimum per location. With no minimum, locations only rank creators.
+- Checkout starts using the shared budget calculator in ticket 03, when content campaigns become payable. Until then content campaigns can be saved as drafts but not paid.
+- Base pay is the content rate per deliverable; performance rates stay where they live today (price table per view, admin reward per conversion).
 
 ## Acceptance criteria
 
