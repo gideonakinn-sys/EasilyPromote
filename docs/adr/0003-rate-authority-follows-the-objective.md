@@ -1,0 +1,3 @@
+# Who sets a creator's rate depends on the objective
+
+Brands set the rate only for content (for example ₦15,000 per approved video). For sign-ups and other referral actions the brand funds a referral budget and admin sets the reward per conversion; for views the price comes from EasilyPromote's price table. The product direction first assumed brands set every rate, as on comparable marketplaces, but brands can't judge what a verified sign-up or view should pay a creator, and letting them set it would let campaigns underprice creators and break the platform's margin. The API rejects a brand-supplied rate wherever the brand isn't the rate authority.
