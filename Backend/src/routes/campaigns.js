@@ -9,7 +9,7 @@ const { initializeTransaction, verifyTransaction } = require("../services/paysta
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
-const { parseReferralSettings } = require("../utils/referralCodes");
+const { parseReferralSettings, campaignEventTypes } = require("../utils/referralCodes");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { refundViewsEscrow } = require("../utils/escrow");
 const { recordUnmatchedPayment } = require("../utils/refunds");
@@ -30,6 +30,18 @@ function objectiveUpdates(objective) {
 }
 
 // True when an edit changes what the brand's open checkout should charge.
+// People who came in through creators' codes, and how much of the referral budget they've used.
+// The share is taken from the creator pool so the platform fee never shows.
+function referralProgress(campaign) {
+  const referral = campaign.referral || {};
+  const pool = referral.pool || 0;
+  return {
+    conversions: referral.conversions || 0,
+    eventTypes: campaignEventTypes(campaign),
+    budgetUsedPercent: pool > 0 ? Math.min(100, Math.round(((pool - (referral.poolRemaining || 0)) / pool) * 100)) : 0,
+  };
+}
+
 function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
   if (targetViews !== undefined && Number(targetViews) !== campaign.targetViews) return true;
   const nextObjective = objective !== undefined ? objective : campaign.objective;
@@ -104,6 +116,7 @@ router.get("/", protect, async (req, res, next) => {
         objective: c.objective || "views",
         // A referral campaign can't be paid for until the brand's app is connected.
         needsAppConnection: c.objective === "actions" && ["draft", "pending_payment"].includes(c.status) && !appVerified,
+        referral: c.objective === "actions" ? referralProgress(c) : null,
       };
     });
 
@@ -457,7 +470,7 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
         if (referralSettings.error) {
           return res.status(400).json({ error: referralSettings.error });
         }
-        for (const key of ["eventType", "requestedBudget"]) {
+        for (const key of ["eventType", "eventTypes", "requestedBudget"]) {
           if (referralSettings.value[key] !== undefined) updates[`referral.${key}`] = referralSettings.value[key];
         }
       }
@@ -782,6 +795,7 @@ router.get("/:id", protect, async (req, res, next) => {
         requestedBudget: campaign.referral ? campaign.referral.requestedBudget || 0 : 0,
         enabled: Boolean(campaign.referral && campaign.referral.enabled),
         eventType: campaign.referral ? campaign.referral.eventType : "signup",
+        eventTypes: campaignEventTypes(campaign),
         codeSource: campaign.referral ? campaign.referral.codeSource : "easilypromote",
         conversions: campaign.referral ? campaign.referral.conversions : 0,
         rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
@@ -790,6 +804,7 @@ router.get("/:id", protect, async (req, res, next) => {
         pool: campaign.referral ? campaign.referral.pool || 0 : 0,
         poolRemaining: campaign.referral ? campaign.referral.poolRemaining || 0 : 0,
         earned: campaign.referral ? campaign.referral.earned || 0 : 0,
+        budgetUsedPercent: referralProgress(campaign).budgetUsedPercent,
       },
     });
   } catch (error) {

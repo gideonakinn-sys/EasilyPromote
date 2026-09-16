@@ -24,11 +24,22 @@ function parseReferralSettings(input) {
     if (typeof input.enabled !== "boolean") return { error: "referral.enabled must be true or false" };
     value.enabled = input.enabled;
   }
-  if (input.eventType !== undefined) {
+  if (input.eventTypes !== undefined) {
+    if (!Array.isArray(input.eventTypes) || input.eventTypes.length === 0) {
+      return { error: "referral.eventTypes must list at least one conversion type" };
+    }
+    const invalid = input.eventTypes.find((type) => !EVENT_TYPES.includes(type));
+    if (invalid !== undefined) {
+      return { error: `referral.eventTypes must only contain: ${EVENT_TYPES.join(", ")}` };
+    }
+    value.eventTypes = [...new Set(input.eventTypes)];
+    value.eventType = value.eventTypes[0];
+  } else if (input.eventType !== undefined) {
     if (!EVENT_TYPES.includes(input.eventType)) {
       return { error: `referral.eventType must be one of: ${EVENT_TYPES.join(", ")}` };
     }
     value.eventType = input.eventType;
+    value.eventTypes = [input.eventType];
   }
   if (input.codeSource !== undefined) {
     if (!CODE_SOURCES.includes(input.codeSource)) {
@@ -48,6 +59,13 @@ function parseReferralSettings(input) {
     value.requestedBudget = amount;
   }
   return { value };
+}
+
+// Campaigns saved before multi-select only have eventType.
+function campaignEventTypes(campaign) {
+  const referral = (campaign && campaign.referral) || {};
+  if (Array.isArray(referral.eventTypes) && referral.eventTypes.length) return [...referral.eventTypes];
+  return [referral.eventType || "signup"];
 }
 
 function normalizeCode(value) {
@@ -146,6 +164,7 @@ module.exports = {
   EVENT_TYPES,
   CODE_SOURCES,
   parseReferralSettings,
+  campaignEventTypes,
   normalizeCode,
   buildDisplayCode,
   createReferralCode,

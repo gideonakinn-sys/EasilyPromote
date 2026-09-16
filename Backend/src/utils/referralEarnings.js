@@ -5,6 +5,7 @@ const ReferralCode = require("../models/ReferralCode");
 const Transaction = require("../models/Transaction");
 const Withdrawal = require("../models/Withdrawal");
 const Notification = require("../models/Notification");
+const { campaignEventTypes } = require("./referralCodes");
 
 // Earnings wait this long before a creator can withdraw them, so admins can void
 // fake or reversed conversions first.
@@ -244,7 +245,7 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
   const counted =
     typeof previous.counted === "boolean"
       ? previous.counted
-      : Boolean(campaign && campaign.referral && campaign.referral.eventType === previous.eventType);
+      : Boolean(campaign && campaign.referral && campaignEventTypes(campaign).includes(previous.eventType));
   const updates = [];
   if (previous.rewardAmount > 0) {
     updates.push(

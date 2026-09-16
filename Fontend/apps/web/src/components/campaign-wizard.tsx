@@ -24,7 +24,8 @@ import {
   MIN_REFERRAL_BUDGET,
   REFERRAL_EVENT_TYPES,
   REFERRAL_HOW_IT_WORKS,
-  conversionNoun,
+  conversionNounFor,
+  eventTypeLabels,
   formatNaira,
   type ReferralEventType,
 } from "../lib/referral";
@@ -55,11 +56,10 @@ interface CampaignData {
   coverImageUrl: string;
   // "views": views only. "actions": people taking an action in the brand's app, tracked with referral codes.
   objective: "views" | "actions";
-  referralEventType: ReferralEventType;
+  referralEventTypes: ReferralEventType[];
   referralBudget: string;
 }
 
-const PLATFORM_FEE_SHARE = 0.3;
 
 const OBJECTIVE_OPTIONS: { value: CampaignData["objective"]; title: string; body: string }[] = [
   {
@@ -248,7 +248,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   useEffect(() => {
     if (!draftId) return;
-    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; objective?: "views" | "actions"; referral?: { enabled: boolean; eventType: ReferralEventType; requestedBudget?: number } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
+    apiRequest<{ name: string; category: string; targetViews: number; budget: number; contentBrief: string; keyMessageCta: string; whatToAvoid: string; goal: string; competitors: string; uniqueSellingPoint: string; funFact: string; platforms: string[]; contentStyle: string[] | string; niches: string[]; scriptUrl: string; scriptFileName: string; coverImageUrl: string; objective?: "views" | "actions"; referral?: { enabled: boolean; eventType: ReferralEventType; eventTypes?: ReferralEventType[]; requestedBudget?: number } }>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((data) => {
         setCampaign({
           name: data.name || "",
@@ -269,7 +269,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           scriptFileName: data.scriptFileName || "",
           coverImageUrl: data.coverImageUrl || "",
           objective: data.objective || (data.referral?.enabled ? "actions" : "views"),
-          referralEventType: data.referral?.eventType || "signup",
+          referralEventTypes: data.referral?.eventTypes?.length ? data.referral.eventTypes : [data.referral?.eventType || "signup"],
           referralBudget: data.referral?.requestedBudget ? String(data.referral.requestedBudget) : "",
         });
 
@@ -306,7 +306,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     scriptFileName: "",
     coverImageUrl: "",
     objective: "views",
-    referralEventType: "signup",
+    referralEventTypes: ["signup"],
     referralBudget: "",
   });
 
@@ -367,7 +367,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             scriptFileName: parsed.campaign.scriptFileName || "",
             coverImageUrl: parsed.campaign.coverImageUrl || "",
             objective: parsed.campaign.objective === "actions" || parsed.campaign.referralEnabled ? "actions" : "views",
-            referralEventType: parsed.campaign.referralEventType || "signup",
+            referralEventTypes:
+              Array.isArray(parsed.campaign.referralEventTypes) && parsed.campaign.referralEventTypes.length
+                ? parsed.campaign.referralEventTypes
+                : [parsed.campaign.referralEventType || "signup"],
             referralBudget: parsed.campaign.referralBudget || "",
           });
           if (parsed.createStep) setCreateStep(parsed.createStep);
@@ -557,7 +560,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     coverImageUrl: campaign.coverImageUrl || undefined,
     objective: campaign.objective,
     referral: {
-      eventType: campaign.referralEventType,
+      eventTypes: campaign.referralEventTypes,
       // The server accepts ₦1,000 or more; anything less is saved as not set yet.
       requestedBudget: campaign.objective === "actions" && referralBudgetValid ? referralBudgetValue : 0,
     },
@@ -583,7 +586,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     }
 
     if (createStep === 3) {
-      if (campaign.objective === "actions" && !referralBudgetValid) {
+      if (campaign.objective === "actions" && (!referralBudgetValid || campaign.referralEventTypes.length === 0)) {
         setTouchedStep(prev => ({ ...prev, step3: true }));
         return;
       }
@@ -1364,10 +1367,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               {campaign.objective === "actions" && (
                 <>
                   <fieldset className="space-y-2">
-                    <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">What should count?</legend>
+                    <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">What should count? Pick all that apply.</legend>
                     <div className="flex flex-wrap gap-2">
                       {REFERRAL_EVENT_TYPES.filter((option) => option.value !== "custom").map((option) => {
-                        const selected = campaign.referralEventType === option.value;
+                        const selected = campaign.referralEventTypes.includes(option.value);
                         return (
                           <button
                             key={option.value}
@@ -1375,7 +1378,12 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                             aria-pressed={selected}
                             onClick={() => {
                               isModified.current = true;
-                              setCampaign(prev => ({ ...prev, referralEventType: option.value }));
+                              setCampaign(prev => ({
+                                ...prev,
+                                referralEventTypes: prev.referralEventTypes.includes(option.value)
+                                  ? prev.referralEventTypes.filter((type) => type !== option.value)
+                                  : [...prev.referralEventTypes, option.value],
+                              }));
                             }}
                             className={cn(
                               "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors",
@@ -1387,6 +1395,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                         );
                       })}
                     </div>
+                    {touchedStep.step3 && campaign.referralEventTypes.length === 0 && (
+                      <p className="text-xs text-red-500 font-medium">Pick at least one.</p>
+                    )}
                   </fieldset>
 
                   <div className="space-y-1.5">
@@ -1411,9 +1422,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       />
                     </div>
                     <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
-                      {referralBudgetValid
-                        ? `Creators get ${formatNaira(Math.round(referralBudgetValue * (1 - PLATFORM_FEE_SHARE)))} after the 30% platform fee. Our team sets what they earn per ${conversionNoun(campaign.referralEventType, 1)} once your campaign is live.`
-                        : `Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views budget.`}
+                      Minimum {formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views budget.
                     </p>
                     {touchedStep.step3 && !referralBudgetValid && (
                       <p className="text-xs text-red-500 font-medium">Enter a referral budget of at least {formatNaira(MIN_REFERRAL_BUDGET)}.</p>
@@ -1562,10 +1571,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     <span className="font-semibold text-stone-900">Total to pay</span>
                     <span className="font-semibold text-stone-900 tabular-nums">{formatNaira(campaign.budget + referralBudgetValue)}</span>
                   </div>
-                  <p className="text-[11px] text-stone-500 font-medium leading-relaxed pt-1">
-                    Creators get {formatNaira(Math.round(referralBudgetValue * (1 - PLATFORM_FEE_SHARE)))} of the referral budget. Our team
-                    sets the reward per {conversionNoun(campaign.referralEventType, 1)} once your campaign is live.
-                  </p>
                 </div>
               )}
 
@@ -1587,7 +1592,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <span className="font-medium text-stone-500">Referral tracking</span>
                   <span className="font-medium text-stone-800">
                     {campaign.objective === "actions"
-                      ? `${REFERRAL_EVENT_TYPES.find((o) => o.value === campaign.referralEventType)?.label || "Conversions"} · reward set by Easily Promote`
+                      ? `${eventTypeLabels(campaign.referralEventTypes) || "Conversions"} · reward set by Easily Promote`
                       : "Off"}
                   </span>
                 </div>
@@ -1596,7 +1601,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               {campaign.objective === "actions" &&
                 (connection.verified ? (
                   <p className="bg-[#CBF5E5] text-[#176448] rounded-[18px] px-4 py-3 text-xs font-medium font-rethink leading-relaxed">
-                    Your app is connected. Paying puts the campaign live and starts tracking {conversionNoun(campaign.referralEventType, 2)}.
+                    Your app is connected. Paying puts the campaign live and starts tracking {conversionNounFor(campaign.referralEventTypes, 2)}.
                   </p>
                 ) : (
                   <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">

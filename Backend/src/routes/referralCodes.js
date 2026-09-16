@@ -6,7 +6,7 @@ const ReferralCode = require("../models/ReferralCode");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const ConversionEvent = require("../models/ConversionEvent");
-const { parseReferralSettings, normalizeCode, backfillReferralCodes } = require("../utils/referralCodes");
+const { parseReferralSettings, campaignEventTypes, normalizeCode, backfillReferralCodes } = require("../utils/referralCodes");
 const {
   MIN_REFERRAL_TOPUP,
   MAX_REFERRAL_TOPUP,
@@ -41,6 +41,7 @@ function serializeSettings(campaign) {
   return {
     enabled: Boolean(referral.enabled),
     eventType: referral.eventType || "signup",
+    eventTypes: campaignEventTypes(campaign),
     codeSource: referral.codeSource || "easilypromote",
     conversions: referral.conversions || 0,
     // Set by admin; 0 means our team hasn't set it yet.

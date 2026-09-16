@@ -11,6 +11,7 @@ const { decrypt } = require("../utils/crypto");
 const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
 const { reserveConversionReward } = require("../utils/referralEarnings");
+const { campaignEventTypes } = require("../utils/referralCodes");
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -316,7 +317,7 @@ async function processConversion(request, context, source) {
   }
 
   // Every event is stored; only the campaign's chosen conversion type moves the counters.
-  const counted = payload.event === (campaign.referral && campaign.referral.eventType);
+  const counted = campaignEventTypes(campaign).includes(payload.event);
 
   // The event is saved first (it's the idempotency guard); only then is money
   // reserved, so a duplicate delivery can never reserve a reward twice.
@@ -381,6 +382,7 @@ async function processCodeCheck(request, context, source) {
     code: evaluation.value,
     campaign_id: String(evaluation.campaign._id),
     event: evaluation.campaign.referral ? evaluation.campaign.referral.eventType : "signup",
+    events: campaignEventTypes(evaluation.campaign),
   });
 }
 

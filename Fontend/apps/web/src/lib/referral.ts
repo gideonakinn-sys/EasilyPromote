@@ -39,6 +39,17 @@ export function conversionNoun(eventType: string | undefined, count: number): st
   return count === 1 ? nouns[0] : nouns[1];
 }
 
+// A campaign can count several types; the specific noun only reads right when there's one.
+export function conversionNounFor(eventTypes: string[] | undefined, count: number): string {
+  return conversionNoun(eventTypes && eventTypes.length === 1 ? eventTypes[0] : "custom", count);
+}
+
+export function eventTypeLabels(eventTypes: string[] | undefined): string {
+  return (eventTypes || [])
+    .map((type) => REFERRAL_EVENT_TYPES.find((option) => option.value === type)?.label || type)
+    .join(", ");
+}
+
 export function formatWhen(iso: string | null | undefined): string {
   if (!iso) return "Never";
   const diffSeconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
@@ -133,6 +144,7 @@ export function formatNaira(value: number | null | undefined): string {
 export interface ReferralSettings {
   enabled: boolean;
   eventType: ReferralEventType;
+  eventTypes: ReferralEventType[];
   codeSource: ReferralCodeSource;
   conversions: number;
   // What a creator earns per counted conversion, set by Easily Promote (0 until it's set),
@@ -197,7 +209,7 @@ export interface ReferralImportResult {
 }
 
 // Brands can't set the reward per conversion; Easily Promote does.
-export type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventType" | "codeSource">>;
+export type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventTypes" | "codeSource">>;
 
 const auth = () => ({ token: getToken() || undefined });
 

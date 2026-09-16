@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Copy01Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
-import { conversionNoun, formatNaira } from "../lib/referral";
+import { conversionNounFor, formatNaira } from "../lib/referral";
 import type { CampaignReferral } from "./types";
 
 const STATUS_COPY: Record<CampaignReferral["status"], { label: string; className: string; hint: string }> = {
@@ -77,17 +77,17 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
 
       {rate === 0 && referral.code && (
         <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
-          Easily Promote is setting your reward per {conversionNoun(referral.eventType, 1)}. Ones through your code already
+          Easily Promote is setting your reward per {conversionNounFor(referral.eventTypes || [referral.eventType], 1)}. Ones through your code already
           count and are paid once it&apos;s set.
         </p>
       )}
 
       {rate > 0 && (
         <p className="font-rethink text-xs font-medium text-stone-900 tracking-[-0.01em]">
-          You earn {formatNaira(rate)} per {conversionNoun(referral.eventType, 1)} through your code.
+          You earn {formatNaira(rate)} per {conversionNounFor(referral.eventTypes || [referral.eventType], 1)} through your code.
           {referral.paying === false && (
             <span className="block text-amber-700 mt-0.5">
-              The brand&apos;s referral budget has run out, so new {conversionNoun(referral.eventType, 2)} aren&apos;t paid until they add more.
+              The brand&apos;s referral budget has run out, so new {conversionNounFor(referral.eventTypes || [referral.eventType], 2)} aren&apos;t paid until they add more.
             </span>
           )}
         </p>
@@ -99,7 +99,7 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
           <div className="flex items-baseline justify-between font-rethink">
             <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Tracked through your code</span>
             <span className="text-sm font-medium text-stone-900 tabular-nums">
-              {referral.conversions.toLocaleString()} {conversionNoun(referral.eventType, referral.conversions)}
+              {referral.conversions.toLocaleString()} {conversionNounFor(referral.eventTypes || [referral.eventType], referral.conversions)}
             </span>
           </div>
           {earnings && earnings.earned > 0 && (

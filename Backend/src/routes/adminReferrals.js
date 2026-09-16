@@ -11,6 +11,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { EVENT_TYPES } = require("../services/conversions");
+const { campaignEventTypes } = require("../utils/referralCodes");
 const { paging, pageMeta, isObjectId, searchRegex, parseDate, csvCell } = require("../utils/adminQuery");
 const {
   payoutStatusOf,
@@ -380,6 +381,7 @@ router.get("/brands/:id", viewGuard, async (req, res, next) => {
         name: campaign.name,
         status: campaign.status,
         eventType: campaign.referral.eventType,
+        eventTypes: campaignEventTypes(campaign),
         codeSource: campaign.referral.codeSource,
         conversions: campaign.referral.conversions,
         viewsDelivered: campaign.viewsDelivered,
@@ -457,6 +459,7 @@ router.get("/campaigns", viewGuard, async (req, res, next) => {
           status: campaign.status,
           brand: brandRef(campaign.businessId),
           eventType: campaign.referral.eventType,
+          eventTypes: campaignEventTypes(campaign),
           codeSource: campaign.referral.codeSource,
           conversions: campaign.referral.conversions,
           rewardPerConversion: campaign.referral.rewardPerConversion || 0,
@@ -514,7 +517,7 @@ router.get("/campaigns/:id/codes", viewGuard, async (req, res, next) => {
     const lastByCode = countMap(lastConversions, "lastAt");
 
     res.json({
-      campaign: { id: campaign._id, name: campaign.name, eventType: campaign.referral ? campaign.referral.eventType : null },
+      campaign: { id: campaign._id, name: campaign.name, eventType: campaign.referral ? campaign.referral.eventType : null, eventTypes: campaign.referral ? campaignEventTypes(campaign) : [] },
       codes: codes.map((code) => {
         const profile = profileByUser.get(String(code.creatorId));
         const user = userById.get(String(code.creatorId));
@@ -597,7 +600,7 @@ async function hydrateConversions(events) {
       counted:
         typeof event.counted === "boolean"
           ? event.counted
-          : Boolean(campaign && campaign.referral && campaign.referral.eventType === event.eventType),
+          : Boolean(campaign && campaign.referral && campaignEventTypes(campaign).includes(event.eventType)),
       rewardAmount: event.rewardAmount || 0,
       unpaidReason: event.unpaidReason || null,
       availableAt: event.availableAt || null,
@@ -820,7 +823,8 @@ router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
     // changes apply to new conversions only; each keeps what it earned.
     const backPay = previous > 0 ? { paid: 0, unpaid: 0 } : await payUnpaidConversions(campaign._id);
 
-    const noun = CONVERSION_NOUNS[campaign.referral.eventType] || "conversion";
+    const types = campaignEventTypes(campaign);
+    const noun = types.length === 1 ? CONVERSION_NOUNS[types[0]] || "conversion" : "conversion";
     const reward = `₦${amount.toLocaleString()}`;
     const creatorIds = await ReferralCode.distinct("creatorId", { campaignId: campaign._id });
     await Notification.insertMany([

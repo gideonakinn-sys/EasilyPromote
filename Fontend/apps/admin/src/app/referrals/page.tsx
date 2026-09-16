@@ -79,7 +79,7 @@ interface DeliveryRow {
 interface BrandDetail {
   brand: { id: string; name: string; email: string; companyName: string | null; connectedAt: string | null; isActive: boolean };
   keys: KeyRow[];
-  campaigns: { id: string; name: string; status: string; eventType: string; conversions: number; viewsDelivered: number }[];
+  campaigns: { id: string; name: string; status: string; eventType: string; eventTypes?: string[]; conversions: number; viewsDelivered: number }[];
   recentRequests: DeliveryRow[];
 }
 
@@ -89,6 +89,7 @@ interface CampaignRow {
   status: string;
   brand: BrandRef;
   eventType: string;
+  eventTypes?: string[];
   codeSource: string;
   conversions: number;
   viewsDelivered: number;
@@ -396,7 +397,8 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ paidEarlierConversions: number; stillUnpaid: number } | null>(null);
-  const [singular, plural] = CONVERSION_NOUNS[campaign.eventType] || CONVERSION_NOUNS.custom;
+  const types = campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType];
+  const [singular, plural] = (types.length === 1 && CONVERSION_NOUNS[types[0]]) || CONVERSION_NOUNS.custom;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !submitting && onClose();
@@ -542,9 +544,9 @@ function CodesPanel({
     setLoading(true);
     setError("");
     try {
-      const data = await apiRequest<{ campaign: { eventType: string | null }; codes: CodeRow[] }>(`/admin/referrals/campaigns/${campaign.id}/codes`);
+      const data = await apiRequest<{ campaign: { eventType: string | null; eventTypes?: string[] }; codes: CodeRow[] }>(`/admin/referrals/campaigns/${campaign.id}/codes`);
       setCodes(data.codes);
-      setEventType(data.campaign.eventType);
+      setEventType(data.campaign.eventTypes?.length ? data.campaign.eventTypes.join(", ") : data.campaign.eventType);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load codes");
     } finally {
@@ -706,7 +708,7 @@ function BrandPanel({
                         <td className="px-6 py-4">
                           <StatusBadge status={campaign.status} />
                         </td>
-                        <td className="px-6 py-4">{campaign.eventType}</td>
+                        <td className="px-6 py-4">{(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType]).join(", ")}</td>
                         <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.conversions)}</td>
                         <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.viewsDelivered)}</td>
                         <td className="px-6 py-4">
@@ -1094,7 +1096,7 @@ function CampaignsTab({
                     <td className="px-6 py-4">
                       <StatusBadge status={campaign.status} />
                     </td>
-                    <td className="px-6 py-4">{campaign.eventType}</td>
+                    <td className="px-6 py-4">{(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType]).join(", ")}</td>
                     <td className="px-6 py-4 font-mono">
                       {campaign.activeCodes} / {campaign.codes} active
                     </td>

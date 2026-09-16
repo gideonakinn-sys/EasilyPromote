@@ -15,6 +15,8 @@ export interface CampaignCardProps {
   className?: string;
   // Something the brand needs to do before this campaign can move on, e.g. connect their app.
   notice?: string;
+  // Referral campaigns: e.g. "12 sign-ups", with the share of the referral budget used.
+  referral?: { label: string; budgetUsedPercent: number };
 }
 
 export function CampaignCard({
@@ -30,6 +32,7 @@ export function CampaignCard({
   onClick,
   className,
   notice,
+  referral,
 }: CampaignCardProps) {
   // Determine badge colors and labels
   const getBadges = () => {
@@ -148,6 +151,16 @@ export function CampaignCard({
             <span className="w-1 h-1 rounded-full bg-stone-300" />
             <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{currentViews} / {targetViews} views</span>
           </div>
+          {referral && (
+            <div className="flex items-center gap-3 mt-2">
+              <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all bg-[#176448]" style={{ width: `${referral.budgetUsedPercent}%` }} />
+              </div>
+              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.budgetUsedPercent}%</span>
+              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.label}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

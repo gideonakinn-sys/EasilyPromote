@@ -11,7 +11,7 @@ import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
 import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
-import type { ReferralSettings } from "../lib/referral";
+import { conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
 import { CampaignReferrals } from "./campaign-referrals";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
@@ -158,7 +158,8 @@ interface CampaignData {
   submissionsReceived: number;
   submissionsApproved: number;
   submissionsAwaitingReview: number;
-  referral?: ReferralSettings;
+  referral?: ReferralSettings & { budgetUsedPercent?: number };
+  objective?: "views" | "actions";
 }
 
 interface SubmissionData {
@@ -203,6 +204,7 @@ function CreatorAvatar({ seed }: { seed: string }) {
 
 export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("Overview");
+  const [referralCodes, setReferralCodes] = useState<ReferralCodeRow[] | null>(null);
 
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionData[]>([]);
@@ -245,6 +247,24 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       setSubmissionsError("Failed to load submissions");
     }
   }, [campaignId]);
+
+  // Each creator's code, shown on the overview so brands can see them without opening Referrals.
+  const referralEnabled = Boolean(campaign?.referral?.enabled);
+  useEffect(() => {
+    if (!referralEnabled) return;
+    let cancelled = false;
+    referralApi
+      .listCodes(campaignId)
+      .then((payload) => {
+        if (!cancelled) setReferralCodes(payload.codes);
+      })
+      .catch(() => {
+        if (!cancelled) setReferralCodes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, referralEnabled]);
 
   useEffect(() => {
     const load = async () => {
@@ -439,7 +459,18 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const creatorsOnCampaign = campaign.creatorCount ?? uniqueCreatorCount;
 
   return (
-    <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex")}>
+    <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex relative")}>
+      {!isMobile && onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Close campaign details"
+          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      )}
       {/* Mobile Header */}
       {isMobile && (
         <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-100 flex-shrink-0">
@@ -737,6 +768,63 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 </span>
               </div>
 
+              {campaign.referral?.enabled && (
+                <>
+                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-stone-500 block">Referral progress</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#176448] rounded-full transition-all"
+                          style={{ width: `${campaign.referral.budgetUsedPercent ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.referral.budgetUsedPercent ?? 0}%</span>
+                    </div>
+                    <span className="text-xs text-stone-500 font-medium font-rethink">
+                      {campaign.referral.conversions.toLocaleString()}{" "}
+                      {conversionNounFor(campaign.referral.eventTypes, campaign.referral.conversions)} through creators&apos; codes
+                      {" · "}
+                      {campaign.referral.budgetUsedPercent ?? 0}% of referral budget used
+                    </span>
+                  </div>
+
+                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-stone-500 block">Referral codes</span>
+                      {referralCodes && referralCodes.length > 0 && (
+                        <button
+                          onClick={() => setActiveTab("Referrals")}
+                          className="text-xs font-semibold text-stone-900 underline underline-offset-2"
+                        >
+                          View all
+                        </button>
+                      )}
+                    </div>
+                    {referralCodes === null ? (
+                      <Skeleton className="h-8 rounded-xl" />
+                    ) : referralCodes.length === 0 ? (
+                      <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+                        Each creator gets their own code when they join this campaign. No creators have joined yet.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {referralCodes.slice(0, 5).map((row) => (
+                          <li key={row.slotId} className="flex items-center justify-between gap-3 text-xs font-rethink">
+                            <span className="text-stone-500 font-medium truncate">
+                              {row.creatorUsername ? `@${row.creatorUsername}` : row.creatorName || "Creator"}
+                            </span>
+                            <span className="font-mono text-stone-900 shrink-0">{row.code || "Code pending"}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
+
               {/* Divider */}
               <div className="border-t border-dashed border-stone-200" />
 
@@ -802,14 +890,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         {/* ================= TAB 3: PAYOUTS ================= */}
         {activeTab === "Payouts" && (
           <div className={cn("space-y-10 pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{totalEscrowed.toLocaleString()}</span>
-              </div>
-              <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block">Creator pool</span>
-                <span className="font-rethink font-medium text-xl text-stone-900 block">₦{creatorPool.toLocaleString()}</span>
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Paid</span>
@@ -819,14 +903,6 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <span className="text-[10px] font-medium text-stone-500 block">Pending in escrow</span>
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{pendingEscrow.toLocaleString()}</span>
               </div>
-            </div>
-
-            {/* Platform fee note */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-medium text-stone-500 block">Platform fee</span>
-              <p className="text-[10px] text-stone-400 font-rethink font-medium leading-relaxed">
-                {feePercent}% of funded budget (₦{platformFee.toLocaleString()}), already deducted from your total.
-              </p>
             </div>
 
             {submissions.filter(s => s.payoutStatus).length === 0 && (

@@ -10,7 +10,7 @@ import {
   CODE_SOURCE_OPTIONS,
   MIN_REFERRAL_BUDGET,
   REFERRAL_EVENT_TYPES,
-  conversionNoun,
+  conversionNounFor,
   downloadReferralCodesCsv,
   formatNaira,
   referralApi,
@@ -29,9 +29,15 @@ const STATUS_CHIPS: Record<ReferralCodeRow["status"], { label: string; className
   disabled: { label: "Disabled", className: "bg-red-50 text-red-700" },
 };
 
+function settingsEventTypes(settings: Pick<ReferralSettings, "eventType" | "eventTypes"> | null | undefined): ReferralEventType[] {
+  if (settings?.eventTypes?.length) return settings.eventTypes;
+  return [settings?.eventType || "signup"];
+}
+
 const DEFAULT_SETTINGS: ReferralSettings = {
   enabled: false,
   eventType: "signup",
+  eventTypes: ["signup"],
   codeSource: "easilypromote",
   conversions: 0,
   rewardPerConversion: 0,
@@ -48,9 +54,9 @@ const DEFAULT_SETTINGS: ReferralSettings = {
 const FUNDABLE_STATUSES = ["live", "paused", "under_review"];
 
 interface ReferralSettingsFieldsProps {
-  eventType: ReferralEventType;
+  eventTypes: ReferralEventType[];
   codeSource: ReferralCodeSource;
-  onEventTypeChange: (value: ReferralEventType) => void;
+  onEventTypesChange: (value: ReferralEventType[]) => void;
   onCodeSourceChange: (value: ReferralCodeSource) => void;
   disabled?: boolean;
   // New campaigns always use Easily Promote codes; the choice stays for campaigns already on their own codes.
@@ -58,9 +64,9 @@ interface ReferralSettingsFieldsProps {
 }
 
 export function ReferralSettingsFields({
-  eventType,
+  eventTypes,
   codeSource,
-  onEventTypeChange,
+  onEventTypesChange,
   onCodeSourceChange,
   disabled,
   showCodeSource = false,
@@ -68,16 +74,25 @@ export function ReferralSettingsFields({
   return (
     <div className="space-y-5">
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">What counts as a conversion?</legend>
+        <legend className="text-xs font-medium text-stone-500 font-rethink mb-2">What counts as a conversion? Pick all that apply.</legend>
         <div className="flex flex-wrap gap-2">
           {REFERRAL_EVENT_TYPES.map((option) => {
-            const selected = eventType === option.value;
+            const selected = eventTypes.includes(option.value);
             return (
               <button
                 key={option.value}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => onEventTypeChange(option.value)}
+                onClick={() =>
+                  // At least one type always stays selected.
+                  onEventTypesChange(
+                    selected
+                      ? eventTypes.length > 1
+                        ? eventTypes.filter((type) => type !== option.value)
+                        : eventTypes
+                      : [...eventTypes, option.value]
+                  )
+                }
                 className={cn(
                   "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors disabled:opacity-50",
                   selected ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
@@ -139,7 +154,7 @@ export function CampaignReferrals({
 }: CampaignReferralsProps) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<ReferralSettings>(initialSettings || DEFAULT_SETTINGS);
-  const [draftEventType, setDraftEventType] = useState<ReferralEventType>(initialSettings?.eventType || "signup");
+  const [draftEventTypes, setDraftEventTypes] = useState<ReferralEventType[]>(settingsEventTypes(initialSettings));
   const [draftCodeSource, setDraftCodeSource] = useState<ReferralCodeSource>(
     initialSettings?.codeSource || "easilypromote"
   );
@@ -167,7 +182,7 @@ export function CampaignReferrals({
       const payload = await referralApi.listCodes(campaignId);
       setData(payload);
       setSettings(payload.referral);
-      setDraftEventType(payload.referral.eventType);
+      setDraftEventTypes(settingsEventTypes(payload.referral));
       setDraftCodeSource(payload.referral.codeSource);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Could not load referral codes");
@@ -394,9 +409,9 @@ export function CampaignReferrals({
         ) : (
           <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-5">
             <ReferralSettingsFields
-              eventType={draftEventType}
+              eventTypes={draftEventTypes}
               codeSource={draftCodeSource}
-              onEventTypeChange={setDraftEventType}
+              onEventTypesChange={setDraftEventTypes}
               onCodeSourceChange={setDraftCodeSource}
               disabled={savingSettings}
               showCodeSource={settings.codeSource === "business"}
@@ -404,7 +419,7 @@ export function CampaignReferrals({
             <button
               onClick={() =>
                 saveSettings(
-                  { enabled: true, eventType: draftEventType, codeSource: draftCodeSource },
+                  { enabled: true, eventTypes: draftEventTypes, codeSource: draftCodeSource },
                   "Referral tracking is on."
                 )
               }
@@ -424,7 +439,11 @@ export function CampaignReferrals({
   const awaitingCount = codes.filter((row) => row.status === "awaiting_business").length;
   const missingCount = codes.filter((row) => row.status === "missing").length;
   const conversions = data?.summary.conversions ?? settings.conversions;
-  const settingsChanged = draftEventType !== settings.eventType || draftCodeSource !== settings.codeSource;
+  const savedEventTypes = settingsEventTypes(settings);
+  const settingsChanged =
+    draftEventTypes.length !== savedEventTypes.length ||
+    draftEventTypes.some((type) => !savedEventTypes.includes(type)) ||
+    draftCodeSource !== settings.codeSource;
 
   return (
     <div className="space-y-8">
@@ -441,7 +460,7 @@ export function CampaignReferrals({
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
           <span className="text-[10px] font-medium text-stone-500 block capitalize">
-            {conversionNoun(settings.eventType, 2)}
+            {conversionNounFor(settingsEventTypes(settings), 2)}
           </span>
           <span className="font-rethink font-medium text-xl text-stone-900 block tabular-nums">
             {conversions.toLocaleString()}
@@ -472,7 +491,7 @@ export function CampaignReferrals({
 
         <div className="space-y-1">
           <span className="text-xs font-medium text-stone-500 font-rethink block">
-            Creators earn per {conversionNoun(settings.eventType, 1)}
+            Creators earn per {conversionNounFor(settingsEventTypes(settings), 1)}
           </span>
           {settings.rewardPerConversion > 0 ? (
             <p className="font-rethink text-lg font-medium text-stone-900 tabular-nums">
@@ -483,17 +502,15 @@ export function CampaignReferrals({
           )}
           <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
             {settings.rewardPerConversion > 0
-              ? `Set by Easily Promote from your referral budget. Creators can withdraw rewards 7 days after each ${conversionNoun(settings.eventType, 1)}.`
-              : `We set this from your referral budget once the campaign is live. ${conversionNoun(settings.eventType, 2).replace(/^./, (c) => c.toUpperCase())} recorded before then are paid once it's set.`}
+              ? `Set by Easily Promote from your referral budget. Creators can withdraw rewards 7 days after each ${conversionNounFor(settingsEventTypes(settings), 1)}.`
+              : `We set this from your referral budget once the campaign is live. ${conversionNounFor(settingsEventTypes(settings), 2).replace(/^./, (c) => c.toUpperCase())} recorded before then are paid once it's set.`}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-stone-100 pt-4">
           {[
             ["Budget added", formatNaira(settings.budget)],
-            [`Platform fee (${settings.platformFeePercent ?? 30}%)`, formatNaira(settings.platformFee)],
             ["Earned by creators", formatNaira(settings.earned)],
-            ["Left for rewards", formatNaira(settings.poolRemaining)],
           ].map(([label, value]) => (
             <div key={label}>
               <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
@@ -504,7 +521,7 @@ export function CampaignReferrals({
         {settings.rewardPerConversion > 0 && (
           <p className="text-[11px] text-stone-500 font-medium font-rethink">
             Enough for about {Math.floor(settings.poolRemaining / settings.rewardPerConversion).toLocaleString()} more{" "}
-            {conversionNoun(settings.eventType, 2)}. When it runs out, conversions are still recorded but not paid.
+            {conversionNounFor(settingsEventTypes(settings), 2)}. When it runs out, conversions are still recorded but not paid.
           </p>
         )}
 
@@ -536,11 +553,7 @@ export function CampaignReferrals({
               </button>
             </div>
             <p className="text-[11px] text-stone-500 font-medium font-rethink">
-              {Number(fundAmount || 0) >= MIN_REFERRAL_BUDGET
-                ? `${formatNaira(
-                    Math.round(Number(fundAmount) * (1 - (settings.platformFeePercent ?? 30) / 100) * 100) / 100
-                  )} goes to creator rewards after the ${settings.platformFeePercent ?? 30}% platform fee.`
-                : `Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Kept separate from your views budget.`}
+              Minimum {formatNaira(MIN_REFERRAL_BUDGET)}. Kept separate from your views budget.
             </p>
           </form>
         ) : (
@@ -669,7 +682,7 @@ export function CampaignReferrals({
                   )}
                   <span className="shrink-0 font-rethink text-sm font-medium text-stone-900 tabular-nums">
                     {row.conversions.toLocaleString()}{" "}
-                    <span className="text-stone-500">{conversionNoun(settings.eventType, row.conversions)}</span>
+                    <span className="text-stone-500">{conversionNounFor(settingsEventTypes(settings), row.conversions)}</span>
                   </span>
                 </div>
 
@@ -734,9 +747,9 @@ export function CampaignReferrals({
         <div className="space-y-4 border-t border-stone-200 pt-6">
           <h4 className="font-rethink font-semibold text-sm text-stone-900">Settings</h4>
           <ReferralSettingsFields
-            eventType={draftEventType}
+            eventTypes={draftEventTypes}
             codeSource={draftCodeSource}
-            onEventTypeChange={setDraftEventType}
+            onEventTypesChange={setDraftEventTypes}
             onCodeSourceChange={setDraftCodeSource}
             disabled={savingSettings}
             showCodeSource={settings.codeSource === "business"}
@@ -744,7 +757,7 @@ export function CampaignReferrals({
           {settingsChanged && (
             <button
               onClick={() =>
-                saveSettings({ eventType: draftEventType, codeSource: draftCodeSource }, "Referral settings saved.")
+                saveSettings({ eventTypes: draftEventTypes, codeSource: draftCodeSource }, "Referral settings saved.")
               }
               disabled={savingSettings}
               className="w-full py-3 bg-stone-900 text-white font-semibold text-sm rounded-full font-rethink disabled:opacity-50"

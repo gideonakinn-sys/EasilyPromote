@@ -3,6 +3,7 @@ const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
 const { creatorReferralEarnings } = require("../utils/referralEarnings");
+const { campaignEventTypes } = require("../utils/referralCodes");
 const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
@@ -213,7 +214,7 @@ async function buildMarketplace(ctx) {
         campaign.referral.enabled &&
         campaign.referral.rewardPerConversion > 0 &&
         campaign.referral.poolRemaining >= campaign.referral.rewardPerConversion
-          ? { amount: campaign.referral.rewardPerConversion, eventType: campaign.referral.eventType }
+          ? { amount: campaign.referral.rewardPerConversion, eventType: campaign.referral.eventType, eventTypes: campaignEventTypes(campaign) }
           : null,
     });
   }
@@ -255,6 +256,7 @@ function buildCreatorReferral(campaign, code, earnings) {
   const totals = earnings || emptyReferralEarnings();
   return {
     eventType: campaign.referral.eventType,
+    eventTypes: campaignEventTypes(campaign),
     code: code ? code.code : null,
     status: code ? code.status : "awaiting_code",
     conversions: code ? code.conversions : 0,
@@ -539,6 +541,7 @@ async function buildWallet(user, ctx) {
       title: campaign.name,
       status: campaign.status,
       eventType: campaign.referral ? campaign.referral.eventType : null,
+      eventTypes: campaign.referral ? campaignEventTypes(campaign) : [],
       rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
       paidConversions: totals.paidConversions,
       earned: totals.earned,

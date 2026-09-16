@@ -125,6 +125,7 @@ export interface CampaignItem {
 
 export interface CampaignReferral {
   eventType: string;
+  eventTypes?: string[];
   code: string | null;
   status: "awaiting_code" | "awaiting_business" | "active" | "disabled";
   conversions: number;
@@ -159,7 +160,7 @@ export interface MarketplaceCampaign {
   viewTarget?: number;
   creatorPool?: number;
   description: string;
-  referralReward?: { amount: number; eventType: string } | null;
+  referralReward?: { amount: number; eventType: string; eventTypes?: string[] } | null;
 }
 
 export interface WalletData {
@@ -218,6 +219,7 @@ export interface WalletData {
       title: string;
       status: string;
       eventType: string | null;
+      eventTypes?: string[];
       rewardPerConversion: number;
       paidConversions: number;
       earned: number;
