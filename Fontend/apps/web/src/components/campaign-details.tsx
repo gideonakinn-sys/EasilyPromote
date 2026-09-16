@@ -15,6 +15,7 @@ import { codeFormatText, conversionNounFor, referralApi, type ReferralCodeRow, t
 import { CampaignReferrals } from "./campaign-referrals";
 import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
+import { CampaignApplicants } from "./campaign-applicants"; // Campaign engine: applications (ticket 06)
 import type { CampaignSetup } from "./types";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
@@ -771,6 +772,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Campaign engine: applications (ticket 06) */}
+            {campaign.creatorAccess === "application_required" && campaign.status !== "draft" && campaign.status !== "pending_payment" && (
+              <CampaignApplicants campaignId={campaign.id} />
             )}
 
             {campaign.campaignObjective && (
