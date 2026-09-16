@@ -6,7 +6,7 @@ const ReferralCode = require("../models/ReferralCode");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const ConversionEvent = require("../models/ConversionEvent");
-const { parseReferralSettings, campaignEventTypes, normalizeCode, backfillReferralCodes } = require("../utils/referralCodes");
+const { parseReferralSettings, campaignEventTypes, normalizeCode, backfillReferralCodes, brandCodePrefix } = require("../utils/referralCodes");
 const {
   MIN_REFERRAL_TOPUP,
   MAX_REFERRAL_TOPUP,
@@ -302,9 +302,10 @@ router.get("/:id/referral-codes", ...businessOnly, async (req, res, next) => {
     const campaign = await loadOwnedCampaign(req, res);
     if (!campaign) return;
 
-    const rows = await buildCodeRows(campaign);
+    const [rows, codePrefix] = await Promise.all([buildCodeRows(campaign), brandCodePrefix(campaign.businessId)]);
     res.json({
       referral: serializeSettings(campaign),
+      codePrefix,
       summary: {
         creators: rows.length,
         active: rows.filter((row) => row.status === "active").length,

@@ -35,7 +35,7 @@ interface Flags {
     brand: BrandRef;
   }[];
   brandsWithHighRejections: { brand: BrandRef; requests: number; rejected: number; rejectionRate: number }[];
-  staleKeys: { id: string; keyId: string; last4: string; createdAt: string; lastUsedAt: string | null; brand: BrandRef }[];
+  staleKeys: { id: string; keyId: string; name?: string; last4: string; createdAt: string; lastUsedAt: string | null; brand: BrandRef }[];
 }
 
 interface BrandRow {
@@ -57,6 +57,7 @@ interface BrandRow {
 interface KeyRow {
   id: string;
   keyId: string;
+  name?: string;
   last4: string;
   status: string;
   expiresAt: string | null;
@@ -666,7 +667,8 @@ function BrandPanel({
                     detail.keys.map((key) => (
                       <tr key={key.id}>
                         <td className="px-6 py-4">
-                          <p className="font-mono font-semibold text-stone-900">{key.keyId}</p>
+                          {key.name && <p className="font-semibold text-stone-900">{key.name}</p>}
+                          <p className={key.name ? "font-mono text-stone-600" : "font-mono font-semibold text-stone-900"}>{key.keyId}</p>
                           <p className="text-[11px] text-stone-400">Secret ending …{key.last4}</p>
                         </td>
                         <td className="px-6 py-4">
@@ -677,7 +679,7 @@ function BrandPanel({
                         <td className="px-6 py-4">
                           {canAct && (key.status === "active" || key.status === "expiring") ? (
                             <button
-                              onClick={() => onAction({ kind: "revoke_key", id: key.id, label: key.keyId, onDone: load })}
+                              onClick={() => onAction({ kind: "revoke_key", id: key.id, label: key.name ? `${key.name} (${key.keyId})` : key.keyId, onDone: load })}
                               className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200"
                             >
                               Revoke
@@ -904,7 +906,10 @@ function OverviewTab({
                 ) : (
                   flags.staleKeys.map((key) => (
                     <tr key={key.id}>
-                      <td className="px-6 py-4 font-mono">{key.keyId}</td>
+                      <td className="px-6 py-4">
+                        {key.name && <p className="font-semibold text-stone-900">{key.name}</p>}
+                        <p className="font-mono">{key.keyId}</p>
+                      </td>
                       <td className="px-6 py-4">
                         <button onClick={() => key.brand.id && onOpenBrand(key.brand.id)} className="font-semibold text-stone-900 underline underline-offset-2">
                           {key.brand.name || key.brand.email || "Unknown brand"}

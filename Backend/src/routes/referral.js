@@ -4,12 +4,14 @@ const WebhookKey = require("../models/WebhookKey");
 const WebhookDelivery = require("../models/WebhookDelivery");
 const BusinessProfile = require("../models/BusinessProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const { brandCodePrefix } = require("../utils/referralCodes");
 const { encrypt, decrypt } = require("../utils/crypto");
 const { EVENT_TYPES, buildSignedRequest, handleCodeCheck, handleConversionWebhook } = require("../services/conversions");
 
 const router = express.Router();
 
 const MAX_KEYS = 3;
+const MAX_KEY_NAME = 40;
 const ROTATION_GRACE_MS = 24 * 60 * 60 * 1000;
 
 router.use(protect, authorizeRoles("business"));
@@ -23,17 +25,34 @@ function generateKey() {
   };
 }
 
+// Names are optional; undefined means "not sent".
+function parseKeyName(input) {
+  if (input === undefined || input === null) return { value: undefined };
+  if (typeof input !== "string") return { error: "Key name must be text" };
+  const value = input.trim().replace(/\s+/g, " ");
+  if (value.length > MAX_KEY_NAME) return { error: `Key names can be at most ${MAX_KEY_NAME} characters` };
+  return { value };
+}
+
 function serializeKey(key, now = new Date()) {
   const expired = key.status === "expiring" && !key.isUsable(now);
   return {
     id: key._id,
     keyId: key.keyId,
+    name: key.name || "",
     last4: key.last4,
     status: expired ? "expired" : key.status,
     expiresAt: key.expiresAt,
     lastUsedAt: key.lastUsedAt,
     createdAt: key.createdAt,
   };
+}
+
+async function keyNamesFor(businessId, deliveries) {
+  const keyIds = [...new Set(deliveries.map((delivery) => delivery.keyId).filter(Boolean))];
+  if (keyIds.length === 0) return new Map();
+  const keys = await WebhookKey.find({ businessId, keyId: { $in: keyIds } }).select("keyId name").lean();
+  return new Map(keys.filter((key) => key.name).map((key) => [key.keyId, key.name]));
 }
 
 function usableKeysFilter(businessId, now = new Date()) {
@@ -56,11 +75,12 @@ function validateCodeUrl(req) {
   return `${apiBase(req)}/api/webhooks/codes/validate`;
 }
 
-async function createKey(businessId) {
+async function createKey(businessId, name = "") {
   const { keyId, secret, last4 } = generateKey();
   const key = await WebhookKey.create({
     businessId,
     keyId,
+    name,
     secretEncrypted: encrypt(secret),
     last4,
   });
@@ -82,12 +102,14 @@ router.get("/keys", async (req, res, next) => {
 // The secret is returned exactly once, here. It is never retrievable again.
 router.post("/keys", async (req, res, next) => {
   try {
+    const name = parseKeyName(req.body && req.body.name);
+    if (name.error) return res.status(400).json({ error: name.error });
     const count = await WebhookKey.countDocuments(usableKeysFilter(req.user._id));
     if (count >= MAX_KEYS) {
       return res.status(400).json({ error: `You can have at most ${MAX_KEYS} keys. Revoke one before generating another.` });
     }
 
-    const { key, secret } = await createKey(req.user._id);
+    const { key, secret } = await createKey(req.user._id, name.value || "");
     res.status(201).json({ key: serializeKey(key), secret });
   } catch (error) {
     next(error);
@@ -97,6 +119,8 @@ router.post("/keys", async (req, res, next) => {
 // Rotation keeps the old key working for 24h so the brand can swap it in without downtime.
 router.post("/keys/:id/rotate", async (req, res, next) => {
   try {
+    const name = parseKeyName(req.body && req.body.name);
+    if (name.error) return res.status(400).json({ error: name.error });
     const oldKey = await WebhookKey.findOne({ _id: req.params.id, businessId: req.user._id });
     if (!oldKey) {
       return res.status(404).json({ error: "Key not found" });
@@ -110,12 +134,31 @@ router.post("/keys/:id/rotate", async (req, res, next) => {
       return res.status(400).json({ error: `You can have at most ${MAX_KEYS} keys. Revoke one before rotating.` });
     }
 
-    const { key, secret } = await createKey(req.user._id);
+    // The replacement keeps the old key's name unless a new one is given.
+    const { key, secret } = await createKey(req.user._id, name.value !== undefined ? name.value : oldKey.name || "");
     oldKey.status = "expiring";
     oldKey.expiresAt = new Date(Date.now() + ROTATION_GRACE_MS);
     await oldKey.save();
 
     res.status(201).json({ key: serializeKey(key), secret, previousKey: serializeKey(oldKey) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/keys/:id", async (req, res, next) => {
+  try {
+    const name = parseKeyName(req.body && req.body.name);
+    if (name.error) return res.status(400).json({ error: name.error });
+    if (name.value === undefined) return res.status(400).json({ error: "Send a name to rename the key" });
+
+    const key = await WebhookKey.findOne({ _id: req.params.id, businessId: req.user._id });
+    if (!key || !key.isUsable()) {
+      return res.status(404).json({ error: "Key not found" });
+    }
+    key.name = name.value;
+    await key.save();
+    res.json(serializeKey(key));
   } catch (error) {
     next(error);
   }
@@ -190,6 +233,7 @@ router.get("/events", async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const events = await WebhookDelivery.find({ businessId: req.user._id }).sort({ createdAt: -1 }).limit(limit).lean();
+    const keyNames = await keyNamesFor(req.user._id, events);
     res.json(
       events.map((event) => ({
         id: event._id,
@@ -204,6 +248,7 @@ router.get("/events", async (req, res, next) => {
         isTest: event.isTest,
         counted: event.counted,
         keyId: event.keyId,
+        keyName: (event.keyId && keyNames.get(event.keyId)) || null,
       }))
     );
   } catch (error) {
@@ -213,9 +258,10 @@ router.get("/events", async (req, res, next) => {
 
 router.get("/status", async (req, res, next) => {
   try {
-    const [profile, keys] = await Promise.all([
+    const [profile, keys, codePrefix] = await Promise.all([
       BusinessProfile.findOne({ userId: req.user._id }).select("referralConnectedAt referralVerification").lean(),
       WebhookKey.find(usableKeysFilter(req.user._id)).select("lastUsedAt").lean(),
+      brandCodePrefix(req.user._id),
     ]);
 
     const lastEventAt = keys.reduce((latest, key) => {
@@ -236,6 +282,7 @@ router.get("/status", async (req, res, next) => {
       connectedAt: profile ? profile.referralConnectedAt : null,
       lastEventAt,
       activeKeys: keys.length,
+      codePrefix,
       webhookUrl: webhookUrl(req),
       validateUrl: validateCodeUrl(req),
     });

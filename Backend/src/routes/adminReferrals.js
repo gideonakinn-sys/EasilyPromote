@@ -102,7 +102,7 @@ async function buildFlags(now) {
       status: "active",
       $or: [{ lastUsedAt: null, createdAt: { $lte: staleBefore } }, { lastUsedAt: { $lte: staleBefore } }],
     })
-      .select("keyId last4 businessId createdAt lastUsedAt")
+      .select("keyId name last4 businessId createdAt lastUsedAt")
       .populate("businessId", "name email")
       .sort({ createdAt: 1 })
       .limit(FLAG_LIMIT)
@@ -132,6 +132,7 @@ async function buildFlags(now) {
     staleKeys: staleKeys.map((key) => ({
       id: key._id,
       keyId: key.keyId,
+      name: key.name || "",
       last4: key.last4,
       createdAt: key.createdAt,
       lastUsedAt: key.lastUsedAt,
@@ -370,6 +371,7 @@ router.get("/brands/:id", viewGuard, async (req, res, next) => {
       keys: keys.map((key) => ({
         id: key._id,
         keyId: key.keyId,
+        name: key.name || "",
         last4: key.last4,
         status: effectiveKeyStatus(key, now),
         expiresAt: key.expiresAt,
@@ -397,6 +399,7 @@ router.get("/brands/:id", viewGuard, async (req, res, next) => {
         eventType: delivery.eventType,
         eventId: delivery.eventId,
         keyId: delivery.keyId,
+        keyName: (delivery.keyId && (keys.find((key) => key.keyId === delivery.keyId) || {}).name) || null,
       })),
     });
   } catch (err) {
@@ -777,7 +780,7 @@ router.post("/keys/:id/revoke", actGuard, async (req, res, next) => {
       businessId: key.businessId,
       type: "webhook_key_revoked",
       title: "Signing key revoked",
-      body: `Easily Promote revoked your signing key ${key.keyId}. Requests signed with it are now rejected — generate a new key in Referral tracking settings. Note: ${note}`,
+      body: `Easily Promote revoked your signing key ${key.name ? `"${key.name}" (${key.keyId})` : key.keyId}. Requests signed with it are now rejected — generate a new key in Referral tracking settings. Note: ${note}`,
     });
 
     await recordAdminActivity(req, {

@@ -85,6 +85,12 @@ function buildDisplayCode(brandName, creatorHandle) {
   return `${slugPart(brandName) || "EP"}-${slugPart(creatorHandle) || "CREATOR"}`;
 }
 
+// Every code we create for a brand starts with this, e.g. KUDA in KUDA-TUNDE.
+async function brandCodePrefix(businessId) {
+  const brand = await BusinessProfile.findOne({ userId: businessId }).select("companyName").lean();
+  return slugPart(brand && brand.companyName) || "EP";
+}
+
 function randomSuffix(length = 3) {
   let suffix = "";
   for (let i = 0; i < length; i += 1) {
@@ -167,6 +173,7 @@ module.exports = {
   campaignEventTypes,
   normalizeCode,
   buildDisplayCode,
+  brandCodePrefix,
   createReferralCode,
   backfillReferralCodes,
 };

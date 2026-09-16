@@ -84,11 +84,15 @@ export const REFERRAL_HOW_IT_WORKS: { title: string; body: string }[] = [
 ];
 
 // Everything a developer needs to connect the brand's app, except the secret, which is shared privately.
-export function buildDeveloperMessage(status: { webhookUrl?: string; validateUrl?: string } | null, keyId: string): string {
+export function buildDeveloperMessage(
+  status: { webhookUrl?: string; validateUrl?: string } | null,
+  keyId: string,
+  keyName?: string
+): string {
   return [
     "Please connect our app to Easily Promote referral tracking.",
     "",
-    `Key ID (EP_KEY_ID): ${keyId}`,
+    `Key ID (EP_KEY_ID): ${keyId}${keyName ? ` (${keyName})` : ""}`,
     "Secret (EP_WEBHOOK_SECRET): I'll share it privately.",
     "",
     `1. When a user enters a referral code, POST { "code": "..." } to ${status?.validateUrl || ""} and accept it only if the answer has "valid": true.`,
@@ -113,6 +117,7 @@ export interface WebhookDeliveryLog {
   isTest: boolean;
   counted: boolean;
   keyId: string | null;
+  keyName?: string | null;
 }
 
 export type TestRequestType = "validate" | "conversion";
@@ -136,6 +141,13 @@ export interface TestEventResult {
 }
 
 export const MIN_REFERRAL_BUDGET = 1000;
+export const MAX_KEY_NAME = 40;
+
+// How a brand's codes look: their name, then the creator's username.
+export function codeFormatText(prefix: string | undefined): string {
+  const start = prefix || "BRAND";
+  return `Your codes look like ${start}-CREATORNAME, for example ${start}-TUNDE. Each creator gets their own when they join.`;
+}
 
 export function formatNaira(value: number | null | undefined): string {
   return `₦${(value || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
@@ -163,6 +175,8 @@ export interface ReferralSettings {
 export interface WebhookKey {
   id: string;
   keyId: string;
+  // Optional label from the brand, e.g. "Live app".
+  name: string;
   last4: string;
   status: "active" | "expiring" | "revoked" | "expired";
   expiresAt: string | null;
@@ -178,6 +192,8 @@ export interface ReferralStatus {
   connectedAt: string | null;
   lastEventAt: string | null;
   activeKeys: number;
+  // Every code we create for this brand starts with it, e.g. KUDA in KUDA-TUNDE.
+  codePrefix?: string;
   webhookUrl: string;
   validateUrl: string;
 }
@@ -198,6 +214,7 @@ export interface ReferralCodeRow {
 
 export interface ReferralCodesPayload {
   referral: ReferralSettings;
+  codePrefix?: string;
   summary: { creators: number; active: number; awaitingBusiness: number; missing: number; conversions: number };
   codes: ReferralCodeRow[];
 }
@@ -216,7 +233,14 @@ const auth = () => ({ token: getToken() || undefined });
 export const referralApi = {
   status: () => apiRequest<ReferralStatus>("/referral/status", auth()),
   listKeys: () => apiRequest<WebhookKey[]>("/referral/keys", auth()),
-  createKey: () => apiRequest<{ key: WebhookKey; secret: string }>("/referral/keys", { method: "POST", ...auth() }),
+  createKey: (name?: string) =>
+    apiRequest<{ key: WebhookKey; secret: string }>("/referral/keys", {
+      method: "POST",
+      body: JSON.stringify({ name: name || "" }),
+      ...auth(),
+    }),
+  renameKey: (id: string, name: string) =>
+    apiRequest<WebhookKey>(`/referral/keys/${id}`, { method: "PATCH", body: JSON.stringify({ name }), ...auth() }),
   rotateKey: (id: string) =>
     apiRequest<{ key: WebhookKey; secret: string; previousKey: WebhookKey }>(`/referral/keys/${id}/rotate`, {
       method: "POST",

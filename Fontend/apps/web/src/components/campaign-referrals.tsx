@@ -10,6 +10,7 @@ import {
   CODE_SOURCE_OPTIONS,
   MIN_REFERRAL_BUDGET,
   REFERRAL_EVENT_TYPES,
+  codeFormatText,
   conversionNounFor,
   downloadReferralCodesCsv,
   formatNaira,
@@ -646,6 +647,9 @@ export function CampaignReferrals({
 
       <div className="space-y-3">
         <h4 className="font-rethink font-semibold text-sm text-stone-900">Creators</h4>
+        {settings.codeSource !== "business" && (
+          <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{codeFormatText(data?.codePrefix)}</p>
+        )}
         {codes.length === 0 ? (
           <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
             No creators have joined yet. Codes appear here as creators claim placements.

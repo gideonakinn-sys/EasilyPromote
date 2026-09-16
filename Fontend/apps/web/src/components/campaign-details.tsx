@@ -11,7 +11,7 @@ import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
 import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
-import { conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
+import { codeFormatText, conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
 import { CampaignReferrals } from "./campaign-referrals";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
@@ -205,6 +205,7 @@ function CreatorAvatar({ seed }: { seed: string }) {
 export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("Overview");
   const [referralCodes, setReferralCodes] = useState<ReferralCodeRow[] | null>(null);
+  const [codePrefix, setCodePrefix] = useState<string | undefined>(undefined);
 
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionData[]>([]);
@@ -256,7 +257,9 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     referralApi
       .listCodes(campaignId)
       .then((payload) => {
-        if (!cancelled) setReferralCodes(payload.codes);
+        if (cancelled) return;
+        setReferralCodes(payload.codes);
+        setCodePrefix(payload.codePrefix);
       })
       .catch(() => {
         if (!cancelled) setReferralCodes([]);
@@ -807,7 +810,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                       <Skeleton className="h-8 rounded-xl" />
                     ) : referralCodes.length === 0 ? (
                       <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
-                        Each creator gets their own code when they join this campaign. No creators have joined yet.
+                        {codeFormatText(codePrefix)} No creators have joined yet.
                       </p>
                     ) : (
                       <ul className="space-y-2">
