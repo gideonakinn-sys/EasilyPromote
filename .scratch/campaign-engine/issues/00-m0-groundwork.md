@@ -8,7 +8,7 @@
 
 **Status:** in-progress
 
-- [ ] D1–D14 answered and recorded in the spec (unanswered ones take the recommended default on Mon 21 Sep)
+- [x] D1–D14 answered and recorded in the spec (defaults adopted 16 Sep)
 - [ ] Glossary covers: campaign model, objective, pay shape, rate authority, content destination, creator access, Creator Approval, Content Approval, audience targeting, creator eligibility
 - [ ] ADRs recorded for decisions that are hard to reverse and surprising without context
 - [ ] End-to-end test setup starts its own throwaway MongoDB, never touches the database in the environment file, and stubs Paystack

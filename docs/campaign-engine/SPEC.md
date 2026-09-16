@@ -172,7 +172,7 @@ Tests run against a throwaway local MongoDB with Paystack stubbed (never the dat
 
 ## Product Decisions (D1–D14)
 
-Status: **proposed defaults — confirm by Mon 21 Sep 2026.** Anything not confirmed by then is adopted as written.
+Status: **accepted — defaults adopted 16 Sep 2026.**
 
 | # | Decision | Default |
 |---|---|---|
