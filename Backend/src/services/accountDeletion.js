@@ -17,7 +17,9 @@ const { decrypt } = require("../utils/crypto");
 const UNDELIVERED_SLOT_STATUSES = ["reserved", "claimed", "submitted"];
 // Work already delivered stays attached to the campaign; the brand got the views.
 const ACTIVE_SLOT_STATUSES = ["claimed", "submitted", "verifying", "approved"];
-const ACTIVE_CAMPAIGN_STATUSES = ["pending_payment", "under_review", "live", "paused"];
+// Campaign engine: content approval (ticket 07)
+const OWED_CONTENT_STATUSES = ["awaiting_delivery", "awaiting_receipt", "verifying", "completed"];
+const ACTIVE_CAMPAIGN_STATUSES =["pending_payment", "under_review", "live", "paused"];
 
 // Deleting an account must always be possible. The only hard stop is a transfer
 // already moving at Paystack, which would break settlement if the records
@@ -130,9 +132,17 @@ async function deleteAccount(user) {
 
   // Release work that produced nothing so the slot can be refilled. Slots that
   // already delivered views stay put: the brand paid for those and got them.
-  const releasedCampaignIds = await Slot.distinct("campaignId", { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES } });
+  // Campaign engine: content approval (ticket 07): a place whose approved content is being delivered,
+  // verified or is complete is owed pay, so it stays.
+  const owedSlotIds = await Submission.distinct("slotId", {
+    creatorId: user._id,
+    slotId: { $type: "objectId" },
+    status: { $in: OWED_CONTENT_STATUSES },
+  });
+  const releasable = { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES }, _id: { $nin: owedSlotIds } };
+  const releasedCampaignIds = await Slot.distinct("campaignId", releasable);
   await Slot.updateMany(
-    { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES } },
+    releasable,
     { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } }
   );
   const { emitPlacesLeft } = require("../utils/campaignUpdates");

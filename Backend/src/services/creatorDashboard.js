@@ -341,6 +341,57 @@ function contentApprovalFields(campaign, submission, timeline) {
   };
 }
 
+// Rejected content gives its place back to the campaign, but the creator still sees the campaign
+// so they can read why and appeal. `submissions` are newest first.
+async function releasedContentCampaigns(submissions, heldItems, eventsBySubmission) {
+  const held = new Set(heldItems.map((item) => String(item.id)));
+  const latest = new Map();
+  for (const sub of submissions) {
+    const key = String(sub.campaignId);
+    if (!held.has(key) && sub.slotId && !latest.has(key)) latest.set(key, sub);
+  }
+  const waiting = [...latest.values()].filter((sub) => ["rejected", "appealed"].includes(sub.status));
+  if (waiting.length === 0) return [];
+
+  const campaigns = await Campaign.find({ _id: { $in: waiting.map((sub) => sub.campaignId) } })
+    .select("name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay contentDestination")
+    .populate("businessId", "name avatar")
+    .lean();
+  const byId = new Map(campaigns.map((campaign) => [String(campaign._id), campaign]));
+
+  return waiting
+    .filter((sub) => byId.has(String(sub.campaignId)) && contentApproval.isContentCampaign(byId.get(String(sub.campaignId))))
+    .map((sub) => {
+      const campaign = byId.get(String(sub.campaignId));
+      const pay = payPerUnit(campaign, null);
+      return {
+        id: campaign._id,
+        slotId: null,
+        title: campaign.name,
+        category: campaign.category,
+        coverImageUrl: campaign.coverImageUrl,
+        status: campaign.status === "cancelled" ? "cancelled" : mapStatusToCreator(sub, campaign, null),
+        reward: pay.amount || 0,
+        submissionId: sub._id,
+        videoUrl: sub.videoUrl,
+        caption: sub.caption,
+        contentBrief: campaign.contentBrief,
+        description: campaign.contentBrief || undefined,
+        platforms: campaign.platforms,
+        kind: "deliverable",
+        brief: fullBrief(campaign),
+        pay,
+        brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
+        brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
+        delivery: sub.status === "appealed" ? "Appealed" : "Rejected",
+        submittedAgo: timeAgo(sub.submittedAt),
+        reviewedAgo: timeAgo(sub.reviewedAt),
+        referral: null,
+        ...contentApprovalFields(campaign, sub, eventsBySubmission[sub._id.toString()] || []),
+      };
+    });
+}
+
 async function buildMyCampaigns(ctx) {
   const { userId } = ctx;
 
@@ -455,7 +506,9 @@ async function buildMyCampaigns(ctx) {
       };
     });
 
-  return { campaigns, locked: ctx.locked, lockReason: ctx.lockReason };
+  // Campaign engine: content approval (ticket 07)
+  const released = await releasedContentCampaigns(submissions, campaigns, eventsBySubmission);
+  return { campaigns: [...campaigns, ...released], locked: ctx.locked, lockReason: ctx.lockReason };
 }
 
 async function buildWallet(user, ctx) {

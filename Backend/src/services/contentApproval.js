@@ -5,13 +5,16 @@
 // then goes where the campaign says:
 //
 //   creator_page: awaiting_post → (live post link) verifying → (brand verifies) completed
-//   brand_page:   awaiting_delivery → (download link + usage rights) delivered → (brand confirms receipt) completed
-//   both:         awaiting_delivery → delivered → (receipt) awaiting_post → verifying → completed
+//   brand_page:   awaiting_delivery → (download link + usage rights) awaiting_receipt → (brand confirms receipt) completed
+//   both:         awaiting_delivery → awaiting_receipt → (receipt) awaiting_post → verifying → completed
 //
-// Content nobody reviews for 72 hours is approved automatically (D10).
+// Whatever waits on the brand (review, receipt, post verification) is done automatically after
+// 72 hours without a response (D10).
 //
-// These transitions only ever read and write the Submission (and its events and notifications).
-// They never read or write an application, and never change who holds a placement.
+// Every transition moves the status in the same guarded update that authorises it, so events,
+// notifications and the pay seam only ever fire for the request that won. These transitions never
+// read or write an application. The one placement change is releasing the place of rejected
+// content (and taking it back if an appeal is upheld while it's still free).
 // Views / performance campaigns never come through here.
 const Submission = require("../models/Submission");
 const Slot = require("../models/Slot");
@@ -20,15 +23,18 @@ const Notification = require("../models/Notification");
 const ReferralCode = require("../models/ReferralCode");
 const User = require("../models/User");
 const CreatorProfile = require("../models/CreatorProfile");
-const { emitToUser } = require("../config/socket");
-const { emitCampaignUpdate } = require("../utils/campaignUpdates");
-const { campaignTerms } = require("../utils/campaignPay");
+const { emitToUser, emitToRole } = require("../config/socket");
+const { emitCampaignUpdate, emitPlacesLeft } = require("../utils/campaignUpdates");
+const { isContentCampaign } = require("../utils/campaignPay");
+const { missingHashtags, captionHasCode } = require("../utils/captionRules");
 const { HELD_PLACEMENT_STATUSES } = require("../utils/placementStatuses");
 const { recordEvent } = require("./submissionEvents");
 
 const MAX_CHANGE_REQUESTS = 2;
-const AUTO_APPROVE_AFTER_MS = 72 * 60 * 60 * 1000;
-const AUTO_APPROVE_INTERVAL_MS = 15 * 60 * 1000;
+const BRAND_RESPONSE_MS = 72 * 60 * 60 * 1000;
+const DEADLINE_INTERVAL_MS = 15 * 60 * 1000;
+// Statuses waiting on the brand; each is resolved automatically after BRAND_RESPONSE_MS.
+const WAITING_ON_BRAND = ["new", "awaiting_receipt", "verifying"];
 
 // D6: the one standard licence a creator grants when content goes to the brand's page.
 const USAGE_RIGHTS_LICENCE =
@@ -47,10 +53,6 @@ const fail = (status, code, message, extra) => {
   throw new ContentApprovalError(status, code, message, extra);
 };
 
-function isContentCampaign(campaign) {
-  return Boolean(campaign) && campaignTerms(campaign).campaignModel === "content";
-}
-
 function destinationOf(campaign) {
   return (campaign && campaign.contentDestination) || "creator_page";
 }
@@ -62,18 +64,12 @@ function statusAfterApproval(campaign) {
   return needsDelivery(campaign) ? "awaiting_delivery" : "awaiting_post";
 }
 
-function changeRequestsUsed(submission) {
-  return (submission.changeRequests || []).length;
-}
+const changeRequestsUsed = (submission) => (submission.changeRequests || []).length;
+const changeRequestsLeft = (submission) => Math.max(MAX_CHANGE_REQUESTS - changeRequestsUsed(submission), 0);
 
-function changeRequestsLeft(submission) {
-  return Math.max(MAX_CHANGE_REQUESTS - changeRequestsUsed(submission), 0);
-}
-
-function reviewDueAt(submission) {
-  if (submission.status !== "new") return null;
-  const since = submission.awaitingReviewSince || submission.submittedAt;
-  return since ? new Date(new Date(since).getTime() + AUTO_APPROVE_AFTER_MS) : null;
+function brandDueAt(submission) {
+  if (!WAITING_ON_BRAND.includes(submission.status) || !submission.awaitingBrandSince) return null;
+  return new Date(new Date(submission.awaitingBrandSince).getTime() + BRAND_RESPONSE_MS);
 }
 
 const isHttpUrl = (value) => {
@@ -84,6 +80,13 @@ const isHttpUrl = (value) => {
     return false;
   }
 };
+
+// actor: { kind: "creator" | "brand" | "admin" | "system", user? }
+function eventActor(actor, submission) {
+  if (actor.kind === "system") return { actor: "system" };
+  if (actor.kind === "creator") return { actor: "creator", actorId: actor.user._id, actorName: submission.creatorHandle };
+  return { actor: actor.kind, actorId: actor.user._id, actorName: actor.user.name };
+}
 
 // In-app notification plus a socket push, sent to whoever has to act next.
 async function notify({ campaign, submission, to, type, title, body }) {
@@ -107,14 +110,10 @@ async function notify({ campaign, submission, to, type, title, body }) {
   return notification;
 }
 
-// Moves a submission only if it is still in one of `from`, so two actors (a brand and the
-// auto-approve job) can't both apply a transition.
+// Moves a submission only if it is still in one of `from`. The request that loses a race gets 409
+// and records nothing.
 async function transition(submission, from, update) {
-  const updated = await Submission.findOneAndUpdate(
-    { _id: submission._id, status: { $in: from } },
-    update,
-    { new: true }
-  );
+  const updated = await Submission.findOneAndUpdate({ _id: submission._id, status: { $in: from } }, update, { new: true });
   if (!updated) fail(409, "STATUS_CHANGED", "This submission has changed. Refresh to see where it is now.");
   return updated;
 }
@@ -125,29 +124,36 @@ function afterChange(submission) {
 }
 
 // ── M6 seam ─────────────────────────────────────────────────────────────────
-// D1: fixed pay is due on approval for brand-page content, and once the live post is verified
-// for creator-page / both. Crediting the creator is ticket M6; for now this only records that
-// the pay became due, so M6 has one place to hook in.
-async function fixedPayDue(submission, campaign, { trigger }) {
-  const slot = await Slot.findOne({ campaignId: campaign._id, creatorId: submission.creatorId }).select("reward").lean();
-  await recordEvent(submission, {
-    type: "fixed_pay_due",
-    actor: "system",
-    reason: null,
-    metadata: { trigger, amount: slot ? slot.reward : null, credited: false },
-  });
-}
-
-async function complete(submission, campaign, { now = new Date() } = {}) {
-  const completed = await Submission.findByIdAndUpdate(
-    submission._id,
-    { $set: { status: "completed", completedAt: now } },
+// D1: fixed pay is due on approval for brand-page content, and once the live post is verified for
+// creator-page / both. Crediting is ticket M6; this records, once per submission, that pay became
+// due. fixedPayDueAt is claimed atomically, so a second call does nothing. Returns whether it fired.
+async function fixedPayDue(submission, campaign, { trigger, now = new Date() }) {
+  const claimed = await Submission.findOneAndUpdate(
+    { _id: submission._id, fixedPayDueAt: null },
+    { $set: { fixedPayDueAt: now } },
     { new: true }
   );
-  // The placement's work is done: it stays held by the creator, but no longer counts
-  // towards their active placement limit.
+  if (!claimed) return false;
+  const slot = claimed.slotId
+    ? await Slot.findById(claimed.slotId).select("reward").lean()
+    : await Slot.findOne({ campaignId: campaign._id, creatorId: claimed.creatorId }).select("reward").lean();
+  await recordEvent(claimed, {
+    type: "fixed_pay_due",
+    actor: "system",
+    metadata: { trigger, amount: slot ? slot.reward : null, credited: false },
+  });
+  return true;
+}
+
+// Runs once, for the request whose guarded update moved the submission into completed.
+async function afterCompleted(completed, campaign, now) {
+  // The placement's work is done: still held by the creator, no longer counted as active.
   await Slot.updateOne(
-    { campaignId: campaign._id, creatorId: submission.creatorId, status: { $in: ["claimed", "submitted", "verifying"] } },
+    {
+      ...(completed.slotId ? { _id: completed.slotId } : { campaignId: campaign._id }),
+      creatorId: completed.creatorId,
+      status: { $in: ["claimed", "submitted", "verifying"] },
+    },
     { $set: { status: "approved", completedAt: now } }
   );
   await recordEvent(completed, { type: "completed", actor: "system" });
@@ -159,7 +165,30 @@ async function complete(submission, campaign, { now = new Date() } = {}) {
     title: "Deliverable completed",
     body: `Your deliverable for "${campaign.name}" is complete.`,
   });
-  return completed;
+}
+
+async function notifyAutoConfirmed(campaign, submission, what) {
+  await notify({
+    campaign,
+    submission,
+    to: "brand",
+    type: "content_auto_confirmed",
+    title: `${what} confirmed automatically`,
+    body: `${submission.creatorHandle}'s ${what.toLowerCase()} for "${campaign.name}" waited 72 hours without a response, so it was confirmed.`,
+  });
+}
+
+// Gives a rejected creator's place back to the campaign so another creator can deliver it.
+async function releasePlacement(submission, campaign) {
+  const released = await Slot.findOneAndUpdate(
+    {
+      ...(submission.slotId ? { _id: submission.slotId } : { campaignId: campaign._id }),
+      creatorId: submission.creatorId,
+      status: { $in: ["claimed", "submitted"] },
+    },
+    { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } }
+  );
+  if (released) await emitPlacesLeft(campaign._id);
 }
 
 // ── Transitions ─────────────────────────────────────────────────────────────
@@ -167,40 +196,42 @@ async function complete(submission, campaign, { now = new Date() } = {}) {
 async function submitContent({ user, campaign, videoUrl, caption, durationSeconds }) {
   if (!isHttpUrl(videoUrl)) fail(400, "VIDEO_URL_REQUIRED", "Add a link to your content");
 
-  const [placements, existing] = await Promise.all([
-    Slot.countDocuments({ campaignId: campaign._id, creatorId: user._id, kind: "deliverable", status: { $in: HELD_PLACEMENT_STATUSES } }),
-    Submission.countDocuments({ campaignId: campaign._id, creatorId: user._id }),
+  const [slot, existing] = await Promise.all([
+    Slot.findOne({ campaignId: campaign._id, creatorId: user._id, kind: "deliverable", status: { $in: HELD_PLACEMENT_STATUSES } }).lean(),
+    Submission.exists({ campaignId: campaign._id, creatorId: user._id }),
   ]);
-  if (placements === 0) fail(403, "PLACEMENT_REQUIRED", "Join this campaign before submitting content");
-  // A placement carries one submission for its whole life: changes go through change
-  // requests, and a rejection is final unless appealed.
-  if (existing >= placements) {
-    fail(409, "SUBMISSION_LIMIT", "You've already submitted content for your place in this campaign");
-  }
+  if (!slot) fail(403, "PLACEMENT_REQUIRED", "Join this campaign before submitting content");
+  // A creator's content for a campaign is one submission for good: changes go through change
+  // requests, and a rejection is final unless appealed (rejoining doesn't reset it).
+  const limit = () => fail(409, "SUBMISSION_LIMIT", "You've already submitted content for this campaign");
+  if (existing) limit();
 
   const [account, profile] = await Promise.all([User.findById(user._id), CreatorProfile.findOne({ userId: user._id })]);
   const now = new Date();
-  const submission = await Submission.create({
-    campaignId: campaign._id,
-    creatorId: user._id,
-    creatorHandle: profile ? profile.username : account.name,
-    videoUrl: String(videoUrl).trim(),
-    caption,
-    durationSeconds,
-    status: "new",
-    submittedAt: now,
-    awaitingReviewSince: now,
-  });
+  let submission;
+  try {
+    submission = await Submission.create({
+      campaignId: campaign._id,
+      creatorId: user._id,
+      slotId: slot._id,
+      creatorHandle: profile ? profile.username : account.name,
+      videoUrl: String(videoUrl).trim(),
+      caption,
+      durationSeconds,
+      status: "new",
+      submittedAt: now,
+      awaitingBrandSince: now,
+    });
+  } catch (error) {
+    // The unique (slot, creator) index caught a concurrent second submit.
+    if (error.code === 11000) limit();
+    throw error;
+  }
 
-  await Slot.updateOne(
-    { campaignId: campaign._id, creatorId: user._id, status: "claimed" },
-    { $set: { status: "submitted", submissionUrl: submission.videoUrl } }
-  );
+  await Slot.updateOne({ _id: slot._id, creatorId: user._id, status: "claimed" }, { $set: { status: "submitted", submissionUrl: submission.videoUrl } });
   await recordEvent(submission, {
     type: "submitted",
-    actor: "creator",
-    actorId: user._id,
-    actorName: submission.creatorHandle,
+    ...eventActor({ kind: "creator", user }, submission),
     metadata: { videoUrl: submission.videoUrl, caption, durationSeconds },
   });
   await notify({
@@ -219,31 +250,28 @@ async function requestChanges({ submission, campaign, user, notes }) {
   const text = String(notes || "").trim();
   if (!text) fail(400, "NOTES_REQUIRED", "Tell the creator what to change");
   if (submission.status !== "new") fail(400, "NOT_AWAITING_REVIEW", "You can only request changes on content waiting for review");
-  if (changeRequestsLeft(submission) <= 0) {
+  const used = changeRequestsUsed(submission);
+  const exhausted = () =>
     fail(409, "CHANGE_REQUESTS_USED", `You've used all ${MAX_CHANGE_REQUESTS} change requests. Approve or reject this content.`);
-  }
+  if (used >= MAX_CHANGE_REQUESTS) exhausted();
 
-  const round = changeRequestsUsed(submission) + 1;
-  const updated = await transition(submission, ["new"], {
-    $set: { status: "changes_requested", reviewedAt: new Date() },
-    $push: {
-      changeRequests: {
-        round,
-        notes: text,
-        requestedAt: new Date(),
-        requestedBy: user._id,
-        videoUrl: submission.videoUrl,
-        caption: submission.caption,
+  const now = new Date();
+  // The round count is part of the guard, so two concurrent requests can't both add a round.
+  const updated = await Submission.findOneAndUpdate(
+    { _id: submission._id, status: "new", [`changeRequests.${MAX_CHANGE_REQUESTS - 1}`]: { $exists: false } },
+    {
+      $set: { status: "changes_requested", reviewedAt: now },
+      $unset: { awaitingBrandSince: 1 },
+      $push: {
+        changeRequests: { round: used + 1, notes: text, requestedAt: now, requestedBy: user._id, videoUrl: submission.videoUrl, caption: submission.caption },
       },
     },
-  });
-  // Guard against a concurrent second request slipping past the round check.
-  if (changeRequestsUsed(updated) > MAX_CHANGE_REQUESTS) {
-    await Submission.updateOne({ _id: updated._id }, { $pop: { changeRequests: 1 }, $set: { status: "new" } });
-    fail(409, "CHANGE_REQUESTS_USED", `You've used all ${MAX_CHANGE_REQUESTS} change requests. Approve or reject this content.`);
-  }
+    { new: true }
+  );
+  if (!updated) fail(409, "STATUS_CHANGED", "This submission has changed. Refresh to see where it is now.");
+  const round = changeRequestsUsed(updated);
 
-  await recordEvent(updated, { type: "changes_requested", actor: "brand", actorId: user._id, actorName: user.name, reason: text, metadata: { round } });
+  await recordEvent(updated, { type: "changes_requested", ...eventActor({ kind: "brand", user }, updated), reason: text, metadata: { round } });
   await notify({
     campaign,
     submission: updated,
@@ -256,20 +284,19 @@ async function requestChanges({ submission, campaign, user, notes }) {
   return updated;
 }
 
-async function resubmit({ submission, campaign, user, videoUrl, caption }) {
+// A creator edits content still waiting for review (no new round), or resubmits after the
+// brand asked for changes (starts the next review).
+async function editOrResubmitContent({ submission, campaign, user, videoUrl, caption }) {
   if (videoUrl !== undefined && !isHttpUrl(videoUrl)) fail(400, "VIDEO_URL_REQUIRED", "Add a link to your content");
+  const set = {};
+  if (videoUrl !== undefined) set.videoUrl = String(videoUrl).trim();
+  if (caption !== undefined) set.caption = caption;
 
   if (submission.status === "new") {
-    // Editing before the brand has looked: no new round, the review clock keeps running.
-    const set = {};
-    if (videoUrl !== undefined) set.videoUrl = String(videoUrl).trim();
-    if (caption !== undefined) set.caption = caption;
     const updated = await transition(submission, ["new"], { $set: set });
     await recordEvent(updated, {
       type: "content_edited",
-      actor: "creator",
-      actorId: user._id,
-      actorName: updated.creatorHandle,
+      ...eventActor({ kind: "creator", user }, updated),
       metadata: { videoUrl: updated.videoUrl, caption: updated.caption },
     });
     afterChange(updated);
@@ -280,52 +307,44 @@ async function resubmit({ submission, campaign, user, videoUrl, caption }) {
   }
 
   const now = new Date();
-  const set = { status: "new", awaitingReviewSince: now };
-  if (videoUrl !== undefined) set.videoUrl = String(videoUrl).trim();
-  if (caption !== undefined) set.caption = caption;
   const last = changeRequestsUsed(submission) - 1;
-  if (last >= 0) set[`changeRequests.${last}.resubmittedAt`] = now;
-
-  const updated = await transition(submission, ["changes_requested"], { $set: set });
+  const updated = await transition(submission, ["changes_requested"], {
+    $set: { ...set, status: "new", awaitingBrandSince: now, ...(last >= 0 && { [`changeRequests.${last}.resubmittedAt`]: now }) },
+  });
   await recordEvent(updated, {
     type: "resubmitted",
-    actor: "creator",
-    actorId: user._id,
-    actorName: updated.creatorHandle,
+    ...eventActor({ kind: "creator", user }, updated),
     metadata: { videoUrl: updated.videoUrl, caption: updated.caption, round: changeRequestsUsed(updated) },
   });
+  const left = changeRequestsLeft(updated);
   await notify({
     campaign,
     submission: updated,
     to: "brand",
     type: "content_resubmitted",
     title: "Updated content to review",
-    body: `${updated.creatorHandle} updated their content for "${campaign.name}". ${changeRequestsLeft(updated)} change request${changeRequestsLeft(updated) === 1 ? "" : "s"} left.`,
+    body: `${updated.creatorHandle} updated their content for "${campaign.name}". ${left} change request${left === 1 ? "" : "s"} left.`,
   });
   afterChange(updated);
   return updated;
 }
 
-// `actor` is { kind: "brand", user } or { kind: "system" }.
 async function approveContent({ submission, campaign, actor, now = new Date() }) {
   if (submission.status !== "new") fail(400, "NOT_AWAITING_REVIEW", "Can only approve content waiting for review");
   const auto = actor.kind === "system";
   const updated = await transition(submission, ["new"], {
     $set: { status: statusAfterApproval(campaign), reviewedAt: now, ...(auto && { autoApproved: true }) },
+    $unset: { awaitingBrandSince: 1 },
   });
 
   await recordEvent(updated, {
     type: "approved",
-    actor: auto ? "system" : "brand",
-    actorId: auto ? null : actor.user._id,
-    actorName: auto ? null : actor.user.name,
+    ...eventActor(actor, updated),
     metadata: auto ? { auto: true, reason: "No brand response within 72 hours" } : {},
   });
-  if (destinationOf(campaign) === "brand_page") await fixedPayDue(updated, campaign, { trigger: "approved" });
+  if (destinationOf(campaign) === "brand_page") await fixedPayDue(updated, campaign, { trigger: "approved", now });
 
-  const next = needsDelivery(campaign)
-    ? "Share a download link for the brand."
-    : "Post it on your page and share the live link.";
+  const next = needsDelivery(campaign) ? "Share a download link for the brand." : "Post it on your page and share the live link.";
   await notify({
     campaign,
     submission: updated,
@@ -350,12 +369,34 @@ async function approveContent({ submission, campaign, actor, now = new Date() })
   return updated;
 }
 
+async function rejectContent({ submission, campaign, actor, reason }) {
+  const text = String(reason || "").trim();
+  if (!text) fail(400, "REASON_REQUIRED", "A rejection reason is required");
+  if (submission.status !== "new") fail(400, "NOT_AWAITING_REVIEW", "Can only reject content waiting for review");
+  const updated = await transition(submission, ["new"], {
+    $set: { status: "rejected", rejectionReason: text, reviewedAt: new Date() },
+    $unset: { awaitingBrandSince: 1 },
+  });
+  await recordEvent(updated, { type: "rejected", ...eventActor(actor, updated), reason: text });
+  await releasePlacement(updated, campaign);
+  await notify({
+    campaign,
+    submission: updated,
+    to: "creator",
+    type: "content_rejected",
+    title: "Content rejected",
+    body: `Your content for "${campaign.name}" was rejected: ${text}. You can appeal if it meets the brief.`,
+  });
+  afterChange(updated);
+  return updated;
+}
+
 async function appealRejection({ submission, campaign, user, reason }) {
   const text = String(reason || "").trim();
   if (!text) fail(400, "REASON_REQUIRED", "Say why the rejection should be reviewed");
   if (submission.status !== "rejected") fail(400, "NOT_REJECTED", "Only rejected content can be appealed");
   const updated = await transition(submission, ["rejected"], { $set: { status: "appealed", appealReason: text } });
-  await recordEvent(updated, { type: "appealed", actor: "creator", actorId: user._id, actorName: updated.creatorHandle, reason: text });
+  await recordEvent(updated, { type: "appealed", ...eventActor({ kind: "creator", user }, updated), reason: text });
   await notify({
     campaign,
     submission: updated,
@@ -364,13 +405,82 @@ async function appealRejection({ submission, campaign, user, reason }) {
     title: "Rejection appealed",
     body: `${updated.creatorHandle} appealed the rejection of their content for "${campaign.name}". EasilyPromote will review it.`,
   });
+  // Admins have no in-app notification inbox; the console's appealed count picks this up, and
+  // signed-in admins get a push.
+  for (const role of ["admin", "super_admin", "support"]) {
+    emitToRole(role, "submission-appealed", { submissionId: updated._id, campaignId: campaign._id, campaignName: campaign.name });
+  }
+  afterChange(updated);
+  return updated;
+}
+
+// Admin's decision on an appeal. Upholding it approves the content, which needs the creator's
+// place back: it's taken again only if still free.
+async function decideAppeal({ submission, campaign, admin, decision, notes }) {
+  if (submission.status !== "appealed") fail(409, "NOT_APPEALED", "This submission has no open appeal");
+  const actor = { kind: "admin", user: admin };
+
+  if (decision === "reject") {
+    const updated = await transition(submission, ["appealed"], { $set: { status: "rejected", adminNotes: notes || "Appeal rejected by Admin" } });
+    await recordEvent(updated, { type: "appeal_rejected", ...eventActor(actor, updated), reason: notes || null });
+    await notify({
+      campaign,
+      submission: updated,
+      to: "creator",
+      type: "content_appeal_rejected",
+      title: "Appeal rejected",
+      body: `Your appeal for "${campaign.name}" was rejected.${notes ? ` ${notes}` : ""}`,
+    });
+    afterChange(updated);
+    return updated;
+  }
+
+  const now = new Date();
+  let retaken = null;
+  if (submission.slotId) {
+    try {
+      retaken = await Slot.findOneAndUpdate(
+        { _id: submission.slotId, $or: [{ creatorId: submission.creatorId }, { status: "available" }] },
+        { $set: { creatorId: submission.creatorId, status: "submitted", claimedAt: now } },
+        { new: true }
+      );
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+    }
+    if (!retaken) {
+      fail(409, "PLACEMENT_TAKEN", "The creator's place in this campaign has been taken by another creator, so this appeal can't be approved");
+    }
+  }
+
+  let updated;
+  try {
+    updated = await transition(submission, ["appealed"], {
+      $set: { status: statusAfterApproval(campaign), reviewedAt: now, adminNotes: notes || "Appeal approved by Admin" },
+    });
+  } catch (error) {
+    if (retaken) {
+      await Slot.updateOne({ _id: retaken._id, creatorId: submission.creatorId }, { $set: { creatorId: null, status: "available", claimedAt: null } });
+    }
+    throw error;
+  }
+  if (retaken) await emitPlacesLeft(campaign._id);
+  await recordEvent(updated, { type: "appeal_approved", ...eventActor(actor, updated), reason: notes || null });
+  if (destinationOf(campaign) === "brand_page") await fixedPayDue(updated, campaign, { trigger: "appeal_approved", now });
+  await notify({
+    campaign,
+    submission: updated,
+    to: "creator",
+    type: "content_appeal_approved",
+    title: "Appeal approved",
+    body: `Your appeal for "${campaign.name}" was approved. Your content is approved.`,
+  });
   afterChange(updated);
   return updated;
 }
 
 async function shareDelivery({ submission, campaign, user, url, acceptUsageRights }) {
   if (!needsDelivery(campaign)) fail(400, "NO_BRAND_DELIVERY", "This campaign's content goes on your page, not to the brand");
-  if (!["awaiting_delivery", "delivered"].includes(submission.status)) {
+  if (!["awaiting_delivery", "awaiting_receipt"].includes(submission.status)) {
     fail(400, "NOT_AWAITING_DELIVERY", "Share a download link once your content is approved");
   }
   if (!isHttpUrl(url)) fail(400, "DOWNLOAD_LINK_REQUIRED", "Add a download link the brand can open");
@@ -379,10 +489,12 @@ async function shareDelivery({ submission, campaign, user, url, acceptUsageRight
   }
 
   const now = new Date();
-  const replacing = submission.status === "delivered";
-  const updated = await transition(submission, ["awaiting_delivery", "delivered"], {
+  const replacing = submission.status === "awaiting_receipt";
+  const updated = await transition(submission, ["awaiting_delivery", "awaiting_receipt"], {
     $set: {
-      status: "delivered",
+      status: "awaiting_receipt",
+      // A new link gives the brand a fresh 72 hours to check it.
+      awaitingBrandSince: now,
       "delivery.url": String(url).trim(),
       "delivery.sharedAt": now,
       "usageRights.licence": USAGE_RIGHTS_LICENCE,
@@ -392,9 +504,7 @@ async function shareDelivery({ submission, campaign, user, url, acceptUsageRight
   });
   await recordEvent(updated, {
     type: "delivery_shared",
-    actor: "creator",
-    actorId: user._id,
-    actorName: updated.creatorHandle,
+    ...eventActor({ kind: "creator", user }, updated),
     metadata: { url: updated.delivery.url, usageRightsAccepted: true, licence: USAGE_RIGHTS_LICENCE, replacing },
   });
   await notify({
@@ -403,31 +513,45 @@ async function shareDelivery({ submission, campaign, user, url, acceptUsageRight
     to: "brand",
     type: "content_delivered",
     title: "Content delivered",
-    body: `${updated.creatorHandle} shared a download link for "${campaign.name}". Download it and confirm you received it.`,
+    body: `${updated.creatorHandle} shared a download link for "${campaign.name}". Download it and confirm you received it within 72 hours.`,
   });
   afterChange(updated);
   return updated;
 }
 
-async function confirmReceipt({ submission, campaign, user }) {
-  if (submission.status !== "delivered") fail(400, "NOT_DELIVERED", "There's no delivered content to confirm");
-  const now = new Date();
+// The brand confirms it received the file: the content is delivered. Brand page completes;
+// both moves on to the live post.
+async function confirmReceipt({ submission, campaign, actor, now = new Date() }) {
+  if (submission.status !== "awaiting_receipt") fail(400, "NOT_AWAITING_RECEIPT", "There's no delivered content to confirm");
   const posting = needsPost(campaign);
-  const updated = await transition(submission, ["delivered"], {
-    $set: { "delivery.confirmedAt": now, "delivery.confirmedBy": user._id, ...(posting && { status: "awaiting_post" }) },
+  const updated = await transition(submission, ["awaiting_receipt"], {
+    $set: {
+      status: posting ? "awaiting_post" : "completed",
+      "delivery.confirmedAt": now,
+      "delivery.confirmedBy": actor.user ? actor.user._id : null,
+      ...(!posting && { completedAt: now }),
+    },
+    $unset: { awaitingBrandSince: 1 },
   });
-  await recordEvent(updated, { type: "receipt_confirmed", actor: "brand", actorId: user._id, actorName: user.name });
-
-  if (!posting) return complete(updated, campaign, { now });
-
-  await notify({
-    campaign,
-    submission: updated,
-    to: "creator",
-    type: "content_receipt_confirmed",
-    title: "Brand received your content",
-    body: `The brand confirmed it received your content for "${campaign.name}". Now post it on your page and share the live link.`,
+  await recordEvent(updated, {
+    type: "receipt_confirmed",
+    ...eventActor(actor, updated),
+    metadata: actor.kind === "system" ? { auto: true } : {},
   });
+  if (actor.kind === "system") await notifyAutoConfirmed(campaign, updated, "Receipt");
+
+  if (!posting) {
+    await afterCompleted(updated, campaign, now);
+  } else {
+    await notify({
+      campaign,
+      submission: updated,
+      to: "creator",
+      type: "content_receipt_confirmed",
+      title: "Brand received your content",
+      body: `The brand's copy of your content for "${campaign.name}" is confirmed. Now post it on your page and share the live link.`,
+    });
+  }
   afterChange(updated);
   return updated;
 }
@@ -440,21 +564,10 @@ const normalizePlatform = (value) => {
   return p;
 };
 
-const normalizeTag = (tag) => String(tag || "").trim().replace(/^#+/, "").toLowerCase();
-
-// Hashtags from the brief that the caption doesn't carry, as "#Tag" in the brief's spelling.
-function missingHashtags(requiredTags, caption) {
-  const present = new Set((String(caption || "").match(/#[\p{L}\p{N}_]+/gu) || []).map(normalizeTag));
-  return (requiredTags || [])
-    .filter((tag) => normalizeTag(tag))
-    .filter((tag) => !present.has(normalizeTag(tag)))
-    .map((tag) => `#${String(tag).trim().replace(/^#+/, "")}`);
-}
-
 async function markContentPosted({ submission, campaign, user, posts, caption }) {
   if (!needsPost(campaign)) fail(400, "NO_CREATOR_POST", "This campaign's content goes to the brand. Share a download link instead");
   if (!["awaiting_post", "verifying"].includes(submission.status)) {
-    const message = submission.status === "awaiting_delivery" || submission.status === "delivered"
+    const message = ["awaiting_delivery", "awaiting_receipt"].includes(submission.status)
       ? "Deliver the content to the brand first, then post it"
       : "You can share a live post link once your content is approved";
     fail(400, "NOT_AWAITING_POST", message);
@@ -467,16 +580,16 @@ async function markContentPosted({ submission, campaign, user, posts, caption })
     fail(400, "POST_LINK_REQUIRED", "Add the link to your live post");
   }
 
-  // The live caption must carry the brief's hashtags, and the creator's referral code when
-  // the campaign tracks referrals. Both are required, not warnings: the brand is paying for them.
-  const brief = campaign.brief || {};
-  const missing = missingHashtags(brief.hashtags, caption);
-  if (missing.length > 0) {
-    fail(400, "MISSING_HASHTAGS", `Your caption is missing ${missing.join(", ")}`, { missing });
-  }
+  // The live caption must carry the brief's hashtags and, when the campaign tracks referrals, the
+  // creator's code. Both are required, not warnings: the brand is paying for them.
+  const missing = missingHashtags((campaign.brief && campaign.brief.hashtags) || [], caption);
+  if (missing.length > 0) fail(400, "MISSING_HASHTAGS", `Your caption is missing ${missing.join(", ")}`, { missing });
   if (campaign.referral && campaign.referral.enabled) {
     const code = await ReferralCode.findOne({ campaignId: campaign._id, creatorId: submission.creatorId }).select("code").lean();
-    if (code && !String(caption || "").toUpperCase().includes(String(code.code).toUpperCase())) {
+    if (!code) {
+      fail(409, "REFERRAL_CODE_PENDING", "Your referral code for this campaign isn't ready yet. Post once it shows on your campaign page.");
+    }
+    if (!captionHasCode(caption, code.code)) {
       fail(400, "MISSING_REFERRAL_CODE", `Your caption is missing your referral code ${code.code}`, { referralCode: code.code });
     }
   }
@@ -490,19 +603,18 @@ async function markContentPosted({ submission, campaign, user, posts, caption })
 
   const now = new Date();
   const additional = submission.status === "verifying";
-  const updated = await transition(submission, ["awaiting_post", "verifying"], {
+  const updated = await transition(submission, [submission.status], {
     $set: {
       status: "verifying",
       postedPlatforms,
       postedCaption: String(caption || ""),
+      ...(!additional && { awaitingBrandSince: now }),
       ...(!submission.postedAt && { postedAt: now }),
     },
   });
   await recordEvent(updated, {
     type: "posted",
-    actor: "creator",
-    actorId: user._id,
-    actorName: updated.creatorHandle,
+    ...eventActor({ kind: "creator", user }, updated),
     metadata: { additional, caption: updated.postedCaption, platforms: postedPlatforms.map((p) => ({ platform: p.platform, postUrl: p.postUrl })) },
   });
   await notify({
@@ -511,19 +623,28 @@ async function markContentPosted({ submission, campaign, user, posts, caption })
     to: "brand",
     type: "content_posted",
     title: "Live post to verify",
-    body: `${updated.creatorHandle} posted their content for "${campaign.name}". Check the live post and confirm it.`,
+    body: `${updated.creatorHandle} posted their content for "${campaign.name}". Check the live post and confirm it within 72 hours.`,
   });
   afterChange(updated);
   return updated;
 }
 
-async function confirmPost({ submission, campaign, user }) {
+async function confirmPost({ submission, campaign, actor, now = new Date() }) {
   if (submission.status !== "verifying") fail(400, "NOT_VERIFYING", "There's no live post waiting to be verified");
-  const now = new Date();
-  const updated = await transition(submission, ["verifying"], { $set: { postVerifiedAt: now } });
-  await recordEvent(updated, { type: "post_verified", actor: "brand", actorId: user._id, actorName: user.name });
-  await fixedPayDue(updated, campaign, { trigger: "post_verified" });
-  return complete(updated, campaign, { now });
+  const updated = await transition(submission, ["verifying"], {
+    $set: { status: "completed", postVerifiedAt: now, completedAt: now },
+    $unset: { awaitingBrandSince: 1 },
+  });
+  await recordEvent(updated, {
+    type: "post_verified",
+    ...eventActor(actor, updated),
+    metadata: actor.kind === "system" ? { auto: true } : {},
+  });
+  await fixedPayDue(updated, campaign, { trigger: "post_verified", now });
+  if (actor.kind === "system") await notifyAutoConfirmed(campaign, updated, "Live post");
+  await afterCompleted(updated, campaign, now);
+  afterChange(updated);
+  return updated;
 }
 
 // The brand can't find the post or it doesn't match: back to the creator with a note.
@@ -531,8 +652,8 @@ async function disputePost({ submission, campaign, user, notes }) {
   const text = String(notes || "").trim();
   if (!text) fail(400, "NOTES_REQUIRED", "Tell the creator what's wrong with the post");
   if (submission.status !== "verifying") fail(400, "NOT_VERIFYING", "There's no live post waiting to be verified");
-  const updated = await transition(submission, ["verifying"], { $set: { status: "awaiting_post" } });
-  await recordEvent(updated, { type: "post_disputed", actor: "brand", actorId: user._id, actorName: user.name, reason: text });
+  const updated = await transition(submission, ["verifying"], { $set: { status: "awaiting_post" }, $unset: { awaitingBrandSince: 1 } });
+  await recordEvent(updated, { type: "post_disputed", ...eventActor({ kind: "brand", user }, updated), reason: text });
   await notify({
     campaign,
     submission: updated,
@@ -545,54 +666,61 @@ async function disputePost({ submission, campaign, user, notes }) {
   return updated;
 }
 
-// D10: approves content that has waited on the brand for 72 hours. `now` is injectable for tests.
+const AUTO_ACTIONS = {
+  new: (ctx) => approveContent(ctx),
+  awaiting_receipt: (ctx) => confirmReceipt(ctx),
+  verifying: (ctx) => confirmPost(ctx),
+};
+
+// D10, extended: whatever has waited on the brand for 72 hours (review, receipt, post verification)
+// is done automatically, as the system. `now` is injectable for tests. Returns counts per status.
 async function autoApproveStaleSubmissions(now = new Date()) {
-  const cutoff = new Date(now.getTime() - AUTO_APPROVE_AFTER_MS);
+  const cutoff = new Date(now.getTime() - BRAND_RESPONSE_MS);
   // Views campaigns keep their manual review, so only content campaigns' submissions are read.
   const contentCampaignIds = await Campaign.distinct("_id", {
     $or: [{ campaignModel: "content" }, { campaignModel: { $exists: false }, campaignObjective: "content" }],
     status: { $ne: "cancelled" },
   });
-  if (contentCampaignIds.length === 0) return { approved: 0 };
+  const result = { approved: 0, receiptsConfirmed: 0, postsVerified: 0 };
+  if (contentCampaignIds.length === 0) return result;
+
   const candidates = await Submission.find({
     campaignId: { $in: contentCampaignIds },
-    status: "new",
-    $or: [
-      { awaitingReviewSince: { $lte: cutoff } },
-      { awaitingReviewSince: { $exists: false }, submittedAt: { $lte: cutoff } },
-    ],
+    status: { $in: WAITING_ON_BRAND },
+    awaitingBrandSince: { $lte: cutoff },
   })
-    .sort({ awaitingReviewSince: 1 })
+    .sort({ awaitingBrandSince: 1 })
     .limit(500);
 
-  let approved = 0;
   const campaigns = new Map();
+  const counter = { new: "approved", awaiting_receipt: "receiptsConfirmed", verifying: "postsVerified" };
   for (const submission of candidates) {
     const key = String(submission.campaignId);
     if (!campaigns.has(key)) campaigns.set(key, await Campaign.findById(submission.campaignId));
     const campaign = campaigns.get(key);
     if (!isContentCampaign(campaign)) continue;
     try {
-      await approveContent({ submission, campaign, actor: { kind: "system" }, now });
-      approved += 1;
+      await AUTO_ACTIONS[submission.status]({ submission, campaign, actor: { kind: "system" }, now });
+      result[counter[submission.status]] += 1;
     } catch (error) {
+      // A brand acting at the same moment wins; anything else is logged and retried next run.
       if (!(error instanceof ContentApprovalError)) {
-        console.error("[Content] Auto-approve failed for submission", String(submission._id), error.message);
+        console.error("[Content] Auto-confirm failed for submission", String(submission._id), error.message);
       }
     }
   }
-  return { approved };
+  return result;
 }
 
 function startContentAutoApprove() {
-  const run = () =>
-    autoApproveStaleSubmissions().catch((error) => console.error("[Content] Auto-approve run failed:", error.message));
+  const run = () => autoApproveStaleSubmissions().catch((error) => console.error("[Content] Deadline run failed:", error.message));
   run();
-  setInterval(run, AUTO_APPROVE_INTERVAL_MS);
+  setInterval(run, DEADLINE_INTERVAL_MS);
 }
 
 // What the brand and the creator see about a content submission's approval and delivery.
 function contentApprovalView(submission, campaign) {
+  const hashtags = (campaign.brief && campaign.brief.hashtags) || [];
   return {
     status: submission.status,
     destination: destinationOf(campaign),
@@ -607,8 +735,8 @@ function contentApprovalView(submission, campaign) {
       resubmittedAt: r.resubmittedAt || null,
     })),
     autoApproved: Boolean(submission.autoApproved),
-    awaitingReviewSince: submission.awaitingReviewSince || null,
-    reviewDueAt: reviewDueAt(submission),
+    // When whatever waits on the brand is done automatically.
+    brandDueAt: brandDueAt(submission),
     rejectionReason: submission.rejectionReason || null,
     appealReason: submission.appealReason || null,
     delivery: submission.delivery && submission.delivery.url
@@ -621,7 +749,10 @@ function contentApprovalView(submission, campaign) {
           acceptedBy: submission.usageRights.acceptedBy ? String(submission.usageRights.acceptedBy) : null,
         }
       : null,
+    // Brief hashtags the submitted caption and the posted caption don't carry, judged here only.
+    missingHashtags: missingHashtags(hashtags, submission.caption),
     postedCaption: submission.postedCaption || null,
+    postedMissingHashtags: submission.postedCaption ? missingHashtags(hashtags, submission.postedCaption) : [],
     postVerifiedAt: submission.postVerifiedAt || null,
     completedAt: submission.completedAt || null,
     licence: needsDelivery(campaign) ? USAGE_RIGHTS_LICENCE : null,
@@ -630,19 +761,20 @@ function contentApprovalView(submission, campaign) {
 
 module.exports = {
   MAX_CHANGE_REQUESTS,
-  AUTO_APPROVE_AFTER_MS,
+  BRAND_RESPONSE_MS,
   USAGE_RIGHTS_LICENCE,
   ContentApprovalError,
   isContentCampaign,
   destinationOf,
   statusAfterApproval,
-  missingHashtags,
   fixedPayDue,
   submitContent,
   requestChanges,
-  resubmit,
+  editOrResubmitContent,
   approveContent,
+  rejectContent,
   appealRejection,
+  decideAppeal,
   shareDelivery,
   confirmReceipt,
   markContentPosted,

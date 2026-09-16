@@ -1,4 +1,5 @@
 const express = require("express");
+const { z } = require("zod");
 const Submission = require("../models/Submission");
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
@@ -40,8 +41,43 @@ function sendContentError(res, error, next) {
   if (error instanceof contentApproval.ContentApprovalError) {
     return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
   }
+  if (error instanceof z.ZodError) {
+    return res.status(400).json({ error: error.errors[0].message, code: "INVALID_BODY" });
+  }
   return next(error);
 }
+
+const linkText = z.string({ invalid_type_error: "Links must be text" }).trim().max(2000, "That link is too long");
+const noteText = (message) => z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message).max(2000);
+const contentBodySchemas = {
+  submit: z.object({
+    videoUrl: linkText.url("Add a link to your content"),
+    caption: z.string().max(1000, "Captions can be up to 1,000 characters").optional(),
+    durationSeconds: z.number().min(0).optional(),
+  }),
+  edit: z.object({
+    videoUrl: linkText.url("Add a link to your content").optional(),
+    caption: z.string().max(1000, "Captions can be up to 1,000 characters").optional(),
+  }),
+  requestChanges: z.object({ notes: noteText("Tell the creator what to change") }),
+  reject: z.object({ reason: noteText("A rejection reason is required") }),
+  appeal: z.object({ reason: noteText("Say why the rejection should be reviewed") }),
+  deliver: z.object({
+    url: linkText.url("Add a download link the brand can open"),
+    acceptUsageRights: z.boolean().optional(),
+  }),
+  markPosted: z.object({
+    posts: z
+      .array(z.object({ platform: z.string().trim().max(40), postUrl: z.string().trim().max(2000) }), {
+        required_error: "Add the link to your live post",
+      })
+      .min(1, "Add the link to your live post")
+      .max(10),
+    caption: z.string().max(5000, "Captions can be up to 5,000 characters").optional(),
+  }),
+  empty: z.object({}).passthrough(),
+  disputePost: z.object({ notes: noteText("Tell the creator what's wrong with the post") }),
+};
 
 function contentResponse(submission, campaign) {
   return { id: submission._id, ...contentApproval.contentApprovalView(submission, campaign) };
@@ -63,7 +99,8 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
     // Campaign engine: content approval (ticket 07)
     if (contentApproval.isContentCampaign(campaign)) {
       try {
-        const created = await contentApproval.submitContent({ user: req.user, campaign, videoUrl, caption, durationSeconds });
+        const body = contentBodySchemas.submit.parse({ videoUrl, caption, durationSeconds });
+        const created = await contentApproval.submitContent({ user: req.user, campaign, ...body });
         return res.status(201).json({ id: created._id, status: created.status, campaignId: created.campaignId });
       } catch (error) {
         return sendContentError(res, error, next);
@@ -130,7 +167,8 @@ router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) =>
     const contentCampaign = await Campaign.findById(submission.campaignId);
     if (contentApproval.isContentCampaign(contentCampaign)) {
       try {
-        const updated = await contentApproval.resubmit({ submission, campaign: contentCampaign, user: req.user, videoUrl, caption });
+        const body = contentBodySchemas.edit.parse({ videoUrl, caption });
+        const updated = await contentApproval.editOrResubmitContent({ submission, campaign: contentCampaign, user: req.user, ...body });
         return res.json({ ...contentResponse(updated, contentCampaign), videoUrl: updated.videoUrl, caption: updated.caption });
       } catch (error) {
         return sendContentError(res, error, next);
@@ -353,6 +391,19 @@ router.patch("/:id/reject", protect, async (req, res, next) => {
     if (!campaign || campaign.businessId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07): the status is checked inside the update, so a
+    // rejection can't overwrite an approval that landed a moment earlier.
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const body = contentBodySchemas.reject.parse(req.body);
+        const rejected = await contentApproval.rejectContent({ submission, campaign, actor: { kind: "brand", user: req.user }, reason: body.reason });
+        return res.json({ ...contentResponse(rejected, campaign), rejectionReason: rejected.rejectionReason });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (submission.status !== "new") {
       return res.status(400).json({ error: "Can only reject new submissions" });
     }
@@ -406,13 +457,8 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     const contentCampaign = await Campaign.findById(submission.campaignId);
     if (contentApproval.isContentCampaign(contentCampaign)) {
       try {
-        const posted = await contentApproval.markContentPosted({
-          submission,
-          campaign: contentCampaign,
-          user: req.user,
-          posts: Array.isArray(posts) ? posts : [{ platform, postUrl: url }],
-          caption: req.body.caption,
-        });
+        const body = contentBodySchemas.markPosted.parse(req.body);
+        const posted = await contentApproval.markContentPosted({ submission, campaign: contentCampaign, user: req.user, ...body });
         return res.json({ ...contentResponse(posted, contentCampaign), postedPlatforms: posted.postedPlatforms });
       } catch (error) {
         return sendContentError(res, error, next);
@@ -525,12 +571,13 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
 // ── Campaign engine: content approval (ticket 07) ──────────────────────────────
 // Content campaigns only; each route answers NOT_CONTENT_CAMPAIGN for views campaigns.
 
-function contentRoute(who, action) {
+function contentRoute(who, schema, action) {
   return async (req, res, next) => {
     try {
       const loaded = await loadContentSubmission(req, res, who);
       if (!loaded) return;
-      const updated = await action({ ...loaded, user: req.user, body: req.body || {} });
+      const body = schema.parse(req.body || {});
+      const updated = await action({ ...loaded, user: req.user, body });
       res.json(contentResponse(updated, loaded.campaign));
     } catch (error) {
       sendContentError(res, error, next);
@@ -541,33 +588,45 @@ function contentRoute(who, action) {
 router.patch(
   "/:id/request-changes",
   protect,
-  contentRoute("brand", ({ body, ...ctx }) => contentApproval.requestChanges({ ...ctx, notes: body.notes }))
+  contentRoute("brand", contentBodySchemas.requestChanges, ({ body, ...ctx }) => contentApproval.requestChanges({ ...ctx, notes: body.notes }))
 );
 
 router.patch(
   "/:id/appeal",
   protect,
   authorizeRoles("creator"),
-  contentRoute("creator", ({ body, ...ctx }) => contentApproval.appealRejection({ ...ctx, reason: body.reason }))
+  contentRoute("creator", contentBodySchemas.appeal, ({ body, ...ctx }) => contentApproval.appealRejection({ ...ctx, reason: body.reason }))
 );
 
 router.patch(
   "/:id/deliver",
   protect,
   authorizeRoles("creator"),
-  contentRoute("creator", ({ body, ...ctx }) =>
+  contentRoute("creator", contentBodySchemas.deliver, ({ body, ...ctx }) =>
     contentApproval.shareDelivery({ ...ctx, url: body.url, acceptUsageRights: body.acceptUsageRights })
   )
 );
 
-router.patch("/:id/confirm-receipt", protect, contentRoute("brand", ({ body, ...ctx }) => contentApproval.confirmReceipt(ctx)));
+router.patch(
+  "/:id/confirm-receipt",
+  protect,
+  contentRoute("brand", contentBodySchemas.empty, ({ user, submission, campaign }) =>
+    contentApproval.confirmReceipt({ submission, campaign, actor: { kind: "brand", user } })
+  )
+);
 
-router.patch("/:id/confirm-post", protect, contentRoute("brand", ({ body, ...ctx }) => contentApproval.confirmPost(ctx)));
+router.patch(
+  "/:id/confirm-post",
+  protect,
+  contentRoute("brand", contentBodySchemas.empty, ({ user, submission, campaign }) =>
+    contentApproval.confirmPost({ submission, campaign, actor: { kind: "brand", user } })
+  )
+);
 
 router.patch(
   "/:id/dispute-post",
   protect,
-  contentRoute("brand", ({ body, ...ctx }) => contentApproval.disputePost({ ...ctx, notes: body.notes }))
+  contentRoute("brand", contentBodySchemas.disputePost, ({ body, ...ctx }) => contentApproval.disputePost({ ...ctx, notes: body.notes }))
 );
 
 router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), async (req, res, next) => {

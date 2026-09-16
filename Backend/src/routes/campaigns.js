@@ -810,7 +810,8 @@ router.get("/:id", protect, async (req, res, next) => {
         Submission.countDocuments({ campaignId: campaign._id }),
         Submission.countDocuments({
           campaignId: campaign._id,
-          status: { $in: ["approved", "awaiting_post", "posted"] },
+          // Campaign engine: content approval (ticket 07) adds verifying, the delivery statuses and completed.
+          status: { $in: ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"] },
         }),
         Submission.countDocuments({ campaignId: campaign._id, status: "new" }),
         Slot.distinct("creatorId", {

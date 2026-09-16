@@ -26,7 +26,8 @@ const WEIGHTS = {
 };
 
 const DELIVERED_STATUSES = ["posted", "verifying"];
-const CLEAN_SUBMISSION_STATUSES = ["approved", "awaiting_post", "posted", "verifying"];
+// Campaign engine: content approval (ticket 07) adds the content delivery statuses and completed.
+const CLEAN_SUBMISSION_STATUSES = ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"];
 const COMPLETED_SLOT_STATUSES = ["approved", "paid"];
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;

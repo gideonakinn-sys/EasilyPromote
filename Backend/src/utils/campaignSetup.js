@@ -48,7 +48,17 @@ const setupSchema = z.object({
       summary: shortText(2000).optional(),
       dos: textList(10, 300).optional(),
       donts: textList(10, 300).optional(),
-      hashtags: textList(20, 60).optional(),
+      // Campaign engine: content approval (ticket 07): a hashtag is one word (hyphens allowed),
+      // because a live caption is checked for each one.
+      hashtags: z
+        .array(
+          shortText(60)
+            .min(1)
+            .refine((tag) => !/\s/.test(tag), "Hashtags can't contain spaces. Use one word per hashtag, like #SummerDrop")
+            .refine((tag) => /^#*[\p{L}\p{M}\p{N}_-]+$/u.test(tag), "Hashtags can only use letters, numbers, _ and -")
+        )
+        .max(20)
+        .optional(),
       soundUrl: z.string().url().max(500).optional(),
       referenceVideos: z.array(z.string().url().max(500)).max(10).optional(),
       tone: shortText(100).optional(),

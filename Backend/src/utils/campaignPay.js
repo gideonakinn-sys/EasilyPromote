@@ -69,4 +69,9 @@ function fullBrief(campaign) {
   };
 }
 
-module.exports = { campaignTerms, payPerUnit, briefSummary, fullBrief };
+// Campaign engine: content approval (ticket 07). Content campaigns pay per approved deliverable.
+function isContentCampaign(campaign) {
+  return Boolean(campaign) && campaignTerms(campaign).campaignModel === "content";
+}
+
+module.exports = { campaignTerms, payPerUnit, briefSummary, fullBrief, isContentCampaign };

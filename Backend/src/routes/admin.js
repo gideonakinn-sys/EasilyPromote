@@ -444,12 +444,29 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
-    // Campaign engine: content approval (ticket 07): approved content goes where its campaign says.
-    const reviewedCampaign = await Campaign.findById(submission.campaignId);
-    const approvedStatus = contentApproval.isContentCampaign(reviewedCampaign)
-      ? contentApproval.statusAfterApproval(reviewedCampaign)
-      : "awaiting_post";
-    submission.status = status === "approved" ? approvedStatus : "rejected";
+    // Campaign engine: content approval (ticket 07): content is only reviewed while it waits for
+    // review, through the same guarded transitions the brand uses.
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      if (submission.status !== "new") {
+        return res.status(409).json({ error: "This content isn't waiting for review", code: "NOT_AWAITING_REVIEW" });
+      }
+      try {
+        const actor = { kind: "admin", user: req.user };
+        const reviewed = status === "approved"
+          ? await contentApproval.approveContent({ submission, campaign: contentCampaign, actor })
+          : await contentApproval.rejectContent({ submission, campaign: contentCampaign, actor, reason: rejectionReason });
+        if (adminNotes) await Submission.updateOne({ _id: reviewed._id }, { $set: { adminNotes } });
+        return res.json({ success: true, submission: reviewed });
+      } catch (error) {
+        if (error instanceof contentApproval.ContentApprovalError) {
+          return res.status(error.status === 400 ? 409 : error.status).json({ error: error.message, code: error.code });
+        }
+        throw error;
+      }
+    }
+
+    submission.status = status === "approved" ? "awaiting_post" : "rejected";
     if (rejectionReason) submission.rejectionReason = rejectionReason;
     if (adminNotes) submission.adminNotes = adminNotes;
     submission.reviewedAt = new Date();
@@ -463,10 +480,6 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
       reason: status === "rejected" ? rejectionReason : null,
       metadata: adminNotes ? { adminNotes } : {},
     });
-    // Campaign engine: content approval (ticket 07): D1, brand-page fixed pay is due on approval.
-    if (status === "approved" && approvedStatus === "awaiting_delivery" && contentApproval.destinationOf(reviewedCampaign) === "brand_page") {
-      await contentApproval.fixedPayDue(submission, reviewedCampaign, { trigger: "admin_approved" });
-    }
 
     const campaign = await Campaign.findById(submission.campaignId);
     await Notification.create({
@@ -501,11 +514,23 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
-    // Campaign engine: content approval (ticket 07): an upheld appeal sends content where its campaign says.
-    const appealCampaign = await Campaign.findById(submission.campaignId);
-    const isContentAppeal = contentApproval.isContentCampaign(appealCampaign);
+    // Campaign engine: content approval (ticket 07): only an open appeal can be decided; upholding
+    // one takes the creator's place back only if it's still free.
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const decided = await contentApproval.decideAppeal({ submission, campaign: contentCampaign, admin: req.user, decision, notes });
+        return res.json({ success: true, submission: decided });
+      } catch (error) {
+        if (error instanceof contentApproval.ContentApprovalError) {
+          return res.status(error.status).json({ error: error.message, code: error.code });
+        }
+        throw error;
+      }
+    }
+
     if (decision === "approve") {
-      submission.status = isContentAppeal ? contentApproval.statusAfterApproval(appealCampaign) : "awaiting_post";
+      submission.status = "awaiting_post";
       submission.adminNotes = notes || "Appeal approved by Admin";
     } else {
       submission.status = "rejected";
@@ -520,22 +545,6 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
       actorName: req.user.name,
       reason: notes || null,
     });
-
-    // Campaign engine: content approval (ticket 07)
-    if (isContentAppeal) {
-      if (decision === "approve" && contentApproval.destinationOf(appealCampaign) === "brand_page") {
-        await contentApproval.fixedPayDue(submission, appealCampaign, { trigger: "appeal_approved" });
-      }
-      await Notification.create({
-        creatorId: submission.creatorId,
-        campaignId: submission.campaignId,
-        type: decision === "approve" ? "content_appeal_approved" : "content_appeal_rejected",
-        title: decision === "approve" ? "Appeal approved" : "Appeal rejected",
-        body: decision === "approve"
-          ? `Your appeal for "${appealCampaign.name}" was approved. Your content is approved.`
-          : `Your appeal for "${appealCampaign.name}" was rejected.${notes ? ` ${notes}` : ""}`,
-      });
-    }
 
     emitCampaignUpdate(submission);
 

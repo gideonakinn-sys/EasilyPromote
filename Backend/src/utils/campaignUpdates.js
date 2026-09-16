@@ -1,6 +1,8 @@
 const Slot = require("../models/Slot");
 const Campaign = require("../models/Campaign");
 const { emitToUser, emitToRole } = require("../config/socket");
+// Campaign engine: content approval (ticket 07)
+const { isContentCampaign } = require("./campaignPay");
 
 const isDeliverable = (slot) => Boolean(slot && slot.kind === "deliverable");
 
@@ -20,12 +22,13 @@ function mapStatusToCreator(submission, campaign, slot = null) {
       }
       return "live_tracking";
     case "rejected":
-      return "changes_requested";
+      // Campaign engine: content approval (ticket 07): content rejection is final (appealable).
+      return isContentCampaign(campaign) ? "rejected" : "changes_requested";
     // Campaign engine: content approval (ticket 07). The exact step is in contentApproval.status.
     case "changes_requested":
       return "changes_requested";
     case "awaiting_delivery":
-    case "delivered":
+    case "awaiting_receipt":
       return "approved_post";
     case "verifying":
       return isDeliverable(slot) ? "approved_post" : "under_review";

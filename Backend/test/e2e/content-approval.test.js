@@ -181,17 +181,250 @@ test("change requests round trip: notes, resubmission, history, then at most 2 r
   assert.equal(appealed.body.status, "appealed");
 });
 
-test("rejecting or requesting changes never touches the creator's placement", async () => {
+test("a change request keeps the placement; a rejection releases it; an upheld appeal takes it back only while it's free", async () => {
   const Slot = require("../../src/models/Slot");
-  const { brand, id } = await liveContentCampaign();
+  const Submission = require("../../src/models/Submission");
+  const admin = await harness.registerAdmin();
+  const { brand, id } = await liveContentCampaign({ deliverables: 3 });
+
   const creator = await joinedCreator(id);
   const submitted = await submit(creator, id);
   await harness.api("PATCH", `/api/submissions/${submitted.body.id}/request-changes`, { token: brand.token, body: { notes: "Closer" } });
+  assert.equal(String((await Slot.findById(creator.slotId).lean()).creatorId), creator.id);
   await harness.api("PUT", `/api/submissions/${submitted.body.id}`, { token: creator.token, body: { caption: "#SummerDrop #ad" } });
-  await harness.api("PATCH", `/api/submissions/${submitted.body.id}/reject`, { token: brand.token, body: { reason: "No" } });
 
+  const rejected = await harness.api("PATCH", `/api/submissions/${submitted.body.id}/reject`, { token: brand.token, body: { reason: "No" } });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+  let slot = await Slot.findById(creator.slotId).lean();
+  assert.equal(slot.creatorId, null);
+  assert.equal(slot.status, "available");
+
+  // The rejected creator still sees the campaign, can appeal, and can't resubmit by joining again.
+  const mine = await creatorCampaign(creator, id);
+  assert.equal(mine.status, "rejected");
+  assert.equal(mine.contentApproval.status, "rejected");
+  const rejoined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  if (rejoined.status === 200) assert.equal((await submit(creator, id)).status, 409);
+
+  // Appeal while the place is still free: upheld, and the place is the creator's again.
+  await Slot.updateMany({ campaignId: id, creatorId: creator.id }, { $set: { creatorId: null, status: "available" } });
+  const appealed = await harness.api("PATCH", `/api/submissions/${submitted.body.id}/appeal`, { token: creator.token, body: { reason: "On brief" } });
+  assert.equal(appealed.status, 200, JSON.stringify(appealed.body));
+  const upheld = await harness.api("PATCH", `/api/admin/submissions/${submitted.body.id}/appeal`, { token: admin.token, body: { decision: "approve" } });
+  assert.equal(upheld.status, 200, JSON.stringify(upheld.body));
+  assert.equal((await Submission.findById(submitted.body.id).lean()).status, "awaiting_post");
+  slot = await Slot.findById(creator.slotId).lean();
+  assert.equal(String(slot.creatorId), creator.id);
+
+  // A second creator's rejected place is taken by someone else before the appeal: it can't be upheld.
+  const other = await joinedCreator(id);
+  const otherSub = (await submit(other, id)).body.id;
+  await harness.api("PATCH", `/api/submissions/${otherSub}/reject`, { token: brand.token, body: { reason: "No" } });
+  await harness.api("PATCH", `/api/submissions/${otherSub}/appeal`, { token: other.token, body: { reason: "On brief" } });
+  const taker = await harness.registerCreator();
+  await Slot.updateOne({ _id: other.slotId }, { $set: { creatorId: taker.id, status: "claimed" } });
+  const blocked = await harness.api("PATCH", `/api/admin/submissions/${otherSub}/appeal`, { token: admin.token, body: { decision: "approve" } });
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.error, /place/i);
+  assert.equal((await Submission.findById(otherSub).lean()).status, "appealed");
+});
+
+test("two submits at once for one placement: one is accepted", async () => {
+  const { id } = await liveContentCampaign();
+  const creator = await joinedCreator(id);
+  const results = await Promise.all([submit(creator, id), submit(creator, id), submit(creator, id)]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [201, 409, 409]);
+});
+
+test("confirming a live post or a receipt twice at once completes once", async () => {
+  const { brand, id } = await liveContentCampaign({ destination: "creator_page" });
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  await approve(brand, submissionId);
+  await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, {
+    token: creator.token,
+    body: { posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }], caption: "#SummerDrop #ad" },
+  });
+  const confirms = await Promise.all([1, 2, 3].map(() => harness.api("PATCH", `/api/submissions/${submissionId}/confirm-post`, { token: brand.token })));
+  assert.equal(confirms.filter((r) => r.status === 200).length, 1);
+  assert.ok(confirms.every((r) => [200, 400, 409].includes(r.status)));
+  const types = (await events(submissionId)).map((e) => e.type);
+  for (const type of ["post_verified", "fixed_pay_due", "completed"]) assert.equal(types.filter((t) => t === type).length, 1, type);
+  assert.equal((await notificationsFor(creator)).filter((n) => n.type === "content_completed").length, 1);
+
+  const brandPage = await liveContentCampaign({ destination: "brand_page" });
+  const deliverer = await joinedCreator(brandPage.id);
+  const deliveredId = (await submit(deliverer, brandPage.id)).body.id;
+  await approve(brandPage.brand, deliveredId);
+  await harness.api("PATCH", `/api/submissions/${deliveredId}/deliver`, {
+    token: deliverer.token,
+    body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
+  });
+  const receipts = await Promise.all([1, 2, 3].map(() => harness.api("PATCH", `/api/submissions/${deliveredId}/confirm-receipt`, { token: brandPage.brand.token })));
+  assert.equal(receipts.filter((r) => r.status === 200).length, 1);
+  assert.ok(receipts.every((r) => [200, 400, 409].includes(r.status)));
+  const deliveredTypes = (await events(deliveredId)).map((e) => e.type);
+  for (const type of ["receipt_confirmed", "fixed_pay_due", "completed"]) assert.equal(deliveredTypes.filter((t) => t === type).length, 1, type);
+});
+
+test("a brand rejection racing the auto-approve: exactly one decision wins", async () => {
+  const Submission = require("../../src/models/Submission");
+  const { autoApproveStaleSubmissions } = require("../../src/services/contentApproval");
+  const { brand, id } = await liveContentCampaign();
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  const now = new Date(Date.now() + 73 * HOUR);
+
+  const [rejected] = await Promise.all([
+    harness.api("PATCH", `/api/submissions/${submissionId}/reject`, { token: brand.token, body: { reason: "Off brief" } }),
+    autoApproveStaleSubmissions(now),
+  ]);
+  const final = await Submission.findById(submissionId).lean();
+  const types = (await events(submissionId)).map((e) => e.type);
+  const decisions = types.filter((t) => t === "approved" || t === "rejected");
+  assert.equal(decisions.length, 1, JSON.stringify(types));
+  if (rejected.status === 200) {
+    assert.equal(final.status, "rejected");
+    assert.deepEqual(decisions, ["rejected"]);
+  } else {
+    assert.ok([400, 409].includes(rejected.status));
+    assert.equal(final.status, "awaiting_post");
+    assert.deepEqual(decisions, ["approved"]);
+  }
+});
+
+test("admin review and appeal decisions only apply from the statuses they belong to", async () => {
+  const Submission = require("../../src/models/Submission");
+  const admin = await harness.registerAdmin();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page" });
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  await approve(brand, submissionId);
+  await harness.api("PATCH", `/api/submissions/${submissionId}/deliver`, {
+    token: creator.token,
+    body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
+  });
+  await harness.api("PATCH", `/api/submissions/${submissionId}/confirm-receipt`, { token: brand.token });
+
+  for (const body of [{ status: "approved" }, { status: "rejected", rejectionReason: "late" }]) {
+    const res = await harness.api("PATCH", `/api/admin/submissions/${submissionId}/review`, { token: admin.token, body });
+    assert.equal(res.status, 409, JSON.stringify(res.body));
+  }
+  const appeal = await harness.api("PATCH", `/api/admin/submissions/${submissionId}/appeal`, { token: admin.token, body: { decision: "approve" } });
+  assert.equal(appeal.status, 409);
+  assert.equal((await Submission.findById(submissionId).lean()).status, "completed");
+  assert.equal((await events(submissionId)).filter((e) => e.type === "fixed_pay_due").length, 1);
+
+  // From awaiting review, admin approval sends it where the campaign says, and pay is due once.
+  const second = await joinedCreator(id);
+  const secondId = (await submit(second, id)).body.id;
+  const reviewed = await harness.api("PATCH", `/api/admin/submissions/${secondId}/review`, { token: admin.token, body: { status: "approved" } });
+  assert.equal(reviewed.status, 200, JSON.stringify(reviewed.body));
+  assert.equal((await Submission.findById(secondId).lean()).status, "awaiting_delivery");
+  const again = await harness.api("PATCH", `/api/admin/submissions/${secondId}/review`, { token: admin.token, body: { status: "approved" } });
+  assert.equal(again.status, 409);
+  assert.equal((await events(secondId)).filter((e) => e.type === "fixed_pay_due").length, 1);
+});
+
+test("brief hashtags can't contain spaces; referral content needs the creator's code as a whole word", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const ReferralCode = require("../../src/models/ReferralCode");
+  const brandForSpaces = await harness.registerBrand();
+  const spaced = await harness.api("POST", "/api/campaigns", {
+    token: brandForSpaces.token,
+    body: { name: "Spaces", category: "Fashion", campaignObjective: "content", contentPay: { ratePerDeliverable: 15000, deliverables: 1 }, brief: { hashtags: ["#summer drop"] } },
+  });
+  assert.equal(spaced.status, 400);
+  assert.match(JSON.stringify(spaced.body), /space/i);
+
+  const { brand, id } = await liveContentCampaign();
+  await Campaign.updateOne({ _id: id }, { $set: { "referral.enabled": true, "referral.codeSource": "business" } });
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  await approve(brand, submissionId);
+  const posts = [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }];
+
+  const noCode = await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, { token: creator.token, body: { posts, caption: "#SummerDrop #ad" } });
+  assert.equal(noCode.status, 409);
+  assert.equal(noCode.body.code, "REFERRAL_CODE_PENDING");
+
+  await ReferralCode.create({ businessId: brand.id, campaignId: id, slotId: creator.slotId, creatorId: creator.id, code: "ADA-25", source: "business", status: "active" });
+  const glued = await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, { token: creator.token, body: { posts, caption: "#SummerDrop #ad ADA-250" } });
+  assert.equal(glued.status, 400);
+  assert.equal(glued.body.code, "MISSING_REFERRAL_CODE");
+  const ok = await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, { token: creator.token, body: { posts, caption: "#SummerDrop #ad code ada-25" } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+
+  const mine = await creatorCampaign(creator, id);
+  assert.deepEqual(mine.contentApproval.requiredHashtags, ["#SummerDrop", "ad"]);
+});
+
+test("deleting a creator account keeps placements whose content is owed pay", async () => {
+  const Slot = require("../../src/models/Slot");
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page" });
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  await approve(brand, submissionId);
+
+  const deleted = await harness.api("DELETE", "/api/auth/account", { token: creator.token, body: { password: "password123" } });
+  assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
   const slot = await Slot.findById(creator.slotId).lean();
   assert.equal(String(slot.creatorId), creator.id);
+});
+
+test("approved-ish counts include completed and delivery statuses", async () => {
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page" });
+  const creator = await joinedCreator(id);
+  const submissionId = (await submit(creator, id)).body.id;
+  await approve(brand, submissionId);
+  let stats = await harness.api("GET", `/api/campaigns/${id}`, { token: brand.token });
+  assert.equal(stats.body.submissionsApproved, 1);
+  await harness.api("PATCH", `/api/submissions/${submissionId}/deliver`, {
+    token: creator.token,
+    body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
+  });
+  await harness.api("PATCH", `/api/submissions/${submissionId}/confirm-receipt`, { token: brand.token });
+  stats = await harness.api("GET", `/api/campaigns/${id}`, { token: brand.token });
+  assert.equal(stats.body.submissionsApproved, 1);
+});
+
+test("with no brand response for 72 hours, a delivery's receipt and a live post are confirmed automatically", async () => {
+  const Submission = require("../../src/models/Submission");
+  const { autoApproveStaleSubmissions } = require("../../src/services/contentApproval");
+
+  const brandPage = await liveContentCampaign({ destination: "brand_page" });
+  const deliverer = await joinedCreator(brandPage.id);
+  const deliveredId = (await submit(deliverer, brandPage.id)).body.id;
+  await approve(brandPage.brand, deliveredId);
+  await harness.api("PATCH", `/api/submissions/${deliveredId}/deliver`, {
+    token: deliverer.token,
+    body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
+  });
+
+  const creatorPage = await liveContentCampaign({ destination: "creator_page" });
+  const poster = await joinedCreator(creatorPage.id);
+  const postedId = (await submit(poster, creatorPage.id)).body.id;
+  await approve(creatorPage.brand, postedId);
+  await harness.api("PATCH", `/api/submissions/${postedId}/mark-posted`, {
+    token: poster.token,
+    body: { posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }], caption: "#SummerDrop #ad" },
+  });
+
+  await autoApproveStaleSubmissions(new Date(Date.now() + 71 * HOUR));
+  assert.equal((await Submission.findById(deliveredId).lean()).status, "awaiting_receipt");
+  assert.equal((await Submission.findById(postedId).lean()).status, "verifying");
+
+  await autoApproveStaleSubmissions(new Date(Date.now() + 73 * HOUR));
+  for (const [submissionId, creator, brand, confirmType] of [
+    [deliveredId, deliverer, brandPage.brand, "receipt_confirmed"],
+    [postedId, poster, creatorPage.brand, "post_verified"],
+  ]) {
+    assert.equal((await Submission.findById(submissionId).lean()).status, "completed");
+    const confirmEvent = (await events(submissionId)).find((e) => e.type === confirmType);
+    assert.equal(confirmEvent.actor, "system");
+    assert.ok((await notificationsFor(creator)).some((n) => n.type === "content_completed"));
+    assert.ok((await notificationsFor(brand)).some((n) => n.type === "content_auto_confirmed"));
+  }
 });
 
 test("creator page: approved → live post link with the brief's hashtags → verifying → brand confirms → completed", async () => {
@@ -283,7 +516,7 @@ test("brand page: approved → creator shares a download link and accepts usage 
     body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
   });
   assert.equal(delivered.status, 200, JSON.stringify(delivered.body));
-  assert.equal(delivered.body.status, "delivered");
+  assert.equal(delivered.body.status, "awaiting_receipt");
   assert.ok((await notificationsFor(brand)).some((n) => n.type === "content_delivered"));
 
   const byCreator = await harness.api("PATCH", `/api/submissions/${submissionId}/confirm-receipt`, { token: creator.token });
@@ -322,7 +555,7 @@ test("both: delivery with usage rights, then the live post, then completed", asy
     token: creator.token,
     body: { url: "https://drive.example.com/final.mp4", acceptUsageRights: true },
   });
-  assert.equal(delivered.body.status, "delivered");
+  assert.equal(delivered.body.status, "awaiting_receipt");
 
   const received = await harness.api("PATCH", `/api/submissions/${submissionId}/confirm-receipt`, { token: brand.token });
   assert.equal(received.status, 200);
@@ -355,7 +588,7 @@ test("content with no brand response for 72 hours is approved automatically", as
   const freshSub = (await submit(fresh, id)).body.id;
 
   const now = new Date(Date.now() + 71 * HOUR);
-  await Submission.updateOne({ _id: staleSub }, { $set: { awaitingReviewSince: new Date(now.getTime() - 73 * HOUR) } });
+  await Submission.updateOne({ _id: staleSub }, { $set: { awaitingBrandSince: new Date(now.getTime() - 73 * HOUR) } });
 
   const result = await autoApproveStaleSubmissions(now);
   assert.ok(result.approved >= 1);
@@ -401,7 +634,7 @@ test("views campaigns keep their submission path: no change requests, no auto-ap
   assert.equal(changes.status, 400);
   assert.equal(changes.body.code, "NOT_CONTENT_CAMPAIGN");
 
-  await Submission.updateOne({ _id: submitted.body.id }, { $set: { awaitingReviewSince: new Date(Date.now() - 100 * HOUR), submittedAt: new Date(Date.now() - 100 * HOUR) } });
+  await Submission.updateOne({ _id: submitted.body.id }, { $set: { awaitingBrandSince: new Date(Date.now() - 100 * HOUR), submittedAt: new Date(Date.now() - 100 * HOUR) } });
   await autoApproveStaleSubmissions(new Date());
   assert.equal((await Submission.findById(submitted.body.id).lean()).status, "new");
 

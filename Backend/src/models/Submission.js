@@ -72,7 +72,9 @@ const submissionSchema = new mongoose.Schema(
     status: {
       type: String,
       // Campaign engine: content approval (ticket 07) adds changes_requested, awaiting_delivery,
-      // delivered and completed; views campaigns never use them.
+      // awaiting_receipt and completed; views campaigns never use them. Content campaigns skip
+      // "posted": sharing the live post link moves straight to "verifying" (the brand checks it),
+      // and a confirmed receipt is the moment brand-page content counts as delivered.
       enum: [
         "new",
         "approved",
@@ -83,7 +85,7 @@ const submissionSchema = new mongoose.Schema(
         "appealed",
         "changes_requested",
         "awaiting_delivery",
-        "delivered",
+        "awaiting_receipt",
         "completed",
       ],
       default: "new",
@@ -134,8 +136,18 @@ const submissionSchema = new mongoose.Schema(
     },
 
     // ── Campaign engine: content approval (ticket 07). Content campaigns only. ──
-    // When the content last went to the brand for review: the 72-hour auto-approve clock (D10).
-    awaitingReviewSince: {
+    // The placement this content is for. One submission per creator per placement.
+    slotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Slot",
+    },
+    // When the submission started waiting on the brand (review, receipt or post verification):
+    // the 72-hour clock after which it's done automatically (D10). Unset while nobody waits on the brand.
+    awaitingBrandSince: {
+      type: Date,
+    },
+    // Set once, atomically, when fixed pay became due (D1). The M6 crediting seam.
+    fixedPayDueAt: {
       type: Date,
     },
     // One entry per change-request round, oldest first: what the brand reviewed, its notes,
@@ -181,7 +193,13 @@ submissionSchema.index({ creatorId: 1, createdAt: -1 });
 // submission on one campaign.
 submissionSchema.index({ campaignId: 1, status: 1 });
 submissionSchema.index({ campaignId: 1, creatorId: 1 });
-// Auto-approve job: content waiting on the brand, oldest first.
-submissionSchema.index({ status: 1, awaitingReviewSince: 1 });
+// Campaign engine: content approval (ticket 07)
+// Deadline job: content waiting on the brand, oldest first.
+submissionSchema.index({ status: 1, awaitingBrandSince: 1 });
+// One content submission per creator per placement, even when two submits race.
+submissionSchema.index(
+  { slotId: 1, creatorId: 1 },
+  { unique: true, partialFilterExpression: { slotId: { $type: "objectId" } } }
+);
 
 module.exports = mongoose.model("Submission", submissionSchema);
