@@ -12,7 +12,7 @@ import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { ACCESS_LABELS, accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useCampaignPlaces } from "../lib/socket";
-import { CampaignApplyPanel } from "./campaign-apply-panel";
+import { CampaignApplyPanel, type ApplicationActions } from "./campaign-apply-panel";
 
 interface MarketplaceDetailsDrawerProps {
   campaign: MarketplaceCampaign | null;
@@ -22,6 +22,7 @@ interface MarketplaceDetailsDrawerProps {
   // Why this creator can't take placements at all (no social account, no niches, at the limit).
   joinBlockedReason: string | null;
   onViewMyCampaigns: () => void;
+  applications: ApplicationActions; // Campaign engine: applications (ticket 06)
 }
 
 const VIEW_PRESETS = [1000, 3000, 5000, 10000, 20000, 30000, 50000, 75000, 100000, 150000, 200000, 300000, 500000, 750000, 1000000, 1500000, 2000000, 3000000] as const;
@@ -98,6 +99,7 @@ interface CampaignDrawerContentProps {
   isMobile: boolean;
   onClose: () => void;
   onViewMyCampaigns: () => void;
+  applications: ApplicationActions;
 }
 
 function CampaignDrawerContent({
@@ -107,6 +109,7 @@ function CampaignDrawerContent({
   isMobile,
   onClose,
   onViewMyCampaigns,
+  applications,
 }: CampaignDrawerContentProps) {
   const targetViews = campaign.targetViews || 0;
   // Content campaigns pay per deliverable, so there's no views share to commit to.
@@ -282,7 +285,15 @@ function CampaignDrawerContent({
                 </button>
               ) : (
                 // Campaign engine: applications (ticket 06)
-                <CampaignApplyPanel campaign={campaign} reasons={reasons} blockedReason={joinBlockedReason} places={places} />
+                <CampaignApplyPanel
+                  campaign={campaign}
+                  application={applications.list.find((a) => a.campaignId === campaign.id)}
+                  reasons={reasons}
+                  blockedReason={joinBlockedReason}
+                  places={places}
+                  onApply={applications.onApply}
+                  onWithdraw={applications.onWithdraw}
+                />
               )}
 
               <p className="text-[10px] text-stone-400 font-medium font-rethink text-center leading-relaxed">
@@ -303,6 +314,7 @@ export function MarketplaceDetailsDrawer({
   onJoin,
   joinBlockedReason,
   onViewMyCampaigns,
+  applications,
 }: MarketplaceDetailsDrawerProps) {
   const isMobile = useIsMobile();
 
@@ -316,6 +328,7 @@ export function MarketplaceDetailsDrawer({
       isMobile={isMobile}
       onClose={() => onOpenChange(false)}
       onViewMyCampaigns={onViewMyCampaigns}
+      applications={applications}
     />
   );
 

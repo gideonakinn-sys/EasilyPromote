@@ -2,16 +2,9 @@
 
 import { cn } from "@ep/ui/lib/utils";
 import type { ApplicationStatus } from "./types";
+import { APPLICATION_STATUS_LABELS } from "../lib/applications";
 
 // Campaign engine: applications (ticket 06)
-export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
-  pending: "Pending",
-  approved: "Selected",
-  rejected: "Not Selected",
-  withdrawn: "Withdrawn",
-  expired: "Expired",
-};
-
 const STATUS_STYLES: Record<ApplicationStatus, { bg: string; text: string; dot: string }> = {
   pending: { bg: "bg-[#FBDFB1]", text: "text-[#693D11]", dot: "bg-[#693D11]" },
   approved: { bg: "bg-[#CBF5E5]", text: "text-[#176448]", dot: "bg-[#176448]" },
@@ -28,22 +21,16 @@ interface ApplicationStatusBadgeProps {
 
 export function ApplicationStatusBadge({ status, audience = "creator" }: ApplicationStatusBadgeProps) {
   const style = STATUS_STYLES[status];
-  const label =
-    audience === "brand" && status === "approved"
-      ? "Approved"
-      : audience === "brand" && status === "rejected"
-        ? "Rejected"
-        : APPLICATION_STATUS_LABELS[status];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink whitespace-nowrap",
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-[10px] font-rethink whitespace-nowrap",
         style.bg,
         style.text
       )}
     >
       <span className={cn("w-1 h-1 rounded-full", style.dot)} />
-      {label}
+      {APPLICATION_STATUS_LABELS[audience][status]}
     </span>
   );
 }

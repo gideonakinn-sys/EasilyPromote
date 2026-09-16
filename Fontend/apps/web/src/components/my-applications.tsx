@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import type { MyApplication } from "./types";
 import { ApplicationStatusBadge } from "./application-status-badge";
+import { applicationStatusLine } from "../lib/applications";
 import { formatPay } from "../lib/campaign-pay";
 
 // Campaign engine: applications (ticket 06)
@@ -11,26 +12,6 @@ import { formatPay } from "../lib/campaign-pay";
 interface MyApplicationsProps {
   applications: MyApplication[];
   onWithdraw: (campaignId: string) => Promise<boolean>;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("en-NG", { day: "numeric", month: "short" });
-}
-
-function statusLine(application: MyApplication): string {
-  switch (application.status) {
-    case "pending":
-      return application.expiresAt ? `Waiting for the brand · open until ${formatDate(application.expiresAt)}` : "Waiting for the brand";
-    case "approved":
-      return "You've been selected. Find the brief in your campaigns below";
-    case "rejected":
-      return "The brand picked other creators this time";
-    case "withdrawn":
-      return "You withdrew this application";
-    case "expired":
-      return "The brand didn't review it in time";
-  }
 }
 
 interface WithdrawModalProps {
@@ -51,7 +32,7 @@ function WithdrawModal({ application, busy, onCancel, onConfirm }: WithdrawModal
     >
       <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
         <h3 id="withdraw-application-title" className="font-rethink font-medium text-base text-stone-900 text-center">
-          Withdraw your application?
+          Withdraw Your Application?
         </h3>
         <p className="font-rethink text-xs text-stone-500 font-medium text-center">
           The brand won&apos;t see it for {application.campaignName}. You can apply again while places are left.
@@ -95,7 +76,7 @@ export function MyApplications({ applications, onWithdraw }: MyApplicationsProps
   return (
     <section className="mb-10 space-y-4 font-rethink">
       <div className="flex items-center gap-2">
-        <h2 className="font-medium text-lg tracking-tighter text-stone-900">My Applications</h2>
+        <h2 className="font-medium text-lg text-stone-900">My Applications</h2>
         <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[10px] font-medium">{applications.length}</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -120,7 +101,7 @@ export function MyApplications({ applications, onWithdraw }: MyApplicationsProps
             {application.pay && <p className="text-sm font-medium text-stone-900">{formatPay(application.pay)}</p>}
 
             <p className={cn("text-[11px] font-medium leading-relaxed", application.status === "approved" ? "text-[#176448]" : "text-stone-500")}>
-              {statusLine(application)}
+              {applicationStatusLine(application)}
             </p>
 
             {application.status === "rejected" && application.rejectionReason && (

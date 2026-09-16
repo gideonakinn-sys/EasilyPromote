@@ -13,13 +13,14 @@ import { useReveal } from "../hooks/use-reveal";
 import slotLimitImg from "@ep/ui/assets/Slot-limit+new-user-empty.png";
 import emptyCampaignImg from "@ep/ui/assets/empty-campaign.png";
 import { MarketplaceDetailsDrawer } from "./campaign-marketplace-drawer";
-import { useCreatorDashboard } from "./creator-dashboard-context";
+import type { ApplicationActions } from "./campaign-apply-panel";
 
 interface CampaignMarketplaceProps {
   campaigns: MarketplaceCampaign[];
   meta: MarketplaceMeta;
   onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
   onViewMyCampaigns: () => void;
+  applications: ApplicationActions; // Campaign engine: applications (ticket 06)
 }
 
 // Hybrid campaigns (ticket 10) only show under All.
@@ -42,16 +43,15 @@ function newestFirst(a: MarketplaceCampaign, b: MarketplaceCampaign) {
 interface MarketplaceCardProps {
   campaign: MarketplaceCampaign;
   onOpen: () => void;
+  // Campaign engine: applications (ticket 06). A pending application to this campaign.
+  applied: boolean;
 }
 
-function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
+function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
   const platforms = platformsOf(campaign);
   const reasons = campaign.ineligibleReasons || [];
   const openCall = accessOf(campaign) === "open_call";
   const places = placesLeftOf(campaign);
-  // Campaign engine: applications (ticket 06)
-  const { applications } = useCreatorDashboard();
-  const applied = !openCall && applications.some((a) => a.campaignId === campaign.id && a.status === "pending");
 
   return (
     <div
@@ -125,20 +125,31 @@ function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
 interface CardGridProps {
   campaigns: MarketplaceCampaign[];
   onOpen: (campaign: MarketplaceCampaign) => void;
+  appliedIds: Set<string>;
 }
 
-function CardGrid({ campaigns, onOpen }: CardGridProps) {
+function CardGrid({ campaigns, onOpen, appliedIds }: CardGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
       {campaigns.map((campaign) => (
-        <MarketplaceCard key={campaign.id} campaign={campaign} onOpen={() => onOpen(campaign)} />
+        <MarketplaceCard
+          key={campaign.id}
+          campaign={campaign}
+          onOpen={() => onOpen(campaign)}
+          applied={appliedIds.has(campaign.id)}
+        />
       ))}
     </div>
   );
 }
 
-export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns }: CampaignMarketplaceProps) {
+export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns, applications }: CampaignMarketplaceProps) {
   useReveal();
+  // Campaign engine: applications (ticket 06)
+  const appliedIds = useMemo(
+    () => new Set(applications.list.filter((a) => a.status === "pending").map((a) => a.campaignId)),
+    [applications.list]
+  );
   const [tab, setTab] = useState<PayTab>("all");
   const [showLimitBanner, setShowLimitBanner] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -202,13 +213,13 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
                 <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Recommended for You</h2>
                 <p className="text-xs font-medium text-stone-500">Campaigns you can join that suit where your audience is.</p>
               </div>
-              <CardGrid campaigns={recommended} onOpen={open} />
+              <CardGrid campaigns={recommended} onOpen={open} appliedIds={appliedIds} />
             </section>
           )}
           {others.length > 0 && (
             <section className="space-y-4">
               <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">New</h2>
-              <CardGrid campaigns={others} onOpen={open} />
+              <CardGrid campaigns={others} onOpen={open} appliedIds={appliedIds} />
             </section>
           )}
         </div>
@@ -243,6 +254,7 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
         }}
         onJoin={onJoin}
         joinBlockedReason={joinBlockedReason}
+        applications={applications}
         onViewMyCampaigns={() => {
           close();
           onViewMyCampaigns();

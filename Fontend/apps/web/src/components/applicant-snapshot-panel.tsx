@@ -9,6 +9,7 @@ import { ApplicationStatusBadge } from "./application-status-badge";
 import { BADGE_OPTIONS } from "./brand-wizard/wizard-state";
 import { applicationsApi } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
+import { useApplicationUpdates } from "../lib/socket";
 
 // Campaign engine: applications (ticket 06)
 // The applicant snapshot a brand reviews: sections render in the order the API returns them,
@@ -109,7 +110,10 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
           <div className="grid grid-cols-3 gap-2">
             <Stat label="Top Location" value={d.topLocation ? `${d.topLocation.name} ${d.topLocation.percentage}%` : "—"} />
             <Stat label="Top Age" value={d.topAge ? `${d.topAge.range} ${d.topAge.percentage}%` : "—"} />
-            <Stat label="Gender" value={d.genders ? `${d.genders.female}% F · ${d.genders.male}% M` : "—"} />
+            <Stat
+              label="Gender"
+              value={d.genders ? `${d.genders.female}% F · ${d.genders.male}% M · ${d.genders.other}% Other` : "—"}
+            />
           </div>
           {d.source === "self_reported" && <p className="text-[10px] font-medium text-stone-400">Self-reported</p>}
         </div>
@@ -288,6 +292,15 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
     };
   }, [campaignId, applicationId]);
 
+  // Withdrawn or decided elsewhere while open: refresh so Approve / Reject disappear.
+  useApplicationUpdates((update) => {
+    if (!applicationId || String(update.campaignId) !== campaignId) return;
+    applicationsApi
+      .get(campaignId, applicationId)
+      .then((data) => setDetail((current) => (current && current.id === data.id ? data : current)))
+      .catch(() => {});
+  });
+
   if (!applicationId) return null;
 
   const approve = async () => {
@@ -358,7 +371,7 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
                   )}
                 </div>
                 <div className="min-w-0 space-y-1">
-                  <p className="text-lg font-medium text-stone-900 tracking-tight truncate">{applicant.name}</p>
+                  <p className="text-lg font-medium text-stone-900 truncate">{applicant.name}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {applicant.verified && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#176448]">

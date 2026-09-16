@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import type { CreatorBrief } from "../components/types";
 import { getToken } from "./api";
 
 const SOCKET_URL = (() => {
@@ -121,6 +122,11 @@ export function useCampaignPlaces(onUpdate?: (data: CampaignPlacesUpdate) => voi
 export interface ApplicationUpdate {
   campaignId: string;
   type: string;
+  applicationId?: string;
+  status?: string;
+  // Sent to the creator with an approval.
+  placement?: { id: string; kind: "views" | "deliverable"; reward: number; referralCode: string | null };
+  brief?: CreatorBrief;
 }
 
 export function useApplicationUpdates(onUpdate?: (data: ApplicationUpdate) => void) {

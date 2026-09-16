@@ -906,9 +906,15 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
-  // A decision or expiry: the approved placement and brief arrive with the fresh dashboard.
-  useApplicationUpdates(({ type }) => {
-    if (type === "application_approved") toast("You've been selected. Your brief is unlocked.", "success");
+  // A decision or expiry. The status shows at once; the placement and brief (also sent with
+  // an approval) arrive in full with the fresh dashboard.
+  useApplicationUpdates((update) => {
+    if (update.status) {
+      setApplications((prev) =>
+        prev.map((a) => (a.campaignId === update.campaignId ? { ...a, status: update.status as MyApplication["status"] } : a))
+      );
+    }
+    if (update.type === "application_approved") toast("You've been selected. Your brief is unlocked.", "success");
     fetchAllData();
   });
 

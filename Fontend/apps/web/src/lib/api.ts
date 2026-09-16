@@ -1,4 +1,5 @@
-import { clearAuth } from "./auth";
+import type { ApplicationDetail, ApplicationList, ApplicationRow, ApprovedApplication, MyApplication } from "../components/types";
+import { clearAuth, getToken } from "./auth";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
@@ -67,16 +68,7 @@ export class ApiRequestError extends Error {
 }
 
 // Campaign engine: applications (ticket 06)
-import { getToken as readApplicationsToken } from "./auth";
-import type {
-  ApplicationDetail,
-  ApplicationList,
-  ApplicationRow,
-  ApprovedApplication,
-  MyApplication,
-} from "../components/types";
-
-const applicationsToken = () => readApplicationsToken() || undefined;
+const applicationsToken = () => getToken() || undefined;
 
 export const applicationsApi = {
   apply(campaignId: string, pitch: string) {

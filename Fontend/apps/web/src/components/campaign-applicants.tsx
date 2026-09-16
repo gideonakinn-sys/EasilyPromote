@@ -40,16 +40,22 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
   const [error, setError] = React.useState("");
   const [openId, setOpenId] = React.useState<string | null>(null);
 
+  // Only the latest request may update the list when filters change quickly.
+  const requestRef = React.useRef(0);
   const load = React.useCallback(async () => {
+    const request = ++requestRef.current;
+    setLoading(true);
     setError("");
     try {
       const data = await applicationsApi.list(campaignId, { status: filter === "all" ? undefined : filter, sort });
+      if (request !== requestRef.current) return;
       setCounts(data.counts);
       setRows(data.applications);
     } catch (err: unknown) {
+      if (request !== requestRef.current) return;
       setError(err instanceof Error ? err.message : "Could not load applicants");
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   }, [campaignId, filter, sort]);
 
@@ -87,7 +93,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
                 sort === value ? "bg-white text-stone-900" : "text-stone-500"
               )}
             >
-              {value === "match" ? "Best Match" : "Newest"}
+              {value === "match" ? "Best Match" : "Recently Applied"}
             </button>
           ))}
         </div>
@@ -110,14 +116,14 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
       </div>
 
       {error && <p className="text-xs font-medium text-red-600">{error}</p>}
-      {loading && <p className="text-xs font-medium text-stone-400">Loading applicants…</p>}
+      {loading && rows.length === 0 && <p className="text-xs font-medium text-stone-400">Loading applicants…</p>}
       {!loading && !error && rows.length === 0 && (
         <p className="text-xs font-medium text-stone-500">
           {filter === "all" ? "No applications yet. Eligible creators can apply from the marketplace." : `No ${filter} applications.`}
         </p>
       )}
 
-      <div className="divide-y divide-stone-100">
+      <div className={cn("divide-y divide-stone-100 transition-opacity", loading && "opacity-50")} aria-busy={loading}>
         {rows.map((row) => (
           <button
             key={row.id}

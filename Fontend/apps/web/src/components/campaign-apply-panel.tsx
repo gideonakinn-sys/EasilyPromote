@@ -2,30 +2,43 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
-import type { EligibilityFailure, MarketplaceCampaign } from "./types";
-import { useCreatorDashboard } from "./creator-dashboard-context";
+import type { EligibilityFailure, MarketplaceCampaign, MyApplication } from "./types";
+import type { ApplyOutcome } from "./creator-dashboard-context";
 import { ApplicationStatusBadge } from "./application-status-badge";
+import { formatShortDate } from "../lib/applications";
 
 // Campaign engine: applications (ticket 06)
 // Apply on an Application Required campaign: an optional pitch, then a confirmation.
 const MAX_PITCH = 500;
 
+// A creator's applications and what they can do with them, passed down from the dashboard.
+export interface ApplicationActions {
+  list: MyApplication[];
+  onApply: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  onWithdraw: (campaignId: string) => Promise<boolean>;
+}
+
 interface CampaignApplyPanelProps {
   campaign: MarketplaceCampaign;
+  // This creator's application to the campaign, if any.
+  application: MyApplication | undefined;
   // Campaign rules this creator misses, and account-wide ones (no social, niches, limit).
   reasons: string[];
   blockedReason: string | null;
   places: number;
+  onApply: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  onWithdraw: (campaignId: string) => Promise<boolean>;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("en-NG", { day: "numeric", month: "short" });
-}
-
-export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }: CampaignApplyPanelProps) {
-  const { applications, handleApplyToCampaign, handleWithdrawApplication } = useCreatorDashboard();
-  const application = applications.find((a) => a.campaignId === campaign.id);
+export function CampaignApplyPanel({
+  campaign,
+  application,
+  reasons,
+  blockedReason,
+  places,
+  onApply,
+  onWithdraw,
+}: CampaignApplyPanelProps) {
   const [pitch, setPitch] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [withdrawing, setWithdrawing] = React.useState(false);
@@ -46,7 +59,7 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
   const apply = async () => {
     setSending(true);
     setError(null);
-    const outcome = await handleApplyToCampaign(campaign.id, pitch);
+    const outcome = await onApply(campaign.id, pitch);
     setSending(false);
     if (outcome.ok) setJustApplied(true);
     else setError({ message: outcome.message, failures: outcome.failures });
@@ -54,24 +67,24 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
 
   const withdraw = async () => {
     setWithdrawing(true);
-    const ok = await handleWithdrawApplication(campaign.id);
+    const ok = await onWithdraw(campaign.id);
     setWithdrawing(false);
     if (ok) setJustApplied(false);
   };
 
   if (application && application.status === "pending") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 font-rethink">
         <div className="bg-[#DBEAFE] rounded-2xl p-4 space-y-1">
-          <p className="text-sm font-medium text-[#1E40AF]">{justApplied ? "Application sent" : "You've applied"}</p>
+          <p className="text-sm font-medium text-[#1E40AF]">{justApplied ? "Application Sent" : "You've Applied"}</p>
           <p className="text-xs font-medium text-[#1E40AF] leading-relaxed">
             The brand reviews applicants and picks who takes part. We&apos;ll tell you as soon as they decide
-            {application.expiresAt ? `. Your application stays open until ${formatDate(application.expiresAt)}.` : "."}
+            {application.expiresAt ? `. Your application stays open until ${formatShortDate(application.expiresAt)}.` : "."}
           </p>
         </div>
         {application.pitch && (
           <div className="border border-stone-200 rounded-2xl p-4 space-y-1">
-            <p className="text-xs font-medium text-stone-500">Your pitch</p>
+            <p className="text-xs font-medium text-stone-500">Your Pitch</p>
             <p className="text-xs font-medium text-stone-800 leading-relaxed">{application.pitch}</p>
           </div>
         )}
@@ -89,9 +102,9 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
 
   if (application && !canReapply) {
     return (
-      <div className="border border-stone-200 rounded-2xl p-4 space-y-2">
+      <div className="border border-stone-200 rounded-2xl p-4 space-y-2 font-rethink">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-stone-500">Your application</p>
+          <p className="text-xs font-medium text-stone-500">Your Application</p>
           <ApplicationStatusBadge status={application.status} />
         </div>
         {application.status === "rejected" && application.rejectionReason && (
@@ -102,10 +115,10 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-rethink">
       {allReasons.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
-          <p className="text-xs font-medium text-amber-900">You can&apos;t apply yet</p>
+          <p className="text-xs font-medium text-amber-900">You Can&apos;t Apply Yet</p>
           <ul className="space-y-1">
             {allReasons.map((reason) => (
               <li key={reason} className="text-xs font-medium text-amber-900 leading-relaxed">
@@ -119,7 +132,7 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
       {allReasons.length === 0 && places > 0 && (
         <div className="space-y-2">
           <label htmlFor="application-pitch" className="text-xs font-medium text-stone-500 block">
-            Why you? (Optional)
+            Why You? (Optional)
           </label>
           <textarea
             id="application-pitch"
@@ -137,7 +150,7 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
-          <p className="text-xs font-medium text-red-800">{error.failures.length > 0 ? "You can't apply yet" : error.message}</p>
+          <p className="text-xs font-medium text-red-800">{error.failures.length > 0 ? "You Can't Apply Yet" : error.message}</p>
           {error.failures.length > 0 && (
             <ul className="space-y-1">
               {error.failures.map((f) => (
@@ -160,7 +173,7 @@ export function CampaignApplyPanel({ campaign, reasons, blockedReason, places }:
             canApply ? "bg-[#FEB604] text-[#1C1917] border border-stone-100" : "bg-stone-200 text-stone-400 cursor-not-allowed"
           )}
         >
-          {sending ? "Sending…" : places === 0 ? "Campaign full" : "Apply"}
+          {sending ? "Sending…" : places === 0 ? "Campaign Full" : "Apply"}
         </button>
         <p className="text-[11px] text-stone-500 font-medium text-center">
           The brand picks who takes part. Applying doesn&apos;t reserve a place.

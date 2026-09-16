@@ -6,8 +6,17 @@ import { SetupRequiredNotice } from "../../../../../components/setup-required-no
 import { AudienceDataPrompt } from "../../../../../components/creator-profile-sections";
 
 function CreatorCampaigns() {
-  const { marketplaceCampaigns, marketplaceMeta, handleJoinCampaign, profile, openProfile, navigateTab } =
-    useCreatorDashboard();
+  const {
+    marketplaceCampaigns,
+    marketplaceMeta,
+    handleJoinCampaign,
+    profile,
+    openProfile,
+    navigateTab,
+    applications,
+    handleApplyToCampaign,
+    handleWithdrawApplication,
+  } = useCreatorDashboard();
 
   return (
     <div className="w-full">
@@ -23,6 +32,7 @@ function CreatorCampaigns() {
         meta={marketplaceMeta}
         onJoin={handleJoinCampaign}
         onViewMyCampaigns={() => navigateTab("home")}
+        applications={{ list: applications, onApply: handleApplyToCampaign, onWithdraw: handleWithdrawApplication }}
       />
     </div>
   );
