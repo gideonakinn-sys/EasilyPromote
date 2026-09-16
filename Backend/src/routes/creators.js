@@ -20,7 +20,7 @@ const {
   audienceSchema,
   categoriesSchema,
   portfolioSchema,
-  publicAudience,
+  ownAudience,
   publicPortfolio,
   brandSafeProfile,
 } = require("../utils/creatorProfile");
@@ -54,16 +54,20 @@ router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, ne
   }
 });
 
+const socialAccountSchema = z.object({
+  platform: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  handle: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  // Self-reported; null clears it.
+  followers: z.number().int("Followers must be a whole number").min(0).nullable().optional(),
+});
+
 router.post("/profile/socials", protect, async (req, res, next) => {
   try {
-    const { platform, handle, followers } = req.body;
-
-    if (!platform || !handle) {
-      return res.status(400).json({ error: "Platform and handle are required" });
+    const parsed = socialAccountSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
     }
-    if (followers !== undefined && (!Number.isInteger(followers) || followers < 0)) {
-      return res.status(400).json({ error: "Followers must be a whole number" });
-    }
+    const { platform, handle, followers } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -76,13 +80,13 @@ router.post("/profile/socials", protect, async (req, res, next) => {
     if (existing) {
       existing.handle = handle;
       existing.verified = false;
-      if (followers !== undefined) existing.followers = followers;
+      if (followers !== undefined) existing.followers = followers === null ? undefined : followers;
     } else {
       profile.socialAccounts.push({
         platform: platform.toLowerCase(),
         handle,
         verified: false,
-        followers,
+        followers: followers === null ? undefined : followers,
       });
     }
 
@@ -135,14 +139,14 @@ router.post("/profile/niches", protect, async (req, res, next) => {
 });
 
 const basicsSchema = z.object({
-  displayName: z.string().trim().max(100).nullish(),
-  bio: z.string().max(300).nullish(),
-  country: z.string().trim().max(60).nullish(),
-  city: z.string().trim().max(60).nullish(),
-  state: z.string().trim().max(60).nullish(),
-  legalName: z.string().trim().max(150).nullish(),
-  phone: z.string().trim().max(30).nullish(),
-  avatar: z.string().nullish(),
+  displayName: z.string().trim().max(100).optional(),
+  bio: z.string().max(300).optional(),
+  country: z.string().trim().max(60).optional(),
+  city: z.string().trim().max(60).optional(),
+  state: z.string().trim().max(60).optional(),
+  legalName: z.string().trim().max(150).optional(),
+  phone: z.string().trim().max(30).optional(),
+  avatar: z.string().optional(),
   categories: categoriesSchema.optional(),
 });
 
@@ -207,6 +211,10 @@ router.put("/profile/audience", protect, authorizeRoles("creator"), async (req, 
     }
 
     const { locations, ages, genders, proofUrl } = parsed.data;
+    // Self-reported numbers need a screenshot of the creator's analytics (D7).
+    if (!proofUrl && !(profile.audience && profile.audience.proofUrl)) {
+      return res.status(400).json({ error: "Add a screenshot of your analytics as proof" });
+    }
     if (locations !== undefined) profile.set("audience.locations", locations);
     if (ages !== undefined) profile.set("audience.ages", ages);
     if (genders !== undefined) profile.set("audience.genders", genders);
@@ -215,7 +223,7 @@ router.put("/profile/audience", protect, authorizeRoles("creator"), async (req, 
     profile.set("audience.updatedAt", new Date());
     await profile.save();
 
-    res.json({ audience: { ...publicAudience(profile.audience), proofUrl: profile.audience.proofUrl || null } });
+    res.json({ audience: ownAudience(profile.audience) });
   } catch (error) {
     next(error);
   }
@@ -577,9 +585,7 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
 
 router.get("/:id", async (req, res, next) => {
   try {
-    const creator = req.params.id.match(/^[a-f0-9]{24}$/i)
-      ? await CreatorProfile.findById(req.params.id).populate("userId", "name avatar")
-      : null;
+    const creator = await CreatorProfile.findById(req.params.id).populate("userId", "name avatar");
     if (!creator) {
       return res.status(404).json({ error: "Creator profile not found" });
     }

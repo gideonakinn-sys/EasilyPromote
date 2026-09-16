@@ -22,23 +22,26 @@ const MAX_PORTFOLIO_ITEMS = 12;
 
 const percentage = z.number().min(0).max(100);
 const totalAtMost100 = (items) => items.reduce((sum, i) => sum + i.percentage, 0) <= 100;
+const uniqueBy = (key) => (items) => new Set(items.map((i) => String(i[key]).toLowerCase())).size === items.length;
 
 const audienceSchema = z.object({
   locations: z
     .array(z.object({ name: z.string().trim().min(1).max(60), percentage }))
     .max(MAX_AUDIENCE_LOCATIONS, `Add up to ${MAX_AUDIENCE_LOCATIONS} audience locations`)
     .refine(totalAtMost100, "Audience locations can't add up to more than 100%")
+    .refine(uniqueBy("name"), "List each audience location once")
     .optional(),
   ages: z
     .array(z.object({ range: z.enum(AGE_RANGES), percentage }))
     .refine(totalAtMost100, "Age groups can't add up to more than 100%")
+    .refine(uniqueBy("range"), "List each age group once")
     .optional(),
   genders: z
     .object({ female: percentage, male: percentage, other: percentage.default(0) })
     .refine((g) => g.female + g.male + g.other <= 100, "Gender split can't add up to more than 100%")
     .optional(),
   proofUrl: z.string().url().max(500).optional(),
-});
+}).refine((a) => a.locations || a.ages || a.genders, "Add your audience locations, age groups or gender split");
 
 const categoriesSchema = z.array(z.enum(CATEGORIES)).max(CATEGORIES.length);
 
@@ -71,7 +74,6 @@ function publicPortfolio(portfolio) {
 function publicStats(profile) {
   const stats = profile.stats || {};
   return {
-    followers: (profile.socialAccounts || []).reduce((sum, s) => sum + (s.followers || 0), 0),
     avgViews: stats.avgViews || 0,
     engagementRate: stats.engagementRate !== undefined ? stats.engagementRate : null,
     pastCampaigns: stats.pastCampaigns || 0,
@@ -95,6 +97,12 @@ function publicAudience(audience) {
 
 // What brands and the public may see of a creator. Built from an explicit list so a new
 // private field (legal name, phone, email, bank details) can never leak by default.
+// The creator's own view of their audience also shows the proof they uploaded.
+function ownAudience(audience) {
+  const view = publicAudience(audience);
+  return view ? { ...view, proofUrl: audience.proofUrl || null } : null;
+}
+
 function brandSafeProfile(profile, user) {
   if (!profile) return null;
   return {
@@ -136,6 +144,7 @@ module.exports = {
   categoriesSchema,
   portfolioSchema,
   publicAudience,
+  ownAudience,
   publicPortfolio,
   publicStats,
   brandSafeProfile,

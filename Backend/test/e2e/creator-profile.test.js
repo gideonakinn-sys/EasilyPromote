@@ -85,16 +85,22 @@ test("a creator records where their audience is, and brands see it", async () =>
   assert.equal(publicView.body.audience.source, "self_reported");
 });
 
-test("audience breakdowns that add up to more than 100% are rejected", async () => {
+test("audience data must be complete, add up to 100% or less, and come with proof", async () => {
   const creator = await harness.registerCreator();
+  const proofUrl = "https://files.example.com/proof.png";
   const cases = [
+    {},
+    { locations: [{ name: "Lagos", percentage: 50 }] },
+    { proofUrl, locations: [{ name: "Lagos", percentage: 30 }, { name: "lagos", percentage: 20 }] },
+    { proofUrl, ages: [{ range: "18-24", percentage: 30 }, { range: "18-24", percentage: 20 }] },
     { locations: [{ name: "Lagos", percentage: 70 }, { name: "Abuja", percentage: 40 }] },
     { ages: [{ range: "18-24", percentage: 90 }, { range: "25-34", percentage: 20 }] },
     { genders: { female: 60, male: 50, other: 0 } },
     { locations: ["Lagos", "Abuja", "Kano", "Ibadan", "Port Harcourt", "Enugu"].map((name) => ({ name, percentage: 10 })) },
   ];
-  for (const body of cases) {
-    const res = await harness.api("PUT", "/api/creators/profile/audience", { token: creator.token, body });
+  for (const [i, body] of cases.entries()) {
+    const withProof = i < 2 || body.proofUrl ? body : { proofUrl, ...body };
+    const res = await harness.api("PUT", "/api/creators/profile/audience", { token: creator.token, body: withProof });
     assert.equal(res.status, 400, JSON.stringify(body));
     assert.ok(res.body.error, "explains what's wrong");
   }
@@ -141,6 +147,9 @@ test("a creator curates categories, follower counts and a portfolio that brands 
   assert.deepEqual(publicView.body.portfolio.map((p) => p.title), ["Vlog", "Dance challenge"]);
   const tiktok = publicView.body.socialAccounts.find((s) => s.platform === "tiktok");
   assert.equal(tiktok.followers, 48200);
+
+  const nullName = await harness.api("PUT", "/api/creators/profile/me", { token: creator.token, body: { displayName: null } });
+  assert.equal(nullName.status, 400);
 });
 
 test("admin verifies a creator with a connected social account, and brands see the badge", async () => {
@@ -184,11 +193,21 @@ test("admin verifies a creator with a connected social account, and brands see t
   assert.equal(afterRevoke.body.verified, false);
 });
 
+test("a creator who disconnects their last social account loses the verified badge", async () => {
+  const admin = await harness.registerAdmin();
+  const creator = await harness.registerCreator();
+  await harness.api("PATCH", `/api/admin/creators/${creator.id}/verification`, { token: admin.token, body: { verified: true } });
+
+  const disconnected = await harness.api("POST", "/api/tiktok/disconnect", { token: creator.token });
+  assert.equal(disconnected.status, 200);
+
+  const publicView = await harness.api("GET", `/api/creators/${await profileId(creator)}`);
+  assert.equal(publicView.body.verified, false);
+});
+
 test("campaign stats come from a creator's delivered submissions", async () => {
   const admin = await harness.registerAdmin();
   const creator = await harness.registerCreator();
-  await harness.api("POST", "/api/creators/profile/socials", { token: creator.token, body: { platform: "tiktok", handle: "@a", followers: 30000 } });
-  await harness.api("POST", "/api/creators/profile/socials", { token: creator.token, body: { platform: "instagram", handle: "@a", followers: 12000 } });
 
   // Posting and view syncing need the real TikTok API, so delivered submissions are fixtures.
   const mongoose = require("mongoose");
@@ -208,7 +227,7 @@ test("campaign stats come from a creator's delivered submissions", async () => {
   const publicView = await harness.api("GET", `/api/creators/${await profileId(creator)}`);
   assert.deepEqual(
     { ...publicView.body.stats, updatedAt: undefined },
-    { followers: 42000, avgViews: 15000, engagementRate: 10, pastCampaigns: 2, totalCampaignViews: 30000, updatedAt: undefined }
+    { avgViews: 15000, engagementRate: 10, pastCampaigns: 2, totalCampaignViews: 30000, updatedAt: undefined }
   );
   assert.ok(publicView.body.stats.updatedAt);
 });

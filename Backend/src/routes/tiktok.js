@@ -1,4 +1,5 @@
 const express = require("express");
+const { dropVerificationIfUnconnected } = require("../utils/creatorVerification");
 const jwt = require("jsonwebtoken");
 const CreatorProfile = require("../models/CreatorProfile");
 const Submission = require("../models/Submission");
@@ -188,6 +189,7 @@ router.post("/disconnect", protect, authorizeRoles("creator"), async (req, res, 
       profile.socialAccounts = profile.socialAccounts.filter((s) => s.platform !== "tiktok");
       await profile.save();
     }
+    await dropVerificationIfUnconnected(req.user._id);
 
     res.json({ message: "TikTok disconnected" });
   } catch (error) {

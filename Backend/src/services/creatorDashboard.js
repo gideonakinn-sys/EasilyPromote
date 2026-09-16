@@ -1,4 +1,5 @@
 const CreatorProfile = require("../models/CreatorProfile");
+const { ownAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
@@ -54,8 +55,6 @@ async function loadContext(userId) {
   };
 }
 
-const { publicAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
-
 function buildProfile(user, ctx) {
   const profile = ctx.profile;
   if (!profile) return null;
@@ -75,9 +74,7 @@ function buildProfile(user, ctx) {
     verified: Boolean(profile.verifiedAt),
     badges: profile.badges || [],
     stats: publicStats(profile),
-    audience: profile.audience && profile.audience.source
-      ? { ...publicAudience(profile.audience), proofUrl: profile.audience.proofUrl || null }
-      : null,
+    audience: ownAudience(profile.audience),
     socialAccounts: profile.socialAccounts || [],
     niches: profile.niches || [],
     rank: profile.rank,
