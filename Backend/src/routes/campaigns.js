@@ -781,7 +781,9 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
 router.post("/:id/join", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
     const { joinCampaign } = require("../services/placements");
-    const result = await joinCampaign({ user: req.user, campaignId: req.params.id });
+    // Views campaigns may commit to a share of the views, as the older claim did.
+    const committedViews = req.body ? req.body.committedViews : undefined;
+    const result = await joinCampaign({ user: req.user, campaignId: req.params.id, committedViews });
     res.status(result.status).json(result.body);
   } catch (error) {
     next(error);

@@ -3,9 +3,10 @@
 import { useCreatorDashboard } from "../../../../../components/creator-dashboard-context";
 import { CampaignMarketplace } from "../../../../../components/campaign-marketplace";
 import { SetupRequiredNotice } from "../../../../../components/setup-required-notice";
+import { AudienceDataPrompt } from "../../../../../components/creator-profile-sections";
 
 function CreatorCampaigns() {
-  const { marketplaceCampaigns, marketplaceMeta, handleClaimSlot, profile, openProfile } =
+  const { marketplaceCampaigns, marketplaceMeta, handleJoinCampaign, profile, openProfile, navigateTab } =
     useCreatorDashboard();
 
   return (
@@ -16,11 +17,12 @@ function CreatorCampaigns() {
         onChooseNiches={() => openProfile("niches")}
         onCompleteProfile={() => openProfile("details")}
       />
+      <AudienceDataPrompt profile={profile} onAddAudience={() => openProfile("audience")} />
       <CampaignMarketplace
         campaigns={marketplaceCampaigns}
         meta={marketplaceMeta}
-        onClaimSlot={handleClaimSlot}
-        niches={profile.niches}
+        onJoin={handleJoinCampaign}
+        onViewMyCampaigns={() => navigateTab("home")}
       />
     </div>
   );

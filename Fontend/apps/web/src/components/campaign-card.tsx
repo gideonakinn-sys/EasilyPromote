@@ -65,7 +65,9 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   const hasProgress = camp.status === "live_tracking" || camp.status === "delivered";
 
   const targetViews = camp.maxViews ?? camp.viewTarget;
-  const targetLabel = targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
+  const targetLabel = camp.kind === "deliverable"
+    ? "1 approved video"
+    : targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
 
   const rewardLabel = `₦${camp.reward.toLocaleString()}`;
 

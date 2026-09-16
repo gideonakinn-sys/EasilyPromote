@@ -51,6 +51,9 @@ function toCampaignItem(c: Record<string, unknown>): CampaignItem {
     scriptFileName: c.scriptFileName as string | undefined,
     timeline: (c.timeline as CampaignItem["timeline"]) || [],
     referral: (c.referral as CampaignItem["referral"]) ?? null,
+    kind: c.kind as CampaignItem["kind"],
+    brief: c.brief as CampaignItem["brief"],
+    pay: c.pay as CampaignItem["pay"],
   };
 }
 

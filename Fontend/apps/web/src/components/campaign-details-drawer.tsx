@@ -18,6 +18,7 @@ import { uploadFile } from "@ep/ui/lib/upload";
 import type { CampaignItem, CampaignReferral, TimelineEvent } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
 import { ReferralCodeCard } from "./referral-code-card";
+import { CampaignBriefDetails } from "./campaign-brief";
 import { useReferralConversions } from "../lib/socket";
 
 // Events that represent a decision on the content itself, so they get the video card.
@@ -726,6 +727,9 @@ export function CampaignDetailsDrawer({
             </div>
           )}
 
+          {/* Campaign engine: the full brief, unlocked by joining */}
+          <CampaignBriefDetails brief={displayCampaign.brief} />
+
           {/* The brief */}
           {(displayCampaign.description || displayCampaign.contentBrief || displayCampaign.keyMessageCta || displayCampaign.whatToAvoid || displayCampaign.contentStyle || displayCampaign.goal || displayCampaign.competitors || displayCampaign.uniqueSellingPoint || displayCampaign.funFact || displayCampaign.scriptUrl) && (
             <div className="space-y-6">
@@ -844,9 +848,11 @@ export function CampaignDetailsDrawer({
               )}
 
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                <span className="text-stone-500">Target</span>
+                <span className="text-stone-500">{displayCampaign.kind === "deliverable" ? "Deliverable" : "Target"}</span>
                 <span className="text-stone-800">
-                  {(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views
+                  {displayCampaign.kind === "deliverable"
+                    ? "1 approved video"
+                    : `${(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views`}
                 </span>
               </div>
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">

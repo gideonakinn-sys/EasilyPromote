@@ -379,7 +379,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 <div className="min-w-0">
                   <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
                   <p className="font-rethink text-xs text-stone-500">
-                    {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views · ₦{c.earned.toLocaleString()} earned
+                    {(c.views || 0).toLocaleString()} / {(c.viewTarget || 0).toLocaleString()} views · ₦{c.earned.toLocaleString()} earned
                     {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
                   </p>
                 </div>

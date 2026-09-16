@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
+import { cn } from "@ep/ui/lib/utils";
 import type { MarketplaceCampaign } from "./types";
-import { conversionNounFor, formatNaira } from "../lib/referral";
+import type { JoinOutcome } from "./creator-dashboard-context";
+import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
+import { accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useReveal } from "../hooks/use-reveal";
 import slotLimitImg from "@ep/ui/assets/Slot-limit+new-user-empty.png";
 import emptyCampaignImg from "@ep/ui/assets/empty-campaign.png";
@@ -14,123 +17,188 @@ import { MarketplaceDetailsDrawer } from "./campaign-marketplace-drawer";
 interface CampaignMarketplaceProps {
   campaigns: MarketplaceCampaign[];
   meta: { activeSlots: number; maxSlots: number; canClaim: boolean };
-  onClaimSlot: (campaignId: string, views: number) => void;
-  niches: string[];
+  onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
+  onViewMyCampaigns: () => void;
 }
 
-export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: CampaignMarketplaceProps) {
+// Hybrid campaigns (ticket 10) only show under All.
+const PAY_TABS = [
+  { value: "all", label: "All" },
+  { value: "fixed", label: "Fixed Pay" },
+  { value: "performance", label: "Performance" },
+] as const;
+
+type PayTab = (typeof PAY_TABS)[number]["value"];
+
+function payShapeOf(campaign: MarketplaceCampaign) {
+  return campaign.payShape || (campaign.campaignModel === "content" ? "fixed" : "performance");
+}
+
+function newestFirst(a: MarketplaceCampaign, b: MarketplaceCampaign) {
+  return new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime();
+}
+
+interface MarketplaceCardProps {
+  campaign: MarketplaceCampaign;
+  onOpen: () => void;
+}
+
+function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
+  const platforms = platformsOf(campaign);
+  const reasons = campaign.ineligibleReasons || [];
+  const openCall = accessOf(campaign) === "open_call";
+  const places = placesLeftOf(campaign);
+
+  return (
+    <div
+      onClick={onOpen}
+      className="bg-white rounded-2xl p-4 flex flex-col relative overflow-hidden cursor-pointer text-left font-rethink"
+    >
+      <div className="flex items-start justify-between gap-3 mb-4">
+        {campaign.coverImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={campaign.coverImageUrl}
+            alt={campaign.title}
+            className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
+          />
+        ) : (
+          <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
+            <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
+          </div>
+        )}
+        <AccessBadge campaign={campaign} />
+      </div>
+
+      {/* Pay leads every card */}
+      <p className="font-rethink font-medium text-[20px] tracking-tight text-stone-900 leading-tight">
+        {formatPay(campaign.pay, campaign.reward)}
+      </p>
+      <h3 className="font-rethink font-medium text-sm text-stone-600 line-clamp-2 mt-1 mb-3">
+        {campaign.title} · {campaign.brandName}
+      </h3>
+
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {platforms.map((platform) => (
+          <span key={platform} className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px]">
+            {platformLabel(platform)}
+          </span>
+        ))}
+        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px]">
+          {targetLocationLabel(campaign)}
+        </span>
+      </div>
+
+      {reasons.length > 0 && (
+        <p className="text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 leading-snug">
+          {reasons[0]}
+          {reasons.length > 1 ? ` (+${reasons.length - 1} more)` : ""}
+        </p>
+      )}
+
+      <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center gap-3">
+        <span className="text-xs text-stone-400 font-medium">
+          {places} {places === 1 ? "place" : "places"} left
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+          className={cn(
+            "px-4 py-2 rounded-full font-semibold text-xs font-rethink",
+            openCall && reasons.length === 0 ? "bg-[#FEB604] text-stone-950" : "bg-stone-100 text-stone-600"
+          )}
+        >
+          {openCall ? "Join Campaign" : "Apply"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CardGrid({ campaigns, onOpen }: { campaigns: MarketplaceCampaign[]; onOpen: (c: MarketplaceCampaign) => void }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+      {campaigns.map((campaign) => (
+        <MarketplaceCard key={campaign.id} campaign={campaign} onOpen={() => onOpen(campaign)} />
+      ))}
+    </div>
+  );
+}
+
+export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns }: CampaignMarketplaceProps) {
   useReveal();
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [tab, setTab] = useState<PayTab>("all");
   const [showLimitBanner, setShowLimitBanner] = useState(true);
-  const [selectedCampaign, setSelectedCampaign] = useState<MarketplaceCampaign | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Kept so the drawer can still show the "you're in" state after the campaign leaves the list.
+  const [selectedSnapshot, setSelectedSnapshot] = useState<MarketplaceCampaign | null>(null);
 
-  const handleClaim = (views: number) => {
-    if (!selectedCampaign) return;
-    onClaimSlot(selectedCampaign.id, views);
-    setSelectedCampaign(null);
-  };
+  const filtered = useMemo(
+    () => (tab === "all" ? campaigns : campaigns.filter((c) => payShapeOf(c) === tab)),
+    [campaigns, tab]
+  );
+  const recommended = filtered.filter((c) => c.recommended);
+  const others = filtered.filter((c) => !c.recommended).sort(newestFirst);
 
-  const categories = ["All", ...niches];
-
-  const filtered = activeCategory === "All"
-    ? campaigns
-    : campaigns.filter((c) => c.category === activeCategory);
-
+  const selected = (selectedId && campaigns.find((c) => c.id === selectedId)) || selectedSnapshot;
   const isAtLimit = !meta.canClaim;
+
+  const open = (campaign: MarketplaceCampaign) => {
+    setSelectedId(campaign.id);
+    setSelectedSnapshot(campaign);
+  };
+  const close = () => {
+    setSelectedId(null);
+    setSelectedSnapshot(null);
+  };
 
   return (
     <div className="w-full flex flex-col font-rethink">
-
-      {/* Category filter bar */}
       <div data-reveal className="w-full mb-8">
         <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
-          {categories.map((cat) => {
-            const isActive = activeCategory === cat;
-            return (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-xs font-medium font-rethink transition-all ${
-                  isActive
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 text-stone-500"
-                }`}
-              >
-                {cat}
-              </button>
-            );
-          })}
+          {PAY_TABS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => setTab(option.value)}
+              className={cn(
+                "px-4 py-2 rounded-full text-xs font-medium font-rethink",
+                tab === option.value ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-500"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-20 px-6">
           <Image src={emptyCampaignImg} alt="" width={200} height={200} className="mb-6" unoptimized />
-
-          <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">
-            Nothing right now
-          </h3>
+          <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">Nothing right now</h3>
           <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
-            New campaigns are added often — check back soon
+            New campaigns are added often. Check back soon.
           </p>
         </div>
       ) : (
-        <div className="space-y-6 w-full">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-            {filtered.map((camp) => (
-              <div
-                key={camp.id}
-                onClick={() => setSelectedCampaign(camp)}
-                className="bg-white rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer text-left"
-              >
-                <div className="flex items-start justify-between mb-5">
-                  {camp.coverImageUrl ? (
-                    <img
-                      src={camp.coverImageUrl}
-                      alt={camp.title}
-                      className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
-                    />
-                  ) : (
-                    <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
-                      <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex-1 text-left">
-                  <h3 className="font-rethink font-medium tracking-tighter text-[16px] text-stone-900 line-clamp-2 mb-2">
-                    {camp.title}
-                  </h3>
-                  <div className="flex gap-1.5 mb-5">
-                    <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
-                      {camp.category}
-                    </span>
-                    {camp.platforms.length > 0 && (
-                      <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
-                        {camp.platforms.join(", ")}
-                      </span>
-                    )}
-                    {camp.referralReward && (
-                      <span className="px-2 py-0.5 rounded-full bg-[#CBF5E5] text-[#176448] font-medium tracking-tight text-[10px] font-rethink whitespace-nowrap">
-                        +{formatNaira(camp.referralReward.amount)} per {conversionNounFor(camp.referralReward.eventTypes || [camp.referralReward.eventType], 1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center text-xs font-medium">
-                  <span className="text-stone-400 font-medium">
-                    {camp.slotsLeft} placements left
-                  </span>
-                  <span className="text-stone-900 font-medium font-rethink">
-                    ₦{camp.reward.toLocaleString()}
-                  </span>
-                </div>
-
+        <div className="space-y-10 w-full">
+          {recommended.length > 0 && (
+            <section className="space-y-4">
+              <div>
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Recommended for You</h2>
+                <p className="text-xs font-medium text-stone-500">Campaigns you can join that suit where your audience is.</p>
               </div>
-            ))}
-          </div>
-
+              <CardGrid campaigns={recommended} onOpen={open} />
+            </section>
+          )}
+          {others.length > 0 && (
+            <section className="space-y-4">
+              <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">New</h2>
+              <CardGrid campaigns={others} onOpen={open} />
+            </section>
+          )}
         </div>
       )}
 
@@ -139,11 +207,9 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
           <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-[20px] p-2 flex items-center justify-between gap-3 text-left relative overflow-hidden">
             <div className="flex gap-3 items-center">
               <Image src={slotLimitImg} alt="" width={36} height={36} className="w-9 h-9 shrink-0" unoptimized />
-              <div>
-                <h4 className="font-rethink text-xs font-medium text-stone-900 leading-snug">
-                  You&apos;re at your active placement limit ({meta.activeSlots}/{meta.maxSlots}). Complete or deliver a placement to claim something new.
-                </h4>
-              </div>
+              <h4 className="font-rethink text-xs font-medium text-stone-900 leading-snug">
+                You&apos;re at your active placement limit ({meta.activeSlots}/{meta.maxSlots}). Finish a placement to join something new.
+              </h4>
             </div>
             <button
               onClick={() => setShowLimitBanner(false)}
@@ -158,13 +224,18 @@ export function CampaignMarketplace({ campaigns, meta, onClaimSlot, niches }: Ca
       )}
 
       <MarketplaceDetailsDrawer
-        campaign={selectedCampaign}
-        open={selectedCampaign !== null}
-        onOpenChange={(open) => { if (!open) setSelectedCampaign(null); }}
-        onClaim={handleClaim}
+        campaign={selected}
+        open={selected !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) close();
+        }}
+        onJoin={onJoin}
         isAtLimit={isAtLimit}
+        onViewMyCampaigns={() => {
+          close();
+          onViewMyCampaigns();
+        }}
       />
-
     </div>
   );
 }
