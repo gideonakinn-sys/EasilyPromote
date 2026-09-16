@@ -7,6 +7,19 @@ function slotCountFor(campaign) {
   return Math.max(1, Math.min(100, Math.floor(count)));
 }
 
+// Content campaigns: one placement per deliverable the brand paid for, at the brand's rate.
+function buildDeliverableSlots(campaign) {
+  const { ratePerDeliverable, deliverables } = campaign.contentPay || {};
+  return Array.from({ length: deliverables || 0 }, () => ({
+    campaignId: campaign._id,
+    creatorId: null,
+    rankRequired: null,
+    kind: "deliverable",
+    reward: ratePerDeliverable,
+    status: "available",
+  }));
+}
+
 function buildSlots(campaign, count) {
   const viewTarget = Math.ceil(campaign.targetViews / count);
   const reward = Math.floor(campaign.creatorPool / count);
@@ -32,6 +45,7 @@ async function ensureCampaignSlots(campaign) {
   const existing = await Slot.countDocuments({ campaignId: campaign._id });
   if (existing > 0) return [];
 
+  if (campaign.campaignModel === "content") return Slot.insertMany(buildDeliverableSlots(campaign));
   const count = slotCountFor(campaign);
   return Slot.insertMany(buildSlots(campaign, count));
 }
@@ -43,6 +57,9 @@ async function ensureCampaignSlots(campaign) {
  */
 async function syncCampaignSlots(campaign, count) {
   if (!campaign) return [];
+  if (campaign.campaignModel === "content") {
+    throw new Error("A content campaign's placements match the deliverables the brand paid for");
+  }
 
   const target = Math.max(1, Math.min(100, Math.floor(Number(count) || DEFAULT_SLOT_COUNT)));
   campaign.slotCount = target;

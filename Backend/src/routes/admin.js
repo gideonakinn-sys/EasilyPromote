@@ -238,8 +238,9 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
 
     await campaign.save();
 
-    // Rebuild available slots when the slot count is changed (e.g. while live).
-    if (slotCount !== undefined) {
+    // Rebuild available slots when the slot count is changed (e.g. while live). Content
+    // campaigns have one placement per deliverable bought, so their count can't change here.
+    if (slotCount !== undefined && campaign.campaignModel !== "content") {
       await syncCampaignSlots(campaign, slotCount);
     }
 
