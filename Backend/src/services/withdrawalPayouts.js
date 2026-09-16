@@ -26,13 +26,14 @@ function estimateTransferFee(amount) {
   return 50;
 }
 
-// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views and referral
-// earnings together; older withdrawals are one or the other.
+// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views, referral and fixed
+// pay together; older withdrawals are views or referral only.
 function withdrawalParts(withdrawal) {
   if (withdrawal.kind === "campaign") {
     return [
       { bucket: "views", amount: roundMoney(withdrawal.viewsAmount) },
       { bucket: "referral", amount: roundMoney(withdrawal.referralAmount) },
+      { bucket: "fixed", amount: roundMoney(withdrawal.fixedAmount) },
     ].filter((part) => part.amount > 0);
   }
   return [{ bucket: withdrawal.kind === "referral" ? "referral" : "views", amount: roundMoney(withdrawal.amount) }];
@@ -144,7 +145,7 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
     if (part.amount > available) {
       await backToPending();
       return reply(400, {
-        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
+        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : part.bucket === "fixed" ? "fixed pay owed" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
       });
     }
   }

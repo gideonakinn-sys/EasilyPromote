@@ -29,6 +29,7 @@ const { isContentCampaign } = require("../utils/campaignPay");
 const { missingHashtags, captionHasCode } = require("../utils/captionRules");
 const { HELD_PLACEMENT_STATUSES } = require("../utils/placementStatuses");
 const { recordEvent } = require("./submissionEvents");
+const { creditFixedPay, ensureFixedCredit } = require("../utils/fixedPay");
 
 const MAX_CHANGE_REQUESTS = 2;
 const BRAND_RESPONSE_MS = 72 * 60 * 60 * 1000;
@@ -123,10 +124,11 @@ function afterChange(submission) {
   emitCampaignUpdate(submission).catch((error) => console.error("[Content] update emit failed:", error.message));
 }
 
-// ── M6 seam ─────────────────────────────────────────────────────────────────
+// ── Fixed pay ───────────────────────────────────────────────────────────────
 // D1: fixed pay is due on approval for brand-page content, and once the live post is verified for
-// creator-page / both. Crediting is ticket M6; this records, once per submission, that pay became
-// due. fixedPayDueAt is claimed atomically, so a second call does nothing. Returns whether it fired.
+// creator-page / both. fixedPayDueAt is claimed atomically, so a second call does nothing; the
+// request that claims it credits the placement's reward from the creator pool (utils/fixedPay.js,
+// which also holds the rule for when it becomes withdrawable). Returns whether it fired.
 async function fixedPayDue(submission, campaign, { trigger, now = new Date() }) {
   const claimed = await Submission.findOneAndUpdate(
     { _id: submission._id, fixedPayDueAt: null },
@@ -134,13 +136,16 @@ async function fixedPayDue(submission, campaign, { trigger, now = new Date() }) 
     { new: true }
   );
   if (!claimed) return false;
-  const slot = claimed.slotId
-    ? await Slot.findById(claimed.slotId).select("reward").lean()
-    : await Slot.findOne({ campaignId: campaign._id, creatorId: claimed.creatorId }).select("reward").lean();
+  const credit = await creditFixedPay({ submission: claimed, campaign, trigger, now });
   await recordEvent(claimed, {
     type: "fixed_pay_due",
     actor: "system",
-    metadata: { trigger, amount: slot ? slot.reward : null, credited: false },
+    metadata: {
+      trigger,
+      amount: credit.amount || null,
+      credited: credit.credited || Boolean(credit.alreadyCredited),
+      ...(credit.reason && { reason: credit.reason }),
+    },
   });
   return true;
 }
@@ -157,6 +162,13 @@ async function afterCompleted(completed, campaign, now) {
     { $set: { status: "approved", completedAt: now } }
   );
   await recordEvent(completed, { type: "completed", actor: "system" });
+  // Completion starts the fixed pay hold. If crediting was interrupted when pay became due, it's
+  // repaired here so the creator's pay can't be stranded.
+  try {
+    await ensureFixedCredit(completed, campaign, now);
+  } catch (error) {
+    console.error("[Content] Fixed pay repair failed for submission", String(completed._id), error.message);
+  }
   await notify({
     campaign,
     submission: completed,

@@ -175,6 +175,16 @@ const campaignSchema = new mongoose.Schema(
       ratePerDeliverable: Number,
       deliverables: Number,
     },
+    // Content campaigns: what the creator pool has promised and given back (ticket 09). Only
+    // written by the atomic conditional updates in utils/fixedPay.js.
+    fixedPay: {
+      // One entry per submission whose fixed pay is credited; its length is deliverables paid.
+      creditedSubmissions: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
+      credited: { type: Number, default: undefined },
+      refundedDeliverables: { type: Number, default: undefined },
+      refundedCreatorBudget: { type: Number, default: undefined },
+      refundedFee: { type: Number, default: undefined },
+    },
     contentDestination: {
       type: String,
       enum: ["creator_page", "brand_page", "both"],

@@ -218,6 +218,19 @@ async function startHarness() {
     return { status: res.status, body: parsed };
   }
 
+  // Sends exact bytes with exact headers, for signed webhooks whose signature covers the body.
+  async function rawPost(urlPath, { headers, rawBody }) {
+    const res = await fetch(baseUrl + urlPath, { method: "POST", headers, body: rawBody });
+    const text = await res.text();
+    let parsed = text;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      // not JSON
+    }
+    return { status: res.status, body: parsed };
+  }
+
   let counter = 0;
   const unique = (prefix) => `${prefix}${Date.now().toString(36)}${(counter++).toString(36)}`;
 
@@ -269,6 +282,7 @@ async function startHarness() {
 
   return {
     api,
+    rawPost,
     paystack,
     registerAdmin,
     registerBrand,

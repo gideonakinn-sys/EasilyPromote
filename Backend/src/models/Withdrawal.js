@@ -27,8 +27,13 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    // Campaign withdrawals pay views and referral earnings together; each part is
+    // Campaign withdrawals pay views, referral and fixed pay together; each part is
     // paid from its own pot.
+    fixedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     viewsAmount: {
       type: Number,
       default: 0,

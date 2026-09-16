@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const User = require("../models/User");
 const Campaign = require("../models/Campaign");
@@ -26,6 +27,9 @@ const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { hasConnectedSocial } = require("../utils/creatorVerification");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
+// Fixed pay payouts and the money trail (ticket 09)
+const { RefundError, contentBudgetSummary, refundUnusedContentBudget } = require("../utils/fixedPay");
+const { reconcileCampaignById } = require("../services/campaignReconciliation");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 
@@ -162,6 +166,8 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         niches: c.niches,
         slotCount: c.slotCount || 5,
         statusNote: c.statusNote,
+        campaignModel: c.campaignModel || "performance",
+        contentPay: c.campaignModel === "content" ? c.contentPay : undefined,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }
@@ -216,6 +222,84 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
       },
       slots,
       submissions,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Content campaigns: fixed pay and unused budget (ticket 09) ──────────────
+function sendRefundError(res, error, next) {
+  if (error instanceof RefundError) {
+    return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+  }
+  return next(error);
+}
+
+// Deliverables bought / completed / owed / unused, what's refundable now, and whether the
+// campaign's books balance.
+router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const loaded = await contentBudgetSummary(req.params.id);
+    if (!loaded) return res.status(404).json({ error: "Content campaign not found" });
+    const reconciliation = await reconcileCampaignById(req.params.id);
+    res.json({ ...loaded.summary, reconciliation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// D5 at launch: admin refunds a finished content campaign's unused deliverables to the brand.
+// The body carries the amount the admin confirmed, so a stale screen can't refund something else.
+router.post("/campaigns/:id/refund-unused", adminGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const expected = req.body && req.body.expectedAmount;
+    if (!(Number(expected) > 0)) {
+      return res.status(400).json({ error: "Confirm the amount to refund", code: "AMOUNT_REQUIRED" });
+    }
+    const note = String((req.body && req.body.note) || "").trim() || null;
+    let result;
+    try {
+      result = await refundUnusedContentBudget({ campaignId: req.params.id, expectedAmount: Number(expected), note });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    const { refund, transaction, campaign } = result;
+    const full = await Campaign.findById(campaign._id).select("name businessId");
+
+    await recordAdminActivity(req, {
+      action: "campaign.unused_budget_refunded",
+      targetType: "campaign",
+      targetId: campaign._id,
+      targetLabel: full ? full.name : null,
+      businessId: full ? full.businessId : null,
+      note,
+      metadata: {
+        amount: refund.amount,
+        deliverables: refund.deliverables,
+        creatorBudget: refund.creatorBudget,
+        platformFee: refund.platformFee,
+        transactionId: transaction ? transaction._id : null,
+        refundStatus: transaction ? transaction.status : null,
+      },
+    });
+    if (full) {
+      await Notification.create({
+        businessId: full.businessId,
+        campaignId: full._id,
+        type: "campaign_refund",
+        title: "Unused budget refunded",
+        body: `₦${refund.amount.toLocaleString()} for ${refund.deliverables} unused deliverable${refund.deliverables === 1 ? "" : "s"} on "${full.name}" is being refunded to your payment method.`,
+      });
+    }
+
+    const summary = await contentBudgetSummary(campaign._id);
+    res.json({
+      success: true,
+      refund: { ...refund, id: transaction ? transaction._id : null, status: transaction ? transaction.status : null },
+      summary: summary ? summary.summary : null,
     });
   } catch (err) {
     next(err);
@@ -834,7 +918,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
             campaignId: campaign._id,
             type: "release",
             status: "released",
-            bucket: { $ne: "referral" },
+            bucket: { $nin: ["referral", "fixed"] },
             submissionId: { $ne: null },
           },
         },
@@ -1309,6 +1393,7 @@ async function buildPayoutRun(now) {
         brandName: w.businessId ? w.businessId.name : "Brand",
         viewsEscrow: campaign ? await campaignEscrowBalance(campaign._id, "views") : 0,
         referralEscrow: campaign ? await campaignEscrowBalance(campaign._id, "referral") : 0,
+        fixedEscrow: campaign ? await campaignEscrowBalance(campaign._id, "fixed") : 0,
         lines: [],
       });
     }
@@ -1319,6 +1404,7 @@ async function buildPayoutRun(now) {
       kind: w.kind || "views",
       viewsAmount: parts.filter((p) => p.bucket === "views").reduce((sum, p) => sum + p.amount, 0),
       referralAmount: parts.filter((p) => p.bucket === "referral").reduce((sum, p) => sum + p.amount, 0),
+      fixedAmount: parts.filter((p) => p.bucket === "fixed").reduce((sum, p) => sum + p.amount, 0),
       amount: w.amount,
       estimatedFee: estimateTransferFee(w.amount),
       requestedAt: w.requestedAt,

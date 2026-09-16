@@ -75,6 +75,10 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
   });
   if (prior) return { credited: false, reason: "reference_already_used" };
 
+  const feePercent = Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30;
+  const fee = roundMoney((amount * feePercent) / 100);
+  const net = roundMoney(amount - fee);
+
   const existing = await Transaction.findOneAndUpdate(
     { reference, type: "topup", bucket: "referral" },
     {
@@ -83,6 +87,7 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
         type: "topup",
         bucket: "referral",
         amount,
+        feeAmount: fee,
         status: "escrow_deposit",
         reference,
         date: new Date(),
@@ -91,10 +96,6 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
     { upsert: true, new: false, setDefaultsOnInsert: true }
   );
   if (existing) return { credited: false, alreadyCredited: true, campaign };
-
-  const feePercent = Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30;
-  const fee = roundMoney((amount * feePercent) / 100);
-  const net = roundMoney(amount - fee);
 
   const updated = await Campaign.findByIdAndUpdate(
     campaign._id,
@@ -179,6 +180,8 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
           paidConversions: { $sum: 1 },
           earned: { $sum: "$rewardAmount" },
           pending: { $sum: { $cond: [{ $gt: ["$availableAt", now] }, "$rewardAmount", 0] } },
+          // When the next held reward becomes available ($min skips the nulls).
+          nextAvailableAt: { $min: { $cond: [{ $gt: ["$availableAt", now] }, "$availableAt", null] } },
         },
       },
     ]),
@@ -209,6 +212,7 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
       available,
       withdrawn,
       availableToWithdraw: Math.max(roundMoney(available - withdrawn), 0),
+      nextAvailableAt: group.nextAvailableAt || null,
     });
   }
   for (const [key, withdrawn] of withdrawnByCampaign) {

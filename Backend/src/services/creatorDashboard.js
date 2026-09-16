@@ -6,6 +6,7 @@ const ReferralCode = require("../models/ReferralCode");
 const { creatorReferralEarnings } = require("../utils/referralEarnings");
 const { campaignEventTypes } = require("../utils/referralCodes");
 const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
+const { creatorFixedEarnings, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const TikTokConnection = require("../models/TikTokConnection");
@@ -515,7 +516,8 @@ async function buildWallet(user, ctx) {
   const { userId, profile } = ctx;
   const handle = profile ? profile.username : user.name;
 
-  const [transactions, submissions, slots, referralEarnings, viewsEarnings] = await Promise.all([
+  const now = new Date();
+  const [transactions, submissions, slots, referralEarnings, viewsEarnings, fixedEarnings] = await Promise.all([
     Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean(),
     Submission.find({ creatorId: userId }).select("_id").lean(),
     Slot.find({ creatorId: userId })
@@ -523,6 +525,7 @@ async function buildWallet(user, ctx) {
       .lean(),
     creatorReferralEarnings(userId),
     creatorViewsEarnings(userId),
+    creatorFixedEarnings(userId, { now }),
   ]);
 
   // Paid views payouts come from the ledger. Older releases carry only a submission;
@@ -572,11 +575,10 @@ async function buildWallet(user, ctx) {
   );
   const payout = profile && profile.payoutAccount;
 
-  // Withdrawals are once a week per campaign: views earnings and referral earnings past
-  // their hold go out together.
+  // Withdrawals are once a week per campaign: views earnings, and referral earnings and fixed
+  // pay past their hold, go out together.
   const Withdrawal = require("../models/Withdrawal");
   const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
-  const now = new Date();
   const weekStart = payoutWeekStart(now);
   const recentWithdrawals = await Withdrawal.find({
     creatorId: userId,
@@ -594,17 +596,33 @@ async function buildWallet(user, ctx) {
 
     const views = viewsEarnings.get(key);
     const referralTotals = referralEarnings.get(key);
+    const fixedTotals = fixedEarnings.get(key);
     const viewsEligible = ["live", "paused", "completed"].includes(campaign.status);
     const referralEligible = viewsEligible || campaign.status === "cancelled";
     const viewsAvailable = viewsEligible && views ? views.availableToWithdraw : 0;
     const referralAvailable = referralEligible && referralTotals ? referralTotals.availableToWithdraw : 0;
     const referralOnHold = referralTotals ? referralTotals.pending : 0;
-    const total = floorKobo(viewsAvailable + referralAvailable);
+    const fixedAvailable = fixedTotals && FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES.includes(campaign.status) ? fixedTotals.availableToWithdraw : 0;
+    const fixedOnHold = fixedTotals ? fixedTotals.onHold : 0;
+    const fixedAwaitingDelivery = fixedTotals ? fixedTotals.awaitingDelivery : 0;
+    const total = floorKobo(viewsAvailable + referralAvailable + fixedAvailable);
 
     const forCampaign = recentWithdrawals.filter((w) => String(w.campaignId) === key);
     const inFlight = forCampaign.find((w) => ["pending", "processing"].includes(w.status));
     const thisWeek = forCampaign.find((w) => new Date(w.requestedAt) >= weekStart);
-    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0) continue;
+    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0 && fixedOnHold <= 0 && fixedAwaitingDelivery <= 0) continue;
+
+    // Money not withdrawable yet, and why.
+    const onHold = [];
+    if (fixedAwaitingDelivery > 0) {
+      onHold.push({ pot: "fixed", amount: fixedAwaitingDelivery, reason: "Waiting for the brand to confirm delivery", until: null });
+    }
+    if (fixedOnHold > 0) {
+      onHold.push({ pot: "fixed", amount: fixedOnHold, reason: "7-day hold", until: fixedTotals.holdUntil });
+    }
+    if (referralOnHold > 0) {
+      onHold.push({ pot: "referral", amount: referralOnHold, reason: "7-day hold", until: referralTotals.nextAvailableAt || null });
+    }
 
     withdrawCampaigns.push({
       id: campaign._id,
@@ -613,6 +631,19 @@ async function buildWallet(user, ctx) {
       viewsAvailable,
       referralAvailable,
       referralOnHold,
+      fixedAvailable,
+      fixedOnHold,
+      fixedAwaitingDelivery,
+      fixedHoldUntil: fixedTotals ? fixedTotals.holdUntil : null,
+      // What the campaign has earned per pot, withdrawn or not.
+      earnings: {
+        fixed: fixedTotals ? fixedTotals.earned : 0,
+        performance: views ? views.earned : 0,
+        referral: referralTotals ? referralTotals.earned : 0,
+      },
+      onHold,
+      onHoldTotal: floorKobo(fixedAwaitingDelivery + fixedOnHold + referralOnHold),
+      payoutDate: inFlight ? nextPayoutDate(inFlight.requestedAt) : nextPayoutDate(now),
       total,
       // available | below_minimum | nothing_yet | requested | withdrawn_this_week
       state: inFlight
@@ -657,6 +688,26 @@ async function buildWallet(user, ctx) {
   const sumReferral = (field) =>
     Math.round(referralByCampaign.reduce((sum, c) => sum + c[field], 0) * 100) / 100;
 
+  // Fixed pay from content campaigns: credited per deliverable, withdrawable once the brand has
+  // confirmed delivery and the 7-day hold is over.
+  const campaignById = new Map(slots.filter((s) => s.campaignId).map((s) => [String(s.campaignId._id), s.campaignId]));
+  const fixedByCampaign = [...fixedEarnings.values()].map((entry) => {
+    const campaign = campaignById.get(String(entry.campaignId));
+    return {
+      id: entry.campaignId,
+      title: campaign ? campaign.name : "Campaign",
+      status: campaign ? campaign.status : null,
+      deliverables: entry.deliverables,
+      earned: entry.earned,
+      awaitingDelivery: entry.awaitingDelivery,
+      onHold: entry.onHold,
+      holdUntil: entry.holdUntil,
+      withdrawn: entry.withdrawn,
+      availableToWithdraw: entry.availableToWithdraw,
+    };
+  });
+  const sumFixed = (field) => Math.round(fixedByCampaign.reduce((sum, c) => sum + c[field], 0) * 100) / 100;
+
   return {
     balance: withdrawableBalance,
     withdrawableBalance,
@@ -679,6 +730,15 @@ async function buildWallet(user, ctx) {
       withdrawn: sumReferral("withdrawn"),
       holdDays: 7,
       byCampaign: referralByCampaign,
+    },
+    fixed: {
+      earned: sumFixed("earned"),
+      awaitingDelivery: sumFixed("awaitingDelivery"),
+      onHold: sumFixed("onHold"),
+      availableToWithdraw: sumFixed("availableToWithdraw"),
+      withdrawn: sumFixed("withdrawn"),
+      holdDays: 7,
+      byCampaign: fixedByCampaign,
     },
     recentTransactions: transactions.map((t) => ({
       id: t._id,

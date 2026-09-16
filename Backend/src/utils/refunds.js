@@ -7,27 +7,41 @@ function roundMoney(value) {
 }
 
 function bucketFilter(bucket) {
-  return bucket === "referral" ? "referral" : { $ne: "referral" };
+  if (bucket === "referral" || bucket === "fixed") return bucket;
+  return { $nin: ["referral", "fixed"] };
 }
 
 // Paystack refunds go back against the payments that funded the campaign, and a refund
-// can't exceed its payment. Splits the amount across the bucket's payments, newest first.
+// can't exceed its payment. Splits the amount across the bucket's payments, newest first,
+// net of what earlier refunds from the same pot already sent back against each payment
+// (only the fixed pot can be refunded more than once).
 async function buildRefundParts({ campaignId, bucket, amount }) {
-  const charges = await Transaction.find({
-    campaignId,
-    type: { $in: ["escrow_deposit", "topup"] },
-    status: "escrow_deposit",
-    bucket: bucketFilter(bucket),
-  })
-    .sort({ date: -1, createdAt: -1 })
-    .lean();
+  const [charges, earlierRefunds] = await Promise.all([
+    Transaction.find({
+      campaignId,
+      type: { $in: ["escrow_deposit", "topup"] },
+      status: "escrow_deposit",
+      bucket: bucketFilter(bucket),
+    })
+      .sort({ date: -1, createdAt: -1 })
+      .lean(),
+    Transaction.find({ campaignId, type: "refund", bucket: bucketFilter(bucket) }).select("refundParts").lean(),
+  ]);
+  const refundedByCharge = new Map();
+  for (const refund of earlierRefunds) {
+    for (const part of refund.refundParts || []) {
+      if (!part.chargeReference || part.status === "failed") continue;
+      refundedByCharge.set(part.chargeReference, roundMoney((refundedByCharge.get(part.chargeReference) || 0) + part.amount));
+    }
+  }
 
   const parts = [];
   let remaining = roundMoney(amount);
   for (const charge of charges) {
     if (remaining <= 0) break;
     if (!charge.reference) continue;
-    const take = roundMoney(Math.min(remaining, charge.amount || 0));
+    const left = roundMoney((charge.amount || 0) - (refundedByCharge.get(charge.reference) || 0));
+    const take = roundMoney(Math.min(remaining, left));
     if (take <= 0) continue;
     parts.push({ chargeReference: charge.reference, amount: take, status: "pending" });
     remaining = roundMoney(remaining - take);
@@ -87,8 +101,9 @@ async function sendRefundParts(refund, note) {
 // Refunds a campaign's bucket once. The ledger row is claimed first under a fixed
 // reference, so a brand cancel and an admin cancel at the same moment can't both send
 // money back. Returns the refund row, or null when another request already claimed it.
-async function refundCampaignBucket({ campaignId, bucket, amount, note }) {
-  const pot = bucket === "referral" ? "referral" : "views";
+// The fixed pot passes its own reference per refund (see utils/fixedPay).
+async function refundCampaignBucket({ campaignId, bucket, amount, note, reference = null, refundBreakdown = undefined }) {
+  const pot = bucket === "referral" || bucket === "fixed" ? bucket : "views";
   const parts = await buildRefundParts({ campaignId, bucket: pot, amount });
 
   let refund;
@@ -99,7 +114,8 @@ async function refundCampaignBucket({ campaignId, bucket, amount, note }) {
       bucket: pot,
       amount: roundMoney(amount),
       status: refundStatusFromParts(parts),
-      reference: `refund_${pot}_${campaignId}`,
+      reference: reference || `refund_${pot}_${campaignId}`,
+      ...(refundBreakdown && { refundBreakdown }),
       refundParts: parts,
       adminNotes: describeFailures(parts),
       date: new Date(),

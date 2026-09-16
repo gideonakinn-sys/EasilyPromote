@@ -11,10 +11,18 @@ const DEPOSIT_TYPES = ["escrow_deposit", "topup"];
 // money — only a "failed" release returns its amount to the pool.
 const COMMITTED_RELEASE_STATUSES = ["escrow_deposit", "released"];
 
-// Views and referral budgets are separate pots. Rows from before referral
+// Views, referral and fixed budgets are separate pots. Rows from before referral
 // budgets existed have no bucket and belong to views.
 function bucketOf(transaction) {
-  return transaction.bucket === "referral" ? "referral" : "views";
+  if (transaction.bucket === "referral") return "referral";
+  if (transaction.bucket === "fixed") return "fixed";
+  return "views";
+}
+
+// Query filter for one pot's rows.
+function bucketFilter(bucket) {
+  if (bucket === "referral" || bucket === "fixed") return bucket;
+  return { $nin: ["referral", "fixed"] };
 }
 
 function escrowBalanceFrom(transactions, bucket = "views", creatorPool = null) {
@@ -24,12 +32,21 @@ function escrowBalanceFrom(transactions, bucket = "views", creatorPool = null) {
     .filter((t) => DEPOSIT_TYPES.includes(t.type) && t.status === "escrow_deposit")
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Every refund row counts, whatever Paystack's progress: that money is the brand's.
-  const refunded = inBucket.filter((t) => t.type === "refund").reduce((sum, t) => sum + t.amount, 0);
-
   const committed = inBucket
     .filter((t) => t.type === "release" && COMMITTED_RELEASE_STATUSES.includes(t.status))
     .reduce((sum, t) => sum + t.amount, 0);
+
+  // Fixed pay is only ever paid against credits: what creators are owed, never the rest of the
+  // pot (unused budget and the platform fee), whatever has been refunded from it.
+  if (bucket === "fixed") {
+    const credited = inBucket
+      .filter((t) => t.type === "fixed_credit" && t.status === "credited")
+      .reduce((sum, t) => sum + t.amount, 0);
+    return Math.max(Math.round((Math.min(credited, deposited) - committed) * 100) / 100, 0);
+  }
+
+  // Every refund row counts, whatever Paystack's progress: that money is the brand's.
+  const refunded = inBucket.filter((t) => t.type === "refund").reduce((sum, t) => sum + t.amount, 0);
 
   // Views payouts come out of the creator pool, never the platform fee inside the deposit.
   const availableDeposits =
@@ -42,9 +59,7 @@ async function campaignEscrowBalance(campaignId, bucket = "views") {
   const Campaign = require("../models/Campaign");
   const campaign = await Campaign.findById(campaignId).select("creatorPool").lean();
 
-  const filter =
-    bucket === "referral" ? { campaignId, bucket: "referral" } : { campaignId, bucket: { $ne: "referral" } };
-  const transactions = await Transaction.find(filter);
+  const transactions = await Transaction.find({ campaignId, bucket: bucketFilter(bucket) });
   const pool = bucket === "views" && campaign ? campaign.creatorPool : null;
   return escrowBalanceFrom(transactions, bucket, pool);
 }
@@ -52,12 +67,14 @@ async function campaignEscrowBalance(campaignId, bucket = "views") {
 // Books a campaign payment into escrow exactly once. The Paystack webhook and the brand's
 // payment-status poll can confirm the same payment at once; the unique {reference, type}
 // index makes every loser a no-op. Returns whether this call booked it.
-async function bookEscrowDeposit({ campaignId, amount, reference }) {
+async function bookEscrowDeposit({ campaignId, amount, reference, bucket = "views", feeAmount }) {
   try {
     await Transaction.create({
       campaignId,
       type: "escrow_deposit",
+      bucket,
       amount,
+      ...(Number.isFinite(feeAmount) && { feeAmount }),
       status: "escrow_deposit",
       reference,
       date: new Date(),
@@ -71,9 +88,10 @@ async function bookEscrowDeposit({ campaignId, amount, reference }) {
 
 // Refunds a cancelled campaign's unused views escrow once, back to the brand's Paystack
 // payments. Money creators are owed stays in escrow so it can still be paid: releases in
-// flight or paid, and views withdrawals they requested that aren't approved yet.
+// flight or paid, and views withdrawals they requested that aren't approved yet. Content
+// campaigns' fixed pot is never touched here; admin refunds its unused part (utils/fixedPay).
 async function refundViewsEscrow(campaignId) {
-  const alreadyRefunded = await Transaction.exists({ campaignId, type: "refund", bucket: { $ne: "referral" } });
+  const alreadyRefunded = await Transaction.exists({ campaignId, type: "refund", bucket: bucketFilter("views") });
   if (alreadyRefunded) return 0;
 
   const balance = await campaignEscrowBalance(campaignId);
@@ -104,4 +122,4 @@ async function refundViewsEscrow(campaignId) {
   return refund ? refundable : 0;
 }
 
-module.exports = { campaignEscrowBalance, escrowBalanceFrom, bookEscrowDeposit, refundViewsEscrow };
+module.exports = { campaignEscrowBalance, escrowBalanceFrom, bookEscrowDeposit, refundViewsEscrow, bucketOf, bucketFilter };
