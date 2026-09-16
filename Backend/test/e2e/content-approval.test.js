@@ -204,7 +204,9 @@ test("a change request keeps the placement; a rejection releases it; an upheld a
   assert.equal(mine.status, "rejected");
   assert.equal(mine.contentApproval.status, "rejected");
   const rejoined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
-  if (rejoined.status === 200) assert.equal((await submit(creator, id)).status, 409);
+  assert.equal(rejoined.status, 409, JSON.stringify(rejoined.body));
+  assert.equal(rejoined.body.code, "CONTENT_REJECTED");
+  assert.equal(await Slot.countDocuments({ campaignId: id, creatorId: creator.id }), 0, "no place wasted on a creator who can't submit");
 
   // Appeal while the place is still free: upheld, and the place is the creator's again.
   await Slot.updateMany({ campaignId: id, creatorId: creator.id }, { $set: { creatorId: null, status: "available" } });

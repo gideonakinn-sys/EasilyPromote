@@ -2,6 +2,7 @@
 // campaign model. Used by POST /api/campaigns/:id/join and the older POST /api/slots/claim.
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
+const Submission = require("../models/Submission");
 const CreatorProfile = require("../models/CreatorProfile");
 const TikTokConnection = require("../models/TikTokConnection");
 const MetaConnection = require("../models/MetaConnection");
@@ -89,6 +90,13 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
 
   if (campaignTerms(campaign).creatorAccess === "application_required") {
     return refuse(403, "APPLICATION_REQUIRED", "This campaign needs an application. The brand picks who takes part");
+  }
+
+  // Rejected (or appealed) content frees the place for someone else; the creator appeals
+  // instead of taking a new place they couldn't submit to. Only Open Call joins check this:
+  // an approved application can't be approved again, and approval never reads submissions (ADR 0002).
+  if (await Submission.exists({ campaignId: campaign._id, creatorId, status: { $in: ["rejected", "appealed"] } })) {
+    return refuse(409, "CONTENT_REJECTED", "Your content for this campaign was rejected. You can appeal the decision instead of joining again");
   }
 
   return takePlacement({ creatorId, campaign, requested, committedViews });
