@@ -22,6 +22,8 @@ const { joinEligibility, campaignFailures } = require("./joinRules");
 // again inside every helper) is where most of the round trips went.
 
 const MAX_SLOTS = 3;
+// Share of a creator's audience inside a campaign's targeting that earns a recommendation.
+const RECOMMENDED_MIN_SCORE = 50;
 const ACTIVE_SLOT_STATUSES = ["claimed", "submitted", "verifying"];
 const CLAIMED_SLOT_STATUSES = ["claimed", "submitted", "verifying", "approved", "paid"];
 
@@ -191,15 +193,30 @@ async function buildMarketplace(ctx) {
     const brand = campaign.businessId;
     const campaignNiches = normalizeNiches(campaign.niches);
 
-    let matchScore = 0;
+    // Niche overlap only breaks ties between campaigns that suit the creator's audience equally.
+    let nicheScore = 0;
     if (profileNiches.length > 0) {
       const overlap = campaignNiches.filter((n) => profileNiches.includes(n)).length;
-      matchScore += overlap * 3;
+      nicheScore += overlap * 3;
       if (campaign.category && profileNiches.includes(String(campaign.category).trim().toLowerCase())) {
-        matchScore += 2;
+        nicheScore += 2;
       }
-      if (campaignNiches.length === 0) matchScore += 1;
+      if (campaignNiches.length === 0) nicheScore += 1;
     }
+
+    // Same check as joining; account-wide rules (connection, niches, placement limit) are
+    // reported once via locked / canClaim rather than on every card.
+    const check = joinEligibility({
+      profile,
+      connectedPlatforms: ctx.connectedPlatforms,
+      hasSocial: ctx.hasSocial,
+      activeSlots,
+      campaign,
+      availableSlots: slots,
+    });
+    const reasons = campaignFailures(check.failures).map((f) => f.message);
+    const terms = campaignTerms(campaign);
+    const targeting = campaign.audienceTargeting || {};
 
     marketplace.push({
       id: campaign._id,
@@ -225,8 +242,22 @@ async function buildMarketplace(ctx) {
       daysLeft,
       brandName: brand ? brand.name || "Brand" : "Brand",
       brandAvatar: brand ? brand.avatar || null : null,
-      matchScore,
-      recommended: matchScore > 0,
+      // Campaign engine: creator marketplace v2 (tickets 04/05)
+      campaignModel: terms.campaignModel,
+      payShape: terms.payShape,
+      creatorAccess: terms.creatorAccess,
+      pay: payPerUnit(campaign, matchingSlot),
+      targetPlatforms: targeting.platforms && targeting.platforms.length ? targeting.platforms : campaign.platforms || [],
+      targetLocations: targeting.locations || [],
+      placesLeft: slots.length,
+      briefSummary: briefSummary(campaign),
+      publishedAt: campaign.createdAt,
+      eligible: reasons.length === 0,
+      ineligibleReasons: reasons,
+      matchScore: check.matchScore,
+      nicheScore,
+      // Recommended for You: campaigns this creator can join whose audience targeting they suit.
+      recommended: reasons.length === 0 && check.matchScore >= RECOMMENDED_MIN_SCORE,
       // Shown before claiming, so creators know a campaign also pays per referral.
       referralReward:
         campaign.referral &&
@@ -241,7 +272,8 @@ async function buildMarketplace(ctx) {
   marketplace.sort((a, b) => {
     if (b.recommended !== a.recommended) return b.recommended - a.recommended;
     if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-    return b.slotsLeft - a.slotsLeft;
+    if (b.nicheScore !== a.nicheScore) return b.nicheScore - a.nicheScore;
+    return new Date(b.publishedAt) - new Date(a.publishedAt);
   });
 
   return {
