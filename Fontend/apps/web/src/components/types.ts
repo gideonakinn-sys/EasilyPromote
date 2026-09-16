@@ -89,6 +89,8 @@ export interface CampaignItem {
     | "approved_post"
     | "live_tracking"
     | "delivered"
+    // Campaign engine: content approval (ticket 07): rejected content, appealable.
+    | "rejected"
     | "cancelled";
   reward: number;
   viewTarget?: number;
@@ -563,7 +565,7 @@ export type ContentSubmissionStatus =
   | "awaiting_post"
   | "verifying"
   | "awaiting_delivery"
-  | "delivered"
+  | "awaiting_receipt"
   | "completed";
 
 export interface ContentChangeRequest {
@@ -584,13 +586,16 @@ export interface ContentApproval {
   changeRequestsLeft: number;
   changeRequests: ContentChangeRequest[];
   autoApproved?: boolean;
-  awaitingReviewSince?: string | null;
-  reviewDueAt?: string | null;
+  // When whatever waits on the brand (review, receipt, post verification) is done automatically.
+  brandDueAt?: string | null;
   rejectionReason?: string | null;
   appealReason?: string | null;
   delivery?: { url: string; sharedAt: string | null; confirmedAt: string | null } | null;
   usageRights?: { licence: string; acceptedAt: string; acceptedBy: string | null } | null;
+  // Judged by the server: brief hashtags the submitted and posted captions don't carry.
+  missingHashtags?: string[];
   postedCaption?: string | null;
+  postedMissingHashtags?: string[];
   postVerifiedAt?: string | null;
   completedAt?: string | null;
   licence: string | null;

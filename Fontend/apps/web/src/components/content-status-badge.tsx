@@ -22,7 +22,7 @@ const CONTENT_STATUS_STYLES: Record<ContentSubmissionStatus, ContentStatusStyle>
   awaiting_post: { label: "Awaiting Post", className: DONE },
   verifying: { label: "Verifying Post", className: PENDING },
   awaiting_delivery: { label: "Awaiting Delivery", className: DONE },
-  delivered: { label: "Delivered", className: PENDING },
+  awaiting_receipt: { label: "Awaiting Receipt", className: PENDING },
   completed: { label: "Completed", className: DONE },
 };
 
@@ -40,13 +40,7 @@ interface ContentStatusBadgeProps {
 export function ContentStatusBadge({ status, className }: ContentStatusBadgeProps) {
   const style = CONTENT_STATUS_STYLES[status] || { label: status, className: PENDING };
   return (
-    <span
-      className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink",
-        style.className,
-        className
-      )}
-    >
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full font-medium text-[10px] font-rethink", style.className, className)}>
       {style.label}
     </span>
   );
@@ -57,11 +51,7 @@ export function formatContentDate(value: string | null | undefined): string {
   return new Date(value).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
-// The brief's hashtags a caption doesn't carry yet, matched the way the server checks them.
-export function missingHashtags(required: string[] | undefined, caption: string): string[] {
-  const present = new Set((caption.match(/#[\p{L}\p{N}_]+/gu) || []).map((tag) => tag.slice(1).toLowerCase()));
-  return (required || [])
-    .map((tag) => tag.trim().replace(/^#+/, ""))
-    .filter((tag) => tag && !present.has(tag.toLowerCase()))
-    .map((tag) => `#${tag}`);
+// Hashtags as the brief lists them, always shown with a leading #.
+export function displayHashtag(tag: string): string {
+  return `#${tag.trim().replace(/^#+/, "")}`;
 }

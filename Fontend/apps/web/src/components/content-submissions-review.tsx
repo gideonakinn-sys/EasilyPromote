@@ -11,15 +11,29 @@ import { contentApprovalApi } from "../lib/api";
 import { useSocket } from "../lib/socket";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { ContentActionModal } from "./content-action-modal";
-import { ContentStatusBadge, DESTINATION_LABELS, formatContentDate, missingHashtags } from "./content-status-badge";
+import { ContentStatusBadge, DESTINATION_LABELS, formatContentDate } from "./content-status-badge";
 import { Skeleton } from "./ui/skeleton";
 import type { ContentReviewData, ContentSubmission } from "./types";
 
 type ReviewAction = "approve" | "request_changes" | "reject" | "confirm_receipt" | "confirm_post" | "dispute_post";
 
-const NEEDS_BRAND: ContentSubmission["status"][] = ["new", "delivered", "verifying"];
+const NEEDS_BRAND: ContentSubmission["status"][] = ["new", "awaiting_receipt", "verifying"];
 
-const isVideoFile = (url: string) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
+// Only files on EasilyPromote's own storage play inline; any other link opens in a new tab.
+const INLINE_VIDEO_HOSTS = [/^res\.cloudinary\.com$/i, /^[a-z0-9.-]+\.s3\.amazonaws\.com$/i, /^[a-z0-9.-]+\.s3\.[a-z0-9-]+\.amazonaws\.com$/i];
+
+function isInlineVideo(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      INLINE_VIDEO_HOSTS.some((host) => host.test(url.hostname)) &&
+      /\.(mp4|mov|webm|m4v)$/i.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 interface ContentSubmissionsReviewProps {
   campaignId: string;
@@ -106,8 +120,10 @@ export function ContentSubmissionsReview({ campaignId, isMobile }: ContentSubmis
             {submission.caption && <p className="text-xs text-stone-500 font-medium line-clamp-2">{submission.caption}</p>}
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium text-stone-400">
               <span>Submitted {formatContentDate(submission.submittedAt)}</span>
-              {submission.status === "new" && submission.reviewDueAt && (
-                <span>Auto-approves {formatContentDate(submission.reviewDueAt)}</span>
+              {submission.brandDueAt && (
+                <span>
+                  {submission.status === "new" ? "Auto-approves" : "Auto-confirms"} {formatContentDate(submission.brandDueAt)}
+                </span>
               )}
               {submission.changeRequests.length > 0 && (
                 <span>
@@ -177,8 +193,8 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
   const [error, setError] = React.useState("");
 
   const brief = review.contentApproval?.brief;
-  const captionMissing = missingHashtags(brief?.hashtags, submission.caption || "");
-  const postedMissing = submission.postedCaption ? missingHashtags(brief?.hashtags, submission.postedCaption) : [];
+  const captionMissing = submission.missingHashtags || [];
+  const postedMissing = submission.postedMissingHashtags || [];
   const roundsLeft = submission.changeRequestsLeft;
 
   const confirm = async (note: string) => {
@@ -240,7 +256,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
         {/* The content */}
         <div className="space-y-4">
           <h4 className="text-xs font-medium text-stone-500">Content</h4>
-          {submission.videoUrl && isVideoFile(submission.videoUrl) ? (
+          {submission.videoUrl && isInlineVideo(submission.videoUrl) ? (
             <video src={submission.videoUrl} controls className="w-full max-h-[420px] rounded-2xl bg-black" />
           ) : (
             <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
@@ -303,9 +319,9 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
       {/* Where it stands and what the brand does next */}
       {submission.status === "new" && (
         <div className="space-y-3">
-          {submission.reviewDueAt && (
+          {submission.brandDueAt && (
             <p className="text-xs font-medium text-stone-500">
-              Review by {formatContentDate(submission.reviewDueAt)} or it&apos;s approved automatically.
+              Review by {formatContentDate(submission.brandDueAt)} or it&apos;s approved automatically.
             </p>
           )}
           <div className="flex flex-col sm:flex-row gap-3">
@@ -379,7 +395,13 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
           {submission.delivery.confirmedAt ? (
             <p className="text-xs font-medium text-stone-500">You confirmed receipt {formatContentDate(submission.delivery.confirmedAt)}.</p>
           ) : (
-            submission.status === "delivered" && (
+            submission.status === "awaiting_receipt" && (
+              <>
+              {submission.brandDueAt && (
+                <p className="text-xs font-medium text-stone-500">
+                  Confirm by {formatContentDate(submission.brandDueAt)} or it&apos;s confirmed automatically.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => openAction("confirm_receipt")}
@@ -387,6 +409,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
               >
                 Confirm Receipt
               </button>
+              </>
             )
           )}
         </div>
@@ -413,6 +436,11 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
           )}
           {postedMissing.length > 0 && (
             <p className="text-xs font-medium text-red-600">Missing from the posted caption: {postedMissing.join(", ")}</p>
+          )}
+          {submission.status === "verifying" && submission.brandDueAt && (
+            <p className="text-xs font-medium text-stone-500">
+              Verify by {formatContentDate(submission.brandDueAt)} or it&apos;s confirmed automatically.
+            </p>
           )}
           {submission.status === "verifying" && (
             <div className="flex flex-col sm:flex-row gap-3">

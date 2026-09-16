@@ -3,12 +3,14 @@
 // Campaign engine: content approval (ticket 07)
 // A creator's side of a content campaign: submit content, see the brand's feedback and
 // resubmit, then post it live or deliver a download link, depending on where it goes.
+// The server judges captions (hashtags, referral code); this form shows what's required and
+// the server's answer.
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
-import { ApiRequestError, contentApprovalApi } from "../lib/api";
+import { contentApprovalApi } from "../lib/api";
 import { ContentActionModal } from "./content-action-modal";
-import { ContentStatusBadge, DESTINATION_LABELS, formatContentDate, missingHashtags } from "./content-status-badge";
+import { ContentStatusBadge, DESTINATION_LABELS, displayHashtag, formatContentDate } from "./content-status-badge";
 import type { CampaignItem, ContentApproval } from "./types";
 
 interface ContentApprovalPanelProps {
@@ -31,13 +33,10 @@ const inputClass =
 const textareaClass =
   "w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink resize-none min-h-[88px]";
 const primaryButtonClass = "w-full py-3 rounded-full font-semibold text-sm border font-rethink";
+const enabledClass = "bg-[#FEB604] text-stone-900 border-stone-100";
+const disabledClass = "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed";
 
 const isLink = (value: string) => /^https?:\/\/\S+$/i.test(value.trim());
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiRequestError || error instanceof Error) return error.message;
-  return fallback;
-}
 
 interface NoticeProps {
   title: string;
@@ -55,8 +54,8 @@ function Notice({ title, children, tone = "pending" }: NoticeProps) {
         tone === "stopped" && "bg-red-50 border-red-200 text-red-800"
       )}
     >
-      <h4 className="font-medium text-sm tracking-[-0.01em]">{title}</h4>
-      <div className="text-sm font-medium leading-normal tracking-[-0.01em]">{children}</div>
+      <h4 className="font-medium text-sm">{title}</h4>
+      <div className="text-sm font-medium leading-normal">{children}</div>
     </div>
   );
 }
@@ -68,37 +67,35 @@ interface FieldLabelProps {
 
 function FieldLabel({ htmlFor, children }: FieldLabelProps) {
   return (
-    <label htmlFor={htmlFor} className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+    <label htmlFor={htmlFor} className="text-xs font-medium text-stone-500 font-rethink">
       {children}
     </label>
   );
 }
 
-interface HashtagChecklistProps {
-  required: string[];
-  caption: string;
+interface CaptionRequirementsProps {
+  hashtags: string[];
+  referralCode?: string | null;
 }
 
-function HashtagChecklist({ required, caption }: HashtagChecklistProps) {
-  if (required.length === 0) return null;
-  const missing = new Set(missingHashtags(required, caption).map((tag) => tag.toLowerCase()));
+// What the caption has to include; the server checks it when the form is sent.
+function CaptionRequirements({ hashtags, referralCode }: CaptionRequirementsProps) {
+  if (hashtags.length === 0 && !referralCode) return null;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {required.map((raw) => {
-        const tag = `#${raw.trim().replace(/^#+/, "")}`;
-        const ok = !missing.has(tag.toLowerCase());
-        return (
-          <span
-            key={tag}
-            className={cn(
-              "px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink",
-              ok ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-500"
-            )}
-          >
-            {tag}
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-stone-500">Your caption must include</p>
+      <div className="flex flex-wrap gap-1.5">
+        {hashtags.map((tag) => (
+          <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-stone-100 text-stone-700">
+            {displayHashtag(tag)}
           </span>
-        );
-      })}
+        ))}
+        {referralCode && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-[#FBDFB1] text-[#693D11]">
+            Code {referralCode}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -107,6 +104,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
   const { toast } = useToast();
   const submissionId = campaign.submissionId;
   const requiredHashtags = approval.requiredHashtags || [];
+  const referralCode = campaign.referral ? campaign.referral.code : null;
   const status = approval.status;
 
   const [videoUrl, setVideoUrl] = React.useState(campaign.videoUrl || "");
@@ -136,7 +134,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
       setAppealOpen(false);
       await onChanged?.();
     } catch (err: unknown) {
-      setError(errorMessage(err, "Something went wrong. Try again."));
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }
@@ -144,9 +142,9 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
 
   const latestRequest = approval.changeRequests[approval.changeRequests.length - 1];
   const canSubmitContent = isLink(videoUrl) && !busy;
-  const postMissing = missingHashtags(requiredHashtags, postCaption);
-  const canPost = isLink(postUrl) && postMissing.length === 0 && !busy;
+  const canPost = isLink(postUrl) && !busy;
   const canDeliver = isLink(downloadUrl) && acceptRights && !busy;
+  const brandDue = approval.brandDueAt ? formatContentDate(approval.brandDueAt) : null;
 
   const contentForm = (label: string) => (
     <div className="space-y-4">
@@ -174,7 +172,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
           placeholder="The caption you plan to post with"
           className={textareaClass}
         />
-        <HashtagChecklist required={requiredHashtags} caption={caption} />
+        <CaptionRequirements hashtags={requiredHashtags} referralCode={referralCode} />
       </div>
       <button
         type="button"
@@ -188,10 +186,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
             "Content sent to the brand for review"
           )
         }
-        className={cn(
-          primaryButtonClass,
-          canSubmitContent ? "bg-[#FEB604] text-stone-900 border-stone-100" : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
-        )}
+        className={cn(primaryButtonClass, canSubmitContent ? enabledClass : disabledClass)}
       >
         {busy ? "Sending…" : label}
       </button>
@@ -202,7 +197,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
     <div className="space-y-5 font-rethink">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <h4 className="font-medium text-sm text-stone-900 tracking-[-0.01em]">Content Approval</h4>
+          <h4 className="font-medium text-sm text-stone-900">Content Approval</h4>
           <p className="text-xs font-medium text-stone-500">Goes to the {DESTINATION_LABELS[approval.destination]}</p>
         </div>
         {status && <ContentStatusBadge status={status} />}
@@ -212,8 +207,8 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
 
       {status === "new" && (
         <Notice title="Waiting For The Brand">
-          {approval.reviewDueAt
-            ? `The brand reviews it by ${formatContentDate(approval.reviewDueAt)}. If they don't, it's approved automatically.`
+          {brandDue
+            ? `The brand reviews it by ${brandDue}. If they don't, it's approved automatically.`
             : "The brand is reviewing your content."}
         </Notice>
       )}
@@ -235,7 +230,8 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
       {status === "rejected" && (
         <>
           <Notice title="Content Rejected" tone="stopped">
-            {approval.rejectionReason || "The brand rejected this content."}
+            {approval.rejectionReason || "The brand rejected this content."} Your place in the campaign was released. If the
+            content meets the brief, you can appeal.
           </Notice>
           <button
             type="button"
@@ -257,14 +253,17 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
         </p>
       )}
 
-      {(status === "awaiting_delivery" || status === "delivered") && (
+      {(status === "awaiting_delivery" || status === "awaiting_receipt") && (
         <div className="space-y-4">
           {status === "awaiting_delivery" ? (
             <Notice title="Approved" tone="done">
-              Share a download link to the original file so the brand can post it.
+              Share a download link to the original file so the brand can use it.
             </Notice>
           ) : (
-            <Notice title="Delivered">Waiting for the brand to confirm it received your content. You can replace the link below.</Notice>
+            <Notice title="Awaiting Receipt">
+              Waiting for the brand to confirm it received your content{brandDue ? `. It's confirmed automatically on ${brandDue}` : ""}.
+              You can replace the link below.
+            </Notice>
           )}
           <div className="space-y-1.5">
             <FieldLabel htmlFor="download-link">Download Link</FieldLabel>
@@ -301,12 +300,9 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
               submissionId &&
               run(() => contentApprovalApi.deliver(submissionId, downloadUrl.trim(), acceptRights), "Download link shared with the brand")
             }
-            className={cn(
-              primaryButtonClass,
-              canDeliver ? "bg-[#FEB604] text-stone-900 border-stone-100" : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
-            )}
+            className={cn(primaryButtonClass, canDeliver ? enabledClass : disabledClass)}
           >
-            {busy ? "Sharing…" : status === "delivered" ? "Replace Link" : "Deliver To Brand"}
+            {busy ? "Sharing…" : status === "awaiting_receipt" ? "Replace Link" : "Deliver To Brand"}
           </button>
         </div>
       )}
@@ -359,9 +355,9 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
               placeholder="Paste the caption exactly as posted"
               className={textareaClass}
             />
-            <HashtagChecklist required={requiredHashtags} caption={postCaption} />
-            {postMissing.length > 0 && (
-              <p className="text-xs font-medium text-stone-500">Your caption needs {postMissing.join(", ")}.</p>
+            <CaptionRequirements hashtags={requiredHashtags} referralCode={referralCode} />
+            {campaign.referral && !referralCode && (
+              <p className="text-xs font-medium text-stone-500">Your referral code isn&apos;t ready yet. Post once it appears here.</p>
             )}
           </div>
           <button
@@ -374,10 +370,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
                 "Live post sent to the brand to verify"
               )
             }
-            className={cn(
-              primaryButtonClass,
-              canPost ? "bg-[#FEB604] text-stone-900 border-stone-100" : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
-            )}
+            className={cn(primaryButtonClass, canPost ? enabledClass : disabledClass)}
           >
             {busy ? "Sending…" : "Submit Live Post"}
           </button>
@@ -386,17 +379,11 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
 
       {status === "verifying" && (
         <Notice title="Verifying Your Post">
-          The brand is checking your live post.
+          The brand is checking your live post{brandDue ? `. It's verified automatically on ${brandDue}` : ""}.
           {(campaign.postedPlatforms || [])
             .filter((p) => p.postUrl)
             .map((p) => (
-              <a
-                key={p.platform}
-                href={p.postUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block underline truncate mt-1"
-              >
+              <a key={p.platform} href={p.postUrl} target="_blank" rel="noopener noreferrer" className="block underline truncate mt-1">
                 {PLATFORM_LABELS[p.platform] || p.platform}: {p.postUrl}
               </a>
             ))}
@@ -413,7 +400,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
 
       {approval.changeRequests.length > 0 && (
         <div className="space-y-3">
-          <h5 className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Feedback History</h5>
+          <h5 className="text-xs font-medium text-stone-500">Feedback History</h5>
           {approval.changeRequests.map((request) => (
             <div key={request.round} className="bg-stone-100 rounded-[16px] p-3 space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-xs font-medium text-stone-500">
@@ -434,7 +421,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
       <ContentActionModal
         open={appealOpen}
         title="Appeal This Rejection?"
-        description="EasilyPromote reviews the content against the brief and decides."
+        description="EasilyPromote reviews the content against the brief and decides. If it's upheld while your place is still free, the place is yours again."
         confirmLabel="Send Appeal"
         noteLabel="Why It Meets The Brief"
         notePlaceholder="Explain what the brand missed"
