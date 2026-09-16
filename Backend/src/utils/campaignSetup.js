@@ -119,41 +119,108 @@ function resolveCampaignSetup(body, current = null) {
   if (priced.error) return badRequest(priced.error);
   const { quote } = priced;
 
-  const updates = {
+  const classification = {
     campaignObjective: objective,
     campaignModel: definition.campaignModel,
     payShape,
     rateAuthority: definition.rateAuthority,
     performanceMetric: definition.performanceMetric,
+  };
+
+  const details = {
     contentDestination: input.contentDestination || (current && current.contentDestination) || "creator_page",
     creatorAccess: input.creatorAccess || (current && current.creatorAccess) || "open_call",
   };
-  if (input.audienceTargeting !== undefined) updates.audienceTargeting = input.audienceTargeting;
-  if (input.creatorEligibility !== undefined) updates.creatorEligibility = input.creatorEligibility;
-  if (input.brief !== undefined) updates.brief = input.brief;
+  if (input.audienceTargeting !== undefined) details.audienceTargeting = input.audienceTargeting;
+  if (input.creatorEligibility !== undefined) details.creatorEligibility = input.creatorEligibility;
+  if (input.brief !== undefined) details.brief = input.brief;
 
-  // Money fields. Content: the quote as-is. Performance: `budget` stays the views price
-  // (the referral budget is booked separately at payment), with the fee inside it.
+  // Content: the quote as-is. Performance: `budget` stays the views price (the referral
+  // budget is booked separately at payment), with the fee inside it.
+  const money = {};
   if (isContent) {
-    updates.contentPay = { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables };
-    updates.budget = quote.total;
-    updates.creatorPool = quote.creatorBudget;
-    updates.platformFee = quote.platformFee;
-    updates.costPerView = 0;
+    money.contentPay = { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables };
+    money.budget = quote.total;
+    money.creatorPool = quote.creatorBudget;
+    money.platformFee = quote.platformFee;
+    money.costPerView = 0;
   } else {
     const referralPart = usesReferralTracking(objective) ? roundMoney(Number(referralBudget) || 0) : 0;
-    updates.budget = roundMoney(quote.total - referralPart);
-    updates.creatorPool = quote.creatorBudget;
-    updates.platformFee = roundMoney(updates.budget - quote.creatorBudget);
-    updates.costPerView = Math.round((updates.budget / targetViews) * 1000) / 1000;
+    money.budget = roundMoney(quote.total - referralPart);
+    money.creatorPool = quote.creatorBudget;
+    money.platformFee = roundMoney(money.budget - quote.creatorBudget);
+    money.costPerView = Math.round((money.budget / targetViews) * 1000) / 1000;
   }
 
   return {
-    updates,
+    classification,
+    details,
+    money,
+    updates: { ...classification, ...details, ...money },
     quote,
     legacyObjective: usesReferralTracking(objective) ? "actions" : "views",
-    referralEventTypes: REFERRAL_EVENT_FOR[objective] && !referralInput.eventTypes && !referralInput.eventType ? [REFERRAL_EVENT_FOR[objective]] : null,
+    // Only a newly chosen objective sets conversion types; older clients keep the ones they sent or stored.
+    referralEventTypes:
+      input.campaignObjective && REFERRAL_EVENT_FOR[objective] && !referralInput.eventTypes && !referralInput.eventType
+        ? [REFERRAL_EVENT_FOR[objective]]
+        : null,
   };
+}
+
+// Referral tracking follows the older objective: actions turn it on; views turn it off and
+// clear the referral budget.
+function legacyObjectiveUpdates(objective) {
+  const next = objective === "actions" ? "actions" : "views";
+  return {
+    objective: next,
+    "referral.enabled": next === "actions",
+    ...(next === "views" && { "referral.requestedBudget": 0 }),
+  };
+}
+
+// Updates for editing a stored campaign. Only what the request touches changes: a rename
+// never reprices a campaign or resets its checkout. Returns { error, code?, status } or
+// { updates, priceChanged }.
+function editSetupUpdates(body, campaign) {
+  const setup = resolveCampaignSetup(body, campaign);
+  if (setup.error) return setup;
+  const referral = body.referral || {};
+
+  const objectiveChanged =
+    body.campaignObjective !== undefined ||
+    body.objective !== undefined ||
+    referral.enabled !== undefined ||
+    referral.eventTypes !== undefined ||
+    referral.eventType !== undefined;
+  const modelChanged = setup.classification.campaignModel !== campaign.campaignModel;
+  const isContent = setup.classification.campaignModel === "content";
+  const moneyChanged =
+    modelChanged ||
+    body.contentPay !== undefined ||
+    body.payShape !== undefined ||
+    (!isContent && body.targetViews !== undefined);
+
+  const updates = {};
+  const needsClassification = objectiveChanged || modelChanged || body.payShape !== undefined || !campaign.campaignObjective;
+  if (needsClassification) Object.assign(updates, setup.classification);
+  if (objectiveChanged) {
+    Object.assign(updates, legacyObjectiveUpdates(setup.legacyObjective));
+    if (setup.referralEventTypes) {
+      updates["referral.eventTypes"] = setup.referralEventTypes;
+      updates["referral.eventType"] = setup.referralEventTypes[0];
+    }
+  }
+  for (const [key, value] of Object.entries(setup.details)) {
+    if (body[key] !== undefined || !campaign[key]) updates[key] = value;
+  }
+  if (moneyChanged) {
+    Object.assign(updates, setup.money);
+    if (isContent) updates.$unset = { targetViews: 1 };
+    else if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
+  }
+
+  const priceChanged = moneyChanged && setup.money.budget !== campaign.budget;
+  return { updates, priceChanged, isContent };
 }
 
 // The campaign engine fields as returned to the brand.
@@ -174,4 +241,4 @@ function campaignSetupView(campaign) {
   };
 }
 
-module.exports = { resolveCampaignSetup, campaignSetupView };
+module.exports = { resolveCampaignSetup, editSetupUpdates, legacyObjectiveUpdates, campaignSetupView };

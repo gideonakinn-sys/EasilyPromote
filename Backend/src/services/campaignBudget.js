@@ -1,5 +1,6 @@
-// Prices a campaign. Checkout and the brand wizard both use this, so what a brand is shown
-// is exactly what they're charged.
+// Prices a campaign (decisions D1–D14 are in docs/campaign-engine/SPEC.md). The brand wizard
+// and checkout are meant to share this, so what a brand is shown
+// is exactly what they are charged.
 const { getPriceForViews } = require("../config/pricing");
 const { OBJECTIVES, usesReferralTracking } = require("../utils/campaignObjectives");
 const { roundMoney } = require("../utils/referralEarnings");

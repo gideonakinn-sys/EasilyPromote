@@ -202,3 +202,80 @@ test("the old wizard can still switch a draft between views and referral trackin
   campaign = await getCampaign(brand, created.body.id);
   assert.deepEqual([campaign.objective, campaign.referral.enabled, campaign.campaignObjective, campaign.rateAuthority], ["views", false, "views", "platform"]);
 });
+
+test("editing unrelated fields never reprices a campaign or resets its checkout", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const brand = await harness.registerBrand();
+  const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Priced last year", category: "Music", targetViews: 100000 } });
+  const checkout = await harness.api("POST", `/api/campaigns/${created.body.id}/pay`, { token: brand.token });
+  assert.equal(checkout.status, 200);
+  // An older campaign priced before the current price table.
+  await Campaign.collection.updateOne(
+    { _id: new (require("mongoose").Types.ObjectId)(created.body.id) },
+    { $set: { budget: 400000, platformFee: 120000, creatorPool: 280000, costPerView: 4, paymentAmount: 400000 } }
+  );
+
+  for (const edit of [
+    () => harness.api("PATCH", `/api/campaigns/${created.body.id}`, { token: brand.token, body: { name: "Renamed" } }),
+    () => harness.api("PATCH", `/api/campaigns/${created.body.id}/save-and-close`, { token: brand.token, body: { step: 2, data: { contentBrief: "New brief" } } }),
+  ]) {
+    const res = await edit();
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const stored = await Campaign.findById(created.body.id).lean();
+    assert.deepEqual(
+      [stored.status, stored.budget, stored.platformFee, stored.creatorPool, stored.costPerView, stored.paymentAmount, stored.paymentReference],
+      ["pending_payment", 400000, 120000, 280000, 4, 400000, checkout.body.reference]
+    );
+  }
+});
+
+test("older clients changing only the objective or referral switch keep conversion types and both objective fields in step", async () => {
+  const brand = await harness.registerBrand();
+  const created = await harness.api("POST", "/api/campaigns", {
+    token: brand.token,
+    body: { name: "Mixed", category: "Tech", objective: "actions", targetViews: 100000, referral: { eventTypes: ["install", "purchase"], requestedBudget: 20000 } },
+  });
+
+  const toViews = await harness.api("PATCH", `/api/campaigns/${created.body.id}`, { token: brand.token, body: { referral: { enabled: false } } });
+  assert.equal(toViews.status, 200, JSON.stringify(toViews.body));
+  let campaign = await getCampaign(brand, created.body.id);
+  assert.deepEqual([campaign.objective, campaign.campaignObjective], ["views", "views"]);
+
+  const backToActions = await harness.api("PATCH", `/api/campaigns/${created.body.id}`, { token: brand.token, body: { objective: "actions" } });
+  assert.equal(backToActions.status, 200, JSON.stringify(backToActions.body));
+  campaign = await getCampaign(brand, created.body.id);
+  assert.deepEqual(campaign.referral.eventTypes, ["install", "purchase"]);
+  assert.deepEqual([campaign.objective, campaign.campaignObjective], ["actions", "downloads"]);
+
+  const step3 = await harness.api("PATCH", `/api/campaigns/${created.body.id}/save-and-close`, {
+    token: brand.token,
+    body: { step: 3, data: { objective: "actions" } },
+  });
+  assert.equal(step3.status, 200);
+  campaign = await getCampaign(brand, created.body.id);
+  assert.deepEqual(campaign.referral.eventTypes, ["install", "purchase"]);
+});
+
+test("a content campaign ignores target views from older wizard steps", async () => {
+  const brand = await harness.registerBrand();
+  const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: contentCampaign });
+  const patch = await harness.api("PATCH", `/api/campaigns/${created.body.id}`, { token: brand.token, body: { targetViews: 100000, name: "Still content" } });
+  assert.equal(patch.status, 200, JSON.stringify(patch.body));
+  const step1 = await harness.api("PATCH", `/api/campaigns/${created.body.id}/save-and-close`, { token: brand.token, body: { step: 1, data: { targetViews: 100000 } } });
+  assert.equal(step1.status, 200);
+  const campaign = await getCampaign(brand, created.body.id);
+  assert.deepEqual([campaign.targetViews, campaign.budget, campaign.name], [undefined, 195000, "Still content"]);
+});
+
+test("admin can only set a conversion reward where admin is the rate authority", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const admin = await harness.registerAdmin();
+  const brand = await harness.registerBrand();
+  const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: contentCampaign });
+  // Even if referral tracking were switched on by mistake, a brand-rate campaign has no admin reward.
+  await Campaign.updateOne({ _id: created.body.id }, { $set: { "referral.enabled": true, status: "live" } });
+
+  const res = await harness.api("PATCH", `/api/admin/referrals/campaigns/${created.body.id}/reward`, { token: admin.token, body: { rewardPerConversion: 500 } });
+  assert.equal(res.status, 409);
+  assert.equal(res.body.code, "RATE_NOT_ADMIN_SET");
+});

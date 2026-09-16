@@ -1,7 +1,7 @@
 // Creator Eligibility: whether a creator may join or apply to a campaign, every rule they
 // miss in plain words, and a Match Score for ordering recommendations and applicants.
 // Audience location, platform and verification (plus the brand's creator eligibility
-// rules) are hard requirements; age, gender and interests only affect the score (D8).
+// rules) are hard requirements; age, gender and interests only affect the score (D8 in docs/campaign-engine/SPEC.md).
 const { rankAtLeast } = require("./creatorScore");
 
 const PLATFORM_NAMES = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", twitter: "X", facebook: "Facebook" };
@@ -32,14 +32,17 @@ function evaluateEligibility(profile, campaign) {
   const fail = (criterion, message) => failures.push({ criterion, message });
 
   const accounts = profile.socialAccounts || [];
-  const targetPlatforms = targeting.platforms || [];
-  const accountsOnTarget = targetPlatforms.length ? accounts.filter((a) => targetPlatforms.includes(a.platform)) : accounts;
+  const targetPlatforms = (targeting.platforms || []).map((p) => String(p).toLowerCase());
+  const accountsOnTarget = targetPlatforms.length
+    ? accounts.filter((a) => targetPlatforms.includes(String(a.platform).toLowerCase()))
+    : accounts;
   const platformNames = targetPlatforms.map((p) => PLATFORM_NAMES[p] || p);
 
   const targetLocations = targeting.locations || [];
   const hasLocationData = Boolean(profile.audience && profile.audience.locations && profile.audience.locations.length);
-  if (targetLocations.length) {
-    const minShare = targeting.minLocationShare || 0;
+  // With no minimum share, targeted locations only rank creators.
+  if (targetLocations.length && targeting.minLocationShare > 0) {
+    const minShare = targeting.minLocationShare;
     const share = locationShare(profile, targeting);
     if (!hasLocationData) {
       fail("audienceLocation", `Add your audience locations to join campaigns targeting ${listWithOr(targetLocations)}`);

@@ -100,3 +100,9 @@ test("match score: share of audience in the targeted locations, ages and genders
   // Nothing targeted: every creator matches equally.
   assert.equal(evaluateEligibility(creator(), { audienceTargeting: {}, creatorEligibility: {} }).matchScore, 100);
 });
+
+test("targeting locations with no minimum share only ranks; platform names ignore letter case", () => {
+  const campaign = { audienceTargeting: { locations: ["Lagos"], minLocationShare: 0, platforms: ["TikTok"] }, creatorEligibility: {} };
+  const result = evaluateEligibility(creator({ audience: undefined }), campaign);
+  assert.deepEqual(result.failures, []);
+});

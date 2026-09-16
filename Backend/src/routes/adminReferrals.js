@@ -809,8 +809,16 @@ router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
       return res.status(400).json({ error: `Enter a reward between ₦1 and ₦${MAX_REWARD_PER_CONVERSION.toLocaleString()}` });
     }
 
-    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral");
+    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral rateAuthority");
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+    // Admin sets rewards only where admin is the rate authority (ADR 0003); campaigns from
+    // before the campaign engine have no rateAuthority and are referral campaigns if enabled.
+    if (campaign.rateAuthority && campaign.rateAuthority !== "admin") {
+      return res.status(409).json({
+        error: "This campaign's creator rate isn't set by our team",
+        code: "RATE_NOT_ADMIN_SET",
+      });
+    }
     if (!(campaign.referral && campaign.referral.enabled)) {
       return res.status(400).json({ error: "Referral tracking isn't on for this campaign" });
     }
