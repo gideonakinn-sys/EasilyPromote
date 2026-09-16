@@ -21,7 +21,8 @@ export interface BrandCampaign {
   name: string;
   category: string;
   status: string;
-  targetViews: number;
+  // Content campaigns have no view target.
+  targetViews?: number;
   viewsDelivered: number;
   budget: number;
   progressPercent: number;
@@ -179,7 +180,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               imageSrc={camp.coverImageUrl}
               progress={camp.progressPercent}
               currentViews={camp.viewsDelivered.toLocaleString()}
-              targetViews={camp.targetViews.toLocaleString()}
+              targetViews={camp.targetViews ? camp.targetViews.toLocaleString() : ""}
               onClick={() => handleCardClick(camp.id, camp.status)}
               onResume={() => handleCardClick(camp.id, camp.status)}
               notice={camp.needsAppConnection ? "Connect your app to launch" : undefined}
