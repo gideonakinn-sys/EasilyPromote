@@ -54,6 +54,8 @@ function toCampaignItem(c: Record<string, unknown>): CampaignItem {
     kind: c.kind as CampaignItem["kind"],
     brief: c.brief as CampaignItem["brief"],
     pay: c.pay as CampaignItem["pay"],
+    // Campaign engine: content approval (ticket 07)
+    contentApproval: c.contentApproval as CampaignItem["contentApproval"],
   };
 }
 

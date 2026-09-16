@@ -20,6 +20,8 @@ import { STATUS_BADGES } from "./campaign-card";
 import { ReferralCodeCard } from "./referral-code-card";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { useReferralConversions } from "../lib/socket";
+// Campaign engine: content approval (ticket 07)
+import { ContentApprovalPanel } from "./content-approval-panel";
 
 // Events that represent a decision on the content itself, so they get the video card.
 const CONTENT_EVENT_TYPES = [
@@ -570,6 +572,11 @@ export function CampaignDetailsDrawer({
             </div>
           )}
 
+          {/* Campaign engine: content approval (ticket 07). Content campaigns replace the views flow below. */}
+          {displayCampaign.contentApproval ? (
+            <ContentApprovalPanel campaign={displayCampaign} approval={displayCampaign.contentApproval} onChanged={onRefresh} />
+          ) : (
+          <>
           {/* Status alerts */}
           {displayCampaign.status === "under_review" && (
             <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-[#FEFCE8] border-[#854D0E]">
@@ -727,6 +734,8 @@ export function CampaignDetailsDrawer({
                     : "Submit link"}
               </button>
             </div>
+          )}
+          </>
           )}
 
           {/* Campaign engine: the full brief, unlocked by joining */}

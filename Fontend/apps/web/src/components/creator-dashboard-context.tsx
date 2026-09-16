@@ -181,6 +181,8 @@ function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): Cam
     kind: c.kind as CampaignItem["kind"],
     brief: c.brief as CampaignItem["brief"],
     pay: c.pay as CampaignItem["pay"],
+    // Campaign engine: content approval (ticket 07)
+    contentApproval: c.contentApproval as CampaignItem["contentApproval"],
   }));
 }
 
@@ -797,6 +799,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   const handleCampaignUpdate = (data: CampaignUpdate) => {
     const exists = campaigns.some((c) => c.id === data.campaignId);
     if (!exists) {
+      fetchCampaigns();
+      return;
+    }
+
+    // Campaign engine: content approval (ticket 07): the update doesn't carry the approval
+    // state (feedback, delivery, auto-approval), so reload content campaigns.
+    if (campaigns.some((c) => c.id === data.campaignId && c.contentApproval)) {
       fetchCampaigns();
       return;
     }

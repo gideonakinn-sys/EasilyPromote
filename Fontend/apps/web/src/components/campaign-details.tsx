@@ -17,6 +17,8 @@ import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
 import { CampaignApplicants } from "./campaign-applicants"; // Campaign engine: applications (ticket 06)
 import type { CampaignSetup } from "./types";
+// Campaign engine: content approval (ticket 07)
+import { ContentSubmissionsReview } from "./content-submissions-review";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
@@ -887,8 +889,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
         {/* ================= TAB 2: SUBMISSION ================= */}
         {activeTab === "Submission" && (
-          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : "w-[350px] mx-auto")}>
-            {submissionsError ? (
+          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : campaign.campaignModel === "content" ? "w-[520px] mx-auto" : "w-[350px] mx-auto")}>
+            {/* Campaign engine: content approval (ticket 07) */}
+            {campaign.campaignModel === "content" ? (
+              <ContentSubmissionsReview campaignId={campaign.id} isMobile={isMobile} />
+            ) : submissionsError ? (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">

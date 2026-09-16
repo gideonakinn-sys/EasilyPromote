@@ -551,3 +551,74 @@ export interface ApprovedApplication extends ApplicationRow {
   placement: { id: string; kind: "views" | "deliverable"; reward: number; viewTarget?: number; referralCode: string | null };
   placesLeft: number;
 }
+
+// Campaign engine: content approval (ticket 07)
+// Interface declarations below merge into the ones above.
+
+export type ContentSubmissionStatus =
+  | "new"
+  | "changes_requested"
+  | "rejected"
+  | "appealed"
+  | "awaiting_post"
+  | "verifying"
+  | "awaiting_delivery"
+  | "delivered"
+  | "completed";
+
+export interface ContentChangeRequest {
+  round: number;
+  notes: string;
+  requestedAt: string;
+  videoUrl: string | null;
+  caption: string | null;
+  resubmittedAt: string | null;
+}
+
+// Where a content submission's approval and delivery stand. status is null before the
+// creator has submitted anything.
+export interface ContentApproval {
+  status: ContentSubmissionStatus | null;
+  destination: ContentDestination;
+  maxChangeRequests: number;
+  changeRequestsLeft: number;
+  changeRequests: ContentChangeRequest[];
+  autoApproved?: boolean;
+  awaitingReviewSince?: string | null;
+  reviewDueAt?: string | null;
+  rejectionReason?: string | null;
+  appealReason?: string | null;
+  delivery?: { url: string; sharedAt: string | null; confirmedAt: string | null } | null;
+  usageRights?: { licence: string; acceptedAt: string; acceptedBy: string | null } | null;
+  postedCaption?: string | null;
+  postVerifiedAt?: string | null;
+  completedAt?: string | null;
+  licence: string | null;
+  // Creator dashboard only.
+  requiredHashtags?: string[];
+}
+
+export interface CampaignItem {
+  contentApproval?: ContentApproval;
+}
+
+// One submission in GET /submissions/campaign/:id for a content campaign.
+export interface ContentSubmission extends ContentApproval {
+  id: string;
+  creatorId: string;
+  creatorHandle: string;
+  videoUrl?: string;
+  caption?: string;
+  submittedAt: string;
+  postedPlatforms?: Array<{ platform: string; postUrl: string }>;
+}
+
+export interface ContentReviewData {
+  submissions: ContentSubmission[];
+  contentApproval?: {
+    destination: ContentDestination;
+    maxChangeRequests: number;
+    licence: string;
+    brief: CreatorBrief;
+  };
+}

@@ -112,3 +112,43 @@ export const applicationsApi = {
     });
   },
 };
+
+// Campaign engine: content approval (ticket 07)
+// Content campaigns only.
+function contentAction(submissionId: string, action: string, body?: Record<string, unknown>) {
+  return apiRequest<{ id: string; status: string }>(`/submissions/${submissionId}/${action}`, {
+    method: "PATCH",
+    token: getToken() || undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export const contentApprovalApi = {
+  list: (campaignId: string) =>
+    apiRequest<import("../components/types").ContentReviewData>(`/submissions/campaign/${campaignId}`, {
+      token: getToken() || undefined,
+    }),
+  submit: (campaignId: string, videoUrl: string, caption: string) =>
+    apiRequest<{ id: string; status: string }>("/submissions", {
+      method: "POST",
+      token: getToken() || undefined,
+      body: JSON.stringify({ campaignId, videoUrl, caption }),
+    }),
+  resubmit: (submissionId: string, videoUrl: string, caption: string) =>
+    apiRequest<{ id: string; status: string }>(`/submissions/${submissionId}`, {
+      method: "PUT",
+      token: getToken() || undefined,
+      body: JSON.stringify({ videoUrl, caption }),
+    }),
+  approve: (submissionId: string) => contentAction(submissionId, "approve"),
+  requestChanges: (submissionId: string, notes: string) => contentAction(submissionId, "request-changes", { notes }),
+  reject: (submissionId: string, reason: string) => contentAction(submissionId, "reject", { reason }),
+  appeal: (submissionId: string, reason: string) => contentAction(submissionId, "appeal", { reason }),
+  deliver: (submissionId: string, url: string, acceptUsageRights: boolean) =>
+    contentAction(submissionId, "deliver", { url, acceptUsageRights }),
+  confirmReceipt: (submissionId: string) => contentAction(submissionId, "confirm-receipt"),
+  markPosted: (submissionId: string, posts: Array<{ platform: string; postUrl: string }>, caption: string) =>
+    contentAction(submissionId, "mark-posted", { posts, caption }),
+  confirmPost: (submissionId: string) => contentAction(submissionId, "confirm-post"),
+  disputePost: (submissionId: string, notes: string) => contentAction(submissionId, "dispute-post", { notes }),
+};
