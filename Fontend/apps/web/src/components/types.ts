@@ -190,7 +190,8 @@ export interface WalletData {
     availableToWithdraw: number;
     withdrawable: boolean;
   }>;
-  // Weekly per-campaign withdrawals: views and referral earnings past their hold together.
+  // Weekly per-campaign withdrawals: views earnings, and referral earnings and fixed pay past
+  // their hold, together.
   withdrawCampaigns?: Array<{
     id: string;
     title: string;
@@ -198,10 +199,41 @@ export interface WalletData {
     viewsAvailable: number;
     referralAvailable: number;
     referralOnHold: number;
+    fixedAvailable?: number;
+    fixedOnHold?: number;
+    fixedAwaitingDelivery?: number;
+    fixedHoldUntil?: string | null;
+    // What the campaign has earned per pot, withdrawn or not.
+    earnings?: { fixed: number; performance: number; referral: number };
+    // Money not withdrawable yet, and why.
+    onHold?: Array<{ pot: "fixed" | "referral"; amount: number; reason: string; until: string | null }>;
+    onHoldTotal?: number;
+    payoutDate?: string;
     total: number;
     state: "available" | "below_minimum" | "nothing_yet" | "requested" | "withdrawn_this_week";
     requested: { amount: number; status: string; payoutDate: string } | null;
   }>;
+  // Fixed pay from content campaigns, credited per deliverable.
+  fixed?: {
+    earned: number;
+    awaitingDelivery: number;
+    onHold: number;
+    availableToWithdraw: number;
+    withdrawn: number;
+    holdDays: number;
+    byCampaign: Array<{
+      id: string;
+      title: string;
+      status: string | null;
+      deliverables: number;
+      earned: number;
+      awaitingDelivery: number;
+      onHold: number;
+      holdUntil: string | null;
+      withdrawn: number;
+      availableToWithdraw: number;
+    }>;
+  };
   payoutSchedule?: { nextPayoutDate: string; minimumPerCampaign: number };
   hasBankAccount: boolean;
   bankName?: string | null;
@@ -248,6 +280,7 @@ export interface WithdrawalItem {
   amount: number;
   viewsAmount?: number;
   referralAmount?: number;
+  fixedAmount?: number;
   // The Friday a pending or processing withdrawal is paid.
   payoutDate?: string | null;
   status: "pending" | "processing" | "rejected" | "released";

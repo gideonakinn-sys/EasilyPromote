@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
 import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { ContentBudgetPanel } from "../../components/content-budget-panel";
 
 interface CampaignItem {
   id: string;
@@ -25,6 +26,7 @@ interface CampaignItem {
   slotCount?: number;
   creatorCount?: number;
   statusNote?: string;
+  campaignModel?: "content" | "performance";
   createdAt: string;
   brand?: { id: string; name: string; email: string };
 }
@@ -413,7 +415,7 @@ export default function AdminCampaignsPage() {
                         <div className="w-36">
                           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700 mb-1">
                             <span>{c.viewsDelivered.toLocaleString()}</span>
-                            <span className="text-stone-400">/ {c.targetViews.toLocaleString()}</span>
+                            <span className="text-stone-400">/ {(c.targetViews ?? 0).toLocaleString()}</span>
                           </div>
                           <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
                             <div
@@ -500,6 +502,10 @@ export default function AdminCampaignsPage() {
                   </div>
                 </div>
 
+                {selectedCampaign.campaignModel === "content" && (
+                  <ContentBudgetPanel campaignId={selectedCampaign.id} campaignName={selectedCampaign.name} />
+                )}
+
                 {/* Content Brief */}
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Content Brief</h4>
@@ -513,7 +519,7 @@ export default function AdminCampaignsPage() {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">Platform Metrics</h4>
                     <span className="text-[11px] text-stone-400">
-                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {selectedCampaign.targetViews.toLocaleString()} views
+                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {(selectedCampaign.targetViews ?? 0).toLocaleString()} views
                     </span>
                   </div>
 
@@ -538,7 +544,7 @@ export default function AdminCampaignsPage() {
                                 <p className="text-[11px] text-stone-400">@{sub.creatorHandle} · {sub.status}</p>
                               </div>
                               <span className="text-sm font-bold text-stone-900">
-                                {sub.viewsDelivered.toLocaleString()} views
+                                {(sub.viewsDelivered ?? 0).toLocaleString()} views
                               </span>
                             </div>
 
