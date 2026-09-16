@@ -175,6 +175,13 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
   }
 });
 
+// What the wizard shows the brand before saving: the same calculator checkout charges from.
+router.post("/quote", protect, authorizeRoles("business"), (req, res) => {
+  const setup = resolveCampaignSetup(req.body || {});
+  if (setup.error) return sendSetupError(res, setup);
+  res.json({ quote: setup.quote });
+});
+
 router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
@@ -187,14 +194,6 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Campaign cannot be paid" });
     }
-    // Content campaigns need places per deliverable, which arrive with the new checkout (ticket 03).
-    if (campaign.campaignModel === "content") {
-      return res.status(409).json({
-        error: "Content campaigns can't be paid for yet. Save it as a draft and we'll let you know when checkout opens.",
-        code: "CONTENT_CHECKOUT_NOT_READY",
-      });
-    }
-
     // Referral campaigns pay their referral budget in the same checkout, and only once the
     // brand's app is connected: Paystack can't hold the money while they finish setup.
     const referralAmount =
@@ -213,7 +212,14 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         });
       }
     }
-    const total = campaign.budget + referralAmount;
+    // Checkout charges the calculator's total for the campaign as it stands, so a draft priced
+    // under an older price table pays what the wizard quotes today.
+    const setup = resolveCampaignSetup({}, campaign);
+    if (setup.error) return sendSetupError(res, setup);
+    for (const [field, value] of Object.entries(setup.money)) {
+      if (field !== "contentPay") campaign[field] = value;
+    }
+    const total = setup.quote.total;
 
     const reference = `ep_${campaign._id}_${Date.now()}`;
 
@@ -557,6 +563,12 @@ router.post("/:id/topup-init", protect, authorizeRoles("business"), async (req, 
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
+    if (campaign.campaignModel === "content") {
+      return res.status(409).json({
+        error: "Top-ups buy more views, so they aren't available for content campaigns.",
+        code: "TOPUP_NOT_FOR_CONTENT",
+      });
+    }
 
     const reference = `ep_topup_${campaign._id}_${Date.now()}`;
 
@@ -598,6 +610,12 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
     }
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
+    }
+    if (campaign.campaignModel === "content") {
+      return res.status(409).json({
+        error: "Top-ups buy more views, so they aren't available for content campaigns.",
+        code: "TOPUP_NOT_FOR_CONTENT",
+      });
     }
 
     // The callback URL carries `amount` in the query string, so the request body

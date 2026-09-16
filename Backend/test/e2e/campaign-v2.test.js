@@ -169,14 +169,6 @@ test("editing a draft content campaign's pay reprices it; a draft can't switch t
   assert.equal(rate.body.code, "RATE_NOT_BRAND_SET");
 });
 
-test("content campaigns can't be paid for until the new checkout ships (ticket 03)", async () => {
-  const brand = await harness.registerBrand();
-  const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: contentCampaign });
-  const pay = await harness.api("POST", `/api/campaigns/${created.body.id}/pay`, { token: brand.token });
-  assert.equal(pay.status, 409);
-  assert.equal(pay.body.code, "CONTENT_CHECKOUT_NOT_READY");
-});
-
 test("the old wizard can still switch a draft between views and referral tracking", async () => {
   const brand = await harness.registerBrand();
   const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Switcher", category: "Tech", targetViews: 100000 } });
