@@ -25,6 +25,7 @@ function initSocket(server) {
       socket.userId = userId;
       onlineUsers.set(userId, socket.id);
       socket.join(`user:${userId}`);
+      if (decoded.role) socket.join(`role:${decoded.role}`);
       console.log(`[Socket] User connected: ${userId}`);
     } catch {
       socket.disconnect();
@@ -56,4 +57,10 @@ function emitToUser(userId, event, data) {
   }
 }
 
-module.exports = { initSocket, getIO, emitToUser };
+// Everyone signed in with this role, e.g. every creator for marketplace updates.
+function emitToRole(role, event, data) {
+  if (!io || !role) return;
+  io.to(`role:${role}`).emit(event, data);
+}
+
+module.exports = { initSocket, getIO, emitToUser, emitToRole };

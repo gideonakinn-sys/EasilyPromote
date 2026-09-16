@@ -4,8 +4,7 @@
 // Pure: callers load the documents; the join route and the marketplace share this.
 const { evaluateEligibility } = require("./eligibility");
 const { rankAtLeast } = require("./creatorScore");
-
-const MAX_ACTIVE_PLACEMENTS = 3;
+const { MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 const RANKS = ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"];
 // Rules about the creator's account as a whole rather than this campaign; the marketplace
 // shows these once, not on every card.
@@ -14,10 +13,11 @@ const ACCOUNT_CRITERIA = ["socialAccount", "niches", "placementLimit"];
 const rankName = (rank) => (rank === "elite" ? "Elite" : `rank ${String(rank).replace("rank", "")}`);
 
 // Connected TikTok / Meta accounts count as social accounts on the platform they belong to.
+// Their follower count is unknown until the creator adds it.
 function withConnectedAccounts(profile, connectedPlatforms) {
   const accounts = [...((profile && profile.socialAccounts) || [])];
   for (const platform of connectedPlatforms || []) {
-    if (!accounts.some((a) => a.platform === platform)) accounts.push({ platform, followers: 0 });
+    if (!accounts.some((a) => a.platform === platform)) accounts.push({ platform });
   }
   return { ...(profile || {}), socialAccounts: accounts };
 }
@@ -55,4 +55,4 @@ function campaignFailures(failures) {
   return failures.filter((f) => !ACCOUNT_CRITERIA.includes(f.criterion));
 }
 
-module.exports = { joinEligibility, campaignFailures, MAX_ACTIVE_PLACEMENTS };
+module.exports = { joinEligibility, campaignFailures };

@@ -34,7 +34,8 @@ function viewsEarned(slot, views) {
 // This is the single source for the withdrawal route, the wallet and sync-stats.
 async function creatorViewsEarnings(creatorId, { campaignIds = null } = {}) {
   const creator = toObjectId(creatorId);
-  const slotFilter = { creatorId: creator };
+  // Deliverable placements pay a fixed rate, never per view.
+  const slotFilter = { creatorId: creator, kind: { $ne: "deliverable" } };
   if (campaignIds) slotFilter.campaignId = { $in: campaignIds.map(toObjectId) };
 
   const slots = await Slot.find(slotFilter)

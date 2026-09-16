@@ -61,7 +61,11 @@ function evaluateEligibility(profile, campaign) {
 
   if (rules.minFollowers) {
     const best = accountsOnTarget.reduce((max, a) => Math.max(max, a.followers || 0), 0);
-    if (best < rules.minFollowers) {
+    const uncounted = accountsOnTarget.filter((a) => a.followers === undefined || a.followers === null);
+    if (best < rules.minFollowers && uncounted.length > 0) {
+      const names = [...new Set(uncounted.map((a) => PLATFORM_NAMES[String(a.platform).toLowerCase()] || a.platform))];
+      fail("minFollowers", `Add your follower count on ${listWithOr(names)} to join`);
+    } else if (best < rules.minFollowers) {
       const where = platformNames.length ? `on ${listWithOr(platformNames)}` : "on one account";
       fail("minFollowers", `Needs ${rules.minFollowers.toLocaleString("en-US")}+ followers ${where}`);
     }

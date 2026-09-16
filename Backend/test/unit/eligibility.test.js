@@ -101,6 +101,18 @@ test("match score: share of audience in the targeted locations, ages and genders
   assert.equal(evaluateEligibility(creator(), { audienceTargeting: {}, creatorEligibility: {} }).matchScore, 100);
 });
 
+test("a follower minimum asks for the missing count instead of saying the creator is too small", () => {
+  const campaign = { audienceTargeting: { platforms: ["tiktok"] }, creatorEligibility: { minFollowers: 5000 } };
+  const noCount = creator({ socialAccounts: [{ platform: "tiktok", handle: "@c" }] });
+  assert.deepEqual(evaluateEligibility(noCount, campaign).failures, [
+    { criterion: "minFollowers", message: "Add your follower count on TikTok to join" },
+  ]);
+  const small = creator({ socialAccounts: [{ platform: "tiktok", handle: "@c", followers: 100 }] });
+  assert.deepEqual(evaluateEligibility(small, campaign).failures, [
+    { criterion: "minFollowers", message: "Needs 5,000+ followers on TikTok" },
+  ]);
+});
+
 test("targeting locations with no minimum share only ranks; platform names ignore letter case", () => {
   const campaign = { audienceTargeting: { locations: ["Lagos"], minLocationShare: 0, platforms: ["TikTok"] }, creatorEligibility: {} };
   const result = evaluateEligibility(creator({ audience: undefined }), campaign);

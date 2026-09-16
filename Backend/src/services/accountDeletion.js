@@ -130,10 +130,13 @@ async function deleteAccount(user) {
 
   // Release work that produced nothing so the slot can be refilled. Slots that
   // already delivered views stay put: the brand paid for those and got them.
+  const releasedCampaignIds = await Slot.distinct("campaignId", { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES } });
   await Slot.updateMany(
     { creatorId: user._id, status: { $in: UNDELIVERED_SLOT_STATUSES } },
     { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } }
   );
+  const { emitPlacesLeft } = require("../utils/campaignUpdates");
+  await Promise.all(releasedCampaignIds.map((campaignId) => emitPlacesLeft(campaignId)));
 
   // Disable referral codes and revoke webhook keys (M8)
   const ReferralCode = require("../models/ReferralCode");

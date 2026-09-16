@@ -131,6 +131,54 @@ test("two creators racing for the last place: exactly one gets it", async () => 
   assert.equal((await heldPlacements(id)).length, 1);
 });
 
+test("a join skips a place whose terms don't fit and takes the next open one", async () => {
+  const Slot = require("../../src/models/Slot");
+  const { id } = await liveCampaign(contentBody({ contentPay: { ratePerDeliverable: 15000, deliverables: 3 } }));
+  const first = await Slot.findOne({ campaignId: id }).sort({ createdAt: 1, _id: 1 });
+  // More than the whole creator pool, so this place can never be given out.
+  await Slot.updateOne({ _id: first._id }, { $set: { reward: 999999 } });
+  const creator = await harness.registerCreator();
+
+  const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  assert.equal(joined.status, 200, JSON.stringify(joined.body));
+  assert.notEqual(String(joined.body.id), String(first._id));
+  assert.equal(joined.body.reward, 15000);
+});
+
+test("when many creators join at once, everyone gets a place while places remain", async () => {
+  const { id } = await liveCampaign(contentBody({ contentPay: { ratePerDeliverable: 15000, deliverables: 8 } }));
+  const creators = await Promise.all(Array.from({ length: 8 }, () => harness.registerCreator()));
+
+  const results = await Promise.all(creators.map((c) => harness.api("POST", `/api/campaigns/${id}/join`, { token: c.token })));
+  assert.deepEqual(results.map((r) => r.status), Array(8).fill(200), JSON.stringify(results.map((r) => r.body)));
+  assert.equal((await heldPlacements(id)).length, 8);
+});
+
+test("a deliverable placement never shows views progress or views earnings", async () => {
+  const Submission = require("../../src/models/Submission");
+  const { id } = await liveCampaign(contentBody());
+  const creator = await harness.registerCreator();
+  const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  assert.equal(joined.status, 200);
+  await Submission.create({
+    campaignId: id,
+    creatorId: creator.id,
+    creatorHandle: creator.username,
+    videoUrl: "https://www.tiktok.com/@c/video/1",
+    status: "posted",
+    viewsDelivered: 500,
+  });
+
+  const dashboard = await harness.api("GET", "/api/creators/dashboard", { token: creator.token });
+  assert.equal(dashboard.status, 200);
+  const mine = dashboard.body.campaigns.campaigns.find((c) => String(c.id) === id);
+  assert.equal(mine.kind, "deliverable");
+  assert.equal(mine.status, "delivered");
+  assert.equal(mine.progress, 0);
+  assert.ok(!("maxViews" in mine));
+  assert.ok(!(dashboard.body.wallet.viewsByCampaign || []).some((c) => String(c.id) === id), "no views earnings for a deliverable");
+});
+
 test("a creator can't hold two places on the same campaign, even joining twice at once", async () => {
   const Slot = require("../../src/models/Slot");
   await Slot.init();

@@ -16,16 +16,14 @@ const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
 const { campaignTerms, payPerUnit, briefSummary, fullBrief } = require("../utils/campaignPay");
 const { joinEligibility, campaignFailures } = require("./joinRules");
+const { recommendation, sortRecommended } = require("./recommendations");
+const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
+const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
 
 // Everything the creator dashboard shows is derived from the same handful of
 // documents. Loading them once per request (instead of once per endpoint, and
 // again inside every helper) is where most of the round trips went.
 
-const MAX_SLOTS = 3;
-// Share of a creator's audience inside a campaign's targeting that earns a recommendation.
-const RECOMMENDED_MIN_SCORE = 50;
-const ACTIVE_SLOT_STATUSES = ["claimed", "submitted", "verifying"];
-const CLAIMED_SLOT_STATUSES = ["claimed", "submitted", "verifying", "approved", "paid"];
 
 function lockReasonFor({ hasSocial, hasNiches }) {
   if (hasSocial && hasNiches) return null;
@@ -147,11 +145,10 @@ function normalizeNiches(list) {
 async function buildMarketplace(ctx) {
   const { userId, profile } = ctx;
   const creatorRank = profile ? profile.rank : "rank1";
-  const profileNiches = normalizeNiches(profile && profile.niches);
 
   const [activeSlots, claimedCampaignIds, campaigns] = await Promise.all([
-    Slot.countDocuments({ creatorId: userId, status: { $in: ACTIVE_SLOT_STATUSES } }),
-    Slot.distinct("campaignId", { creatorId: userId, status: { $in: CLAIMED_SLOT_STATUSES } }),
+    Slot.countDocuments({ creatorId: userId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
+    Slot.distinct("campaignId", { creatorId: userId, status: { $in: HELD_PLACEMENT_STATUSES } }),
     Campaign.find({ status: "live" })
       .populate("businessId", "name avatar")
       .sort({ createdAt: -1 })
@@ -161,13 +158,14 @@ async function buildMarketplace(ctx) {
   const claimedCampaignSet = new Set(claimedCampaignIds.map((id) => id.toString()));
   const openCampaigns = campaigns.filter((c) => !claimedCampaignSet.has(c._id.toString()));
 
-  // One query for every campaign's open slots, instead of one query per campaign.
+  // One query for every campaign's open slots, instead of one query per campaign, in the
+  // order a join takes them so each card shows the pay of the place the creator would get.
   const availableSlots = openCampaigns.length > 0
     ? await Slot.find({
         campaignId: { $in: openCampaigns.map((c) => c._id) },
         status: "available",
       })
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: 1, _id: 1 })
         .lean()
     : [];
 
@@ -193,17 +191,6 @@ async function buildMarketplace(ctx) {
     const brand = campaign.businessId;
     const campaignNiches = normalizeNiches(campaign.niches);
 
-    // Niche overlap only breaks ties between campaigns that suit the creator's audience equally.
-    let nicheScore = 0;
-    if (profileNiches.length > 0) {
-      const overlap = campaignNiches.filter((n) => profileNiches.includes(n)).length;
-      nicheScore += overlap * 3;
-      if (campaign.category && profileNiches.includes(String(campaign.category).trim().toLowerCase())) {
-        nicheScore += 2;
-      }
-      if (campaignNiches.length === 0) nicheScore += 1;
-    }
-
     // Same check as joining; account-wide rules (connection, niches, placement limit) are
     // reported once via locked / canClaim rather than on every card.
     const check = joinEligibility({
@@ -215,6 +202,10 @@ async function buildMarketplace(ctx) {
       availableSlots: slots,
     });
     const reasons = campaignFailures(check.failures).map((f) => f.message);
+    const { recommended, nicheOverlap } = recommendation(profile, campaign, {
+      eligible: reasons.length === 0,
+      matchScore: check.matchScore,
+    });
     const terms = campaignTerms(campaign);
     const targeting = campaign.audienceTargeting || {};
 
@@ -255,9 +246,8 @@ async function buildMarketplace(ctx) {
       eligible: reasons.length === 0,
       ineligibleReasons: reasons,
       matchScore: check.matchScore,
-      nicheScore,
-      // Recommended for You: campaigns this creator can join whose audience targeting they suit.
-      recommended: reasons.length === 0 && check.matchScore >= RECOMMENDED_MIN_SCORE,
+      nicheOverlap,
+      recommended,
       // Shown before claiming, so creators know a campaign also pays per referral.
       referralReward:
         campaign.referral &&
@@ -269,18 +259,18 @@ async function buildMarketplace(ctx) {
     });
   }
 
+  // Recommended for You first, then New: everything else, newest first.
   marketplace.sort((a, b) => {
     if (b.recommended !== a.recommended) return b.recommended - a.recommended;
-    if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-    if (b.nicheScore !== a.nicheScore) return b.nicheScore - a.nicheScore;
+    if (a.recommended) return sortRecommended(a, b);
     return new Date(b.publishedAt) - new Date(a.publishedAt);
   });
 
   return {
     campaigns: marketplace,
     activeSlots,
-    maxSlots: MAX_SLOTS,
-    canClaim: ctx.locked ? false : activeSlots < MAX_SLOTS,
+    maxSlots: MAX_ACTIVE_PLACEMENTS,
+    canClaim: ctx.locked ? false : activeSlots < MAX_ACTIVE_PLACEMENTS,
     locked: ctx.locked,
     lockReason: ctx.lockReason,
   };
@@ -373,30 +363,9 @@ async function buildMyCampaigns(ctx) {
       const campaign = slot.campaignId;
       const submission = submissionMap[campaign._id.toString()];
 
-      let status;
-      if (submission) {
-        switch (submission.status) {
-          case "new":
-            status = "under_review";
-            break;
-          case "awaiting_post":
-          case "approved":
-            status = "approved_post";
-            break;
-          case "posted":
-            status = submission.viewsDelivered >= campaign.targetViews ? "delivered" : "live_tracking";
-            break;
-          case "rejected":
-            status = "changes_requested";
-            break;
-          default:
-            status = "under_review";
-        }
-      } else {
-        status = "needs_content";
-      }
-
+      let status = mapStatusToCreator(submission, campaign, slot);
       if (campaign.status === "cancelled") status = "cancelled";
+      const deliverable = slot.kind === "deliverable";
 
       return {
         id: campaign._id,
@@ -407,14 +376,12 @@ async function buildMyCampaigns(ctx) {
         status,
         reward: slot.reward,
         viewTarget: slot.viewTarget,
-        minViews: 1000,
-        maxViews: slot.viewTarget,
+        // Deliverable placements have no views to commit to.
+        ...(!deliverable && { minViews: 1000, maxViews: slot.viewTarget }),
         costPerView: campaign.costPerView,
         submissionId: submission ? submission._id : null,
         comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
-        progress: submission && submission.viewsDelivered > 0
-          ? Math.min(Number(((submission.viewsDelivered / (slot.viewTarget || campaign.targetViews)) * 100).toFixed(3)), 100)
-          : 0,
+        progress: deliveryProgress(submission, slot, campaign),
         currentViews: submission ? submission.viewsDelivered : undefined,
         targetViews: campaign.targetViews,
         videoUrl: submission ? submission.videoUrl : undefined,

@@ -53,7 +53,7 @@ test("cards lead with pay per unit for every kind of campaign", async () => {
   const marketplace = await marketplaceFor(creator);
 
   const contentCard = card(marketplace, content);
-  assert.deepEqual(contentCard.pay, { amount: 15000, unit: "approved video" });
+  assert.deepEqual(contentCard.pay, { amount: 15000, unit: "approved deliverable" });
   assert.equal(contentCard.campaignModel, "content");
   assert.equal(contentCard.payShape, "fixed");
   assert.equal(contentCard.creatorAccess, "open_call");
@@ -119,4 +119,43 @@ test("Recommended for You puts the campaigns that suit the creator's audience fi
   assert.equal(abujaCard.recommended, false);
   const order = marketplace.campaigns.map((c) => String(c.id));
   assert.ok(order.indexOf(lagos) < order.indexOf(abuja));
+});
+
+test("an untargeted campaign is recommended only when it shares the creator's niches or categories", async () => {
+  const offNiche = await liveCampaign({ campaignObjective: "views", category: "Finance", targetViews: 100000, niches: ["Finance"] });
+  const onNiche = await liveCampaign({ campaignObjective: "views", category: "Finance", targetViews: 100000, niches: ["Music"] });
+  const byCategory = await liveCampaign({ campaignObjective: "views", category: "Comedy", targetViews: 100000 });
+  const creator = await harness.registerCreator({ niches: ["Music"] });
+  const categories = await harness.api("PUT", "/api/creators/profile/me", { token: creator.token, body: { categories: ["Comedy"] } });
+  assert.equal(categories.status, 200);
+
+  const marketplace = await marketplaceFor(creator);
+  assert.equal(card(marketplace, offNiche).recommended, false);
+  assert.equal(card(marketplace, onNiche).recommended, true);
+  assert.equal(card(marketplace, byCategory).recommended, true);
+
+  // Recommended first, then everything else newest first.
+  const ids = marketplace.campaigns.map((c) => String(c.id));
+  const firstOther = marketplace.campaigns.findIndex((c) => !c.recommended);
+  assert.ok(marketplace.campaigns.slice(firstOther).every((c) => !c.recommended));
+  const others = marketplace.campaigns.slice(firstOther);
+  for (let i = 1; i < others.length; i += 1) {
+    assert.ok(new Date(others[i - 1].publishedAt) >= new Date(others[i].publishedAt));
+  }
+  assert.ok(ids.indexOf(onNiche) < ids.indexOf(offNiche));
+});
+
+test("a views card prices from the place a join would take", async () => {
+  const Slot = require("../../src/models/Slot");
+  const id = await liveCampaign({ campaignObjective: "views", targetViews: 100000 });
+  // Make the newest open place pay differently from the oldest.
+  const newest = await Slot.findOne({ campaignId: id, status: "available" }).sort({ createdAt: -1, _id: -1 });
+  await Slot.updateOne({ _id: newest._id }, { $set: { reward: 1, viewTarget: 1000 } });
+  const creator = await harness.registerCreator();
+
+  const entry = card(await marketplaceFor(creator), id);
+  const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  assert.equal(joined.status, 200, JSON.stringify(joined.body));
+  assert.equal(entry.pay.amount, Math.round((joined.body.reward / joined.body.viewTarget) * 1000 * 100) / 100);
+  assert.equal(entry.reward, joined.body.reward);
 });

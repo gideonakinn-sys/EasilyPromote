@@ -13,9 +13,9 @@ test("a campaign saved before the campaign engine reads as views, performance, O
   assert.deepEqual(payPerUnit({}, { reward: 20000, viewTarget: 40000 }), { amount: 500, unit: "1,000 views" });
 });
 
-test("content pays the brand's rate per approved video", () => {
+test("content pays the brand's rate per approved deliverable", () => {
   const campaign = { campaignObjective: "content", campaignModel: "content", contentPay: { ratePerDeliverable: 15000, deliverables: 3 } };
-  assert.deepEqual(payPerUnit(campaign, { reward: 15000 }), { amount: 15000, unit: "approved video" });
+  assert.deepEqual(payPerUnit(campaign, { reward: 15000 }), { amount: 15000, unit: "approved deliverable" });
 });
 
 test("referral campaigns pay the admin-set reward, or nothing yet", () => {

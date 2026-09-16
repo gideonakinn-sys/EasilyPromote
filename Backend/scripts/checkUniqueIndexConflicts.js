@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-// Read-only pre-deploy check for the unique indexes on transactions and withdrawals.
-// MongoDB can't build a unique index over existing duplicates; resolve any found first.
+// Read-only pre-deploy check for the unique indexes on transactions, withdrawals and
+// placements (slots). MongoDB can't build a unique index over existing duplicates;
+// resolve any found first.
+//
+// Placements: slots have a unique { campaignId, creatorId } index for slots that have a
+// creator (Slot model). A creator holding more than one placement in a campaign blocks
+// it; the listed slot ids and statuses show which placement to release or merge.
 //
 //   MONGODB_URI=<connection string> node scripts/checkUniqueIndexConflicts.js
 
@@ -38,6 +43,15 @@ async function main() {
       ),
     },
   ];
+  checks.push({
+    label: "slots {campaignId, creatorId} with a creator",
+    rows: await duplicates(
+      "slots",
+      { creatorId: { $type: "objectId" } },
+      { campaignId: "$campaignId", creatorId: "$creatorId" },
+      { statuses: { $push: "$status" }, rewards: { $push: "$reward" } }
+    ),
+  });
   for (const status of ["pending", "processing"]) {
     checks.push({
       label: `withdrawals ${status} {creatorId, campaignId, kind}`,

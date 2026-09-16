@@ -242,6 +242,7 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
     // campaigns have one placement per deliverable bought, so their count can't change here.
     if (slotCount !== undefined && campaign.campaignModel !== "content") {
       await syncCampaignSlots(campaign, slotCount);
+      await require("../utils/campaignUpdates").emitPlacesLeft(campaign._id);
     }
 
     res.json({

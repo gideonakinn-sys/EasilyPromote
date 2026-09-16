@@ -33,7 +33,7 @@ function payPerUnit(campaign, slot) {
 
   if (campaignModel === "content") {
     const rate = (campaign.contentPay && campaign.contentPay.ratePerDeliverable) || (slot && slot.reward) || null;
-    return { amount: rate, unit: "approved video" };
+    return { amount: rate, unit: "approved deliverable" };
   }
 
   if (usesReferralTracking(objective)) {
