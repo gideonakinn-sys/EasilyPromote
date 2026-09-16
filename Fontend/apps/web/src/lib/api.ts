@@ -65,3 +65,58 @@ export class ApiRequestError extends Error {
     this.body = body;
   }
 }
+
+// Campaign engine: applications (ticket 06)
+import { getToken as readApplicationsToken } from "./auth";
+import type {
+  ApplicationDetail,
+  ApplicationList,
+  ApplicationRow,
+  ApprovedApplication,
+  MyApplication,
+} from "../components/types";
+
+const applicationsToken = () => readApplicationsToken() || undefined;
+
+export const applicationsApi = {
+  apply(campaignId: string, pitch: string) {
+    return apiRequest<MyApplication>(`/campaigns/${campaignId}/apply`, {
+      method: "POST",
+      token: applicationsToken(),
+      body: JSON.stringify(pitch.trim() ? { pitch: pitch.trim() } : {}),
+    });
+  },
+  withdraw(campaignId: string) {
+    return apiRequest<MyApplication>(`/campaigns/${campaignId}/apply/withdraw`, {
+      method: "POST",
+      token: applicationsToken(),
+    });
+  },
+  list(campaignId: string, { status, sort }: { status?: string; sort?: "match" | "newest" } = {}) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (sort) params.set("sort", sort);
+    const query = params.toString();
+    return apiRequest<ApplicationList>(`/campaigns/${campaignId}/applications${query ? `?${query}` : ""}`, {
+      token: applicationsToken(),
+    });
+  },
+  get(campaignId: string, applicationId: string) {
+    return apiRequest<ApplicationDetail>(`/campaigns/${campaignId}/applications/${applicationId}`, {
+      token: applicationsToken(),
+    });
+  },
+  approve(campaignId: string, applicationId: string) {
+    return apiRequest<ApprovedApplication>(`/campaigns/${campaignId}/applications/${applicationId}/approve`, {
+      method: "POST",
+      token: applicationsToken(),
+    });
+  },
+  reject(campaignId: string, applicationId: string, reason: string) {
+    return apiRequest<ApplicationRow>(`/campaigns/${campaignId}/applications/${applicationId}/reject`, {
+      method: "POST",
+      token: applicationsToken(),
+      body: JSON.stringify(reason.trim() ? { reason: reason.trim() } : {}),
+    });
+  },
+};

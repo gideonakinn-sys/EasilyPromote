@@ -13,6 +13,7 @@ import { useReveal } from "../hooks/use-reveal";
 import slotLimitImg from "@ep/ui/assets/Slot-limit+new-user-empty.png";
 import emptyCampaignImg from "@ep/ui/assets/empty-campaign.png";
 import { MarketplaceDetailsDrawer } from "./campaign-marketplace-drawer";
+import { useCreatorDashboard } from "./creator-dashboard-context";
 
 interface CampaignMarketplaceProps {
   campaigns: MarketplaceCampaign[];
@@ -48,6 +49,9 @@ function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
   const reasons = campaign.ineligibleReasons || [];
   const openCall = accessOf(campaign) === "open_call";
   const places = placesLeftOf(campaign);
+  // Campaign engine: applications (ticket 06)
+  const { applications } = useCreatorDashboard();
+  const applied = !openCall && applications.some((a) => a.campaignId === campaign.id && a.status === "pending");
 
   return (
     <div
@@ -108,10 +112,10 @@ function MarketplaceCard({ campaign, onOpen }: MarketplaceCardProps) {
           }}
           className={cn(
             "px-4 py-2 rounded-full font-semibold text-xs font-rethink",
-            openCall && reasons.length === 0 ? "bg-[#FEB604] text-stone-950" : "bg-stone-100 text-stone-600"
+            reasons.length === 0 && !applied ? "bg-[#FEB604] text-stone-950" : "bg-stone-100 text-stone-600"
           )}
         >
-          {openCall ? "Join Campaign" : "Apply"}
+          {openCall ? "Join Campaign" : applied ? "Applied" : "Apply"}
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { ACCESS_LABELS, accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useCampaignPlaces } from "../lib/socket";
+import { CampaignApplyPanel } from "./campaign-apply-panel";
 
 interface MarketplaceDetailsDrawerProps {
   campaign: MarketplaceCampaign | null;
@@ -249,7 +250,9 @@ function CampaignDrawerContent({
                 </div>
               )}
 
-              <ReasonList title="You can't join yet" reasons={openCall && joinBlockedReason ? [joinBlockedReason, ...reasons] : reasons} />
+              {openCall && (
+                <ReasonList title="You can't join yet" reasons={joinBlockedReason ? [joinBlockedReason, ...reasons] : reasons} />
+              )}
 
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
@@ -278,18 +281,12 @@ function CampaignDrawerContent({
                   {joining ? "Joining…" : places === 0 ? "Campaign full" : "Join Campaign"}
                 </button>
               ) : (
-                <div className="space-y-2">
-                  <button disabled className="w-full py-3 rounded-full font-semibold text-sm font-rethink bg-stone-200 text-stone-400 cursor-not-allowed">
-                    Apply
-                  </button>
-                  <p className="text-[11px] text-stone-500 font-medium text-center">
-                    The brand picks who takes part. Applications open soon.
-                  </p>
-                </div>
+                // Campaign engine: applications (ticket 06)
+                <CampaignApplyPanel campaign={campaign} reasons={reasons} blockedReason={joinBlockedReason} places={places} />
               )}
 
               <p className="text-[10px] text-stone-400 font-medium font-rethink text-center leading-relaxed">
-                The full brief, with do&apos;s and don&apos;ts, hashtags, sound and reference videos, unlocks once you join.
+                The full brief, with do&apos;s and don&apos;ts, hashtags, sound and reference videos, unlocks once you {openCall ? "join" : "are selected"}.
               </p>
             </>
           )}

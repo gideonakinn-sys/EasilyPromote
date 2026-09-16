@@ -442,3 +442,112 @@ export interface JoinResult {
   placesLeft: number;
   brief: CreatorBrief;
 }
+
+// Campaign engine: applications (ticket 06)
+
+export type ApplicationStatus = "pending" | "approved" | "rejected" | "withdrawn" | "expired";
+
+// A creator's own application, from the dashboard payload (`applications`).
+export interface MyApplication {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  campaignStatus?: string;
+  status: ApplicationStatus;
+  pitch: string;
+  pay: PayPerUnit | null;
+  appliedAt: string;
+  expiresAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string;
+  coverImageUrl?: string | null;
+  brandName?: string;
+  brandAvatar?: string | null;
+}
+
+export interface ApplicantPlatform {
+  platform: string;
+  handle: string | null;
+  followers: number | null;
+}
+
+export interface ApplicantLocation {
+  city: string;
+  state: string;
+  country: string;
+}
+
+// One applicant row in the brand's list.
+export interface ApplicationRow {
+  id: string;
+  status: ApplicationStatus;
+  pitch: string;
+  matchScore: number;
+  appliedAt: string;
+  expiresAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string;
+  creator: {
+    id: string;
+    name: string;
+    username: string;
+    photo: string | null;
+    verified: boolean;
+    location: ApplicantLocation | null;
+    topPlatform: ApplicantPlatform | null;
+    categories: string[];
+  };
+}
+
+export type ApplicationCounts = Record<ApplicationStatus | "all", number>;
+
+export interface ApplicationList {
+  counts: ApplicationCounts;
+  applications: ApplicationRow[];
+}
+
+export interface ApplicantPortfolioItem extends PortfolioItem {
+  matchesCampaign: boolean;
+}
+
+// Sections come back in the order the brand should read them for this campaign.
+export type ApplicantSection =
+  | { key: "platforms"; emphasis: boolean; data: { accounts: ApplicantPlatform[] } }
+  | { key: "categories"; emphasis: boolean; data: { categories: string[]; matching: string[] } }
+  | {
+      key: "audience";
+      emphasis: boolean;
+      data: {
+        targetedLocations: string[];
+        targetedShare: number;
+        locations: AudienceLocation[];
+        topLocation: AudienceLocation | null;
+        topAge: AudienceAge | null;
+        genders: AudienceGenders | null;
+        source: "self_reported" | "api" | null;
+      };
+    }
+  | {
+      key: "performance";
+      emphasis: boolean;
+      data: { avgViews: number; engagementRate: number | null; pastCampaigns: number; totalCampaignViews: number };
+    }
+  | { key: "portfolio"; emphasis: boolean; data: { categories: string[]; items: ApplicantPortfolioItem[] } }
+  | { key: "badges"; emphasis: boolean; data: { badges: string[]; completionRate: number } };
+
+export interface ApplicationDetail extends ApplicationRow {
+  applicant: {
+    name: string;
+    username: string;
+    photo: string | null;
+    verified: boolean;
+    location: ApplicantLocation;
+  };
+  sections: ApplicantSection[];
+}
+
+// POST /campaigns/:id/applications/:applicationId/approve
+export interface ApprovedApplication extends ApplicationRow {
+  placement: { id: string; kind: "views" | "deliverable"; reward: number; viewTarget?: number; referralCode: string | null };
+  placesLeft: number;
+}

@@ -115,6 +115,31 @@ export function useCampaignPlaces(onUpdate?: (data: CampaignPlacesUpdate) => voi
   }, []);
 }
 
+// Campaign engine: applications (ticket 06)
+// Sent to the creator when their application is decided or expires, and to the brand when
+// an application arrives, is withdrawn or waits for review.
+export interface ApplicationUpdate {
+  campaignId: string;
+  type: string;
+}
+
+export function useApplicationUpdates(onUpdate?: (data: ApplicationUpdate) => void) {
+  const updateRef = useRef(onUpdate);
+  updateRef.current = onUpdate;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const connection = ensureSocket(token);
+    const handleUpdate = (data: ApplicationUpdate) => updateRef.current?.(data);
+    connection.on("application-update", handleUpdate);
+    return () => {
+      connection.off("application-update", handleUpdate);
+    };
+  }, []);
+}
+
 export function useSocket(
   onPaymentSuccess?: (data: { campaignId: string; status: string }) => void,
   onCampaignStatus?: (data: { campaignId: string; status: string; viewsDelivered?: number; targetViews?: number }) => void

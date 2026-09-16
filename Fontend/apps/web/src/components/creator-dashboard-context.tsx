@@ -21,6 +21,10 @@ import type {
   MetaStatus,
   MetaProvider,
 } from "./types";
+// Campaign engine: applications (ticket 06)
+import type { MyApplication } from "./types";
+import { applicationsApi } from "../lib/api";
+import { useApplicationUpdates } from "../lib/socket";
 
 interface CreatorDashboardValue {
   profile: CreatorProfile;
@@ -63,7 +67,16 @@ interface CreatorDashboardValue {
   handleJoinCampaign: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
   refreshProfile: () => Promise<void>;
   applyProfileUpdate: (data: Partial<CreatorProfile>) => void;
+  // Campaign engine: applications (ticket 06)
+  applications: MyApplication[];
+  handleApplyToCampaign: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  handleWithdrawApplication: (campaignId: string) => Promise<boolean>;
 }
+
+// Campaign engine: applications (ticket 06)
+export type ApplyOutcome =
+  | { ok: true; application: MyApplication }
+  | { ok: false; message: string; failures: EligibilityFailure[] };
 
 // canClaim is false when the creator can't take placements at all; lockReason says why
 // (no social account or niches) and a full placement limit shows as activeSlots >= maxSlots.
@@ -92,6 +105,7 @@ interface DashboardPayload {
   wallet: WalletData;
   tiktok: TikTokStatus;
   meta: MetaStatus;
+  applications?: MyApplication[]; // Campaign engine: applications (ticket 06)
 }
 
 const DASHBOARD_CACHE = "creator-dashboard";
@@ -257,6 +271,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   const [metaStatus, setMetaStatus] = React.useState<MetaStatus>({ instagram: { connected: false }, facebook: { connected: false } });
   const [selectedCampaign, setSelectedCampaign] = React.useState<CampaignItem | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [applications, setApplications] = React.useState<MyApplication[]>([]); // Campaign engine: applications (ticket 06)
 
   const [profileForm, setProfileForm] = React.useState<ProfileForm>({
     name: "",
@@ -389,6 +404,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     if (data.wallet) setWalletData(data.wallet);
     if (data.tiktok) setTiktokStatus(data.tiktok);
     if (data.meta) setMetaStatus(data.meta);
+    if (data.applications) setApplications(data.applications); // Campaign engine: applications (ticket 06)
   };
 
   const fetchAllData = async () => {
@@ -848,6 +864,54 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     );
   });
 
+  // Campaign engine: applications (ticket 06)
+  // Keeps the list's campaign details (brand, cover) when a response only carries the application.
+  const upsertApplication = (next: MyApplication) => {
+    setApplications((prev) => {
+      const existing = prev.find((a) => a.campaignId === next.campaignId);
+      const merged = existing ? { ...existing, ...next } : next;
+      const list = [merged, ...prev.filter((a) => a.campaignId !== next.campaignId)];
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { applications: list });
+      return list;
+    });
+  };
+
+  const handleApplyToCampaign = async (campaignId: string, pitch: string): Promise<ApplyOutcome> => {
+    try {
+      const application = await applicationsApi.apply(campaignId, pitch);
+      const campaign = marketplaceCampaigns.find((c) => c.id === campaignId);
+      upsertApplication({
+        ...application,
+        brandName: campaign?.brandName,
+        brandAvatar: campaign?.brandAvatar ?? null,
+        coverImageUrl: campaign?.coverImageUrl ?? null,
+      });
+      return { ok: true, application };
+    } catch (err) {
+      const failures = err instanceof ApiRequestError && Array.isArray(err.body.failures)
+        ? (err.body.failures as EligibilityFailure[])
+        : [];
+      const message = err instanceof Error ? err.message : "Could not send your application. Try again.";
+      return { ok: false, message, failures };
+    }
+  };
+
+  const handleWithdrawApplication = async (campaignId: string): Promise<boolean> => {
+    try {
+      upsertApplication(await applicationsApi.withdraw(campaignId));
+      return true;
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not withdraw your application. Try again.", "error");
+      return false;
+    }
+  };
+
+  // A decision or expiry: the approved placement and brief arrive with the fresh dashboard.
+  useApplicationUpdates(({ type }) => {
+    if (type === "application_approved") toast("You've been selected. Your brief is unlocked.", "success");
+    fetchAllData();
+  });
+
   const applyProfileUpdate = (data: Partial<CreatorProfile>) => {
     setProfile((prev) => {
       const next = { ...prev, ...data };
@@ -927,6 +991,10 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleJoinCampaign,
     refreshProfile: fetchProfile,
     applyProfileUpdate,
+    // Campaign engine: applications (ticket 06)
+    applications,
+    handleApplyToCampaign,
+    handleWithdrawApplication,
   };
 
   return (
