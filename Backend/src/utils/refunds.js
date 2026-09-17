@@ -1,15 +1,7 @@
 const mongoose = require("mongoose");
 const Transaction = require("../models/Transaction");
 const paystack = require("../services/paystack");
-
-function roundMoney(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
-
-function bucketFilter(bucket) {
-  if (bucket === "referral" || bucket === "fixed") return bucket;
-  return { $nin: ["referral", "fixed"] };
-}
+const { roundMoney, bucketFilter } = require("./money");
 
 // Paystack refunds go back against the payments that funded the campaign, and a refund
 // can't exceed its payment. Splits the amount across the bucket's payments, newest first,
@@ -98,12 +90,12 @@ async function sendRefundParts(refund, note) {
   return refund;
 }
 
-// Refunds a campaign's bucket once. The ledger row is claimed first under a fixed
-// reference, so a brand cancel and an admin cancel at the same moment can't both send
+// Refunds a campaign's views or referral bucket once. The ledger row is claimed first under a
+// fixed reference, so a brand cancel and an admin cancel at the same moment can't both send
 // money back. Returns the refund row, or null when another request already claimed it.
-// The fixed pot passes its own reference per refund (see utils/fixedPay).
-async function refundCampaignBucket({ campaignId, bucket, amount, note, reference = null, refundBreakdown = undefined }) {
-  const pot = bucket === "referral" || bucket === "fixed" ? bucket : "views";
+// The fixed pot has its own retryable refund flow (utils/fixedPay).
+async function refundCampaignBucket({ campaignId, bucket, amount, note }) {
+  const pot = bucket === "referral" ? "referral" : "views";
   const parts = await buildRefundParts({ campaignId, bucket: pot, amount });
 
   let refund;
@@ -114,8 +106,7 @@ async function refundCampaignBucket({ campaignId, bucket, amount, note, referenc
       bucket: pot,
       amount: roundMoney(amount),
       status: refundStatusFromParts(parts),
-      reference: reference || `refund_${pot}_${campaignId}`,
-      ...(refundBreakdown && { refundBreakdown }),
+      reference: `refund_${pot}_${campaignId}`,
       refundParts: parts,
       adminNotes: describeFailures(parts),
       date: new Date(),
@@ -151,6 +142,11 @@ async function applyRefundEvent(event, data) {
 
   part.status = outcome;
   if (outcome === "failed") part.error = "Paystack reported the refund failed";
+  if (refund.bucket === "fixed") {
+    // Fixed refunds are retryable; their reservation is released when nothing is left moving.
+    await require("./fixedPay").applyFixedRefundOutcome(refund);
+    return true;
+  }
   refund.status = refundStatusFromParts(refund.refundParts);
   refund.adminNotes = describeFailures(refund.refundParts);
   await refund.save();
@@ -184,6 +180,8 @@ async function recordUnmatchedPayment({ campaignId, reference, amount, currency,
 }
 
 module.exports = {
+  buildRefundParts,
+  describeFailures,
   refundCampaignBucket,
   sendRefundParts,
   applyRefundEvent,

@@ -265,7 +265,7 @@ test("a withdrawal pays views, referral and fixed parts from their own pots", ()
 
 test("admin refunds unused budget once, never money still owed, and sees the amount first", async () => {
   const { AdminActivity, Campaign, Transaction } = models();
-  const admin = await harness.registerAdmin();
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
   const { brand, id, reference } = await liveContentCampaign({ destination: "brand_page", deliverables: 4 });
   const done = await joinAndSubmit(id);
   await approve(brand, done);
@@ -342,7 +342,7 @@ for (const destination of ["brand_page", "creator_page"]) {
     const { Transaction, Withdrawal } = models();
     const { autoApproveStaleSubmissions } = require("../../src/services/contentApproval");
     const { payoutWeekStart } = require("../../src/utils/payoutSchedule");
-    const admin = await harness.registerAdmin();
+    const admin = await harness.registerAdmin({ role: "finance_admin" });
     const { brand, id } = await liveContentCampaign({ destination, deliverables: 3 });
     const paidIn = await reconcile(id);
     assert.ok(paidIn.ok, JSON.stringify(paidIn.problems));
@@ -384,16 +384,359 @@ for (const destination of ["brand_page", "creator_page"]) {
     assert.deepEqual(summary.body.refundable, { deliverables: 1, creatorBudget: 15000, platformFee: 4500, amount: 19500 });
     const refunded = await harness.api("POST", `/api/admin/campaigns/${id}/refund-unused`, { token: admin.token, body: { expectedAmount: 19500 } });
     assert.equal(refunded.status, 200, JSON.stringify(refunded.body));
+    let result = await reconcile(id);
+    assert.ok(result.ok, JSON.stringify(result.problems));
+    assert.equal(result.pendingRefunds, 19500, "sent, waiting for Paystack");
+    assert.equal(result.refunds, 0);
 
-    const result = await reconcile(id);
+    // Paystack confirms it.
+    const [refundRow] = await Transaction.find({ campaignId: id, type: "refund" }).lean();
+    const webhook = await harness.api("POST", "/api/webhooks/paystack", {
+      body: { event: "refund.processed", data: { transaction_reference: refundRow.refundParts[0].chargeReference } },
+    });
+    assert.equal(webhook.status, 200);
+
+    result = await reconcile(id);
     assert.ok(result.ok, JSON.stringify(result.problems));
     assert.equal(result.paidIn, 58500);
     assert.equal(result.released, 30000);
     assert.equal(result.owed, 0);
     assert.equal(result.refunds, 19500);
+    assert.equal(result.pendingRefunds, 0);
     assert.equal(result.platformFee, 9000);
     assert.equal(result.left, 0);
-    assert.equal(result.paidIn, result.released + result.inFlight + result.owed + result.platformFee + result.refunds + result.left);
+    assert.equal(result.paidIn, result.released + result.inFlight + result.owed + result.platformFee + result.refunds + result.pendingRefunds + result.left);
     assert.equal(await Transaction.countDocuments({ campaignId: id, type: "release", bucket: "fixed", status: "released" }), 2);
   });
 }
+
+// ── Review fixes ────────────────────────────────────────────────────────────
+
+const finance = () => harness.registerAdmin({ role: "finance_admin" });
+const paystackModule = () => require("../../src/services/paystack");
+
+// A completed campaign with one delivered deliverable and one unused, ready to refund ₦19,500.
+async function finishedCampaignWithOneUnused(admin) {
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 2 });
+  const done = await joinAndSubmit(id);
+  await approve(brand, done);
+  await deliver(done);
+  await patch(`/api/submissions/${done.submissionId}/confirm-receipt`, brand.token);
+  const completed = await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: admin.token, body: { status: "completed" } });
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+  return { brand, id, done };
+}
+
+const budgetOf = async (admin, id) => (await harness.api("GET", `/api/admin/campaigns/${id}/content-budget`, { token: admin.token })).body;
+const refundUnused = (admin, id, expectedAmount = 19500) =>
+  harness.api("POST", `/api/admin/campaigns/${id}/refund-unused`, { token: admin.token, body: { expectedAmount } });
+const retryRefund = (admin, id, refundId) => harness.api("POST", `/api/admin/campaigns/${id}/refunds/${refundId}/retry`, { token: admin.token });
+
+test("only finance admins and super admins can refund or void pay", async () => {
+  const owner = await finance();
+  const { id, done } = await finishedCampaignWithOneUnused(owner);
+  for (const role of ["support", "admin"]) {
+    const other = await harness.registerAdmin({ role });
+    assert.equal((await refundUnused(other, id)).status, 403, role);
+    assert.equal((await harness.api("POST", `/api/admin/submissions/${done.submissionId}/void-undelivered`, { token: other.token })).status, 403, role);
+    assert.equal((await retryRefund(other, id, "000000000000000000000000")).status, 403, role);
+  }
+  const superAdmin = await harness.registerAdmin({ role: "super_admin" });
+  assert.equal((await refundUnused(superAdmin, id)).status, 200);
+});
+
+test("a refund Paystack rejects is recorded as failed, holds nothing back, and a retry sends it once", async () => {
+  const { Transaction } = models();
+  const admin = await finance();
+  const { id } = await finishedCampaignWithOneUnused(admin);
+  const paystack = paystackModule();
+  const original = paystack.createRefund;
+  let calls = 0;
+  paystack.createRefund = async () => {
+    calls += 1;
+    throw Object.assign(new Error("Transaction has been fully reversed"), { status: 400 });
+  };
+  try {
+    const failed = await refundUnused(admin, id);
+    assert.equal(failed.status, 502, JSON.stringify(failed.body));
+    assert.equal(failed.body.refund.state, "failed");
+    assert.match(failed.body.refund.error, /fully reversed/);
+  } finally {
+    paystack.createRefund = original;
+  }
+  let budget = await budgetOf(admin, id);
+  assert.equal(budget.refunded, 0, "a failed refund counts for nothing");
+  assert.equal(budget.refundable.amount, 19500);
+  assert.equal(budget.refunds.length, 1);
+  assert.equal(budget.refunds[0].state, "failed");
+  assert.equal(budget.refunds[0].retryable, true);
+  assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
+
+  // A new refund isn't started beside a failed one: the failed one is retried.
+  const beside = await refundUnused(admin, id);
+  assert.equal(beside.status, 409);
+  assert.equal(beside.body.code, "REFUND_NEEDS_RETRY");
+
+  paystack.createRefund = async (args) => {
+    calls += 1;
+    return original(args);
+  };
+  try {
+    const retried = await retryRefund(admin, id, budget.refunds[0].id);
+    assert.equal(retried.status, 200, JSON.stringify(retried.body));
+    assert.equal(retried.body.refund.state, "sent");
+    assert.equal((await retryRefund(admin, id, budget.refunds[0].id)).status, 409);
+  } finally {
+    paystack.createRefund = original;
+  }
+  assert.equal(calls, 2);
+  assert.equal(await Transaction.countDocuments({ campaignId: id, type: "refund" }), 1, "the retry reused the row");
+  budget = await budgetOf(admin, id);
+  assert.equal(budget.refunded, 1);
+  assert.equal(budget.refundable.amount, 0);
+  assert.equal(budget.refunds[0].state, "sent");
+  assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
+  assert.equal(budget.reconciliation.pendingRefunds, 19500);
+});
+
+test("a refund interrupted after its row is written is retried from that row and never sent twice", async () => {
+  const { Transaction } = models();
+  const fixedPay = require("../../src/utils/fixedPay");
+  const admin = await finance();
+  const { id } = await finishedCampaignWithOneUnused(admin);
+  const paystack = paystackModule();
+  const original = paystack.createRefund;
+  let calls = 0;
+
+  fixedPay.refundHooks.beforeSend = () => {
+    throw new Error("simulated crash");
+  };
+  try {
+    const crashed = await refundUnused(admin, id);
+    assert.equal(crashed.status, 500);
+  } finally {
+    fixedPay.refundHooks.beforeSend = null;
+  }
+  let budget = await budgetOf(admin, id);
+  assert.equal(budget.refunds.length, 1);
+  assert.equal(budget.refunds[0].state, "not_sent");
+  assert.equal(budget.refunded, 1, "still reserved, so nothing can refund it again");
+  assert.equal(budget.refundable.amount, 0);
+  assert.equal((await refundUnused(admin, id)).status, 409);
+
+  paystack.createRefund = async (args) => {
+    calls += 1;
+    return original(args);
+  };
+  try {
+    const retries = await Promise.all([1, 2, 3].map(() => retryRefund(admin, id, budget.refunds[0].id)));
+    assert.equal(retries.filter((r) => r.status === 200).length, 1, JSON.stringify(retries.map((r) => r.body)));
+  } finally {
+    paystack.createRefund = original;
+  }
+  assert.equal(calls, 1);
+  assert.equal(await Transaction.countDocuments({ campaignId: id, type: "refund" }), 1);
+  budget = await budgetOf(admin, id);
+  assert.equal(budget.refunds[0].state, "sent");
+  assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
+});
+
+test("rejected content isn't refundable while it can still be appealed; after 7 days without an appeal it is", async () => {
+  const { Submission } = models();
+  const admin = await finance();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 2 });
+  const done = await joinAndSubmit(id);
+  await approve(brand, done);
+  await deliver(done);
+  await patch(`/api/submissions/${done.submissionId}/confirm-receipt`, brand.token);
+  const rejected = await joinAndSubmit(id);
+  const reject = await patch(`/api/submissions/${rejected.submissionId}/reject`, brand.token, { reason: "Off brief" });
+  assert.equal(reject.status, 200, JSON.stringify(reject.body));
+  const stored = await Submission.findById(rejected.submissionId).lean();
+  assert.ok(stored.appealableUntil > new Date(Date.now() + 6 * DAY));
+  await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: admin.token, body: { status: "completed" } });
+
+  let budget = await budgetOf(admin, id);
+  assert.equal(budget.inProgress, 1);
+  assert.equal(budget.refundable.amount, 0);
+
+  await Submission.updateOne({ _id: rejected.submissionId }, { $set: { appealableUntil: new Date(Date.now() - 1000) } });
+  budget = await budgetOf(admin, id);
+  assert.equal(budget.inProgress, 0);
+  assert.equal(budget.refundable.amount, 19500);
+  const late = await patch(`/api/submissions/${rejected.submissionId}/appeal`, rejected.token, { reason: "It matched" });
+  assert.equal(late.status, 409, JSON.stringify(late.body));
+  assert.equal(late.body.code, "APPEAL_WINDOW_CLOSED");
+});
+
+test("an appeal can't be upheld when there's no budget left to pay for it", async () => {
+  const { Campaign, Submission } = models();
+  const Slot = require("../../src/models/Slot");
+  const { creditFixedPay } = require("../../src/utils/fixedPay");
+  const admin = await finance();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 1 });
+  const creator = await joinAndSubmit(id);
+  await patch(`/api/submissions/${creator.submissionId}/reject`, brand.token, { reason: "Off brief" });
+  const appealed = await patch(`/api/submissions/${creator.submissionId}/appeal`, creator.token, { reason: "On brief" });
+  assert.equal(appealed.status, 200, JSON.stringify(appealed.body));
+
+  // The only deliverable's budget is used by another submission (test fixture), its place still free.
+  const other = await harness.registerCreator();
+  const filler = await Submission.create({ campaignId: id, creatorId: other.id, creatorHandle: other.username, videoUrl: "https://x.test/v.mp4", status: "completed", completedAt: new Date() });
+  assert.ok((await creditFixedPay({ submission: filler, campaign: await Campaign.findById(id), trigger: "test" })).credited);
+
+  const upheld = await harness.api("PATCH", `/api/admin/submissions/${creator.submissionId}/appeal`, { token: admin.token, body: { decision: "approve" } });
+  assert.equal(upheld.status, 409, JSON.stringify(upheld.body));
+  assert.equal(upheld.body.code, "NO_BUDGET_FOR_APPEAL");
+  assert.match(upheld.body.error, /budget/i);
+  const after = await Submission.findById(creator.submissionId).lean();
+  assert.equal(after.status, "appealed");
+  assert.equal((await Slot.findOne({ campaignId: id }).lean()).status, "available");
+});
+
+test("receipts and live posts still auto-confirm after the campaign is cancelled or completed", async () => {
+  const { Submission } = models();
+  const { autoApproveStaleSubmissions } = require("../../src/services/contentApproval");
+  const admin = await finance();
+
+  const brandPage = await liveContentCampaign({ destination: "brand_page" });
+  const deliverer = await joinAndSubmit(brandPage.id);
+  await approve(brandPage.brand, deliverer);
+  await deliver(deliverer);
+  const reviewing = await joinAndSubmit(brandPage.id);
+  await harness.api("PATCH", `/api/admin/campaigns/${brandPage.id}/status`, { token: admin.token, body: { status: "cancelled", note: "Brand request" } });
+
+  const creatorPage = await liveContentCampaign({ destination: "creator_page" });
+  const poster = await joinAndSubmit(creatorPage.id);
+  await approve(creatorPage.brand, poster);
+  await post(poster);
+  await harness.api("PATCH", `/api/admin/campaigns/${creatorPage.id}/status`, { token: admin.token, body: { status: "completed" } });
+
+  await autoApproveStaleSubmissions(new Date(Date.now() + 73 * HOUR));
+  assert.equal((await Submission.findById(deliverer.submissionId).lean()).status, "completed");
+  assert.equal((await Submission.findById(poster.submissionId).lean()).status, "completed");
+  assert.equal((await credits(creatorPage.id)).length, 1);
+  // Review of new content isn't done for a cancelled campaign.
+  assert.equal((await Submission.findById(reviewing.submissionId).lean()).status, "new");
+});
+
+test("admin voids pay for approved content never delivered: reversed, back in the pool, once", async () => {
+  const { AdminActivity, Campaign, Submission, Transaction } = models();
+  const Notification = require("../../src/models/Notification");
+  const admin = await finance();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 2 });
+  const creator = await joinAndSubmit(id);
+  await approve(brand, creator);
+  const voidPay = () => harness.api("POST", `/api/admin/submissions/${creator.submissionId}/void-undelivered`, { token: admin.token });
+
+  const early = await voidPay();
+  assert.equal(early.status, 409, JSON.stringify(early.body));
+  assert.equal(early.body.code, "NOT_VOIDABLE_YET");
+
+  await Submission.updateOne({ _id: creator.submissionId }, { $set: { reviewedAt: new Date(Date.now() - 15 * DAY), fixedPayDueAt: new Date(Date.now() - 15 * DAY) } });
+  const voids = await Promise.all([voidPay(), voidPay(), voidPay()]);
+  assert.ok(voids.every((r) => r.status === 200), JSON.stringify(voids.map((r) => r.body)));
+  assert.equal(voids.filter((r) => r.body.voided).length, 1);
+
+  const credit = await Transaction.findOne({ campaignId: id, type: "fixed_credit" }).lean();
+  assert.equal(credit.status, "voided");
+  const reversals = await Transaction.find({ campaignId: id, type: "fixed_void" }).lean();
+  assert.equal(reversals.length, 1);
+  assert.equal(reversals[0].amount, RATE);
+  const campaign = await Campaign.findById(id).lean();
+  assert.equal(campaign.fixedPay.credited, 0);
+  assert.equal(campaign.fixedPay.creditedSubmissions.length, 0);
+  assert.equal((await Submission.findById(creator.submissionId).lean()).status, "not_delivered");
+  assert.equal(await Notification.countDocuments({ creatorId: creator.id, type: "content_not_delivered" }), 1);
+  assert.equal(await AdminActivity.countDocuments({ targetId: creator.submissionId, action: "submission.fixed_pay_voided" }), 1);
+  assert.equal((await walletCampaign(creator, id)).wallet.fixed.earned, 0);
+
+  await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: admin.token, body: { status: "cancelled", note: "Brand request" } });
+  const budget = await budgetOf(admin, id);
+  assert.equal(budget.refundable.deliverables, 2, "the voided deliverable is refundable");
+  assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
+
+  // On a cancelled campaign there's no 14-day wait.
+  const cancelled = await liveContentCampaign({ destination: "brand_page" });
+  const other = await joinAndSubmit(cancelled.id);
+  await approve(cancelled.brand, other);
+  await harness.api("PATCH", `/api/admin/campaigns/${cancelled.id}/status`, { token: admin.token, body: { status: "cancelled", note: "Brand request" } });
+  const now = await harness.api("POST", `/api/admin/submissions/${other.submissionId}/void-undelivered`, { token: admin.token });
+  assert.equal(now.status, 200, JSON.stringify(now.body));
+});
+
+test("a payout re-checks fixed pay and releases only credits delivered and past their hold", async () => {
+  const { Campaign, Submission, Transaction, Withdrawal } = models();
+  const { creditFixedPay } = require("../../src/utils/fixedPay");
+  const admin = await finance();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 3 });
+  const creator = await joinAndSubmit(id);
+  await approve(brand, creator);
+  await deliver(creator);
+  await patch(`/api/submissions/${creator.submissionId}/confirm-receipt`, brand.token);
+  await completedDaysAgo(creator.submissionId, 9);
+  // A second credit for the same creator (test fixture), still in its hold.
+  const second = await Submission.create({ campaignId: id, creatorId: creator.id, creatorHandle: creator.username, videoUrl: "https://x.test/2.mp4", status: "completed", completedAt: new Date(Date.now() - 2 * DAY) });
+  assert.ok((await creditFixedPay({ submission: second, campaign: await Campaign.findById(id), trigger: "test" })).credited);
+
+  // The wallet shows each unlock date with its own amount.
+  let { entry } = await walletCampaign(creator, id);
+  const fixedHolds = entry.onHold.filter((h) => h.pot === "fixed");
+  assert.equal(fixedHolds.length, 1);
+  assert.equal(fixedHolds[0].amount, RATE);
+  assert.ok(new Date(fixedHolds[0].until) > new Date(Date.now() + 4 * DAY));
+
+  await Submission.updateOne({ _id: second._id }, { $set: { completedAt: new Date(Date.now() - 8 * DAY) } });
+  const requested = await withdraw(creator, id);
+  assert.equal(requested.status, 201, JSON.stringify(requested.body));
+  assert.equal(requested.body.fixedAmount, 2 * RATE);
+
+  // Before payout the second credit stops being eligible (test seam).
+  await Submission.updateOne({ _id: second._id }, { $set: { completedAt: new Date() } });
+  const paid = await harness.api("POST", `/api/admin/withdrawals/${requested.body.id}/review`, { token: admin.token, body: { approve: true } });
+  assert.equal(paid.status, 200, JSON.stringify(paid.body));
+  const releases = await Transaction.find({ campaignId: id, type: "release", status: { $ne: "failed" } }).lean();
+  assert.equal(releases.reduce((sum, r) => sum + r.amount, 0), RATE);
+  const withdrawal = await Withdrawal.findById(requested.body.id).lean();
+  assert.equal(withdrawal.amount, RATE);
+  assert.equal(withdrawal.fixedAmount, RATE);
+  assert.equal(withdrawal.status, "released");
+
+  ({ entry } = await walletCampaign(creator, id));
+  assert.equal(entry.fixedOnHold, RATE);
+});
+
+test("brand payouts show paid out, owed and refundable separately; audit views list credits and fixed amounts", async () => {
+  const admin = await finance();
+  const { brand, id } = await liveContentCampaign({ destination: "brand_page", deliverables: 3 });
+  const paidCreator = await joinAndSubmit(id);
+  await approve(brand, paidCreator);
+  await deliver(paidCreator);
+  await patch(`/api/submissions/${paidCreator.submissionId}/confirm-receipt`, brand.token);
+  await completedDaysAgo(paidCreator.submissionId, 8);
+  const requested = await withdraw(paidCreator, id);
+  const owedCreator = await joinAndSubmit(id);
+  await approve(brand, owedCreator);
+
+  const withdrawals = await harness.api("GET", "/api/admin/withdrawals?status=pending", { token: admin.token });
+  const line = withdrawals.body.withdrawals.find((w) => String(w.id) === String(requested.body.id));
+  assert.equal(line.fixedAmount, RATE);
+  await harness.api("POST", `/api/admin/withdrawals/${requested.body.id}/review`, { token: admin.token, body: { approve: true } });
+  await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: admin.token, body: { status: "completed" } });
+
+  const payouts = await harness.api("GET", `/api/payouts/campaign/${id}`, { token: brand.token });
+  assert.equal(payouts.status, 200, JSON.stringify(payouts.body));
+  assert.deepEqual(payouts.body.content, {
+    deliverables: 3,
+    paidOut: RATE,
+    owed: RATE,
+    refundable: 19500,
+    refunded: 0,
+    refundPending: 0,
+  });
+  assert.equal(payouts.body.refundable, 19500, "never the owed pay or the fee on delivered work");
+  assert.ok(payouts.body.ledger.some((row) => row.type === "fixed_credit" && row.status === "credited"));
+
+  const ledger = await harness.api("GET", "/api/admin/payouts?limit=100", { token: admin.token });
+  assert.ok(ledger.body.transactions.some((t) => t.type === "fixed_credit"));
+});

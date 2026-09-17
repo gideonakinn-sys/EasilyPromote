@@ -87,6 +87,7 @@ const submissionSchema = new mongoose.Schema(
         "awaiting_delivery",
         "awaiting_receipt",
         "completed",
+        "not_delivered",
       ],
       default: "new",
     },
@@ -181,6 +182,15 @@ const submissionSchema = new mongoose.Schema(
       type: Date,
     },
     completedAt: {
+      type: Date,
+    },
+    // Rejected content can be appealed until then (7 days); an appeal decision closes it. While
+    // it's open the deliverable isn't refundable (ticket 09).
+    appealableUntil: {
+      type: Date,
+    },
+    // Admin voided fixed pay for approved content that was never delivered to the brand.
+    notDeliveredAt: {
       type: Date,
     },
   },

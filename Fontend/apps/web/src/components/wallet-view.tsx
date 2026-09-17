@@ -38,9 +38,19 @@ function formatPayoutDay(iso?: string | null) {
 }
 
 const POT_LABEL: Record<"fixed" | "referral", string> = {
-  fixed: "Fixed pay",
-  referral: "Referral pay",
+  fixed: "Fixed Pay On Hold",
+  referral: "Referral Pay On Hold",
 };
+
+const roundKobo = (value: number) => Math.round(value * 100) / 100;
+
+// "₦15,000 unlocks 12 November, ₦7,500 later": the next unlock with its own amount.
+function unlockText(unlocks: Array<{ date: string; amount: number }>) {
+  if (unlocks.length === 0) return null;
+  const [next, ...rest] = unlocks;
+  const later = roundKobo(rest.reduce((sum, u) => sum + u.amount, 0));
+  return `₦${next.amount.toLocaleString()} unlocks ${formatHoldDate(next.date)}${later > 0 ? `, ₦${later.toLocaleString()} later` : ""}`;
+}
 
 function formatHoldDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Africa/Lagos" });
@@ -350,11 +360,11 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                     <ul className="space-y-0.5">
                       {(c.onHold ?? []).map((hold) => (
                         <li
-                          key={`${hold.pot}-${hold.reason}`}
+                          key={`${hold.pot}-${hold.until ?? hold.reason}`}
                           className="font-rethink text-[11px] font-medium text-stone-500 flex justify-between gap-3"
                         >
                           <span>
-                            {POT_LABEL[hold.pot]} on hold · {hold.until ? `${hold.reason} until ${formatHoldDate(hold.until)}` : hold.reason}
+                            {POT_LABEL[hold.pot]} · {hold.until ? `Unlocks ${formatHoldDate(hold.until)}` : hold.reason}
                           </span>
                           <span className="tabular-nums shrink-0">₦{hold.amount.toLocaleString()}</span>
                         </li>
@@ -363,7 +373,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   )}
                   {c.payoutDate && ["available", "below_minimum", "nothing_yet"].includes(state) && (
                     <p className="font-rethink text-[11px] font-medium text-stone-400">
-                      Payout day: {formatPayoutDay(c.payoutDate)}
+                      Payout Day: {formatPayoutDay(c.payoutDate)}
                     </p>
                   )}
                   {state === "available" && (
@@ -435,14 +445,14 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       {fixedCampaigns.length > 0 && (
         <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-stone-500">Fixed pay</span>
+            <span className="text-[10px] font-medium text-stone-500">Fixed Pay</span>
             <span className="font-rethink text-sm font-medium text-stone-900">₦{(fixed?.earned ?? 0).toLocaleString()}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-medium text-stone-500 block">On hold</span>
+              <span className="text-[10px] font-medium text-stone-500 block">On Hold</span>
               <span className="font-rethink text-sm font-medium text-stone-900">
-                ₦{((fixed?.awaitingDelivery ?? 0) + (fixed?.onHold ?? 0)).toLocaleString()}
+                ₦{roundKobo((fixed?.awaitingDelivery ?? 0) + (fixed?.onHold ?? 0)).toLocaleString()}
               </span>
             </div>
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
@@ -458,7 +468,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   <p className="font-rethink text-xs text-stone-500">
                     {c.deliverables} deliverable{c.deliverables === 1 ? "" : "s"}
                     {c.awaitingDelivery > 0 && ` · ₦${c.awaitingDelivery.toLocaleString()} waiting for the brand to confirm delivery`}
-                    {c.onHold > 0 && c.holdUntil && ` · ₦${c.onHold.toLocaleString()} on hold until ${formatHoldDate(c.holdUntil)}`}
+                    {c.onHold > 0 && (c.unlocks ?? []).length > 0 && ` · ${unlockText(c.unlocks ?? [])}`}
                     {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
                   </p>
                 </div>
@@ -477,7 +487,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-medium text-stone-500 block">On hold ({referral?.holdDays ?? 7} days)</span>
+              <span className="text-[10px] font-medium text-stone-500 block">On Hold ({referral?.holdDays ?? 7} Days)</span>
               <span className="font-rethink text-sm font-medium text-stone-900">₦{(referral?.pending ?? 0).toLocaleString()}</span>
             </div>
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
@@ -582,7 +592,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
             <dl className="bg-stone-50 rounded-2xl p-4 space-y-2 text-sm font-rethink">
               {(confirmCampaign.fixedAvailable ?? 0) > 0 && (
                 <div className="flex justify-between gap-3">
-                  <dt className="text-stone-500 font-medium">Fixed pay</dt>
+                  <dt className="text-stone-500 font-medium">Fixed Pay</dt>
                   <dd className="text-stone-900 font-medium tabular-nums">₦{(confirmCampaign.fixedAvailable ?? 0).toLocaleString()}</dd>
                 </div>
               )}

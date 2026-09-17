@@ -189,8 +189,13 @@ test("a sign-up campaign's referral payout, cancellation refunds and ledger reco
   result = await reconcileCampaignById(id);
   assert.ok(result.ok, JSON.stringify(result.problems));
   assert.equal(result.released, REWARD);
-  assert.equal(result.refunds, 347428.57);
+  // Sent to Paystack, not yet confirmed.
+  assert.equal(result.pendingRefunds, 347428.57);
+  assert.equal(result.refunds, 0);
   assert.equal(result.left, 0);
-  assert.equal(result.paidIn, Math.round((result.released + result.inFlight + result.owed + result.platformFee + result.refunds + result.left) * 100) / 100);
+  assert.equal(
+    result.paidIn,
+    Math.round((result.released + result.inFlight + result.owed + result.platformFee + result.refunds + result.pendingRefunds + result.left) * 100) / 100
+  );
   assert.equal((await Campaign.findById(id).lean()).referral.poolRemaining, 0);
 });

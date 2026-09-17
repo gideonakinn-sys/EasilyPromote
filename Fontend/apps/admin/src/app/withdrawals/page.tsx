@@ -14,6 +14,10 @@ interface WithdrawalItem {
   creatorId: string;
   creatorName: string;
   amount: number;
+  kind?: "views" | "referral" | "campaign";
+  viewsAmount?: number;
+  referralAmount?: number;
+  fixedAmount?: number;
   status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   targetViews: number | null;
@@ -180,7 +184,15 @@ export default function AdminWithdrawalsPage() {
 
                     <td className="px-6 py-4 font-mono text-stone-600">{formatCurrency(w.escrowBalance)}</td>
 
-                    <td className="px-6 py-4 font-bold text-stone-900">{formatCurrency(w.amount)}</td>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-stone-900">{formatCurrency(w.amount)}</p>
+                      {w.kind === "campaign" && (
+                        <p className="text-[10px] text-stone-500 mt-0.5 whitespace-nowrap">
+                          Views {formatCurrency(w.viewsAmount ?? 0)} · Referral {formatCurrency(w.referralAmount ?? 0)} · Fixed{" "}
+                          {formatCurrency(w.fixedAmount ?? 0)}
+                        </p>
+                      )}
+                    </td>
 
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${

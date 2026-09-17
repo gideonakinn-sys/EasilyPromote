@@ -7,6 +7,7 @@ const { creatorReferralEarnings } = require("../utils/referralEarnings");
 const { campaignEventTypes } = require("../utils/referralCodes");
 const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
 const { creatorFixedEarnings, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
+const { roundMoney } = require("../utils/money");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const TikTokConnection = require("../models/TikTokConnection");
@@ -612,16 +613,16 @@ async function buildWallet(user, ctx) {
     const thisWeek = forCampaign.find((w) => new Date(w.requestedAt) >= weekStart);
     if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0 && fixedOnHold <= 0 && fixedAwaitingDelivery <= 0) continue;
 
-    // Money not withdrawable yet, and why.
+    // Money not withdrawable yet, and why: one line per unlock date, each with its own amount.
     const onHold = [];
     if (fixedAwaitingDelivery > 0) {
       onHold.push({ pot: "fixed", amount: fixedAwaitingDelivery, reason: "Waiting for the brand to confirm delivery", until: null });
     }
-    if (fixedOnHold > 0) {
-      onHold.push({ pot: "fixed", amount: fixedOnHold, reason: "7-day hold", until: fixedTotals.holdUntil });
+    for (const unlock of (fixedTotals && fixedTotals.unlocks) || []) {
+      onHold.push({ pot: "fixed", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
     }
-    if (referralOnHold > 0) {
-      onHold.push({ pot: "referral", amount: referralOnHold, reason: "7-day hold", until: referralTotals.nextAvailableAt || null });
+    for (const unlock of (referralTotals && referralTotals.unlocks) || []) {
+      onHold.push({ pot: "referral", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
     }
 
     withdrawCampaigns.push({
@@ -642,7 +643,7 @@ async function buildWallet(user, ctx) {
         referral: referralTotals ? referralTotals.earned : 0,
       },
       onHold,
-      onHoldTotal: floorKobo(fixedAwaitingDelivery + fixedOnHold + referralOnHold),
+      onHoldTotal: roundMoney(fixedAwaitingDelivery + fixedOnHold + referralOnHold),
       payoutDate: inFlight ? nextPayoutDate(inFlight.requestedAt) : nextPayoutDate(now),
       total,
       // available | below_minimum | nothing_yet | requested | withdrawn_this_week
@@ -702,11 +703,12 @@ async function buildWallet(user, ctx) {
       awaitingDelivery: entry.awaitingDelivery,
       onHold: entry.onHold,
       holdUntil: entry.holdUntil,
+      unlocks: entry.unlocks,
       withdrawn: entry.withdrawn,
       availableToWithdraw: entry.availableToWithdraw,
     };
   });
-  const sumFixed = (field) => Math.round(fixedByCampaign.reduce((sum, c) => sum + c[field], 0) * 100) / 100;
+  const sumFixed = (field) => roundMoney(fixedByCampaign.reduce((sum, c) => sum + c[field], 0));
 
   return {
     balance: withdrawableBalance,

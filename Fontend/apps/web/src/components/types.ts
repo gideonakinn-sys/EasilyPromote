@@ -230,6 +230,8 @@ export interface WalletData {
       awaitingDelivery: number;
       onHold: number;
       holdUntil: string | null;
+      // Each unlock date with the amount that unlocks then, soonest first.
+      unlocks?: Array<{ date: string; amount: number }>;
       withdrawn: number;
       availableToWithdraw: number;
     }>;

@@ -181,9 +181,22 @@ const campaignSchema = new mongoose.Schema(
       // One entry per submission whose fixed pay is credited; its length is deliverables paid.
       creditedSubmissions: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
       credited: { type: Number, default: undefined },
-      refundedDeliverables: { type: Number, default: undefined },
-      refundedCreatorBudget: { type: Number, default: undefined },
-      refundedFee: { type: Number, default: undefined },
+      // Capacity held by unused-budget refunds that are pending or succeeded, one entry per refund
+      // row. The refund rows are the record; this is the lock credits check against.
+      refundReservations: {
+        type: [
+          new mongoose.Schema(
+            {
+              refundId: { type: mongoose.Schema.Types.ObjectId, required: true },
+              deliverables: { type: Number, required: true },
+              creatorBudget: { type: Number, required: true },
+              platformFee: { type: Number, required: true },
+            },
+            { _id: false }
+          ),
+        ],
+        default: undefined,
+      },
     },
     contentDestination: {
       type: String,

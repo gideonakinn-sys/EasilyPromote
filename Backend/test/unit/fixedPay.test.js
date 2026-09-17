@@ -2,9 +2,20 @@
 // refund returns. Amounts worked by hand from D2 (30% fee on top of the brand's rate).
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { fixedCreditState, unusedBudgetRefund, FIXED_HOLD_MS } = require("../../src/utils/fixedPay");
+const { fixedCreditState, unusedBudgetRefund, canStillEarn, FIXED_HOLD_MS } = require("../../src/utils/fixedPayRules");
 
 const DAY = 24 * 60 * 60 * 1000;
+
+test("content that can still earn its pay: in progress, under appeal, or rejected within 7 days", () => {
+  const now = new Date("2026-11-06T12:00:00Z");
+  for (const status of ["new", "changes_requested", "awaiting_delivery", "awaiting_receipt", "awaiting_post", "verifying", "appealed"]) {
+    assert.equal(canStillEarn({ status }, now), true, status);
+  }
+  assert.equal(canStillEarn({ status: "rejected", appealableUntil: new Date(now.getTime() + DAY) }, now), true);
+  assert.equal(canStillEarn({ status: "rejected", appealableUntil: new Date(now.getTime() - 1) }, now), false);
+  assert.equal(canStillEarn({ status: "rejected" }, now), false, "an appeal decision closed it");
+  assert.equal(canStillEarn({ status: "not_delivered" }, now), false);
+});
 
 test("a credit waits for delivery, is held 7 days from completion, then is available", () => {
   const now = new Date("2026-11-06T12:00:00Z");

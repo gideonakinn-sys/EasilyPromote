@@ -11,19 +11,7 @@ const DEPOSIT_TYPES = ["escrow_deposit", "topup"];
 // money — only a "failed" release returns its amount to the pool.
 const COMMITTED_RELEASE_STATUSES = ["escrow_deposit", "released"];
 
-// Views, referral and fixed budgets are separate pots. Rows from before referral
-// budgets existed have no bucket and belong to views.
-function bucketOf(transaction) {
-  if (transaction.bucket === "referral") return "referral";
-  if (transaction.bucket === "fixed") return "fixed";
-  return "views";
-}
-
-// Query filter for one pot's rows.
-function bucketFilter(bucket) {
-  if (bucket === "referral" || bucket === "fixed") return bucket;
-  return { $nin: ["referral", "fixed"] };
-}
+const { bucketOf, bucketFilter, roundMoney } = require("./money");
 
 function escrowBalanceFrom(transactions, bucket = "views", creatorPool = null) {
   const inBucket = transactions.filter((t) => bucketOf(t) === bucket);
@@ -42,7 +30,7 @@ function escrowBalanceFrom(transactions, bucket = "views", creatorPool = null) {
     const credited = inBucket
       .filter((t) => t.type === "fixed_credit" && t.status === "credited")
       .reduce((sum, t) => sum + t.amount, 0);
-    return Math.max(Math.round((Math.min(credited, deposited) - committed) * 100) / 100, 0);
+    return Math.max(roundMoney(Math.min(credited, deposited) - committed), 0);
   }
 
   // Every refund row counts, whatever Paystack's progress: that money is the brand's.
@@ -110,7 +98,7 @@ async function refundViewsEscrow(campaignId) {
       },
     },
   ]);
-  const refundable = Math.round(Math.max(balance - (awaiting ? awaiting.total : 0), 0) * 100) / 100;
+  const refundable = roundMoney(Math.max(balance - (awaiting ? awaiting.total : 0), 0));
   if (refundable <= 0) return 0;
 
   const refund = await refundCampaignBucket({

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Read-only money check for every campaign with money on record: paid in = creator payouts
-// (released and in flight) + owed to creators + platform fee kept + refunds + what's left in the
-// pools, to the kobo, per pot (views, referral, fixed). Lists every campaign that doesn't balance
+// (released and in flight) + owed to creators + platform fee kept + refunds (succeeded and pending)
+// + what's left in the pools, to the kobo, per pot (views, referral, fixed), with the fee, per-creator
+// payouts and content refunds checked independently. Lists every campaign that doesn't balance
 // and why. Writes nothing. Exits 1 when any campaign has a problem.
 //
 //   MONGODB_URI=<connection string> node scripts/reconcileCampaigns.js [--all]
@@ -33,7 +34,8 @@ async function main() {
       console.log(`${result.ok ? "OK  " : "FAIL"} ${result.campaignId} ${result.name || ""} (${result.status})`);
       console.log(
         `     paid in ${money(result.paidIn)} = released ${money(result.released)} + in flight ${money(result.inFlight)} + owed ${money(result.owed)}` +
-          ` + fee ${money(result.platformFee)} + refunds ${money(result.refunds)} + left ${money(result.left)}`
+          ` + fee ${money(result.platformFee)} + refunds ${money(result.refunds)} + refunds pending ${money(result.pendingRefunds)}` +
+          ` + left ${money(result.left)}${result.failedRefunds > 0 ? ` (failed refunds ${money(result.failedRefunds)})` : ""}`
       );
       for (const problem of result.problems) console.log(`     - ${problem}`);
     },

@@ -24,7 +24,8 @@ const transactionSchema = new mongoose.Schema(
       // against the campaign for its books; never part of escrow.
       // fixed_credit: a content campaign's fixed pay owed to a creator for one submission
       // (ticket 09), reserved from the creator pool and paid out later by a release.
-      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment", "transfer_fee", "fixed_credit"],
+      // fixed_void: reverses a fixed credit that was never delivered; the amount goes back to the pool.
+      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment", "transfer_fee", "fixed_credit", "fixed_void"],
       required: true,
     },
     views: {
@@ -49,8 +50,8 @@ const transactionSchema = new mongoose.Schema(
       type: String,
       // Refunds: refund_pending until Paystack confirms every part, refund_failed when any
       // part needs a manual refund. Unmatched payments sit in under_review. Fixed credits
-      // are "credited" while owed.
-      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review", "credited"],
+      // are "credited" while owed and "voided" once reversed.
+      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review", "credited", "voided"],
       required: true,
     },
     adminNotes: {
@@ -65,6 +66,8 @@ const transactionSchema = new mongoose.Schema(
             chargeReference: { type: String, default: null },
             amount: { type: Number, required: true },
             paystackRefundId: { type: String, default: null },
+            // When Paystack accepted the refund request (fixed refunds; Paystack may not return an id).
+            sentAt: { type: Date, default: null },
             status: { type: String, enum: ["pending", "processed", "failed"], default: "pending" },
             error: { type: String, default: null },
           },
@@ -88,6 +91,11 @@ const transactionSchema = new mongoose.Schema(
     // Deposits and top-ups: the platform fee inside the amount paid.
     feeAmount: {
       type: Number,
+      default: undefined,
+    },
+    // Fixed refunds: set while a request is sending parts to Paystack, so two retries can't both send.
+    refundSendingUntil: {
+      type: Date,
       default: undefined,
     },
     // A content campaign's unused-budget refund: what the amount is made of.

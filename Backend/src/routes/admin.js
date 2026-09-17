@@ -28,7 +28,13 @@ const { hasConnectedSocial } = require("../utils/creatorVerification");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
 // Fixed pay payouts and the money trail (ticket 09)
-const { RefundError, contentBudgetSummary, refundUnusedContentBudget } = require("../utils/fixedPay");
+const {
+  RefundError,
+  contentBudgetSummary,
+  refundUnusedContentBudget,
+  retryContentRefund,
+  voidUndeliveredPay,
+} = require("../utils/fixedPay");
 const { reconcileCampaignById } = require("../services/campaignReconciliation");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
@@ -250,9 +256,50 @@ router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) =
   }
 });
 
+// Refunding and voiding creator pay move money: finance admins and super admins only.
+const moneyGuard = [protect, authorizeRoles("finance_admin", "super_admin")];
+
+// Logs a refund attempt, tells the brand once Paystack has it, and answers with the real outcome:
+// 200 when sent or refunded, 502 when it failed (retryable).
+async function answerRefund(req, res, { refund, campaignId, action, note }) {
+  const campaign = await Campaign.findById(campaignId).select("name businessId");
+  await recordAdminActivity(req, {
+    action,
+    targetType: "campaign",
+    targetId: campaignId,
+    targetLabel: campaign ? campaign.name : null,
+    businessId: campaign ? campaign.businessId : null,
+    note,
+    metadata: {
+      refundId: refund.id,
+      amount: refund.amount,
+      deliverables: refund.deliverables,
+      creatorBudget: refund.creatorBudget,
+      platformFee: refund.platformFee,
+      state: refund.state,
+      error: refund.error,
+    },
+  });
+  if (campaign && ["sent", "refunded"].includes(refund.state)) {
+    await Notification.create({
+      businessId: campaign.businessId,
+      campaignId: campaign._id,
+      type: "campaign_refund",
+      title: "Unused budget refunded",
+      body: `₦${refund.amount.toLocaleString()} for ${refund.deliverables} unused deliverable${refund.deliverables === 1 ? "" : "s"} on "${campaign.name}" is being refunded to your payment method.`,
+    });
+  }
+  const summary = await contentBudgetSummary(campaignId);
+  res.status(refund.state === "failed" ? 502 : 200).json({
+    success: refund.state !== "failed",
+    refund,
+    summary: summary ? summary.summary : null,
+  });
+}
+
 // D5 at launch: admin refunds a finished content campaign's unused deliverables to the brand.
 // The body carries the amount the admin confirmed, so a stale screen can't refund something else.
-router.post("/campaigns/:id/refund-unused", adminGuard, async (req, res, next) => {
+router.post("/campaigns/:id/refund-unused", moneyGuard, async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
     const expected = req.body && req.body.expectedAmount;
@@ -266,41 +313,67 @@ router.post("/campaigns/:id/refund-unused", adminGuard, async (req, res, next) =
     } catch (error) {
       return sendRefundError(res, error, next);
     }
-    const { refund, transaction, campaign } = result;
-    const full = await Campaign.findById(campaign._id).select("name businessId");
+    await answerRefund(req, res, { refund: result.refund, campaignId: result.campaign._id, action: "campaign.unused_budget_refunded", note });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    await recordAdminActivity(req, {
-      action: "campaign.unused_budget_refunded",
-      targetType: "campaign",
-      targetId: campaign._id,
-      targetLabel: full ? full.name : null,
-      businessId: full ? full.businessId : null,
-      note,
-      metadata: {
-        amount: refund.amount,
-        deliverables: refund.deliverables,
-        creatorBudget: refund.creatorBudget,
-        platformFee: refund.platformFee,
-        transactionId: transaction ? transaction._id : null,
-        refundStatus: transaction ? transaction.status : null,
-      },
-    });
-    if (full) {
+// Retries a failed or interrupted unused-budget refund from its own row.
+router.post("/campaigns/:id/refunds/:refundId/retry", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    let result;
+    try {
+      result = await retryContentRefund({ campaignId: req.params.id, refundId: req.params.refundId });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    await answerRefund(req, res, { refund: result.refund, campaignId: req.params.id, action: "campaign.unused_budget_refund_retried", note: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Voids fixed pay for approved brand-page content never delivered (14 days after approval, or on a
+// cancelled campaign). Idempotent; the creator is told and the action logged once.
+router.post("/submissions/:id/void-undelivered", moneyGuard, async (req, res, next) => {
+  try {
+    let result;
+    try {
+      result = await voidUndeliveredPay({ submissionId: req.params.id });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    const { voided, amount, submission, campaign } = result;
+    if (voided) {
+      const note = String((req.body && req.body.note) || "").trim() || null;
+      await recordEvent(await Submission.findById(submission._id), {
+        type: "fixed_pay_voided",
+        actor: "admin",
+        actorId: req.user._id,
+        actorName: req.user.name,
+        reason: note,
+        metadata: { amount },
+      });
       await Notification.create({
-        businessId: full.businessId,
-        campaignId: full._id,
-        type: "campaign_refund",
-        title: "Unused budget refunded",
-        body: `₦${refund.amount.toLocaleString()} for ${refund.deliverables} unused deliverable${refund.deliverables === 1 ? "" : "s"} on "${full.name}" is being refunded to your payment method.`,
+        creatorId: submission.creatorId,
+        campaignId: campaign._id,
+        type: "content_not_delivered",
+        title: "Pay removed: content not delivered",
+        body: `Your approved content for "${campaign.name}" was never delivered to the brand, so its ₦${amount.toLocaleString()} fixed pay was removed.`,
+      });
+      await recordAdminActivity(req, {
+        action: "submission.fixed_pay_voided",
+        targetType: "submission",
+        targetId: submission._id,
+        targetLabel: `${submission.creatorHandle || "Creator"} · ${campaign.name}`,
+        businessId: campaign.businessId,
+        note,
+        metadata: { amount, campaignId: campaign._id, creatorId: submission.creatorId },
       });
     }
-
-    const summary = await contentBudgetSummary(campaign._id);
-    res.json({
-      success: true,
-      refund: { ...refund, id: transaction ? transaction._id : null, status: transaction ? transaction.status : null },
-      summary: summary ? summary.summary : null,
-    });
+    res.json({ success: true, voided, amount });
   } catch (err) {
     next(err);
   }
@@ -1332,9 +1405,11 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
         kind: w.kind || "views",
         viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
         referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
         // Each part is paid from its own pot, so show the balances that will fund it.
         escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId, w.kind === "referral" ? "referral" : "views") : 0,
         referralEscrowBalance: w.campaignId && w.kind === "campaign" ? await campaignEscrowBalance(w.campaignId, "referral") : null,
+        fixedEscrowBalance: w.campaignId && w.kind === "campaign" && (w.fixedAmount || 0) > 0 ? await campaignEscrowBalance(w.campaignId, "fixed") : null,
         requestedAt: w.requestedAt,
         reviewedAt: w.reviewedAt,
         releasedAt: w.releasedAt,

@@ -20,6 +20,7 @@ const EVENT_TYPES = [
   "post_disputed",
   "fixed_pay_due",
   "completed",
+  "fixed_pay_voided",
 ];
 
 const submissionEventSchema = new mongoose.Schema(

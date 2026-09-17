@@ -29,7 +29,8 @@ const { isContentCampaign } = require("../utils/campaignPay");
 const { missingHashtags, captionHasCode } = require("../utils/captionRules");
 const { HELD_PLACEMENT_STATUSES } = require("../utils/placementStatuses");
 const { recordEvent } = require("./submissionEvents");
-const { creditFixedPay, ensureFixedCredit } = require("../utils/fixedPay");
+const { creditFixedPay, ensureFixedCredit, canPayAnotherDeliverable } = require("../utils/fixedPay");
+const { APPEAL_WINDOW_MS } = require("../utils/fixedPayRules");
 
 const MAX_CHANGE_REQUESTS = 2;
 const BRAND_RESPONSE_MS = 72 * 60 * 60 * 1000;
@@ -385,8 +386,10 @@ async function rejectContent({ submission, campaign, actor, reason }) {
   const text = String(reason || "").trim();
   if (!text) fail(400, "REASON_REQUIRED", "A rejection reason is required");
   if (submission.status !== "new") fail(400, "NOT_AWAITING_REVIEW", "Can only reject content waiting for review");
+  const rejectedAt = new Date();
   const updated = await transition(submission, ["new"], {
-    $set: { status: "rejected", rejectionReason: text, reviewedAt: new Date() },
+    // The creator can appeal for 7 days; until then the deliverable isn't unused budget.
+    $set: { status: "rejected", rejectionReason: text, reviewedAt: rejectedAt, appealableUntil: new Date(rejectedAt.getTime() + APPEAL_WINDOW_MS) },
     $unset: { awaitingBrandSince: 1 },
   });
   await recordEvent(updated, { type: "rejected", ...eventActor(actor, updated), reason: text });
@@ -407,7 +410,15 @@ async function appealRejection({ submission, campaign, user, reason }) {
   const text = String(reason || "").trim();
   if (!text) fail(400, "REASON_REQUIRED", "Say why the rejection should be reviewed");
   if (submission.status !== "rejected") fail(400, "NOT_REJECTED", "Only rejected content can be appealed");
-  const updated = await transition(submission, ["rejected"], { $set: { status: "appealed", appealReason: text } });
+  if (!submission.appealableUntil || new Date(submission.appealableUntil) <= new Date()) {
+    fail(409, "APPEAL_WINDOW_CLOSED", "The 7 days to appeal this rejection have passed");
+  }
+  const updated = await Submission.findOneAndUpdate(
+    { _id: submission._id, status: "rejected", appealableUntil: { $gt: new Date() } },
+    { $set: { status: "appealed", appealReason: text } },
+    { new: true }
+  );
+  if (!updated) fail(409, "STATUS_CHANGED", "This submission has changed. Refresh to see where it is now.");
   await recordEvent(updated, { type: "appealed", ...eventActor({ kind: "creator", user }, updated), reason: text });
   await notify({
     campaign,
@@ -433,7 +444,11 @@ async function decideAppeal({ submission, campaign, admin, decision, notes }) {
   const actor = { kind: "admin", user: admin };
 
   if (decision === "reject") {
-    const updated = await transition(submission, ["appealed"], { $set: { status: "rejected", adminNotes: notes || "Appeal rejected by Admin" } });
+    // The appeal decision is final: the rejection can't be appealed again.
+    const updated = await transition(submission, ["appealed"], {
+      $set: { status: "rejected", adminNotes: notes || "Appeal rejected by Admin" },
+      $unset: { appealableUntil: 1 },
+    });
     await recordEvent(updated, { type: "appeal_rejected", ...eventActor(actor, updated), reason: notes || null });
     await notify({
       campaign,
@@ -445,6 +460,15 @@ async function decideAppeal({ submission, campaign, admin, decision, notes }) {
     });
     afterChange(updated);
     return updated;
+  }
+
+  // Upholding means paying for this deliverable; refuse while nothing is left to pay it with.
+  if (!(await canPayAnotherDeliverable(campaign._id))) {
+    fail(
+      409,
+      "NO_BUDGET_FOR_APPEAL",
+      "This campaign's creator budget is fully used or refunded, so there's no budget left to pay for this deliverable. The appeal can't be upheld."
+    );
   }
 
   const now = new Date();
@@ -468,6 +492,7 @@ async function decideAppeal({ submission, campaign, admin, decision, notes }) {
   try {
     updated = await transition(submission, ["appealed"], {
       $set: { status: statusAfterApproval(campaign), reviewedAt: now, adminNotes: notes || "Appeal approved by Admin" },
+      $unset: { appealableUntil: 1 },
     });
   } catch (error) {
     if (retaken) {
@@ -689,16 +714,22 @@ const AUTO_ACTIONS = {
 async function autoApproveStaleSubmissions(now = new Date()) {
   const cutoff = new Date(now.getTime() - BRAND_RESPONSE_MS);
   // Views campaigns keep their manual review, so only content campaigns' submissions are read.
-  const contentCampaignIds = await Campaign.distinct("_id", {
-    $or: [{ campaignModel: "content" }, { campaignModel: { $exists: false }, campaignObjective: "content" }],
-    status: { $ne: "cancelled" },
-  });
+  // Receipts and live posts are confirmed whatever the campaign's state: the creator delivered, and
+  // a cancelled or completed campaign doesn't cancel what they're owed. New content on a cancelled
+  // campaign isn't reviewed automatically.
+  const isContent = { $or: [{ campaignModel: "content" }, { campaignModel: { $exists: false }, campaignObjective: "content" }] };
+  const [contentCampaignIds, reviewableCampaignIds] = await Promise.all([
+    Campaign.distinct("_id", isContent),
+    Campaign.distinct("_id", { ...isContent, status: { $ne: "cancelled" } }),
+  ]);
   const result = { approved: 0, receiptsConfirmed: 0, postsVerified: 0 };
   if (contentCampaignIds.length === 0) return result;
 
   const candidates = await Submission.find({
-    campaignId: { $in: contentCampaignIds },
-    status: { $in: WAITING_ON_BRAND },
+    $or: [
+      { campaignId: { $in: contentCampaignIds }, status: { $in: WAITING_ON_BRAND.filter((s) => s !== "new") } },
+      { campaignId: { $in: reviewableCampaignIds }, status: "new" },
+    ],
     awaitingBrandSince: { $lte: cutoff },
   })
     .sort({ awaitingBrandSince: 1 })
@@ -711,6 +742,7 @@ async function autoApproveStaleSubmissions(now = new Date()) {
     if (!campaigns.has(key)) campaigns.set(key, await Campaign.findById(submission.campaignId));
     const campaign = campaigns.get(key);
     if (!isContentCampaign(campaign)) continue;
+    if (submission.status === "new" && campaign.status === "cancelled") continue;
     try {
       await AUTO_ACTIONS[submission.status]({ submission, campaign, actor: { kind: "system" }, now });
       result[counter[submission.status]] += 1;

@@ -14,9 +14,7 @@ const MIN_REFERRAL_TOPUP = 1000;
 const MAX_REFERRAL_TOPUP = 50000000;
 const MAX_REWARD_PER_CONVERSION = 1000000;
 
-function roundMoney(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
+const { roundMoney } = require("./money");
 
 function toObjectId(value) {
   return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
@@ -148,6 +146,19 @@ async function refundUnusedReferralBudget(campaignId) {
   return refund ? unused : 0;
 }
 
+// Held rewards grouped by the Lagos day they unlock: [{ date (the latest unlock that day), amount }].
+function unlocksByDay(held) {
+  const days = new Map();
+  for (const { at, amount } of held) {
+    const day = new Date(new Date(at).getTime() + 60 * 60 * 1000).toISOString().slice(0, 10);
+    const entry = days.get(day) || { date: new Date(at), kobo: 0 };
+    if (new Date(at) > entry.date) entry.date = new Date(at);
+    entry.kobo += Math.round(amount * 100);
+    days.set(day, entry);
+  }
+  return [...days.values()].sort((a, b) => a.date - b.date).map((d) => ({ date: d.date, amount: d.kobo / 100 }));
+}
+
 function payoutStatusOf(event, now = new Date()) {
   if (event.voidedAt) return "voided";
   if (!(event.rewardAmount > 0)) return "unpaid";
@@ -182,6 +193,7 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
           pending: { $sum: { $cond: [{ $gt: ["$availableAt", now] }, "$rewardAmount", 0] } },
           // When the next held reward becomes available ($min skips the nulls).
           nextAvailableAt: { $min: { $cond: [{ $gt: ["$availableAt", now] }, "$availableAt", null] } },
+          held: { $push: { $cond: [{ $gt: ["$availableAt", now] }, { at: "$availableAt", amount: "$rewardAmount" }, "$$REMOVE"] } },
         },
       },
     ]),
@@ -213,6 +225,7 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
       withdrawn,
       availableToWithdraw: Math.max(roundMoney(available - withdrawn), 0),
       nextAvailableAt: group.nextAvailableAt || null,
+      unlocks: unlocksByDay(group.held || []),
     });
   }
   for (const [key, withdrawn] of withdrawnByCampaign) {

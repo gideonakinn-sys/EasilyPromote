@@ -187,6 +187,16 @@ interface SubmissionData {
   reviewedAt?: string;
 }
 
+// A content campaign's money, from GET /payouts/campaign/:id (ticket 09).
+interface ContentPayouts {
+  deliverables: number;
+  paidOut: number;
+  owed: number;
+  refundable: number;
+  refunded: number;
+  refundPending: number;
+}
+
 interface SubmissionCounts {
   new: number;
   approved: number;
@@ -229,6 +239,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const [topupSuccess, setTopupSuccess] = useState(false);
   const [topupError, setTopupError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [contentPayouts, setContentPayouts] = useState<ContentPayouts | null>(null);
 
   useReveal(activeTab);
 
@@ -276,6 +287,23 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       cancelled = true;
     };
   }, [campaignId, referralEnabled]);
+
+  // Content campaigns: what's been paid out, what creators are still owed and what's refundable.
+  const isContentCampaign = campaign?.campaignModel === "content";
+  useEffect(() => {
+    if (!isContentCampaign || activeTab !== "Payouts") return;
+    let cancelled = false;
+    apiRequest<{ content: ContentPayouts | null }>(`/payouts/campaign/${campaignId}`, { token: getToken() || undefined })
+      .then((data) => {
+        if (!cancelled) setContentPayouts(data.content);
+      })
+      .catch(() => {
+        if (!cancelled) setContentPayouts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, isContentCampaign, activeTab]);
 
   useEffect(() => {
     const load = async () => {
@@ -941,6 +969,29 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         {/* ================= TAB 3: PAYOUTS ================= */}
         {activeTab === "Payouts" && (
           <div className={cn("space-y-10 pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
+            {isContent ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Paid Out", value: contentPayouts?.paidOut ?? 0 },
+                  { label: "Owed To Creators", value: contentPayouts?.owed ?? 0 },
+                  {
+                    label: "Refundable",
+                    value: contentPayouts?.refundable ?? 0,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+                    <span className="text-[10px] font-medium text-stone-500 block">{item.label}</span>
+                    <span className="font-rethink font-medium text-xl text-stone-900 block">₦{item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+                {contentPayouts && contentPayouts.refunded + contentPayouts.refundPending > 0 && (
+                  <p className="sm:col-span-3 font-rethink text-xs text-stone-500 font-medium">
+                    ₦{(contentPayouts.refunded + contentPayouts.refundPending).toLocaleString()} of unused budget refunded to you
+                    {contentPayouts.refundPending > 0 && " (on its way)"}.
+                  </p>
+                )}
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>
@@ -955,6 +1006,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{pendingEscrow.toLocaleString()}</span>
               </div>
             </div>
+            )}
 
             {submissions.filter(s => s.payoutStatus).length === 0 && (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
