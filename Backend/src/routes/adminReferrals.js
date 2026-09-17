@@ -26,6 +26,8 @@ const router = express.Router();
 // because disabling a code or revoking a key breaks a brand's live integration.
 const viewGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 const actGuard = [protect, authorizeRoles("admin", "super_admin")];
+// Rewards are money creators earn from the brand's budget, so finance admins set them too.
+const rewardGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin")];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CSV_MAX_ROWS = 50000;
@@ -801,7 +803,7 @@ router.post("/keys/:id/revoke", actGuard, async (req, res, next) => {
 
 // ─── PATCH /api/admin/referrals/campaigns/:id/reward ──────────────────────────
 // Brands fund the referral budget; our team decides what creators earn per conversion.
-router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
+router.patch("/campaigns/:id/reward", rewardGuard, async (req, res, next) => {
   try {
     if (!isObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
     const amount = Math.round(Number(req.body && req.body.rewardPerConversion) * 100) / 100;

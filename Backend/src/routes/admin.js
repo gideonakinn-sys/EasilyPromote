@@ -36,8 +36,25 @@ const {
   voidUndeliveredPay,
 } = require("../utils/fixedPay");
 const { reconcileCampaignById } = require("../services/campaignReconciliation");
+const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
+// Moving money (paying or reviewing withdrawals, the payout run and payout check, refunds, voids,
+// cancelling a paid campaign, which refunds it): finance admins and super admins only.
+const MONEY_ROLES = ["finance_admin", "super_admin"];
+const moneyGuard = [protect, authorizeRoles(...MONEY_ROLES)];
+const completeGuard = [protect, authorizeRoles(...COMPLETE_ROLES)];
+
+// Answers a completion, or its refusal.
+async function answerCompletion(req, res, next, { campaignId, note }) {
+  try {
+    const { campaign, closedPlaces } = await completeCampaign({ campaignId, req, note });
+    res.json({ success: true, status: campaign.status, closedPlaces });
+  } catch (error) {
+    if (error instanceof CompletionError) return res.status(error.status).json({ error: error.message, code: error.code });
+    next(error);
+  }
+}
 
 // ─── GET /api/admin/stats ─────────────────────────────────────────────────────
 router.get("/stats", adminGuard, async (req, res, next) => {
@@ -268,8 +285,6 @@ router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) =
   }
 });
 
-// Refunding and voiding creator pay move money: finance admins and super admins only.
-const moneyGuard = [protect, authorizeRoles("finance_admin", "super_admin")];
 
 // Logs a refund attempt, tells the brand once Paystack has it, and answers with the real outcome:
 // 200 when sent or refunded, 502 when it failed or couldn't be sent (retryable).
@@ -434,6 +449,14 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── POST /api/admin/campaigns/:id/complete ───────────────────────────────────
+// Ends a live or paused campaign: open places close, the brand is told, and a content campaign's
+// unused budget becomes refundable.
+router.post("/campaigns/:id/complete", completeGuard, async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+  return answerCompletion(req, res, next, { campaignId: req.params.id, note: req.body && req.body.note });
+});
+
 // ─── PATCH /api/admin/campaigns/:id/status ────────────────────────────────────
 router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
   try {
@@ -465,6 +488,23 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
       return res.status(400).json({
         error: `Cannot transition campaign from "${campaign.status}" to "${status}"`,
       });
+    }
+
+    // Completing closes open places and opens the unused-budget refund: the same path as Complete Campaign.
+    if (status === "completed") {
+      if (!COMPLETE_ROLES.includes(req.user.role)) return res.status(403).json({ error: "Not authorized for this action" });
+      return answerCompletion(req, res, next, { campaignId: campaign._id, note });
+    }
+
+    // Cancelling a paid campaign refunds its views and referral budget automatically.
+    if (status === "cancelled" && !MONEY_ROLES.includes(req.user.role)) {
+      const paid = await Transaction.exists({ campaignId: campaign._id, type: { $in: ["escrow_deposit", "topup"] } });
+      if (paid) {
+        return res.status(403).json({
+          error: "Only finance admins and super admins can cancel a paid campaign, because cancelling sends refunds",
+          code: "MONEY_ROLE_REQUIRED",
+        });
+      }
     }
 
     if (status === "live") {
@@ -1076,7 +1116,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
 });
 
 // ─── POST /api/admin/payouts/reconcile ───────────────────────────────────────
-router.post("/payouts/reconcile", adminGuard, async (req, res, next) => {
+router.post("/payouts/reconcile", moneyGuard, async (req, res, next) => {
   try {
     const summary = await reconcilePayouts();
     res.json({ success: true, message: "Payout reconciliation completed", summary });
@@ -1447,7 +1487,7 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
 const { payWithdrawal, rejectWithdrawal, withdrawalParts, estimateTransferFee } = require("../services/withdrawalPayouts");
 const { payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
 
-router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
+router.post("/withdrawals/:id/review", moneyGuard, async (req, res, next) => {
   try {
     const { approve, note } = req.body || {};
     const result =
@@ -1547,7 +1587,7 @@ router.get("/payout-run", adminGuard, async (req, res, next) => {
 
 // ─── POST /api/admin/payout-run/approve ───────────────────────────────────────
 // Pays the chosen due withdrawals one by one after one Paystack balance check for the total.
-router.post("/payout-run/approve", adminGuard, async (req, res, next) => {
+router.post("/payout-run/approve", moneyGuard, async (req, res, next) => {
   try {
     const ids = Array.isArray(req.body && req.body.withdrawalIds) ? req.body.withdrawalIds.map(String) : [];
     if (ids.length === 0) return res.status(400).json({ error: "Choose at least one withdrawal to pay" });

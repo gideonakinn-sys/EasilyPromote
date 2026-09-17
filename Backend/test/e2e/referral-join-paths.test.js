@@ -69,7 +69,7 @@ function sendConversion(key, code) {
 }
 
 async function setReward(campaignId) {
-  const admin = await harness.registerAdmin();
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
   const res = await harness.api("PATCH", `/api/admin/referrals/campaigns/${campaignId}/reward`, {
     token: admin.token,
     body: { rewardPerConversion: REWARD },

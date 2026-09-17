@@ -176,7 +176,7 @@ test("crediting can never pay more deliverables than were bought, even all at on
 
 test("fixed pay waits for delivery to be confirmed, then the 7-day hold, then goes out in the weekly withdrawal", async () => {
   const { Transaction, Withdrawal } = models();
-  const admin = await harness.registerAdmin();
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
   const { brand, id } = await liveContentCampaign({ destination: "brand_page" });
   const creator = await joinAndSubmit(id);
   await approve(brand, creator);

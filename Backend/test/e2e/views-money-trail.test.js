@@ -61,7 +61,7 @@ test("a views campaign's withdrawal, cancellation refund and ledger reconcile to
   assert.equal(requested.body.viewsAmount, slot.reward);
   assert.equal(requested.body.referralAmount, 0);
   assert.equal(requested.body.fixedAmount, 0);
-  const admin = await harness.registerAdmin();
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
   const paid = await harness.api("POST", `/api/admin/withdrawals/${requested.body.id}/review`, { token: admin.token, body: { approve: true } });
   assert.equal(paid.status, 200, JSON.stringify(paid.body));
   const releases = await Transaction.find({ campaignId: id, type: "release" }).lean();

@@ -49,6 +49,9 @@ const slotSchema = new mongoose.Schema(
         "verifying",
         "approved",
         "paid",
+        // Nobody took it and the campaign ended (admin completed it), or its deliverable was voided
+        // as not delivered and can't be offered again. Not active, not open.
+        "closed",
       ],
       default: "available",
     },
