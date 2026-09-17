@@ -400,6 +400,54 @@ test("sign-up bonus: paid from the pool once admin sets the reward, capped per c
   assert.equal(referral ? referral.earned : 0, 0);
 });
 
+test("a sign-up bonus void interrupted by a crash is returned to the pool once by the ops job", async () => {
+  const { runScheduledOpsAlerts } = require("../../src/services/opsAlerts");
+  const { id, key } = await liveHybridCampaign({ metric: "signups", pool: 10000, capPerCreator: 10000, deliverables: 1, destination: "brand_page" });
+  const creator = await joinAndSubmit(id);
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
+  assert.equal((await patch(`/api/admin/referrals/campaigns/${id}/reward`, admin.token, { rewardPerConversion: REWARD })).status, 200);
+  assert.equal((await sendConversion(key, creator.referralCode)).status, 200);
+  assert.equal((await sendConversion(key, creator.referralCode)).status, 200);
+  assert.equal((await campaignDoc(id)).hybridBonus.poolRemaining, 5000);
+  const [firstEvent, secondEvent] = await model("ConversionEvent").find({ campaignId: id, bonusAmount: REWARD }).sort({ createdAt: 1 }).lean();
+
+  // The API dies after the credit is voided, before the bonus goes back to the pool.
+  const hooks = bonusService().voidHooks;
+  hooks.afterCreditVoided = async () => {
+    throw new Error("simulated crash");
+  };
+  try {
+    const crashed = await harness.api("POST", `/api/admin/referrals/conversions/${firstEvent._id}/void`, { token: admin.token, body: { note: "Fake sign-up" } });
+    assert.equal(crashed.status, 500);
+  } finally {
+    hooks.afterCreditVoided = null;
+  }
+  assert.equal((await campaignDoc(id)).hybridBonus.poolRemaining, 5000, "the pool is short until it's repaired");
+  const short = await reconcile(id);
+  assert.ok(!short.ok);
+  assert.ok(short.problems.some((p) => /voided bonus hasn't gone back to the pool/.test(p)), JSON.stringify(short.problems));
+
+  // A crash after the give-back but before the marker is cleared: returning it again changes nothing.
+  hooks.afterCreditVoided = null;
+  await runScheduledOpsAlerts({ notify: async () => {} });
+  let campaign = await campaignDoc(id);
+  assert.equal(campaign.hybridBonus.poolRemaining, 7500);
+  assert.equal(campaign.hybridBonus.reserved, 2500);
+  await model("Transaction").updateOne({ reference: `bonus_conv_${firstEvent._id}` }, { $set: { bonusGiveBack: "pending" } });
+  assert.equal(await bonusService().repairVoidedBonuses(), 1);
+  await runScheduledOpsAlerts({ notify: async () => {} });
+  campaign = await campaignDoc(id);
+  assert.equal(campaign.hybridBonus.poolRemaining, 7500, "never returned twice");
+  assert.equal((await model("Transaction").findOne({ reference: `bonus_conv_${firstEvent._id}` }).lean()).bonusGiveBack, "done");
+  await assertBalanced(id);
+
+  // A void that isn't interrupted returns its bonus at once.
+  const voided = await harness.api("POST", `/api/admin/referrals/conversions/${secondEvent._id}/void`, { token: admin.token, body: { note: "Fake sign-up" } });
+  assert.equal(voided.status, 200, JSON.stringify(voided.body));
+  assert.equal((await campaignDoc(id)).hybridBonus.poolRemaining, 10000);
+  await assertBalanced(id);
+});
+
 // ── Wallet, withdrawal, refund, reconciliation ──────────────────────────────
 
 test("end to end: wallet shows base and bonus apart, both are withdrawn and paid, the unused pool is refunded, and it reconciles", async () => {

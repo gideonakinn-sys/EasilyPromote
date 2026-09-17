@@ -36,7 +36,7 @@ const { toObjectId } = require("../utils/objectId");
 const { plural } = require("../utils/plural");
 const { sendEmail } = require("./email");
 const { retryStrandedBackPay } = require("../utils/referralEarnings");
-const { accrueAllViewsBonuses } = require("../utils/hybridBonus");
+const { accrueAllViewsBonuses, repairVoidedBonuses } = require("../utils/hybridBonus");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -577,7 +577,12 @@ async function runScheduledOpsAlerts({ now = new Date(), notify = null } = {}) {
     console.error("[OpsAlerts] Views bonus accrual failed:", error.message);
     return { campaigns: 0, amount: 0, error: error.message };
   });
-  const summary = { ...(await runOpsAlerts({ now, full, notify })), backPay, viewsBonus };
+  // A voided hybrid bonus whose give-back a crash interrupted goes back to its pool here (once).
+  const voidedBonuses = await repairVoidedBonuses().catch((error) => {
+    console.error("[OpsAlerts] Returning voided bonuses failed:", error.message);
+    return 0;
+  });
+  const summary = { ...(await runOpsAlerts({ now, full, notify })), backPay, viewsBonus, voidedBonuses };
   if (full) {
     try {
       await JobState.updateOne({ _id: JOB_NAME }, { $set: { lastFullPassAt: now } }, { upsert: true });

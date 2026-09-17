@@ -41,6 +41,8 @@ const BONUS_WITHDRAWABLE_CAMPAIGN_STATUSES = ["live", "paused", "completed", "ca
 const COMMITTED_RELEASE_STATUSES = ["escrow_deposit", "released"];
 // A compare-and-set reservation retries this often when other reservations keep landing first.
 const MAX_RESERVE_ATTEMPTS = 50;
+// Test seam: runs after a conversion's bonus credit is voided, before its bonus goes back to the pool.
+const voidHooks = { afterCreditVoided: null };
 
 const conversionReference = (conversionId) => `bonus_conv_${conversionId}`;
 const viewsReference = (campaignId, creatorId, totalKobo) => `bonus_views_${campaignId}_${creatorId}_${totalKobo}`;
@@ -168,13 +170,17 @@ async function reserveBonus({ campaignId, creatorId, wantKobo = null, totalDueKo
   return { amount: 0, reason: "busy" };
 }
 
-// Gives a voided bonus back to the pool and takes it off the creator's earned amount.
-async function giveBackBonus(campaignId, creatorId, amount) {
+// Gives a voided bonus back to the pool and takes it off the creator's earned amount, once per credit:
+// the credit's reference is recorded on the campaign in the same compare-and-set, so a repeat (the
+// ops job finishing a void a crash interrupted) never gives the same bonus back twice. Returns true
+// once the bonus is back in the pool (now or earlier).
+async function giveBackBonus(campaignId, creatorId, amount, ref) {
   const creator = toObjectId(creatorId);
   const amountKobo = toKobo(amount);
   for (let attempt = 0; attempt < MAX_RESERVE_ATTEMPTS; attempt += 1) {
     const campaign = await Campaign.findById(campaignId).select("hybridBonus").lean();
     const bonus = campaign && campaign.hybridBonus;
+    if (bonus && (bonus.returnedRefs || []).includes(ref)) return true;
     const entry = bonus && (bonus.creators || []).find((c) => String(c.creatorId) === String(creator));
     if (!entry) return false;
     const updated = await Campaign.updateOne(
@@ -182,6 +188,7 @@ async function giveBackBonus(campaignId, creatorId, amount) {
         _id: campaignId,
         "hybridBonus.poolRemaining": bonus.poolRemaining,
         "hybridBonus.reserved": bonus.reserved,
+        "hybridBonus.returnedRefs": { $ne: ref },
         "hybridBonus.creators": { $elemMatch: { creatorId: creator, earned: entry.earned } },
       },
       {
@@ -190,12 +197,35 @@ async function giveBackBonus(campaignId, creatorId, amount) {
           "hybridBonus.reserved": fromKobo(Math.max(toKobo(bonus.reserved) - amountKobo, 0)),
           "hybridBonus.creators.$.earned": fromKobo(Math.max(toKobo(entry.earned) - amountKobo, 0)),
         },
+        $push: { "hybridBonus.returnedRefs": ref },
       }
     );
     if (updated.modifiedCount === 1) return true;
   }
-  console.error(`[HybridBonus] Couldn't give back ₦${amount} voided bonus on campaign ${campaignId}; reconciliation will report it`);
+  console.error(`[HybridBonus] Couldn't give back ₦${amount} voided bonus on campaign ${campaignId}; the ops job retries it`);
   return false;
+}
+
+// Finishes one voided credit: its bonus back in the pool, then the credit marked as returned.
+async function returnVoidedBonus(credit) {
+  const returned = await giveBackBonus(credit.campaignId, credit.creatorId, credit.amount, credit.reference);
+  if (returned) await Transaction.updateOne({ _id: credit._id, bonusGiveBack: "pending" }, { $set: { bonusGiveBack: "done" } });
+  return returned;
+}
+
+// Voided bonus credits whose give-back a crash interrupted (the credit is voided but the pool never got
+// the money back): finished here. Run by the ops job. Returns how many it returned.
+async function repairVoidedBonuses() {
+  const stranded = await Transaction.find({ type: "bonus_credit", status: "voided", bonusGiveBack: "pending" }).lean();
+  let returned = 0;
+  for (const credit of stranded) {
+    try {
+      if (await returnVoidedBonus(credit)) returned += 1;
+    } catch (error) {
+      console.error(`[HybridBonus] Returning voided bonus ${credit.reference} failed:`, error.message);
+    }
+  }
+  return returned;
 }
 
 // ── Views bonus ─────────────────────────────────────────────────────────────
@@ -324,15 +354,18 @@ async function payUnpaidConversionBonuses(campaignId, now = new Date()) {
 }
 
 // A conversion voided in its hold: its bonus credit is voided and the amount goes back to the pool.
-// Only the call that voids the credit gives the money back. Returns the amount given back.
+// Crash-safe: the credit is voided together with a pending give-back marker, the bonus is returned to
+// the pool keyed on the credit's reference, then the marker is cleared. A crash in between leaves the
+// marker for repairVoidedBonuses (the ops job), which can't return it twice. Returns the amount.
 async function voidConversionBonus(event) {
   const credit = await Transaction.findOneAndUpdate(
     { reference: conversionReference(event._id), type: "bonus_credit", status: "credited" },
-    { $set: { status: "voided" } },
+    { $set: { status: "voided", bonusGiveBack: "pending" } },
     { new: true }
   ).lean();
   if (!credit) return 0;
-  await giveBackBonus(credit.campaignId, credit.creatorId, credit.amount);
+  if (voidHooks.afterCreditVoided) await voidHooks.afterCreditVoided(credit);
+  await returnVoidedBonus(credit);
   return credit.amount;
 }
 
@@ -564,6 +597,8 @@ module.exports = {
   reserveConversionBonus,
   payUnpaidConversionBonuses,
   voidConversionBonus,
+  repairVoidedBonuses,
+  voidHooks,
   bonusEarningsFrom,
   creatorBonusEarnings,
   bonusPayableNow,

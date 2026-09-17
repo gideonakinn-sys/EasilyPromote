@@ -251,6 +251,11 @@ function reconcileBonus({ campaign, rows, now }, problems) {
     problems.push(`bonus: ${bonus.pending.length} bonus reservation${bonus.pending.length === 1 ? " hasn't" : "s haven't"} been written to the ledger yet (the next views sync or conversion settles them)`);
   }
 
+  const unreturned = rows.filter((t) => t.type === "bonus_credit" && t.status === "voided" && t.bonusGiveBack === "pending");
+  if (unreturned.length > 0) {
+    problems.push(`bonus: ${unreturned.length} voided bonus${unreturned.length === 1 ? " hasn't" : "es haven't"} gone back to the pool yet (the ops job returns ${unreturned.length === 1 ? "it" : "them"})`);
+  }
+
   const creditedByCreator = new Map();
   for (const credit of credits) creditedByCreator.set(String(credit.creatorId), (creditedByCreator.get(String(credit.creatorId)) || 0) + toKobo(credit.amount));
   const cap = toKobo(bonus.capPerCreator);

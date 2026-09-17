@@ -245,6 +245,9 @@ const campaignSchema = new mongoose.Schema(
             ],
             default: undefined,
           },
+          // References of voided bonus credits already given back to the pool, so a repeat can't give
+          // one back twice.
+          returnedRefs: { type: [String], default: undefined },
           // One entry per unused-bonus refund: the pool it gave back and what the brand is refunded.
           refundClaims: {
             type: [

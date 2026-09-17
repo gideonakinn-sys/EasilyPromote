@@ -113,6 +113,13 @@ const transactionSchema = new mongoose.Schema(
       ),
       default: undefined,
     },
+    // Voided hybrid bonus credits: "pending" until the bonus is back in the pool, then "done". Older
+    // voided credits have none (their bonus was returned when they were voided).
+    bonusGiveBack: {
+      type: String,
+      enum: ["pending", "done"],
+      default: undefined,
+    },
     // Set on releases so a payout can be credited to its creator without a submission
     // (referral payouts have none).
     creatorId: {
