@@ -186,6 +186,8 @@ async function startHarness() {
   try {
     for (const name of OUTSIDE_SERVICE_ENV) delete process.env[name];
     process.env.NODE_ENV = "test";
+    // Test passwords don't need production-strength hashing; 4 rounds keeps sign-ups fast.
+    process.env.TEST_BCRYPT_ROUNDS = "4";
     process.env.MONGODB_URI = mongod.uri;
     process.env.JWT_SECRET = "e2e-jwt-secret";
     process.env.JWT_REFRESH_SECRET = "e2e-jwt-refresh-secret";

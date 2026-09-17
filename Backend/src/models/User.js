@@ -48,9 +48,16 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// 12 rounds in every real environment. The end-to-end harness (NODE_ENV=test) lowers it so
+// hundreds of test sign-ups don't spend most of the suite hashing passwords.
+function saltRounds() {
+  const testRounds = Number(process.env.TEST_BCRYPT_ROUNDS);
+  return process.env.NODE_ENV === "test" && Number.isInteger(testRounds) && testRounds >= 4 ? testRounds : 12;
+}
+
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  const salt = await bcrypt.genSalt(12);
+  const salt = await bcrypt.genSalt(saltRounds());
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
