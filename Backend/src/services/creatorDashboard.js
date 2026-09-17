@@ -507,8 +507,8 @@ async function buildMyCampaigns(ctx, data = null) {
         status,
         reward: slot.reward,
         viewTarget: slot.viewTarget,
-        // Deliverable placements have no views to commit to.
-        ...(!deliverable && { minViews: 1000, maxViews: slot.viewTarget }),
+        // Deliverable placements, and referrals-only ones (SPEC D31, view target 0), have no views to commit to.
+        ...(!deliverable && slot.viewTarget > 0 && { minViews: 1000, maxViews: slot.viewTarget }),
         costPerView: campaign.costPerView,
         submissionId: submission ? submission._id : null,
         comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
@@ -614,7 +614,8 @@ async function buildWallet(user, ctx, data = null) {
 
   // Every campaign with views earnings, using the same formula as withdrawals.
   const viewsByCampaignList = [...viewsEarnings.values()]
-    .filter((entry) => entry.views > 0 || entry.withdrawn > 0)
+    // Referrals-only placements (SPEC D31) have no view target, so their views earn nothing to list.
+    .filter((entry) => (entry.views > 0 && entry.viewTarget > 0) || entry.withdrawn > 0)
     .map((entry) => ({
       id: entry.campaignId,
       title: entry.title,

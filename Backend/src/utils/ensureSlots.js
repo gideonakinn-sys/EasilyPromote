@@ -20,9 +20,11 @@ function buildDeliverableSlots(campaign) {
   }));
 }
 
+// Referrals-only places (SPEC D31) carry no view target and no views reward: creators there are paid
+// only admin's reward per conversion, from the referral budget.
 function buildSlots(campaign, count) {
-  const viewTarget = Math.ceil(campaign.targetViews / count);
-  const reward = Math.floor(campaign.creatorPool / count);
+  const viewTarget = campaign.targetViews > 0 ? Math.ceil(campaign.targetViews / count) : 0;
+  const reward = campaign.targetViews > 0 && campaign.creatorPool > 0 ? Math.floor(campaign.creatorPool / count) : 0;
 
   return Array.from({ length: count }, () => ({
     campaignId: campaign._id,
@@ -78,6 +80,7 @@ async function syncCampaignSlots(campaign, count) {
  */
 async function addTopupSlots(campaign, extraViews, extraPool) {
   if (!campaign || extraViews <= 0 || extraPool <= 0) return [];
+  if (!(campaign.targetViews > 0)) return [];
   const baseSlots = slotCountFor(campaign);
   const standardViews = Math.max(1, Math.ceil(campaign.targetViews / baseSlots));
   const slotsToAdd = Math.max(1, Math.round(extraViews / standardViews));

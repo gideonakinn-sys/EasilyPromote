@@ -32,7 +32,8 @@ const slotSchema = new mongoose.Schema(
         },
         "View target is required",
       ],
-      min: 1,
+      // 0 on a referrals-only campaign's places (SPEC D31): they carry no views.
+      min: 0,
     },
     reward: {
       type: Number,

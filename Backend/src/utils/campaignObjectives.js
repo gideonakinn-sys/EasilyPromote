@@ -42,4 +42,12 @@ function objectiveForLegacy(campaign) {
   return "signups";
 }
 
-module.exports = { OBJECTIVES, OBJECTIVE_NAMES, usesReferralTracking, objectiveForLegacy };
+// Referrals only (SPEC D31): a referral objective with no views target. It buys no views, so its views
+// price, creator pool and places' view targets and rewards are all 0; creators are paid only admin's
+// reward per conversion from the referral budget. A referral campaign with a views target is Hybrid.
+function isReferralsOnly(campaign) {
+  if (!campaign || campaign.campaignModel === "content") return false;
+  return usesReferralTracking(campaign.campaignObjective) && !(Number(campaign.targetViews) > 0);
+}
+
+module.exports = { OBJECTIVES, OBJECTIVE_NAMES, usesReferralTracking, objectiveForLegacy, isReferralsOnly };

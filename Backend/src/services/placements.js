@@ -6,6 +6,7 @@ const Submission = require("../models/Submission");
 const { loadCreatorAccounts } = require("../utils/creatorAccounts");
 const { joinEligibility } = require("./joinRules");
 const { campaignTerms, fullBrief } = require("../utils/campaignPay");
+const { isReferralsOnly } = require("../utils/campaignObjectives");
 const { emitPlacesLeft } = require("../utils/campaignUpdates");
 const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 
@@ -33,6 +34,10 @@ function placementTerms({ campaign, slot, committed, committedViews }) {
     }
     return { set: { reward: slot.reward } };
   }
+
+  // Referrals only (SPEC D31): places carry no views and no views pay; creators earn per conversion
+  // from the referral budget, so the (empty) creator pool never fills them.
+  if (isReferralsOnly(campaign)) return { set: { viewTarget: 0, reward: 0 } };
 
   const viewsRemaining = Math.max((campaign.targetViews || 0) - committed.views, 0);
   if (poolRemaining <= 0 || viewsRemaining <= 0) {

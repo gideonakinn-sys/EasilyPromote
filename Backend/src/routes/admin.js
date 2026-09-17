@@ -46,7 +46,7 @@ const { reconcileCampaignById } = require("../services/campaignReconciliation");
 // Hybrid pay (ticket 10)
 const { BonusError, bonusBudgetSummary, refundUnusedBonusPool } = require("../utils/hybridBonus");
 const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
-const { campaignHasPayments } = require("../utils/campaignPayments");
+const { campaignHasPayments, campaignPaymentBooked } = require("../utils/campaignPayments");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 // Moving money (paying or reviewing withdrawals, the payout run and payout check, refunds, voids,
@@ -680,11 +680,8 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
     }
 
     if (status === "live") {
-      const depositExists = await Transaction.exists({
-        campaignId: campaign._id,
-        type: "escrow_deposit",
-        status: "escrow_deposit",
-      });
+      // A referrals-only campaign (SPEC D31) has no views deposit; its referral budget payment counts.
+      const depositExists = await campaignPaymentBooked(campaign);
       if (!depositExists) {
         return res.status(400).json({
           error: "Cannot set campaign to live: no confirmed escrow deposit was found for this campaign",

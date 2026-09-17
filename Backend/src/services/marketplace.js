@@ -497,7 +497,8 @@ function cardOf(viewer, scored, brand, { trending = false } = {}) {
     platforms: campaign.platforms,
     description: campaign.contentBrief || "",
     minViews: 1000,
-    maxViews: matchingSlot.viewTarget,
+    // A referrals-only place (SPEC D31) has no view target to commit to.
+    maxViews: matchingSlot.viewTarget > 0 ? matchingSlot.viewTarget : undefined,
     costPerView: campaign.costPerView,
     daysLeft,
     brandName: brand ? brand.name || "Brand" : "Brand",

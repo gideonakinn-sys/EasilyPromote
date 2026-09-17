@@ -62,7 +62,7 @@ async function updateCampaignFromSubmission(submission) {
   ]);
   campaign.viewsDelivered = totalViews.length > 0 ? totalViews[0].total : 0;
 
-  if (campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
+  if (campaign.targetViews > 0 && campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
     campaign.status = "completed";
     await Notification.create({
       businessId: campaign.businessId,

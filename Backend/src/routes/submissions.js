@@ -656,7 +656,7 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
       let shouldComplete = false;
       let completionReason = "";
 
-      if (campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
+      if (campaign.targetViews > 0 && campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
         shouldComplete = true;
         completionReason = "Campaign hit its target — that's a wrap.";
       }
@@ -669,7 +669,8 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
           { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
         const totalReleased = released.length > 0 ? released[0].total : 0;
-        if (totalReleased >= campaign.creatorPool) {
+        // A referrals-only campaign (SPEC D31) has no views pool, so views never complete it.
+        if (campaign.creatorPool > 0 && totalReleased >= campaign.creatorPool) {
           shouldComplete = true;
           completionReason = "Campaign escrow has been fully released — that's a wrap.";
         }
