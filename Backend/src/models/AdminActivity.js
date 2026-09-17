@@ -25,7 +25,7 @@ const adminActivitySchema = new mongoose.Schema(
     },
     targetType: {
       type: String,
-      enum: ["campaign", "user", "withdrawal", "referral_code", "webhook_key", "conversion", "submission"],
+      enum: ["campaign", "user", "withdrawal", "referral_code", "webhook_key", "conversion", "submission", "ops_alert"],
       required: true,
     },
     targetId: {

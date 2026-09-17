@@ -86,6 +86,8 @@ const withdrawalSchema = new mongoose.Schema(
 );
 
 withdrawalSchema.index({ creatorId: 1, status: 1 });
+// Ops alerts and payout reconciliation: withdrawals by status, oldest review first.
+withdrawalSchema.index({ status: 1, reviewedAt: 1 });
 withdrawalSchema.index({ campaignId: 1, creatorId: 1, status: 1 });
 withdrawalSchema.index({ creatorId: 1, kind: 1, campaignId: 1, status: 1 });
 // At most one pending and one processing withdrawal per creator, campaign and kind, so

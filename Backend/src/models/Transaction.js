@@ -135,6 +135,9 @@ transactionSchema.index(
 transactionSchema.index({ transferReference: 1 }, { sparse: true });
 // Paystack refund webhooks name the original payment.
 transactionSchema.index({ "refundParts.chargeReference": 1 }, { sparse: true });
+// Ops alerts: refunds still pending or failed, oldest first; campaigns with recent money movement.
+transactionSchema.index({ type: 1, status: 1, createdAt: 1 });
+transactionSchema.index({ updatedAt: -1 });
 // Creator wallet: recent transactions for a handle.
 transactionSchema.index({ creatorHandle: 1, date: -1 });
 

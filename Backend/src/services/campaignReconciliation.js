@@ -46,6 +46,16 @@ async function reconcileCampaignById(campaignId, now = new Date()) {
   return input ? reconcileCampaign({ ...input, now }) : null;
 }
 
+// The given campaigns, a batch at a time.
+async function reconcileCampaigns(campaignIds, { batchSize = 200, now = new Date() } = {}) {
+  const ids = campaignIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const results = [];
+  for (let i = 0; i < ids.length; i += batchSize) {
+    for (const input of await loadBatch(ids.slice(i, i + batchSize))) results.push(reconcileCampaign({ ...input, now }));
+  }
+  return results;
+}
+
 // Every campaign that has money on record, a batch at a time.
 async function reconcileAllCampaigns({ batchSize = 200, onResult = null, now = new Date() } = {}) {
   const ids = await Transaction.distinct("campaignId");
@@ -61,4 +71,4 @@ async function reconcileAllCampaigns({ batchSize = 200, onResult = null, now = n
   return results;
 }
 
-module.exports = { reconcileCampaignById, reconcileAllCampaigns };
+module.exports = { reconcileCampaignById, reconcileCampaigns, reconcileAllCampaigns };
