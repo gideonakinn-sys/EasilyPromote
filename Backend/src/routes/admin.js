@@ -287,6 +287,10 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
               }
             : null,
         hasPayments,
+        // M8 batch 7: clicks destination and usage-rights terms (SPEC D29, D30).
+        campaignObjective: campaign.campaignObjective || null,
+        destinationUrl: campaign.destinationUrl || null,
+        usageRights: campaign.usageRights && campaign.usageRights.type ? campaign.usageRights : null,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
           ? { id: campaign.businessId._id, name: campaign.businessId.name, email: campaign.businessId.email }
@@ -1281,6 +1285,13 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
 
     const submissionById = new Map(submissions.map((s) => [String(s._id), s]));
     const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
+    // M8 batch 7: usage-rights terms each creator accepted on their placement (SPEC D30).
+    const acceptedSlots = await Slot.find({ campaignId: campaign._id, "usageRightsAccepted.acceptedAt": { $ne: null } })
+      .select("creatorId usageRightsAccepted")
+      .lean();
+    const termsByCreator = new Map(
+      acceptedSlots.map((slot) => [String(slot.creatorId), { version: slot.usageRightsAccepted.version, acceptedAt: slot.usageRightsAccepted.acceptedAt }])
+    );
 
     res.json({
       campaign: {
@@ -1310,6 +1321,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
         submittedAt: s.submittedAt,
         reviewedAt: s.reviewedAt,
         postedAt: s.postedAt,
+        usageRightsAccepted: termsByCreator.get(String(s.creatorId)) || null,
       })),
       events: events.map((e) => {
         const submission = submissionById.get(String(e.submissionId));

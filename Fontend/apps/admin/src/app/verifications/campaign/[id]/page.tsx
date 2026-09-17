@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "../../../../components/sidebar";
 import { apiRequest, getToken, isAuthenticated } from "../../../../lib/api";
+import { TermsAcceptedText, type TermsAccepted } from "../../../../components/campaign-terms-panel";
 
 interface ActivityEvent {
   id: string;
@@ -37,6 +38,8 @@ interface ActivitySubmission {
   submittedAt?: string;
   reviewedAt?: string;
   postedAt?: string;
+  // M8 batch 7: usage-rights terms the creator accepted on joining (SPEC D30).
+  usageRightsAccepted?: TermsAccepted | null;
 }
 
 interface ActivityCampaign {
@@ -189,7 +192,14 @@ export default function CampaignVerificationDetailPage() {
               ) : (
                 submissions.map((sub) => (
                   <tr key={sub.id} className="hover:bg-stone-50/80 transition-colors">
-                    <td className="px-6 py-3 font-bold text-stone-900 font-mono">@{sub.creatorHandle}</td>
+                    <td className="px-6 py-3 font-bold text-stone-900 font-mono">
+                      @{sub.creatorHandle}
+                      {sub.usageRightsAccepted && (
+                        <span className="block font-rethink">
+                          <TermsAcceptedText accepted={sub.usageRightsAccepted} />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-3">
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono bg-stone-100 text-stone-700">
                         {sub.status}

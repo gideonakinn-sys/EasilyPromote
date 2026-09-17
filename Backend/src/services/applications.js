@@ -248,6 +248,11 @@ function brandRow(application, standing = new Map()) {
     expiresAt: application.status === "pending" ? expiresAt(application) : null,
     reviewedAt: application.reviewedAt || null,
     rejectionReason: application.rejectionReason || "",
+    // M8 batch 7: the usage-rights version accepted when applying (SPEC D30).
+    usageRightsAccepted:
+      application.usageRightsAccepted && application.usageRightsAccepted.acceptedAt
+        ? { version: application.usageRightsAccepted.version, acceptedAt: application.usageRightsAccepted.acceptedAt }
+        : null,
     creator: {
       id: application.creator,
       name: s.name || "",

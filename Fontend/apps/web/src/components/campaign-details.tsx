@@ -20,6 +20,15 @@ import { CreatorRatings } from "./creator-ratings"; // Brand ratings (M8)
 import type { CampaignSetup } from "./types";
 // Campaign engine: content approval (ticket 07)
 import { ContentSubmissionsReview } from "./content-submissions-review";
+// M8 batch 7: clicks destination and usage-rights terms (SPEC D29, D30)
+import {
+  DestinationLinkCard,
+  TermsAcceptedNote,
+  UsageRightsCard,
+  isClicksObjective,
+  type CampaignUsageRights,
+  type WithTermsAccepted,
+} from "./campaign-usage-rights";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
@@ -169,6 +178,9 @@ interface CampaignData extends Partial<CampaignSetup> {
   submissionsAwaitingReview: number;
   referral?: ReferralSettings & { budgetUsedPercent?: number };
   objective?: "views" | "actions";
+  // M8 batch 7 (SPEC D29, D30)
+  destinationUrl?: string | null;
+  usageRights?: CampaignUsageRights | null;
 }
 
 interface SubmissionData {
@@ -494,6 +506,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const formattedBudget = `₦${campaign.budget.toLocaleString()}`;
   const formattedTarget = `${(campaign.targetViews || 0).toLocaleString()} views`;
   const isContent = campaign.campaignModel === "content";
+  const isClicks = isClicksObjective(campaign.campaignObjective);
+  const showsUsageRights =
+    campaign.usageRights?.type === "custom" ||
+    campaign.contentDestination === "brand_page" ||
+    campaign.contentDestination === "both";
 
   const totalEscrowed = campaign.budget;
   // platformFeePercent is stored as a whole percentage (30 means 30%).
@@ -542,7 +559,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             { label: "Overview",    value: "Overview"   as TabType },
             { label: "Submissions", value: "Submission" as TabType },
             { label: "Payouts",     value: "Payouts"    as TabType },
-            { label: "Referrals",   value: "Referrals"  as TabType },
+            { label: isClicks ? "Clicks" : "Referrals", value: "Referrals" as TabType },
           ]).map(({ label, value }) => {
             const isActive = activeTab === value;
             return (
@@ -571,7 +588,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               { label: "Overview",    value: "Overview"   as TabType },
               { label: "Submissions", value: "Submission" as TabType },
               { label: "Payouts",     value: "Payouts"    as TabType },
-              { label: "Referrals",   value: "Referrals"  as TabType },
+              { label: isClicks ? "Clicks" : "Referrals", value: "Referrals" as TabType },
             ]).map(({ label, value }) => {
               const isActive = activeTab === value;
               return (
@@ -831,6 +848,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               />
             )}
 
+            {isClicks && <DestinationLinkCard url={campaign.destinationUrl} />}
+
+            {showsUsageRights && <UsageRightsCard usageRights={campaign.usageRights} />}
+
             <div className="border border-dashed border-stone-200 rounded-2xl p-4 space-y-4">
               {/* Campaign Progress (views campaigns) */}
               {!isContent && (<>
@@ -855,7 +876,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <>
                   <div className="border-t border-dashed border-stone-200" />
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-stone-500 block">Referral progress</span>
+                    <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Click progress" : "Referral progress"}</span>
                     <div className="flex items-center gap-3">
                       <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
                         <div
@@ -867,7 +888,9 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     </div>
                     <span className="text-xs text-stone-500 font-medium font-rethink">
                       {campaign.referral.conversions.toLocaleString()}{" "}
-                      {conversionNounFor(campaign.referral.eventTypes, campaign.referral.conversions)} through creators&apos; codes
+                      {isClicks
+                        ? `valid click${campaign.referral.conversions === 1 ? "" : "s"} through creators' links`
+                        : `${conversionNounFor(campaign.referral.eventTypes, campaign.referral.conversions)} through creators' codes`}
                       {" · "}
                       {campaign.referral.budgetUsedPercent ?? 0}% of referral budget used
                     </span>
@@ -876,7 +899,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   <div className="border-t border-dashed border-stone-200" />
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-stone-500 block">Referral codes</span>
+                      <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Creators' links" : "Referral codes"}</span>
                       {referralCodes && referralCodes.length > 0 && (
                         <button
                           onClick={() => setActiveTab("Referrals")}
@@ -890,16 +913,23 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                       <Skeleton className="h-8 rounded-xl" />
                     ) : referralCodes.length === 0 ? (
                       <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
-                        {codeFormatText(codePrefix)} No creators have joined yet.
+                        {isClicks ? "Each creator gets a tracked link when they join." : codeFormatText(codePrefix)} No creators have joined yet.
                       </p>
                     ) : (
                       <ul className="space-y-2">
                         {referralCodes.slice(0, 5).map((row) => (
                           <li key={row.slotId} className="flex items-center justify-between gap-3 text-xs font-rethink">
-                            <span className="text-stone-500 font-medium truncate">
-                              {row.creatorUsername ? `@${row.creatorUsername}` : row.creatorName || "Creator"}
+                            <span className="min-w-0 flex flex-col">
+                              <span className="text-stone-500 font-medium truncate">
+                                {row.creatorUsername ? `@${row.creatorUsername}` : row.creatorName || "Creator"}
+                              </span>
+                              <TermsAcceptedNote accepted={(row as ReferralCodeRow & WithTermsAccepted).usageRightsAccepted} />
                             </span>
-                            <span className="font-mono text-stone-900 shrink-0">{row.code || "Code pending"}</span>
+                            <span className="font-mono text-stone-900 shrink-0">
+                              {isClicks
+                                ? `${row.conversions.toLocaleString()} click${row.conversions === 1 ? "" : "s"}`
+                                : row.code || "Code pending"}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -1034,6 +1064,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               initialSettings={campaign.referral}
               topupReference={referralTopupReference}
               onTopupHandled={() => setReferralTopupReference(null)}
+              campaignObjective={campaign.campaignObjective}
             />
           </div>
         )}

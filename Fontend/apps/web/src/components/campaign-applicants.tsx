@@ -11,6 +11,7 @@ import { BADGE_LABELS, RatingSummary } from "./creator-rating-summary";
 import { applicationsApi } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
 import { useApplicationUpdates } from "../lib/socket";
+import { TermsAcceptedNote, type WithTermsAccepted } from "./campaign-usage-rights"; // M8 batch 7 (SPEC D30)
 
 // Campaign engine: applications (ticket 06)
 // Applicants on an Application Required campaign: count, status filters, sort by match,
@@ -165,6 +166,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
                   ))}
                 </p>
               )}
+              <TermsAcceptedNote accepted={(row as ApplicationRow & WithTermsAccepted).usageRightsAccepted} />
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-xs font-medium text-stone-900">{row.matchScore}% match</span>

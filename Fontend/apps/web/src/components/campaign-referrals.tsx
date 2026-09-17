@@ -22,6 +22,17 @@ import {
   type ReferralEventType,
   type ReferralSettings,
 } from "../lib/referral";
+import {
+  CopyLinkButton,
+  TermsAcceptedNote,
+  isClicksObjective,
+  trackedLinkFor,
+  type WithTermsAccepted,
+} from "./campaign-usage-rights";
+
+// M8 batch 7: extra fields the referral codes endpoint returns (clicks waiting to be paid, accepted terms).
+type CodesSummaryExtras = { waitingForBudget?: number; waitingForReward?: number };
+type CodeRowWithTerms = ReferralCodeRow & WithTermsAccepted;
 
 const STATUS_CHIPS: Record<ReferralCodeRow["status"], { label: string; className: string }> = {
   active: { label: "Active", className: "bg-[#CBF5E5] text-[#176448]" },
@@ -144,6 +155,8 @@ interface CampaignReferralsProps {
   // Set when the brand returns from paying for referral budget on Paystack.
   topupReference?: string | null;
   onTopupHandled?: () => void;
+  // M8 batch 7: clicks campaigns pay per valid click on tracked links and need no app connection.
+  campaignObjective?: string | null;
 }
 
 export function CampaignReferrals({
@@ -152,6 +165,7 @@ export function CampaignReferrals({
   initialSettings,
   topupReference,
   onTopupHandled,
+  campaignObjective,
 }: CampaignReferralsProps) {
   const { toast } = useToast();
   const [settings, setSettings] = useState<ReferralSettings>(initialSettings || DEFAULT_SETTINGS);
@@ -175,7 +189,13 @@ export function CampaignReferrals({
   const [fundAmount, setFundAmount] = useState("");
   const [funding, setFunding] = useState(false);
 
+  const [confirmTurnOff, setConfirmTurnOff] = useState(false);
+
   const isCancelled = campaignStatus === "cancelled";
+  const isClicks = isClicksObjective(campaignObjective);
+  // Clicks campaigns always count clicks; other campaigns use the brand's chosen event types.
+  const noun = (count: number) =>
+    isClicks ? (count === 1 ? "click" : "clicks") : conversionNounFor(settingsEventTypes(settings), count);
 
   const fetchCodes = useCallback(async () => {
     setError("");
@@ -271,9 +291,9 @@ export function CampaignReferrals({
     }
   };
 
-  const handleTurnOff = () => {
-    if (!window.confirm("Turn off referral tracking? Codes stop counting new conversions until you turn it back on.")) return;
-    saveSettings({ enabled: false }, "Referral tracking is off.");
+  const handleTurnOff = async () => {
+    setConfirmTurnOff(false);
+    await saveSettings({ enabled: false }, "Referral tracking is off.");
   };
 
   const handleMarkLoaded = async () => {
@@ -381,10 +401,12 @@ export function CampaignReferrals({
   const header = (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="font-rethink font-semibold text-base text-stone-900 tracking-tight">Referral tracking</h3>
-        {settings.enabled && (
+        <h3 className="font-rethink font-semibold text-base text-stone-900 tracking-tight">
+          {isClicks ? "Click tracking" : "Referral tracking"}
+        </h3>
+        {settings.enabled && !isClicks && (
           <button
-            onClick={handleTurnOff}
+            onClick={() => setConfirmTurnOff(true)}
             disabled={savingSettings || isCancelled}
             className="text-xs font-medium text-stone-500 font-rethink disabled:opacity-50"
           >
@@ -393,9 +415,44 @@ export function CampaignReferrals({
         )}
       </div>
       <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
-        Every creator gets a unique code. Your servers tell us when someone converts with it, so you see results per
-        creator. Creators keep earning on views either way.
+        {isClicks
+          ? "Every creator gets their own tracked link to your destination. We count valid clicks (bots and repeat clicks from the same person within a day don't count) and pay creators from your referral budget. No app connection needed."
+          : "Every creator gets a unique code. Your servers tell us when someone converts with it, so you see results per creator. Creators keep earning on views either way."}
       </p>
+      {confirmTurnOff && (
+        <div
+          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="referral-turn-off-title"
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
+            <h3 id="referral-turn-off-title" className="font-rethink font-medium text-base text-stone-900 text-center">
+              Turn off referral tracking?
+            </h3>
+            <p className="font-rethink text-xs text-stone-500 font-medium text-center">
+              Codes stop counting new conversions until you turn it back on.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmTurnOff(false)}
+                className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full font-rethink"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleTurnOff}
+                disabled={savingSettings}
+                className="flex-1 py-2.5 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink disabled:opacity-50"
+              >
+                Turn off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -435,7 +492,10 @@ export function CampaignReferrals({
     );
   }
 
-  const codes = data?.codes || [];
+  const codes: CodeRowWithTerms[] = data?.codes || [];
+  const summaryExtras: CodesSummaryExtras = (data?.summary as CodesSummaryExtras | undefined) || {};
+  const waitingForBudget = summaryExtras.waitingForBudget ?? 0;
+  const waitingForReward = summaryExtras.waitingForReward ?? 0;
   const activeCount = codes.filter((row) => row.status === "active").length;
   const awaitingCount = codes.filter((row) => row.status === "awaiting_business").length;
   const missingCount = codes.filter((row) => row.status === "missing").length;
@@ -450,6 +510,7 @@ export function CampaignReferrals({
     <div className="space-y-8">
       {header}
 
+      {!isClicks && (
       <Link
         href="/dashboard/brand/settings/referral"
         className="flex items-center justify-between gap-3 bg-white border border-stone-200 rounded-2xl px-4 py-3 font-rethink"
@@ -457,23 +518,50 @@ export function CampaignReferrals({
         <span className="text-sm font-medium text-stone-900">Webhook keys and setup guide</span>
         <span className="text-xs font-medium text-stone-500" aria-hidden="true">→</span>
       </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
           <span className="text-[10px] font-medium text-stone-500 block capitalize">
-            {conversionNounFor(settingsEventTypes(settings), 2)}
+            {isClicks ? "Valid clicks" : noun(2)}
           </span>
           <span className="font-rethink font-medium text-xl text-stone-900 block tabular-nums">
             {conversions.toLocaleString()}
           </span>
         </div>
-        <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-          <span className="text-[10px] font-medium text-stone-500 block">Active codes</span>
-          <span className="font-rethink font-medium text-xl text-stone-900 block tabular-nums">
-            {activeCount} <span className="text-sm text-stone-400">/ {codes.length}</span>
-          </span>
-        </div>
+        {isClicks ? (
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+            <span className="text-[10px] font-medium text-stone-500 block">Spend</span>
+            <span className="font-rethink font-medium text-xl text-stone-900 block tabular-nums">
+              {formatNaira(settings.earned)}
+            </span>
+          </div>
+        ) : (
+          <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+            <span className="text-[10px] font-medium text-stone-500 block">Active codes</span>
+            <span className="font-rethink font-medium text-xl text-stone-900 block tabular-nums">
+              {activeCount} <span className="text-sm text-stone-400">/ {codes.length}</span>
+            </span>
+          </div>
+        )}
       </div>
+
+      {(waitingForBudget > 0 || waitingForReward > 0) && (
+        <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-1">
+          {waitingForBudget > 0 && (
+            <p className="font-rethink text-xs font-medium text-amber-900 leading-relaxed">
+              {waitingForBudget.toLocaleString()} {noun(waitingForBudget)} waiting for budget. Add referral budget and
+              creators are paid for them, oldest first.
+            </p>
+          )}
+          {waitingForReward > 0 && (
+            <p className="font-rethink text-xs font-medium text-amber-900 leading-relaxed">
+              {waitingForReward.toLocaleString()} {noun(waitingForReward)} waiting for our team to set the reward.
+              They&apos;re paid once it&apos;s set.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
         <div className="flex items-center justify-between gap-3">
@@ -492,7 +580,7 @@ export function CampaignReferrals({
 
         <div className="space-y-1">
           <span className="text-xs font-medium text-stone-500 font-rethink block">
-            Creators earn per {conversionNounFor(settingsEventTypes(settings), 1)}
+            Creators earn per {noun(1)}
           </span>
           {settings.rewardPerConversion > 0 ? (
             <p className="font-rethink text-lg font-medium text-stone-900 tabular-nums">
@@ -503,15 +591,15 @@ export function CampaignReferrals({
           )}
           <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
             {settings.rewardPerConversion > 0
-              ? `Set by Easily Promote from your referral budget. Creators can withdraw rewards 7 days after each ${conversionNounFor(settingsEventTypes(settings), 1)}.`
-              : `We set this from your referral budget once the campaign is live. ${conversionNounFor(settingsEventTypes(settings), 2).replace(/^./, (c) => c.toUpperCase())} recorded before then are paid once it's set.`}
+              ? `Set by Easily Promote from your referral budget. Creators can withdraw rewards 7 days after each ${noun(1)}.`
+              : `We set this from your referral budget once the campaign is live. ${noun(2).replace(/^./, (c) => c.toUpperCase())} recorded before then are paid once it's set.`}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-stone-100 pt-4">
           {[
             ["Budget added", formatNaira(settings.budget)],
-            ["Earned by creators", formatNaira(settings.earned)],
+            [isClicks ? "Paid to creators" : "Earned by creators", formatNaira(settings.earned)],
           ].map(([label, value]) => (
             <div key={label}>
               <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
@@ -522,7 +610,7 @@ export function CampaignReferrals({
         {settings.rewardPerConversion > 0 && (
           <p className="text-[11px] text-stone-500 font-medium font-rethink">
             Enough for about {Math.floor(settings.poolRemaining / settings.rewardPerConversion).toLocaleString()} more{" "}
-            {conversionNounFor(settingsEventTypes(settings), 2)}. When it runs out, conversions are still recorded but not paid.
+            {noun(2)}. When it runs out, {noun(2)} are still recorded and paid once you add more.
           </p>
         )}
 
@@ -566,15 +654,15 @@ export function CampaignReferrals({
         )}
       </div>
 
-      {(awaitingCount > 0 || missingCount > 0) && (
+      {((!isClicks && awaitingCount > 0) || missingCount > 0) && (
         <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-4 space-y-3">
           <p className="font-rethink text-xs font-medium text-amber-900 leading-relaxed">
-            {awaitingCount > 0 &&
+            {!isClicks && awaitingCount > 0 &&
               `${awaitingCount} older code${awaitingCount === 1 ? " is" : "s are"} pending. ${awaitingCount === 1 ? "It activates" : "They activate"} the first time your app checks or reports ${awaitingCount === 1 ? "it" : "them"}, or you can mark ${awaitingCount === 1 ? "it" : "them"} active now. `}
             {missingCount > 0 &&
               `${missingCount} creator${missingCount === 1 ? " doesn't" : "s don't"} have a code yet.`}
           </p>
-          {awaitingCount > 0 && (
+          {!isClicks && awaitingCount > 0 && (
             <button
               onClick={handleMarkLoaded}
               disabled={markingLoaded}
@@ -594,6 +682,7 @@ export function CampaignReferrals({
         >
           {downloading ? "Preparing…" : "Download codes (CSV)"}
         </button>
+        {!isClicks && (
         <button
           onClick={() => setImportOpen((open) => !open)}
           disabled={codes.length === 0}
@@ -602,6 +691,7 @@ export function CampaignReferrals({
         >
           Import your own codes
         </button>
+        )}
       </div>
 
       {importOpen && (
@@ -647,17 +737,24 @@ export function CampaignReferrals({
 
       <div className="space-y-3">
         <h4 className="font-rethink font-semibold text-sm text-stone-900">Creators</h4>
-        {settings.codeSource !== "business" && (
-          <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{codeFormatText(data?.codePrefix)}</p>
+        {isClicks ? (
+          <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
+            Each creator gets a tracked link when they join. Clicks show up here as they happen.
+          </p>
+        ) : (
+          settings.codeSource !== "business" && (
+            <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{codeFormatText(data?.codePrefix)}</p>
+          )
         )}
         {codes.length === 0 ? (
           <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
-            No creators have joined yet. Codes appear here as creators claim placements.
+            No creators have joined yet. {isClicks ? "Links" : "Codes"} appear here as creators claim placements.
           </p>
         ) : (
           codes.map((row) => {
             const chip = STATUS_CHIPS[row.status];
-            const canEdit = settings.codeSource === "business" || row.status === "missing" || row.source === "business";
+            const canEdit =
+              !isClicks && (settings.codeSource === "business" || row.status === "missing" || row.source === "business");
             const isEditing = editingSlotId === row.slotId;
             const inputId = `referral-code-${row.slotId}`;
             return (
@@ -670,6 +767,7 @@ export function CampaignReferrals({
                     {row.creatorUsername && (
                       <p className="font-rethink text-xs font-medium text-stone-500 truncate">@{row.creatorUsername}</p>
                     )}
+                    <TermsAcceptedNote accepted={row.usageRightsAccepted} />
                   </div>
                   <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink", chip.className)}>
                     {chip.label}
@@ -686,13 +784,22 @@ export function CampaignReferrals({
                   )}
                   <span className="shrink-0 font-rethink text-sm font-medium text-stone-900 tabular-nums">
                     {row.conversions.toLocaleString()}{" "}
-                    <span className="text-stone-500">{conversionNounFor(settingsEventTypes(settings), row.conversions)}</span>
+                    <span className="text-stone-500">{noun(row.conversions)}</span>
                   </span>
                 </div>
 
+                {isClicks && row.code && (
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 min-w-0 font-mono text-[11px] text-stone-600 truncate" title={trackedLinkFor(campaignId, row.code)}>
+                      {trackedLinkFor(campaignId, row.code)}
+                    </code>
+                    <CopyLinkButton value={trackedLinkFor(campaignId, row.code)} label="Copy link" />
+                  </div>
+                )}
+
                 {row.earned > 0 && (
                   <p className="font-rethink text-xs font-medium text-stone-500">
-                    {formatNaira(row.earned)} earned from referrals
+                    {formatNaira(row.earned)} earned from {isClicks ? "clicks" : "referrals"}
                   </p>
                 )}
 
@@ -747,7 +854,7 @@ export function CampaignReferrals({
         )}
       </div>
 
-      {!isCancelled && (
+      {!isCancelled && !isClicks && (
         <div className="space-y-4 border-t border-stone-200 pt-6">
           <h4 className="font-rethink font-semibold text-sm text-stone-900">Settings</h4>
           <ReferralSettingsFields
