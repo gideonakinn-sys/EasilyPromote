@@ -25,6 +25,7 @@ const TARGET_FILTERS = [
   { value: "referral_code", label: "Referral codes" },
   { value: "webhook_key", label: "Signing keys" },
   { value: "conversion", label: "Conversions" },
+  { value: "ops_alert", label: "Alerts" },
 ];
 
 const ACTION_LABELS: Record<string, string> = {
@@ -37,6 +38,7 @@ const ACTION_LABELS: Record<string, string> = {
   "referral_code.enabled": "Re-enabled referral code",
   "webhook_key.revoked": "Revoked signing key",
   "conversion.voided": "Voided conversion",
+  "ops_alert.resolved": "Resolved alert",
 };
 
 const ACTION_TONES: Record<string, string> = {
