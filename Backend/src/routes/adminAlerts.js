@@ -18,18 +18,19 @@ router.get("/", viewGuard, async (req, res, next) => {
     const status = ["open", "resolved", "all"].includes(req.query.status) ? req.query.status : "open";
     const filter = status === "open" ? { resolvedAt: null } : status === "resolved" ? { resolvedAt: { $ne: null } } : {};
     const sort = status === "resolved" ? { resolvedAt: -1 } : { firstSeenAt: -1 };
+    // The list is capped; `open` always counts every open alert.
     const [alerts, open] = await Promise.all([
       OpsAlert.find(filter).sort(sort).limit(MAX_ALERTS).lean(),
-      status === "open" ? null : OpsAlert.countDocuments({ resolvedAt: null }),
+      OpsAlert.countDocuments({ resolvedAt: null }),
     ]);
-    res.json({ alerts: alerts.map(alertView), open: open === null ? alerts.length : open });
+    res.json({ alerts: alerts.map(alertView), open });
   } catch (error) {
     next(error);
   }
 });
 
-// PATCH /api/admin/alerts/:id/resolve — marks it handled. It stays resolved while the condition
-// lasts; if the condition clears and comes back later, that's a new alert.
+// PATCH /api/admin/alerts/:id/resolve — marks it handled. If the condition lasts, the alert reopens
+// when the problem changes or 24 hours later; if it clears and comes back later, that's a new alert.
 router.patch("/:id/resolve", resolveGuard, async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Alert not found" });
