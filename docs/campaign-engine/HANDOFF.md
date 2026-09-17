@@ -272,7 +272,7 @@ Recommended design (from reading the referral code): run a clicks campaign **on 
 1. [x] §4 finish deploy review; fix the two minor findings; `npm test` + typechecks green; commit.
 2. [ ] §5 owner: snapshot → preDeployChecks → confirm Render Paystack live key → push → index checks → smoke tests → reconciliation → badge review.
 3. [ ] §7.1 remove all `alert()`/`confirm()`.
-4. [ ] §6 marketplace UI on sections + load test + docs.
+4. [x] §6 marketplace UI on sections + load test + docs (M8 batch 6) — web UI on sections, in-memory tab state caching, cursor paging, browser check, load test p50 587ms, ADMIN_RUNBOOK §9d, DEPLOY_CHECKLIST §15, LAUNCH_ROADMAP ticked.
 5. [ ] §7.3 age/gender hard filters.
 6. [ ] §7.4 custom usage rights.
 7. [ ] §7.2 Clicks objective.

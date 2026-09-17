@@ -48,6 +48,8 @@ interface CreatorDashboardValue {
   handleLogout: () => void;
   marketplaceCampaigns: MarketplaceCampaign[];
   marketplaceMeta: MarketplaceMeta;
+  setMarketplaceMeta: React.Dispatch<React.SetStateAction<MarketplaceMeta>>;
+  upsertMarketplaceCampaigns: (items: MarketplaceCampaign[]) => void;
   walletData: WalletData | null;
   selectedCampaign: CampaignItem | null;
   setSelectedCampaign: (camp: CampaignItem | null) => void;
@@ -187,7 +189,7 @@ function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): Cam
   }));
 }
 
-function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): MarketplaceCampaign[] {
+export function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): MarketplaceCampaign[] {
   return (list || []).map((c) => ({
     id: c.id as string,
     title: c.title as string,
@@ -221,6 +223,8 @@ function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): 
     ineligibleReasons: (c.ineligibleReasons as string[]) || [],
     matchScore: c.matchScore as number | undefined,
     recommended: Boolean(c.recommended),
+    why: (c.why as string[]) || [],
+    recommendationScore: typeof c.recommendationScore === "number" ? c.recommendationScore : undefined,
     recentCreators: typeof c.recentCreators === "number" ? c.recentCreators : 0,
     trending: Boolean(c.trending),
   }));
@@ -414,7 +418,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   const fetchAllData = async () => {
     try {
-      const data = await apiRequest<DashboardPayload>("/creators/dashboard", {
+      const data = await apiRequest<DashboardPayload>("/creators/dashboard?marketplace=none", {
         token: getToken() || undefined,
       });
       applyDashboard(data);
@@ -504,6 +508,16 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       lockReason: data.lockReason ?? null,
     });
   };
+
+  const upsertMarketplaceCampaigns = React.useCallback((items: MarketplaceCampaign[]) => {
+    setMarketplaceCampaigns((prev) => {
+      const byId = new Map(prev.map((c) => [c.id, c]));
+      for (const item of items) {
+        byId.set(item.id, { ...(byId.get(item.id) || {}), ...item });
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
 
   const fetchMarketplace = async () => {
     try {
@@ -990,6 +1004,8 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleLogout,
     marketplaceCampaigns,
     marketplaceMeta,
+    setMarketplaceMeta,
+    upsertMarketplaceCampaigns,
     walletData,
     selectedCampaign,
     setSelectedCampaign,

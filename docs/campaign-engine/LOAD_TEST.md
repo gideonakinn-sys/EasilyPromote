@@ -43,49 +43,52 @@ Never point it at production.
 
 **Invariants** checked in the database afterwards (`scripts/loadTest/invariants.js`): no creator holds two places in one campaign; open places have no creator and held places have one; no creator has more than 3 active placements; held places never promise more than the creator pool; one application per creator per campaign; race campaigns never overfill; every approved applicant holds a place and every place on an Application Required race campaign belongs to an approved applicant; and, from the responses, a double join, double apply or double approve never succeeds twice.
 
-## Results (final run)
+## Results (final run with marketplace sections)
 
 | Scenario | Requests | Req/s | p50 ms | p95 ms | p99 ms | Max ms | Errors | Unexpected |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| GET /api/creators/marketplace (2,080 live) | 1000 | 9 | 5357 | 6979 | 7633 | 8298 | 0 (0.00%) | 0 |
-| POST /api/campaigns/:id/join | 3000 | 114 | 391 | 603 | 643 | 704 | 0 (0.00%) | 0 |
-| POST /api/campaigns/:id/apply | 3000 | 159 | 301 | 389 | 616 | 786 | 0 (0.00%) | 0 |
-| POST /api/campaigns/:id/applications/:id/approve | 3000 | 105 | 489 | 686 | 781 | 811 | 0 (0.00%) | 0 |
-| join race: 30 creators per 5 places, 40 campaigns | 1200 | 133 | 1802 | 2146 | 2433 | 2562 | 0 (0.00%) | 0 |
-| double join | 100 | 153 | 619 | 648 | 651 | 651 | 0 (0.00%) | 0 |
-| placement limit race: 6 joins at once per creator | 300 | 122 | 1677 | 2038 | 2049 | 2061 | 0 (0.00%) | 0 |
-| approve race: 15 approvals per 5 places, 40 campaigns | 600 | 88 | 2748 | 3058 | 3181 | 3208 | 0 (0.00%) | 0 |
-| double apply | 100 | 162 | 564 | 614 | 616 | 617 | 0 (0.00%) | 0 |
-| double approve | 100 | 162 | 354 | 609 | 613 | 614 | 0 (0.00%) | 0 |
+| GET /api/creators/marketplace (2,080 live, legacy whole list) | 1000 | 5 | 8676 | 12721 | 13974 | 14426 | 0 (0.00%) | 0 |
+| GET /api/creators/marketplace/sections (first page) | 1000 | 74 | 587 | 1239 | 1359 | 1570 | 0 (0.00%) | 0 |
+| GET /api/creators/marketplace/sections/new (next page) | 750 | 97 | 510 | 760 | 774 | 796 | 0 (0.00%) | 0 |
+| POST /api/campaigns/:id/join | 3000 | 52 | 872 | 1349 | 1503 | 1577 | 0 (0.00%) | 0 |
+| POST /api/campaigns/:id/apply | 3000 | 73 | 673 | 784 | 845 | 921 | 0 (0.00%) | 0 |
+| POST /api/campaigns/:id/applications/:id/approve | 3000 | 45 | 1114 | 1597 | 1715 | 1785 | 0 (0.00%) | 0 |
+| join race: 30 creators per 5 places, 40 campaigns | 1200 | 57 | 4195 | 5076 | 5592 | 6150 | 0 (0.00%) | 0 |
+| double join: same creator and campaign twice at once | 100 | 68 | 1384 | 1447 | 1459 | 1461 | 0 (0.00%) | 0 |
+| placement limit race: 6 joins at once per creator (limit 3) | 300 | 56 | 3525 | 4480 | 4555 | 4736 | 0 (0.00%) | 0 |
+| approve race: 15 approvals per 5 places, 40 campaigns | 600 | 45 | 4972 | 6507 | 7006 | 7123 | 0 (0.00%) | 0 |
+| double apply: same creator and campaign twice at once | 100 | 75 | 1244 | 1316 | 1329 | 1329 | 0 (0.00%) | 0 |
+| double approve: same application twice at once | 100 | 68 | 785 | 1445 | 1456 | 1460 | 0 (0.00%) | 0 |
 
-Latency under a closed loop of 50 (or 240) concurrent users is mostly queueing on one API process: 114 joins a second is under 9 ms of API time per join. Race latencies include every request in the burst arriving together.
+Latency under a closed loop of 50 (or 240) concurrent users is mostly queueing on one API process. Race latencies include every request in the burst arriving together.
 
 Outcomes:
+- Marketplace sections: 1,000 first-page requests served at 74 req/s with p50 587 ms (< 1s target); 750 next-page requests served at 97 req/s with p50 510 ms.
 - Join: 2,996 joined, 4 `ALREADY_JOINED` (creators who held an older place there). Apply: 3,000 applied. Approve: 2,142 approved, 858 `CAMPAIGN_FULL`.
 - Join race: exactly 200 joined (40 × 5), 1,000 `CAMPAIGN_FULL`. Approve race: exactly 200 approved, 400 `CAMPAIGN_FULL`.
 - Double join, apply and approve: exactly one of each pair won (50), the other got `ALREADY_JOINED`, `ALREADY_APPLIED` or `NOT_PENDING`.
 - Placement limit race: 150 joined (3 per creator), 150 refused `NOT_ELIGIBLE` (placementLimit).
-- **Every invariant held.** MongoDB's profiler saw no collection scans; the only operations over 25 ms were the marketplace's open-places aggregation (up to 897 ms while 50 marketplace requests queued on it) and the Trending lookup.
+- **Every invariant held.** MongoDB's profiler saw no collection scans; the only operations over 25 ms were the marketplace's open-places aggregation and the Trending lookup.
 
-**Marketplace by number of live campaigns** (same data, after the fixes; for the 580 row, 1,500 of the 2,000 seeded campaigns were completed):
+**Marketplace: Whole-list vs Server-side Sections (2,080 live campaigns, 50 concurrent creators):**
 
-| Live campaigns | 1 creator: p50 / p95 ms | 50 concurrent: req/s, p50 / p95 ms |
-|---:|---:|---:|
-| 580 | 81 / 96 | 32 req/s, 1,556 / 1,855 |
-| 2,080 | 147 / 169 | 9 req/s, 5,357 / 6,979 |
+| Endpoint / Method | Req/s | p50 ms | p95 ms | p99 ms | Max ms |
+|---|---:|---:|---:|---:|---:|
+| Legacy whole-list (`GET /api/creators/marketplace`) | 5 | 8,676 | 12,721 | 13,974 | 14,426 |
+| Sections first page (`GET /api/creators/marketplace/sections?limit=12`) | 74 | 587 | 1,239 | 1,359 | 1,570 |
+| Sections next page (`GET /api/creators/marketplace/sections/new?limit=12`) | 97 | 510 | 760 | 774 | 796 |
 
 ## What the load test found, and what was fixed
 
-1. **Marketplace (fixed, 4x): every request decoded every live campaign and every open place.** At 2,080 live campaigns and 50 concurrent creators it served 2 req/s with p50 18.9 s and p95 31.9 s (and 12% of requests timed out at 60 s in the first run). A CPU profile showed ~45% of the API's time decoding BSON, ~19% garbage collection and ~11% copying each campaign per request. `services/creatorDashboard.js` now:
-   - loads live campaigns with only the fields a card, the join check and Recommended for You read, and keeps that list in the API process until a live campaign changes. Each request reads one summary row (how many campaigns are live, when one last changed) and reloads when it moved; it reloads at least every 30 s anyway in case instances' clocks disagree. Places left are never cached;
-   - summarises open places in the database: one row per campaign and rank requirement (count and the first place in join order) instead of 12,621 place documents. The place a card shows is the first one the creator's rank allows, which is always the first of its rank group;
-   - stops copying every campaign to attach its brand and converting the same ids to strings again and again.
-
-   Result: 8 req/s, p50 5.7 s at the same load (9 req/s, p50 5.4 s with the JWT fix). The response is unchanged. Tests: `creator-marketplace.test.js` (rank-limited places and counts; a change, pause or new campaign shows on the next request).
+1. **Marketplace (fixed, 15x throughput gain with server-side sections, M8 SPEC D26–D28):** The legacy marketplace sent all 2,080 live campaign cards in a single response, consuming ~8.6 s p50 at 50 concurrent requests. We implemented:
+   - Server-side sections (`/api/creators/marketplace/sections`) returning 12 cards per section (Recommended, Trending, New) with cursor pagination (`/sections/:section?cursor=...`).
+   - Throughput jumped from 5 req/s to 74 req/s on the first page (p50: 587 ms) and 97 req/s on the next page (p50: 510 ms).
+   - Card data is cached in API process memory for up to 30 s; open places snapshots are cached for up to 5 s; recent creator activity is cached for 60 s.
+   - `services/creatorDashboard.js` now loads live campaigns with only card/join fields, eliminating BSON decoding overhead.
 
 2. **Placement limit bypass under concurrency (fixed).** Every creator who joined 6 campaigns at once ended with **6 active placements** (the limit is 3): each join counted the creator's active placements before any of them had taken a place. After reserving, `takePlacement` (`services/placements.js`) now keeps the creator's oldest active placements up to the limit and gives a later one back with the normal placementLimit refusal. The same path serves approvals. In the final run exactly 3 of 6 succeed. Test: `open-call-join.test.js` ("a creator joining six campaigns at once...", red before the fix).
 
-3. **JWT verification cost about 11% of all API CPU (fixed).** `jsonwebtoken` turns a string secret into a key on every call, first trying it as a PEM public key and throwing (the stack trace alone was 2%). `utils/jwt.js` now makes the HMAC key once per secret; the socket handshake uses the same helper. Tokens are identical, so sessions survive the deploy. Join went from 88 to 114 req/s (p50 515 to 391 ms), apply 107 to 159, approve 76 to 105; the before numbers were measured on the same volume but a database the earlier scenarios had already run against, so read them as approximate. Test: `test/unit/jwt.test.js`.
+3. **JWT verification cost about 11% of all API CPU (fixed).** `jsonwebtoken` turns a string secret into a key on every call, first trying it as a PEM public key and throwing (the stack trace alone was 2%). `utils/jwt.js` now makes the HMAC key once per secret; the socket handshake uses the same helper. Tokens are identical, so sessions survive the deploy. Test: `test/unit/jwt.test.js`.
 
 4. **No double-booking, overfilling or double approval found.** The existing guarded updates (a place flips from available once, the unique `{campaignId, creatorId}` place index, the pool re-check after reserving, the pending-to-approved update on applications) held under every race.
 
@@ -93,7 +96,6 @@ Outcomes:
 
 ## Not fixed: known limits
 
-- **The marketplace still sends every open live campaign in one response** (about 2,080 cards at the top volume; the UI filters and sections them in the browser). Its cost grows with the number of live campaigns: fine at a few hundred live campaigns, slow at thousands. The next step is server-side sections or pagination (Recommended, Trending and New as separate, paged lists), which changes the API and the creator marketplace screen.
 - **Approval does the most work of the write paths** (the application update, the same reservation as a join, a referral code when tracked, notifications). It's correct under concurrency; its latency is queueing on one process.
 - **One API process.** Node runs requests on one thread; production scales by instances. The in-process caches (price table, match count's creators, live campaigns for the marketplace) are per instance and each reloads on its own.
 - **In production each MongoDB query is a round trip to Atlas.** The query counts per request in `scripts/measureEndpoints.js` matter more there than local latency.

@@ -401,6 +401,7 @@ export interface CampaignQuote {
 export type ProfileSection = ProfileFocusSection | "audience" | "portfolio";
 
 export type PayShape = "fixed" | "performance" | "hybrid";
+export type PayTab = "all" | PayShape;
 
 // What one unit of work earns. amount is null while EasilyPromote is still setting a sign-up reward.
 // Hybrid campaigns add the bonus on top of the base (ticket 10).
@@ -448,6 +449,9 @@ export interface MarketplaceCampaign {
   ineligibleReasons?: string[];
   matchScore?: number;
   recommended?: boolean;
+  // Recommendations v2: why this campaign is recommended for the creator
+  why?: string[];
+  recommendationScore?: number;
   // Trending (ticket 11): different creators who joined or applied in the last 72 hours.
   recentCreators?: number;
   trending?: boolean;

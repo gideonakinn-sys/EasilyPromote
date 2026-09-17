@@ -510,6 +510,46 @@ Engineering load tested the marketplace, join, apply and approve (`docs/campaign
 
 ---
 
+## 9d. Recommended v2 and Trending v2 (M8, tickets 04 & 11)
+
+Server-side sections and paging (SPEC D26–D28) organise the creator marketplace into **Recommended for You**, **Trending**, and **New**, split across four pay-shape tabs (**All**, **Fixed Pay**, **Performance**, **Hybrid**).
+
+### What to tell a creator who asks about their recommendations
+
+1. **"Why am I seeing this campaign in Recommended?"**
+   - The creator must be eligible to participate (they meet the rank, verification, badge, and slot requirements, and haven't already joined).
+   - And at least one of three conditions holds:
+     1. **Audience match:** the campaign targets specific locations and the creator's self-reported audience matches (Match Score ≥ 50).
+     2. **Category/Niche match:** the campaign has no audience location targeting and shares one or more of the creator's chosen niches or categories.
+     3. **Track record match (Recommended v2):** the campaign has no audience targeting and no direct niche match, but the creator has completed similar campaigns in the past (similarity score ≥ 0.6 based on objective, category, platform, and pay shape across their best 3 finished campaigns) and has delivered good results on that objective (track record score ≥ 0.6).
+   - Cards in Recommended display up to 2 "why" lines explaining the match (e.g. *"Matches your audience in Lagos"*, *"You film tech content"*, *"Top Creator bonus"*). These reasons come strictly from the creator's own profile and performance data — never disclosing another creator's info.
+
+2. **"Why am I NOT seeing a specific campaign in Recommended?"**
+   - **Targeting mismatch:** if a brand targets an audience (e.g., Nigeria only) and the creator's audience does not match, the campaign is **never** recommended, even if the creator has a flawless track record in that niche. Audience location is a hard constraint for targeting.
+   - **Ineligibility:** campaigns the creator cannot join (e.g., requires Verified, higher rank, or the creator already holds a slot) sit in **New** with an eligibility explanation badge, never in Recommended.
+   - **Recommendation score threshold:** campaigns scoring under 50 points appear in **New** instead.
+
+3. **"How does Trending work (Trending v2)?"**
+   - Trending highlights campaigns gaining rapid creator traction over the last 72 hours (or since launch if under 72h).
+   - The trend score combines:
+     - **Fill speed (60% weight):** how quickly places are taken, normalized over at least 24 hours so brand-new campaigns don't spike artificially from a single join.
+     - **Campaign scale weight:** campaigns with fewer than 4 places cannot trend; full size weight applies at 10+ places.
+     - **Recent creator interest (40% weight):** number of distinct creators who joined or applied in the last 72 hours (must have at least 3 distinct creators).
+   - Campaigns already in the creator's Recommended list are excluded from Trending to avoid duplicate suggestions.
+   - Trending cards show recent creator volume (e.g., *"5 creators joined or applied in the last 3 days"*), never names or identities.
+
+### Caching and data freshness (D28)
+
+To maintain sub-second marketplace performance across thousands of live campaigns, the API uses tiered in-memory caches:
+- **Live campaigns list:** cached in API process memory for up to 30 seconds; invalidated immediately when the live campaign count or `updatedAt` moves.
+- **Open places snapshot:** cached for up to 5 seconds across requests on an instance (1 second when the live campaign list updates).
+- **Recent interest (Trending):** aggregate join/apply activity over 72h is cached for 60 seconds.
+- **Brand info:** brand names and logos are cached for 60 seconds.
+
+If a creator reports a campaign they just applied to still appears in Trending, or a newly launched campaign hasn't appeared yet, it will reflect within 5 to 60 seconds.
+
+---
+
 ## 10. Things the admin panel can't do yet
 
 | Task | Do it this way |

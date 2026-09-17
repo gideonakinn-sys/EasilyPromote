@@ -5,7 +5,9 @@ import type {
   ApprovedApplication,
   CampaignRating,
   CampaignRatingList,
+  MarketplaceCampaign,
   MyApplication,
+  PayTab,
   RatingTag,
 } from "../components/types";
 import { clearAuth, getToken } from "./auth";
@@ -190,3 +192,56 @@ export const ratingsApi = {
     });
   },
 };
+
+// Marketplace sections and paging (M8, SPEC D26–D28)
+export interface MarketplaceSectionData {
+  campaigns: MarketplaceCampaign[];
+  nextCursor: string | null;
+  total: number;
+}
+
+export interface MarketplaceSectionsResponse {
+  tab: PayTab;
+  limit: number;
+  sections: {
+    recommended: MarketplaceSectionData;
+    trending: MarketplaceSectionData;
+    new: MarketplaceSectionData;
+  };
+  tabCounts: Record<PayTab, number>;
+  activeSlots: number;
+  maxSlots: number;
+  canClaim: boolean;
+  locked: boolean;
+  lockReason?: string | null;
+}
+
+export interface MarketplaceSectionPageResponse extends MarketplaceSectionData {
+  section: "recommended" | "trending" | "new";
+  tab: PayTab;
+  limit: number;
+  activeSlots: number;
+  maxSlots: number;
+  canClaim: boolean;
+  locked: boolean;
+  lockReason?: string | null;
+}
+
+export function getMarketplaceSections(tab: PayTab = "all", limit = 12): Promise<MarketplaceSectionsResponse> {
+  return apiRequest<MarketplaceSectionsResponse>(`/creators/marketplace/sections?tab=${tab}&limit=${limit}`, {
+    token: getToken() || undefined,
+  });
+}
+
+export function getMarketplaceSectionPage(
+  section: "recommended" | "trending" | "new",
+  tab: PayTab = "all",
+  cursor?: string | null,
+  limit = 12
+): Promise<MarketplaceSectionPageResponse> {
+  const query = new URLSearchParams({ tab, limit: String(limit) });
+  if (cursor) query.set("cursor", cursor);
+  return apiRequest<MarketplaceSectionPageResponse>(`/creators/marketplace/sections/${section}?${query.toString()}`, {
+    token: getToken() || undefined,
+  });
+}

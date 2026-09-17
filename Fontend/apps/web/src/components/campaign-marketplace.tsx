@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import * as React from "react";
 import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { TiktokIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
-import type { MarketplaceCampaign } from "./types";
-import type { JoinOutcome, MarketplaceMeta } from "./creator-dashboard-context";
+import type { MarketplaceCampaign, PayTab } from "./types";
+import { useCreatorDashboard, type JoinOutcome, type MarketplaceMeta, mapMarketplaceItems } from "./creator-dashboard-context";
 import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useReveal } from "../hooks/use-reveal";
@@ -14,10 +14,18 @@ import slotLimitImg from "@ep/ui/assets/Slot-limit+new-user-empty.png";
 import emptyCampaignImg from "@ep/ui/assets/empty-campaign.png";
 import { MarketplaceDetailsDrawer } from "./campaign-marketplace-drawer";
 import type { ApplicationActions } from "./campaign-apply-panel";
+import {
+  getMarketplaceSections,
+  getMarketplaceSectionPage,
+  ApiRequestError,
+  apiRequest,
+} from "../lib/api";
+import { getToken } from "../lib/auth";
+import { Skeleton } from "./ui/skeleton";
 
 interface CampaignMarketplaceProps {
-  campaigns: MarketplaceCampaign[];
-  meta: MarketplaceMeta;
+  campaigns?: MarketplaceCampaign[];
+  meta?: MarketplaceMeta;
   onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
   onViewMyCampaigns: () => void;
   applications: ApplicationActions; // Campaign engine: applications (ticket 06)
@@ -30,20 +38,13 @@ const PAY_TABS = [
   { value: "hybrid", label: "Hybrid" },
 ] as const;
 
-type PayTab = (typeof PAY_TABS)[number]["value"];
-
 function payShapeOf(campaign: MarketplaceCampaign) {
   return campaign.payShape || (campaign.campaignModel === "content" ? "fixed" : "performance");
-}
-
-function newestFirst(a: MarketplaceCampaign, b: MarketplaceCampaign) {
-  return new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime();
 }
 
 interface MarketplaceCardProps {
   campaign: MarketplaceCampaign;
   onOpen: () => void;
-  // Campaign engine: applications (ticket 06). A pending application to this campaign.
   applied: boolean;
 }
 
@@ -82,9 +83,22 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
         {campaign.title} · {campaign.brandName}
       </h3>
 
-      {campaign.trending && (campaign.recentCreators || 0) > 0 && (
+      {/* Recommended "why" lines (up to 2, D26) */}
+      {campaign.recommended && Array.isArray(campaign.why) && campaign.why.length > 0 && (
+        <div className="flex flex-col gap-1 -mt-1 mb-3">
+          {campaign.why.slice(0, 2).map((reason, idx) => (
+            <p key={idx} className="text-[11px] font-medium text-purple-700 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+              <span className="truncate">{reason}</span>
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* Trending recent creator count (D27) */}
+      {campaign.trending && typeof campaign.recentCreators === "number" && campaign.recentCreators > 0 && (
         <p className="text-[11px] font-medium text-stone-500 -mt-1 mb-3">
-          {campaign.recentCreators} creators joined or applied in the last 3 days
+          {campaign.recentCreators} {campaign.recentCreators === 1 ? "creator" : "creators"} joined or applied in the last 3 days
         </p>
       )}
 
@@ -149,35 +163,270 @@ function CardGrid({ campaigns, onOpen, appliedIds }: CardGridProps) {
   );
 }
 
-export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns, applications }: CampaignMarketplaceProps) {
+interface SectionState {
+  items: MarketplaceCampaign[];
+  nextCursor: string | null;
+  total: number;
+  loadingMore: boolean;
+}
+
+interface TabSectionsState {
+  recommended: SectionState;
+  trending: SectionState;
+  new: SectionState;
+  tabCounts?: Record<PayTab, number>;
+  loading: boolean;
+  error: string | null;
+  loaded: boolean;
+}
+
+const INITIAL_SECTION: SectionState = {
+  items: [],
+  nextCursor: null,
+  total: 0,
+  loadingMore: false,
+};
+
+const INITIAL_TAB_STATE: TabSectionsState = {
+  recommended: { ...INITIAL_SECTION },
+  trending: { ...INITIAL_SECTION },
+  new: { ...INITIAL_SECTION },
+  loading: false,
+  error: null,
+  loaded: false,
+};
+
+export function CampaignMarketplace({
+  meta: propMeta,
+  onJoin,
+  onViewMyCampaigns,
+  applications,
+}: CampaignMarketplaceProps) {
   useReveal();
-  // Campaign engine: applications (ticket 06)
-  const appliedIds = useMemo(
+  const {
+    marketplaceMeta: ctxMeta,
+    setMarketplaceMeta,
+    upsertMarketplaceCampaigns,
+  } = useCreatorDashboard();
+  const meta = propMeta || ctxMeta;
+
+  const appliedIds = React.useMemo(
     () => new Set(applications.list.filter((a) => a.status === "pending").map((a) => a.campaignId)),
     [applications.list]
   );
-  const [tab, setTab] = useState<PayTab>("all");
-  const [showLimitBanner, setShowLimitBanner] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Kept so the drawer can still show the "you're in" state after the campaign leaves the list.
-  const [selectedSnapshot, setSelectedSnapshot] = useState<MarketplaceCampaign | null>(null);
 
-  const filtered = useMemo(
-    () => (tab === "all" ? campaigns : campaigns.filter((c) => payShapeOf(c) === tab)),
-    [campaigns, tab]
+  const [tab, setTab] = React.useState<PayTab>("all");
+  const [showLimitBanner, setShowLimitBanner] = React.useState(true);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = React.useState<MarketplaceCampaign | null>(null);
+
+  // Per-tab in-memory caching: preserves loaded items and nextCursor across tab switches
+  const [tabsState, setTabsState] = React.useState<Record<PayTab, TabSectionsState>>({
+    all: { ...INITIAL_TAB_STATE },
+    fixed: { ...INITIAL_TAB_STATE },
+    performance: { ...INITIAL_TAB_STATE },
+    hybrid: { ...INITIAL_TAB_STATE },
+  });
+
+  const fetchTab = React.useCallback(
+    async (targetTab: PayTab, force = false) => {
+      setTabsState((prev) => {
+        if (!force && prev[targetTab].loaded) return prev;
+        return {
+          ...prev,
+          [targetTab]: {
+            ...prev[targetTab],
+            loading: true,
+            error: null,
+          },
+        };
+      });
+
+      try {
+        const res = await getMarketplaceSections(targetTab, 12);
+        const recommended: SectionState = {
+          items: mapMarketplaceItems(res.sections.recommended.campaigns as unknown as Array<Record<string, unknown>>),
+          nextCursor: res.sections.recommended.nextCursor,
+          total: res.sections.recommended.total,
+          loadingMore: false,
+        };
+        const trending: SectionState = {
+          items: mapMarketplaceItems(res.sections.trending.campaigns as unknown as Array<Record<string, unknown>>),
+          nextCursor: res.sections.trending.nextCursor,
+          total: res.sections.trending.total,
+          loadingMore: false,
+        };
+        const newSection: SectionState = {
+          items: mapMarketplaceItems(res.sections.new.campaigns as unknown as Array<Record<string, unknown>>),
+          nextCursor: res.sections.new.nextCursor,
+          total: res.sections.new.total,
+          loadingMore: false,
+        };
+
+        setTabsState((prev) => ({
+          ...prev,
+          [targetTab]: {
+            recommended,
+            trending,
+            new: newSection,
+            tabCounts: res.tabCounts,
+            loading: false,
+            error: null,
+            loaded: true,
+          },
+        }));
+
+        if (res.activeSlots !== undefined) {
+          setMarketplaceMeta({
+            activeSlots: res.activeSlots,
+            maxSlots: res.maxSlots ?? 3,
+            canClaim: res.canClaim ?? true,
+            lockReason: res.lockReason ?? null,
+          });
+        }
+
+        upsertMarketplaceCampaigns([...recommended.items, ...trending.items, ...newSection.items]);
+      } catch (err: unknown) {
+        // Fallback: if sections endpoint 404s (e.g. web deployed before API), fall back to whole-list
+        const is404 =
+          err instanceof ApiRequestError
+            ? err.status === 404
+            : (err as { status?: number })?.status === 404;
+
+        if (is404) {
+          try {
+            const legacy = await apiRequest<{
+              campaigns: Array<Record<string, unknown>>;
+              activeSlots: number;
+              maxSlots: number;
+              canClaim: boolean;
+              lockReason: string | null;
+            }>("/creators/marketplace", {
+              token: getToken() || undefined,
+            });
+            const allItems = mapMarketplaceItems(legacy.campaigns);
+            const filtered = targetTab === "all" ? allItems : allItems.filter((c) => payShapeOf(c) === targetTab);
+            const rec = filtered.filter((c) => c.recommended);
+            const trn = filtered.filter((c) => c.trending && !c.recommended);
+            const oth = filtered.filter((c) => !c.recommended && !c.trending);
+
+            setTabsState((prev) => ({
+              ...prev,
+              [targetTab]: {
+                recommended: { items: rec, nextCursor: null, total: rec.length, loadingMore: false },
+                trending: { items: trn, nextCursor: null, total: trn.length, loadingMore: false },
+                new: { items: oth, nextCursor: null, total: oth.length, loadingMore: false },
+                loading: false,
+                error: null,
+                loaded: true,
+              },
+            }));
+
+            setMarketplaceMeta({
+              activeSlots: legacy.activeSlots || 0,
+              maxSlots: legacy.maxSlots || 3,
+              canClaim: legacy.canClaim ?? true,
+              lockReason: legacy.lockReason ?? null,
+            });
+
+            upsertMarketplaceCampaigns(allItems);
+            return;
+          } catch (fallbackErr) {
+            console.error("Marketplace legacy fallback failed:", fallbackErr);
+          }
+        }
+
+        const message = err instanceof Error ? err.message : "Couldn't load campaigns right now.";
+        setTabsState((prev) => ({
+          ...prev,
+          [targetTab]: {
+            ...prev[targetTab],
+            loading: false,
+            error: message,
+            loaded: false,
+          },
+        }));
+      }
+    },
+    [setMarketplaceMeta, upsertMarketplaceCampaigns]
   );
-  const recommended = filtered.filter((c) => c.recommended);
-  // Trending (ticket 11): never repeats a recommended card; New is everything else.
-  const trending = filtered
-    .filter((c) => c.trending && !c.recommended)
-    .sort((a, b) => (b.recentCreators || 0) - (a.recentCreators || 0) || newestFirst(a, b));
-  const others = filtered.filter((c) => !c.recommended && !c.trending).sort(newestFirst);
 
-  const selected = (selectedId && campaigns.find((c) => c.id === selectedId)) || selectedSnapshot;
+  // Load initial tab on mount or tab change if not loaded
+  React.useEffect(() => {
+    if (!tabsState[tab].loaded && !tabsState[tab].loading) {
+      fetchTab(tab);
+    }
+  }, [tab, tabsState, fetchTab]);
+
+  const loadMore = async (section: "recommended" | "trending" | "new") => {
+    const currentTabState = tabsState[tab];
+    const sectionState = currentTabState[section];
+    if (!sectionState.nextCursor || sectionState.loadingMore) return;
+
+    setTabsState((prev) => ({
+      ...prev,
+      [tab]: {
+        ...prev[tab],
+        [section]: {
+          ...prev[tab][section],
+          loadingMore: true,
+        },
+      },
+    }));
+
+    try {
+      const res = await getMarketplaceSectionPage(section, tab, sectionState.nextCursor, 12);
+      const newItems = mapMarketplaceItems(res.campaigns as unknown as Array<Record<string, unknown>>);
+
+      setTabsState((prev) => {
+        const existingItems = prev[tab][section].items;
+        const existingIds = new Set(existingItems.map((c) => c.id));
+        const appended = [...existingItems, ...newItems.filter((c) => !existingIds.has(c.id))];
+
+        return {
+          ...prev,
+          [tab]: {
+            ...prev[tab],
+            [section]: {
+              items: appended,
+              nextCursor: res.nextCursor,
+              total: res.total ?? prev[tab][section].total,
+              loadingMore: false,
+            },
+          },
+        };
+      });
+
+      upsertMarketplaceCampaigns(newItems);
+    } catch (err) {
+      console.error(`Failed to load more ${section} campaigns:`, err);
+      setTabsState((prev) => ({
+        ...prev,
+        [tab]: {
+          ...prev[tab],
+          [section]: {
+            ...prev[tab][section],
+            loadingMore: false,
+          },
+        },
+      }));
+    }
+  };
+
+  const currentTab = tabsState[tab];
+  const allLoadedCampaigns = React.useMemo(() => {
+    return [
+      ...currentTab.recommended.items,
+      ...currentTab.trending.items,
+      ...currentTab.new.items,
+    ];
+  }, [currentTab]);
+
+  const selected = (selectedId && allLoadedCampaigns.find((c) => c.id === selectedId)) || selectedSnapshot;
   const isAtLimit = meta.activeSlots >= meta.maxSlots;
-  // The server refuses joins for these too; say why before the creator tries.
-  const joinBlockedReason = meta.lockReason
-    || (isAtLimit || !meta.canClaim ? `You have ${meta.activeSlots} active placements. Finish one to join another` : null);
+  const joinBlockedReason =
+    meta.lockReason ||
+    (isAtLimit || !meta.canClaim ? `You have ${meta.activeSlots} active placements. Finish one to join another` : null);
 
   const open = (campaign: MarketplaceCampaign) => {
     setSelectedId(campaign.id);
@@ -188,13 +437,18 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
     setSelectedSnapshot(null);
   };
 
+  const totalCampaignsOnTab =
+    currentTab.recommended.items.length + currentTab.trending.items.length + currentTab.new.items.length;
+
   return (
     <div className="w-full flex flex-col font-rethink">
+      {/* Pay Tabs */}
       <div data-reveal className="w-full mb-8">
         <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
           {PAY_TABS.map((option) => (
             <button
               key={option.value}
+              type="button"
               onClick={() => setTab(option.value)}
               className={cn(
                 "px-4 py-2 rounded-full text-xs font-medium font-rethink",
@@ -202,12 +456,52 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
               )}
             >
               {option.label}
+              {currentTab.tabCounts && currentTab.tabCounts[option.value] !== undefined && (
+                <span className={cn("ml-1.5 opacity-70")}>({currentTab.tabCounts[option.value]})</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {/* Error state with retry */}
+      {currentTab.error && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center mb-8">
+          <p className="font-rethink text-xs font-medium text-red-800 mb-3">{currentTab.error}</p>
+          <button
+            type="button"
+            onClick={() => fetchTab(tab, true)}
+            className="px-4 py-2 rounded-full bg-stone-900 text-white font-semibold text-xs font-rethink"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Initial loading skeleton */}
+      {currentTab.loading && !currentTab.loaded ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl p-4 flex flex-col">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <Skeleton className="w-[50px] h-[50px] rounded-2xl" />
+                <Skeleton className="w-20 h-5 rounded-full" />
+              </div>
+              <Skeleton className="h-6 w-32 mb-2" />
+              <Skeleton className="h-4 w-48 mb-4" />
+              <div className="flex gap-2 mb-6">
+                <Skeleton className="h-4 w-16 rounded-full" />
+                <Skeleton className="h-4 w-20 rounded-full" />
+              </div>
+              <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-8 w-24 rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !currentTab.loading && !currentTab.error && totalCampaignsOnTab === 0 ? (
+        /* Overall empty state */
         <div className="flex flex-col items-center justify-center text-center py-20 px-6">
           <Image src={emptyCampaignImg} alt="" width={200} height={200} className="mb-6" unoptimized />
           <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">Nothing right now</h3>
@@ -216,34 +510,82 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
           </p>
         </div>
       ) : (
+        /* Sections */
         <div className="space-y-10 w-full">
-          {recommended.length > 0 && (
+          {/* Recommended for You */}
+          {currentTab.recommended.items.length > 0 && (
             <section className="space-y-4">
               <div>
                 <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Recommended for You</h2>
                 <p className="text-xs font-medium text-stone-500">Campaigns you can join that suit where your audience is.</p>
               </div>
-              <CardGrid campaigns={recommended} onOpen={open} appliedIds={appliedIds} />
+              <CardGrid campaigns={currentTab.recommended.items} onOpen={open} appliedIds={appliedIds} />
+              {currentTab.recommended.nextCursor && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    disabled={currentTab.recommended.loadingMore}
+                    onClick={() => loadMore("recommended")}
+                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                  >
+                    {currentTab.recommended.loadingMore ? "Loading..." : "Show more"}
+                  </button>
+                </div>
+              )}
             </section>
           )}
-          {trending.length > 0 && (
+
+          {/* Trending */}
+          {currentTab.trending.items.length > 0 && (
             <section className="space-y-4">
               <div>
                 <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Trending</h2>
-                <p className="text-xs font-medium text-stone-500">Campaigns the most creators joined or applied to in the last 3 days.</p>
+                <p className="text-xs font-medium text-stone-500">
+                  Campaigns the most creators joined or applied to in the last 3 days.
+                </p>
               </div>
-              <CardGrid campaigns={trending} onOpen={open} appliedIds={appliedIds} />
+              <CardGrid campaigns={currentTab.trending.items} onOpen={open} appliedIds={appliedIds} />
+              {currentTab.trending.nextCursor && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    disabled={currentTab.trending.loadingMore}
+                    onClick={() => loadMore("trending")}
+                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                  >
+                    {currentTab.trending.loadingMore ? "Loading..." : "Show more"}
+                  </button>
+                </div>
+              )}
             </section>
           )}
-          {others.length > 0 && (
+
+          {/* New */}
+          {currentTab.new.items.length > 0 && (
             <section className="space-y-4">
-              <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">New</h2>
-              <CardGrid campaigns={others} onOpen={open} appliedIds={appliedIds} />
+              <div>
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">New</h2>
+                <p className="text-xs font-medium text-stone-500">Latest campaigns added to the platform.</p>
+              </div>
+              <CardGrid campaigns={currentTab.new.items} onOpen={open} appliedIds={appliedIds} />
+              {currentTab.new.nextCursor && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    disabled={currentTab.new.loadingMore}
+                    onClick={() => loadMore("new")}
+                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                  >
+                    {currentTab.new.loadingMore ? "Loading..." : "Show more"}
+                  </button>
+                </div>
+              )}
             </section>
           )}
         </div>
       )}
 
+      {/* Active placement limit warning banner */}
       {isAtLimit && showLimitBanner && (
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 z-50">
           <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-[20px] p-2 flex items-center justify-between gap-3 text-left relative overflow-hidden">
@@ -254,6 +596,7 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
               </h4>
             </div>
             <button
+              type="button"
               onClick={() => setShowLimitBanner(false)}
               className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center shrink-0 text-stone-400"
             >

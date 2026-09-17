@@ -470,3 +470,24 @@ A new collection, so the unique index can't conflict. Confirm with `db.creatorra
 - As admin, **Users & Creators** → **Badges & Ratings** on a creator loads the checks; **Activity** has a **Ratings** filter.
 
 **Rollback:** safe for money (nothing here moves money). Older code ignores `creatorratings` and the new profile fields (`badgesAuto`, `badgeOverrides`, `badgeEvaluation`, `badgesEvaluatedAt`, `badgesRevision`, `brandRating`), keeps the `badges` array as last written (automatic badges stay until changed by hand) and computes completion the old way at its next daily run.
+
+---
+
+## 15. Creator marketplace sections & paging (M8, SPEC D26–D28)
+
+**No manual migration, no new environment variables. Deploy the API first, then web (`Fontend/apps/web`).**
+
+**What changes:**
+- **Creator marketplace:** replaced whole-list fetching with server-side sections (`GET /api/creators/marketplace/sections?tab=...&limit=12`) and cursor-based "Show more" paging (`GET /api/creators/marketplace/sections/:section?cursor=...`). Tab state is preserved in-memory across switches without refetching.
+- **Creator dashboard:** calls `GET /api/creators/dashboard?marketplace=none` to avoid loading unneeded marketplace cards on dashboard initialisation.
+- **Backward compatibility / Deploy order:** if web is deployed before the API (or during rolling updates), the web client catches a 404 from `/creators/marketplace/sections` and automatically falls back to `GET /api/creators/marketplace`, segmenting cards into sections client-side.
+- **Recommended v2 & Trending v2:** Recommended cards display up to 2 "why" lines; Trending cards show 72h creator count.
+
+**Smoke tests after deploy:**
+- Creator marketplace loads with sections: **Recommended for You**, **Trending**, and **New**.
+- Switching pay tabs (**All**, **Fixed Pay**, **Performance**, **Hybrid**) filters correctly and preserves loaded sections when switching back.
+- Clicking **Show more** loads subsequent pages with cursor pagination, appending cards without duplicates.
+- Recommended cards show "why" lines when applicable; Trending cards show recent creator counts.
+
+**Rollback:** safe. If web rolls back, older web clients call the legacy whole-list `GET /api/creators/marketplace` which remains fully supported. If the API rolls back, the new web client falls back gracefully to the legacy endpoint.
+
