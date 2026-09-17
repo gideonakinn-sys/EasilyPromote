@@ -198,8 +198,10 @@ function resolveCampaignSetup(body, current = null) {
     performanceMetric: definition.performanceMetric,
   };
 
+  // Where content goes (and the usage rights that come with the brand's page) is only a Content campaign's
+  // question (SPEC D31): every other objective posts on the creator's own page.
   const details = {
-    contentDestination: input.contentDestination || (current && current.contentDestination) || "creator_page",
+    contentDestination: isContent ? input.contentDestination || (current && current.contentDestination) || "creator_page" : "creator_page",
     creatorAccess: input.creatorAccess || (current && current.creatorAccess) || "open_call",
   };
   // A views bonus is earned on the creator's own post, so content only delivered to the brand can't earn one.
@@ -219,8 +221,14 @@ function resolveCampaignSetup(body, current = null) {
     // Only enforce when the wizard explicitly chose clicks (not on a draft save with no objective yet).
     if (objectiveChosen) return badRequest("Add a destination URL for people who click the link");
   }
-  // M8 batch 7: custom usage-rights terms.
-  if (input.usageRights !== undefined) {
+  // M8 batch 7: custom usage-rights terms. A Content draft changed to another objective goes back to the
+  // standard licence (SPEC D31): the wizard only asks about rights for Content, so terms set there would
+  // otherwise stay behind for creators to accept.
+  const leavingContent = !isContent && current && current.campaignModel === "content";
+  if (leavingContent && input.usageRights === undefined) {
+    const prev = current.usageRights;
+    if (prev && prev.type === "custom") details.usageRights = { type: "standard", version: prev.version || 1, terms: {} };
+  } else if (input.usageRights !== undefined) {
     const prev = current && current.usageRights;
     const merged = {
       type: (input.usageRights && input.usageRights.type) || (prev && prev.type) || "standard",
@@ -349,7 +357,9 @@ function editSetupUpdates(body, campaign) {
     }
   }
   for (const [key, value] of Object.entries(setup.details)) {
-    if (body[key] !== undefined || !campaign[key]) updates[key] = value;
+    // A campaign that isn't Content always posts on the creator's page with standard rights (SPEC D31).
+    const nonContentReset = !isContent && ((key === "contentDestination" && campaign[key] !== value) || (key === "usageRights" && modelChanged));
+    if (body[key] !== undefined || !campaign[key] || nonContentReset) updates[key] = value;
   }
   if (moneyChanged) {
     Object.assign(updates, setup.money);
