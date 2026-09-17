@@ -10,6 +10,7 @@ import {
   MIN_VIEWS,
   PAY_SHAPE_OPTIONS,
   usesReferralBudget,
+  actionNoun,
   type WizardData,
 } from "./wizard-state";
 import type { CampaignQuote } from "../types";
@@ -133,7 +134,7 @@ interface StepPayProps {
 export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepPayProps) {
   const isContent = data.objective === "content";
   const referral = usesReferralBudget(data.objective);
-  const actionNoun = data.objective === "downloads" ? "download" : "sign-up";
+  const unitNoun = actionNoun(data.objective);
   const hybrid = isContent && data.payShape === "hybrid";
 
   return (
@@ -146,7 +147,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             : isContent
             ? "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate."
             : referral
-              ? `You fund a budget and our team sets what creators earn per ${actionNoun}.`
+              ? `You fund a budget and our team sets what creators earn per ${unitNoun}.`
               : "You choose how many views you want. The price comes from our price table."
         }
       />
@@ -230,7 +231,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
           <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
             {data.bonusMetric === "views"
               ? "The bonus per 1,000 views comes from our price table."
-              : `Bonus per ${data.bonusMetric === "downloads" ? "download" : "sign-up"} is set by our team. Your app needs to be connected before you pay.`}
+              : `Bonus per ${actionNoun(data.bonusMetric)} is set by our team. Your app needs to be connected before you pay.`}
           </p>
         </>
       )}
@@ -251,7 +252,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             />
           </div>
           <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
-            Reward per {actionNoun} is set by our team.
+            Reward per {unitNoun} is set by our team.
           </p>
         </Field>
       )}

@@ -1,11 +1,12 @@
 import { API_URL, apiRequest, getToken } from "./api";
 
-export type ReferralEventType = "install" | "signup" | "purchase" | "deposit" | "custom";
+export type ReferralEventType = "install" | "signup" | "lead" | "purchase" | "deposit" | "custom";
 export type ReferralCodeSource = "easilypromote" | "business";
 
 export const REFERRAL_EVENT_TYPES: { value: ReferralEventType; label: string }[] = [
   { value: "signup", label: "Sign-ups" },
   { value: "install", label: "App installs" },
+  { value: "lead", label: "Leads" },
   { value: "purchase", label: "Purchases" },
   { value: "deposit", label: "Deposits" },
   { value: "custom", label: "Custom event" },
@@ -29,6 +30,7 @@ export const CODE_SOURCE_OPTIONS: { value: ReferralCodeSource; label: string; sh
 const CONVERSION_NOUNS: Record<ReferralEventType, [string, string]> = {
   signup: ["sign-up", "sign-ups"],
   install: ["install", "installs"],
+  lead: ["lead", "leads"],
   purchase: ["purchase", "purchases"],
   deposit: ["deposit", "deposits"],
   custom: ["conversion", "conversions"],

@@ -46,7 +46,7 @@ const NEEDS_REWARD_FILTER = {
   status: { $in: ["live", "paused"] },
   "referral.rewardPerConversion": { $not: { $gt: 0 } },
 };
-const CONVERSION_NOUNS = { signup: "sign-up", install: "download", purchase: "purchase", deposit: "deposit", custom: "conversion" };
+const CONVERSION_NOUNS = { signup: "sign-up", install: "download", lead: "lead", purchase: "purchase", deposit: "deposit", custom: "conversion" };
 
 function brandRef(user, fallbackId = null) {
   return user

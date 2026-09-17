@@ -6,6 +6,7 @@ const { campaignEventTypes } = require("./referralCodes");
 const CONVERSION_UNITS = {
   install: "download",
   signup: "sign-up",
+  lead: "lead",
   purchase: "purchase",
   deposit: "deposit",
   custom: "action",

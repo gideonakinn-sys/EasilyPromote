@@ -25,10 +25,21 @@ export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body:
   { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver.", available: true },
   { value: "downloads", title: "Downloads", body: "Pay for app installs, tracked with a code for each creator.", available: true },
   { value: "signups", title: "Sign-ups", body: "Pay for people who sign up, tracked with a code for each creator.", available: true },
-  { value: "engagement", title: "Engagement", body: "Pay for likes, comments and shares.", available: false },
-  { value: "leads", title: "Leads", body: "Pay for people who show interest in what you sell.", available: false },
-  { value: "sales", title: "Sales", body: "Pay for purchases made through creators.", available: false },
-  { value: "other", title: "Other", body: "Pay for another action that matters to you.", available: false },
+  { value: "leads", title: "Leads", body: "Pay for people who show interest, like filling in a form, tracked with a code for each creator.", available: true },
+  { value: "sales", title: "Sales", body: "Pay for purchases made with a creator's code, reported by your app or website.", available: true },
+  // Coming soon (SPEC, ticket 11): why is said on the card.
+  {
+    value: "engagement",
+    title: "Engagement",
+    body: "Pay for likes, comments and shares. We can't yet verify these on every platform or pay for them.",
+    available: false,
+  },
+  {
+    value: "other",
+    title: "Other",
+    body: "Pay for another action. We can't yet describe and verify an action of your choosing.",
+    available: false,
+  },
 ];
 
 export const DESTINATION_OPTIONS: { value: ContentDestination; title: string; body: string }[] = [
@@ -122,7 +133,20 @@ export const BONUS_METRIC_OPTIONS: { value: BonusMetric; title: string; body: st
   { value: "downloads", title: "Downloads", body: "Creators earn per app install with their code. Our team sets the reward." },
 ];
 const DEFAULT_VIEWS = 1000000;
-const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads"];
+const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads", "leads", "sales"];
+
+// What one tracked result of a referral objective is called: "sign-up", "downloads", "lead", "purchases".
+const ACTION_NOUNS: Partial<Record<CampaignObjective | BonusMetric, [string, string]>> = {
+  signups: ["sign-up", "sign-ups"],
+  downloads: ["download", "downloads"],
+  leads: ["lead", "leads"],
+  sales: ["purchase", "purchases"],
+};
+
+export function actionNoun(objective: CampaignObjective | BonusMetric | null | undefined, plural = false): string {
+  const nouns = (objective && ACTION_NOUNS[objective]) || ACTION_NOUNS.signups!;
+  return plural ? nouns[1] : nouns[0];
+}
 
 export interface WizardBrief {
   summary: string;

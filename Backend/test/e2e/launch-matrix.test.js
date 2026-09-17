@@ -5,10 +5,11 @@
 // withdrawal, and the campaign's books reconcile to the kobo.
 //
 // Enabled at launch (D14): objective content | views | signups | downloads × access open_call |
-// application_required, and for content also destination creator_page | brand_page | both.
+// application_required, and for content also destination creator_page | brand_page | both. Ticket 11
+// adds leads (the `lead` conversion event) and sales (`purchase`), through the same referral path.
 // Not in the matrix: destination on performance objectives (they have no deliverable, so it's always
 // creator_page), Hybrid pay (after launch; covered by hybrid-pay.test.js) and the "Coming soon"
-// objectives (engagement, leads, sales, other), which are refused.
+// objectives (engagement, other), which are refused.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { startHarness } = require("./harness");
@@ -76,7 +77,7 @@ function campaignBody({ objective, access, destination }) {
 }
 
 async function createAndPay(combo) {
-  const brand = ["signups", "downloads"].includes(combo.objective) ? brands.referral : brands.plain;
+  const brand = Object.keys(CONVERSION_EVENT).includes(combo.objective) ? brands.referral : brands.plain;
   const created = await harness.api("POST", "/api/campaigns", { token: brand.token, body: campaignBody(combo) });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const id = created.body.id;
@@ -90,8 +91,7 @@ async function createAndPay(combo) {
   assert.equal(stored.campaignObjective, combo.objective);
   assert.equal(stored.creatorAccess, combo.access);
   if (combo.destination) assert.equal(stored.contentDestination, combo.destination);
-  if (combo.objective === "signups") assert.deepEqual(stored.referral.eventTypes, ["signup"]);
-  if (combo.objective === "downloads") assert.deepEqual(stored.referral.eventTypes, ["install"]);
+  if (CONVERSION_EVENT[combo.objective]) assert.deepEqual(stored.referral.eventTypes, [CONVERSION_EVENT[combo.objective]]);
   return { brand, id };
 }
 
@@ -181,7 +181,7 @@ async function deliverConversion({ id, placement, objective }) {
     payload: {
       event_id: `evt_matrix_${Date.now()}_${eventCounter}`,
       code: placement.referralCode,
-      event: objective === "downloads" ? "install" : "signup",
+      event: CONVERSION_EVENT[objective],
       timestamp: new Date().toISOString(),
     },
   });
@@ -199,10 +199,13 @@ async function adminWhoSetsRewards() {
   return rewardAdmin;
 }
 
+// The conversion event each referral objective counts.
+const CONVERSION_EVENT = { signups: "signup", downloads: "install", leads: "lead", sales: "purchase" };
+
 const COMBINATIONS = [];
 for (const access of ["open_call", "application_required"]) {
   for (const destination of ["creator_page", "brand_page", "both"]) COMBINATIONS.push({ objective: "content", access, destination });
-  for (const objective of ["views", "signups", "downloads"]) COMBINATIONS.push({ objective, access });
+  for (const objective of ["views", "signups", "downloads", "leads", "sales"]) COMBINATIONS.push({ objective, access });
 }
 
 COMBINATIONS.forEach((combo, index) => {
@@ -236,7 +239,7 @@ COMBINATIONS.forEach((combo, index) => {
 });
 
 test("launch matrix: objectives that aren't live yet can't be created", async () => {
-  for (const objective of ["engagement", "leads", "sales", "other"]) {
+  for (const objective of ["engagement", "other"]) {
     const res = await harness.api("POST", "/api/campaigns", {
       token: brands.plain.token,
       body: { name: "Not yet", category: "Tech", campaignObjective: objective, creatorAccess: "open_call", brief },

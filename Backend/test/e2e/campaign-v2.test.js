@@ -145,9 +145,9 @@ test("hybrid pay is for content campaigns only, and objectives that aren't ready
   assert.equal(unpricedHybrid.status, 201, JSON.stringify(unpricedHybrid.body));
   assert.equal(unpricedHybrid.body.quote, null);
 
-  const sales = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Sales", category: "Tech", campaignObjective: "sales", targetViews: 100000 } });
-  assert.equal(sales.status, 400);
-  assert.match(sales.body.error, /available yet/);
+  const engagement = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Engagement", category: "Tech", campaignObjective: "engagement", targetViews: 100000 } });
+  assert.equal(engagement.status, 400);
+  assert.match(engagement.body.error, /available yet/);
 
   const badPay = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { ...contentCampaign, contentPay: { ratePerDeliverable: 0, deliverables: 3 } } });
   assert.equal(badPay.status, 400);

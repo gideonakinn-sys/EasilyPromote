@@ -320,12 +320,12 @@ const campaignSchema = new mongoose.Schema(
       },
       eventType: {
         type: String,
-        enum: ["install", "signup", "purchase", "deposit", "custom"],
+        enum: ["install", "signup", "lead", "purchase", "deposit", "custom"],
         default: "signup",
       },
       // Every conversion type that counts; eventType mirrors the first one for older readers.
       eventTypes: {
-        type: [{ type: String, enum: ["install", "signup", "purchase", "deposit", "custom"] }],
+        type: [{ type: String, enum: ["install", "signup", "lead", "purchase", "deposit", "custom"] }],
         default: undefined,
       },
       codeSource: {

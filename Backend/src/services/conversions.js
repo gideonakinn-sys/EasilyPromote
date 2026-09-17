@@ -16,7 +16,8 @@ const { isConversionBonus, reserveConversionBonus } = require("../utils/hybridBo
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-const EVENT_TYPES = ["install", "signup", "purchase", "deposit", "custom"];
+// `lead` (ticket 11) pays Leads campaigns; Sales campaigns count `purchase`.
+const EVENT_TYPES = ["install", "signup", "lead", "purchase", "deposit", "custom"];
 
 const INVALID_CODE_MESSAGES = {
   not_found: "No creator in your account has this code",

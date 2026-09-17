@@ -29,7 +29,7 @@ async function connectBrandApp(brand) {
 }
 
 // A paid, live sign-up campaign and a signing key for the brand's server.
-async function liveSignupCampaign(creatorAccess) {
+async function liveSignupCampaign(creatorAccess, objective = "signups") {
   const brand = await harness.registerBrand();
   await connectBrandApp(brand);
   const created = await harness.api("POST", "/api/campaigns", {
@@ -37,7 +37,7 @@ async function liveSignupCampaign(creatorAccess) {
     body: {
       name: "App launch",
       category: "Tech",
-      campaignObjective: "signups",
+      campaignObjective: objective,
       targetViews: 100000,
       referral: { requestedBudget: 50000 },
       creatorAccess,
@@ -57,13 +57,13 @@ async function liveSignupCampaign(creatorAccess) {
 }
 
 let eventCounter = 0;
-function sendConversion(key, code) {
+function sendConversion(key, code, event = "signup") {
   const { buildSignedRequest } = require("../../src/services/conversions");
   eventCounter += 1;
   const request = buildSignedRequest({
     keyId: key.keyId,
     secret: key.secret,
-    payload: { event_id: `evt_${Date.now()}_${eventCounter}`, code, event: "signup", timestamp: new Date().toISOString() },
+    payload: { event_id: `evt_${Date.now()}_${eventCounter}`, code, event, timestamp: new Date().toISOString() },
   });
   return harness.rawPost("/api/webhooks/conversions", request);
 }
@@ -84,10 +84,10 @@ async function dashboard(creator) {
   return res.body;
 }
 
-async function expectRewardCredited({ campaignId, creator, key, code }) {
+async function expectRewardCredited({ campaignId, creator, key, code, event = "signup" }) {
   const Campaign = require("../../src/models/Campaign");
   const before = await Campaign.findById(campaignId).lean();
-  const sent = await sendConversion(key, code);
+  const sent = await sendConversion(key, code, event);
   assert.equal(sent.status, 200, JSON.stringify(sent.body));
   assert.deepEqual(sent.body, { status: "recorded", counted: true });
 
@@ -122,6 +122,27 @@ test("Open Call: joining a sign-up campaign creates the code, and a signed conve
 
   await setReward(id);
   await expectRewardCredited({ campaignId: id, creator, key, code: joined.body.referralCode });
+});
+
+test("Leads and Sales (ticket 11): a signed lead or purchase is credited at admin's reward; other events don't count", async () => {
+  for (const [objective, event, unit] of [["leads", "lead", "lead"], ["sales", "purchase", "purchase"]]) {
+    const { id, key } = await liveSignupCampaign("open_call", objective);
+    const creator = await harness.registerCreator();
+    const card = (await dashboard(creator)).marketplace.campaigns.find((c) => String(c.id) === id);
+    assert.deepEqual(card.pay, { amount: null, unit }, objective);
+
+    const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+    assert.equal(joined.status, 200, JSON.stringify(joined.body));
+    assert.ok(joined.body.referralCode, "code created on join");
+    await setReward(id);
+    const priced = (await dashboard(creator)).campaigns.campaigns.find((c) => String(c.id) === id);
+    assert.deepEqual(priced.pay, { amount: REWARD, unit });
+
+    // A sign-up isn't what this campaign pays for: recorded, not counted, nothing reserved.
+    const other = await sendConversion(key, joined.body.referralCode, "signup");
+    assert.deepEqual(other.body, { status: "recorded", counted: false });
+    await expectRewardCredited({ campaignId: id, creator, key, code: joined.body.referralCode, event });
+  }
 });
 
 test("Application Required: approving an applicant creates the code, and a signed conversion is credited as today", async () => {

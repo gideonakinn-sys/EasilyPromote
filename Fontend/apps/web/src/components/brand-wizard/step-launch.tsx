@@ -5,7 +5,7 @@ import Image from "next/image";
 import { StepHeading } from "./wizard-fields";
 import { QuoteSummary } from "./step-pay";
 import { CampaignSetupSummary, setupFromWizard } from "./campaign-setup-summary";
-import { isHybrid, tracksConversions, type WizardData } from "./wizard-state";
+import { actionNoun, isHybrid, tracksConversions, type WizardData } from "./wizard-state";
 import type { CampaignQuote } from "../types";
 import { ConnectAppChecklist, useReferralConnection } from "../connect-app-checklist";
 
@@ -23,7 +23,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
   const referral = tracksConversions(data);
   const isContent = data.objective === "content";
   const hybrid = isHybrid(data);
-  const trackedNoun = (hybrid ? data.bonusMetric : data.objective) === "downloads" ? "downloads" : "sign-ups";
+  const trackedNoun = actionNoun(hybrid ? data.bonusMetric : data.objective, true);
 
   return (
     <div className="space-y-8">

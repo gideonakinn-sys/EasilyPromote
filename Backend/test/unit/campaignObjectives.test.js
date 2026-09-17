@@ -10,6 +10,7 @@ test("campaigns from before the campaign engine map to the objective their setti
     [{ objective: "actions", referral: { eventTypes: ["install"] } }, "downloads"],
     [{ objective: "actions", referral: { eventTypes: ["install", "signup"] } }, "signups"],
     [{ objective: "actions", referral: { eventTypes: ["purchase"] } }, "sales"],
+    [{ objective: "actions", referral: { eventTypes: ["lead"] } }, "leads"],
     [{ objective: "actions", referral: { eventTypes: ["deposit"] } }, "sales"],
     [{ objective: "actions", referral: { eventTypes: ["custom"] } }, "other"],
     [{ objective: "actions", referral: {} }, "signups"],

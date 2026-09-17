@@ -6,9 +6,15 @@ const OBJECTIVES = {
   views: { campaignModel: "performance", performanceMetric: "views", rateAuthority: "platform", available: true },
   downloads: { campaignModel: "performance", performanceMetric: "downloads", rateAuthority: "admin", available: true },
   signups: { campaignModel: "performance", performanceMetric: "signups", rateAuthority: "admin", available: true },
+  // Coming soon (SPEC, ticket 11): likes and comments sync for TikTok and Meta posts, but there's no
+  // engagement price, payout, refund or reconciliation path, shares and saves aren't stored and
+  // YouTube / X posts don't sync.
   engagement: { campaignModel: "performance", performanceMetric: "engagement", rateAuthority: "platform", available: false },
-  leads: { campaignModel: "performance", performanceMetric: "leads", rateAuthority: "admin", available: false },
-  sales: { campaignModel: "performance", performanceMetric: "sales", rateAuthority: "admin", available: false },
+  // Ticket 11: leads (the `lead` conversion event) and sales (`purchase`) are tracked like sign-ups.
+  leads: { campaignModel: "performance", performanceMetric: "leads", rateAuthority: "admin", available: true },
+  sales: { campaignModel: "performance", performanceMetric: "sales", rateAuthority: "admin", available: true },
+  // Coming soon (SPEC, ticket 11): the webhook's `custom` event carries no description of the action,
+  // so creators couldn't be told what they're paid for, nor admin price a reward for it.
   other: { campaignModel: "performance", performanceMetric: null, rateAuthority: "admin", available: false },
 };
 
@@ -27,6 +33,7 @@ function objectiveForLegacy(campaign) {
   const types = referral.eventTypes && referral.eventTypes.length ? referral.eventTypes : [referral.eventType];
   if (types.includes("signup")) return "signups";
   if (types.includes("install")) return "downloads";
+  if (types.includes("lead")) return "leads";
   if (types.includes("purchase") || types.includes("deposit")) return "sales";
   if (types.includes("custom")) return "other";
   return "signups";

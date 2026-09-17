@@ -127,7 +127,7 @@ What a creator earns for one verified conversion, set by admin.
 _Avoid_: Bounty, commission, CPA
 
 **Conversion**:
-One verified action (install, sign-up, purchase, deposit) credited to a creator's referral code, reported by the brand's server.
+One verified action (install, sign-up, lead, purchase, deposit) credited to a creator's referral code, reported by the brand's server.
 _Avoid_: Referral, lead, event
 
 **Referral Code**:

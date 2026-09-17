@@ -30,7 +30,7 @@ const conversionEventSchema = new mongoose.Schema(
     },
     eventType: {
       type: String,
-      enum: ["install", "signup", "purchase", "deposit", "custom"],
+      enum: ["install", "signup", "lead", "purchase", "deposit", "custom"],
       required: true,
     },
     occurredAt: {

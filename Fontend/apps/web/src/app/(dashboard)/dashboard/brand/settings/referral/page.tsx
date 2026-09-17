@@ -838,7 +838,7 @@ function ReferralSettingsContent() {
                   <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{sampleRequest}</pre>
                 </div>
                 <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  <code className="font-mono text-stone-900">event</code> is one of install, signup, purchase, deposit or
+                  <code className="font-mono text-stone-900">event</code> is one of install, signup, lead, purchase, deposit or
                   custom. <code className="font-mono text-stone-900">event_id</code> must be unique per conversion — resending
                   it is safe and never counts twice.
                 </p>

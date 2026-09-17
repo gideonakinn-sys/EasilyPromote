@@ -153,7 +153,7 @@ interface PendingAction {
 }
 
 const ACTION_ROLES = ["admin", "super_admin"];
-const EVENT_TYPES = ["install", "signup", "purchase", "deposit", "custom"];
+const EVENT_TYPES = ["install", "signup", "lead", "purchase", "deposit", "custom"];
 const CAMPAIGN_STATUSES = ["all", "live", "paused", "completed", "cancelled"];
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -388,6 +388,7 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
 const CONVERSION_NOUNS: Record<string, [string, string]> = {
   signup: ["sign-up", "sign-ups"],
   install: ["download", "downloads"],
+  lead: ["lead", "leads"],
   purchase: ["purchase", "purchases"],
   deposit: ["deposit", "deposits"],
   custom: ["conversion", "conversions"],

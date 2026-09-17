@@ -10,7 +10,8 @@ const { roundMoney } = require("./referralEarnings");
 const PLATFORMS = ["tiktok", "instagram", "youtube", "twitter", "facebook"];
 const RANKS = ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"];
 const BADGES = ["top_creator", "high_performer", "reliable_creator", "campaign_pro"];
-const REFERRAL_EVENT_FOR = { signups: "signup", downloads: "install" };
+// The conversion event each referral objective counts (ticket 11 adds leads and sales).
+const REFERRAL_EVENT_FOR = { signups: "signup", downloads: "install", leads: "lead", sales: "purchase" };
 // Hybrid pay (ticket 10): destinations where a creator's own post can earn a views bonus.
 const VIEWS_BONUS_DESTINATIONS = ["creator_page", "both"];
 

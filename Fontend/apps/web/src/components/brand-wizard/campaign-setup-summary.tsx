@@ -13,6 +13,7 @@ import {
   RANK_OPTIONS,
   USAGE_RIGHTS_TEXT,
   usesReferralBudget,
+  actionNoun,
   type WizardData,
 } from "./wizard-state";
 import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility, HybridBonus } from "../types";
@@ -121,7 +122,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
   const eligibility = setup.creatorEligibility || {};
   const brief = setup.brief || {};
   const referral = setup.campaignObjective ? usesReferralBudget(setup.campaignObjective) : false;
-  const actionNoun = setup.campaignObjective === "downloads" ? "download" : "sign-up";
+  const unitNoun = actionNoun(setup.campaignObjective);
 
   return (
     <div className="space-y-6">
@@ -149,7 +150,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         {referral && (
           <>
             <SummaryRow label="Referral Budget" value={formatNaira(setup.referralBudget)} />
-            <SummaryRow label={actionNoun === "download" ? "Reward Per Download" : "Reward Per Sign-up"} value="Set by our team" />
+            <SummaryRow label={`Reward Per ${unitNoun[0].toUpperCase()}${unitNoun.slice(1)}`} value="Set by our team" />
           </>
         )}
       </Section>
