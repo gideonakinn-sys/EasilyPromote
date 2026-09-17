@@ -18,6 +18,8 @@ import { uploadFile } from "@ep/ui/lib/upload";
 import type { CampaignItem, CampaignReferral, TimelineEvent } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
 import { ReferralCodeCard } from "./referral-code-card";
+import { TrackedLinkCard } from "./tracked-link-card";
+import { isClicksCampaign } from "../lib/creator-campaign-terms";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { useReferralConversions } from "../lib/socket";
 // Campaign engine: content approval (ticket 07)
@@ -493,7 +495,17 @@ export function CampaignDetailsDrawer({
             </div>
           </div>
 
-          {referral && <ReferralCodeCard referral={referral} />}
+          {/* M8 batch 7 (SPEC D29): clicks campaigns share a tracked link instead of a code. */}
+          {isClicksCampaign(displayCampaign) ? (
+            <TrackedLinkCard
+              campaignId={displayCampaign.id}
+              referralCode={referral?.code ?? null}
+              destinationDomain={displayCampaign.destinationDomain}
+              referral={referral}
+            />
+          ) : (
+            referral && <ReferralCodeCard referral={referral} />
+          )}
 
           {/* Live CTA */}
           {displayCampaign.status === "live_tracking" && (

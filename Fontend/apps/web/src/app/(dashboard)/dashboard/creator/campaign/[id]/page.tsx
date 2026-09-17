@@ -56,6 +56,11 @@ function toCampaignItem(c: Record<string, unknown>): CampaignItem {
     pay: c.pay as CampaignItem["pay"],
     // Campaign engine: content approval (ticket 07)
     contentApproval: c.contentApproval as CampaignItem["contentApproval"],
+    // M8 batch 7 (SPEC D29, D30)
+    campaignObjective: c.campaignObjective as string | undefined,
+    contentDestination: (c.contentDestination as CampaignItem["contentDestination"]) ?? null,
+    destinationDomain: (c.destinationDomain as string | null | undefined) ?? null,
+    usageRights: (c.usageRights as CampaignItem["usageRights"]) ?? null,
   };
 }
 

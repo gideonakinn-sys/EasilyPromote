@@ -57,6 +57,9 @@ const MARKETPLACE_CAMPAIGN_FIELDS = [
   "hybridBonus.ratePerThousandViews",
   "hybridBonus.capPerCreator",
   "hybridBonus.poolRemaining",
+  "contentDestination",
+  "destinationUrl",
+  "usageRights",
 ].join(" ");
 
 // ── Shared, per API process ─────────────────────────────────────────────────────────────────────
@@ -447,6 +450,26 @@ function classifyBoard(viewer, board) {
   return scored;
 }
 
+// The hostname a clicks campaign sends people to, or null.
+function destinationDomainOf(campaign) {
+  if (!campaign.destinationUrl) return null;
+  try {
+    return new URL(campaign.destinationUrl).hostname.replace(/^www\./, "");
+  } catch (error) {
+    return null;
+  }
+}
+
+function creatorTermsOf(campaign, terms) {
+  const rights = campaign.usageRights;
+  return {
+    campaignObjective: terms.objective,
+    contentDestination: campaign.contentDestination || null,
+    destinationDomain: terms.objective === "clicks" ? destinationDomainOf(campaign) : null,
+    usageRights: rights && rights.type ? { type: rights.type, version: rights.version || 1, terms: rights.terms || {} } : null,
+  };
+}
+
 // A marketplace card for a scored campaign. `brand` is { name, avatar } or null.
 function cardOf(viewer, scored, brand, { trending = false } = {}) {
   const { campaign, open, terms } = scored;
@@ -512,6 +535,9 @@ function cardOf(viewer, scored, brand, { trending = false } = {}) {
       campaign.referral.poolRemaining >= campaign.referral.rewardPerConversion
         ? { amount: campaign.referral.rewardPerConversion, eventType: campaign.referral.eventType, eventTypes: campaignEventTypes(campaign) }
         : null,
+    // M8 batch 7 (SPEC D29, D30): what the objective is, where a clicks link lands (domain only) and
+    // the usage terms a creator accepts before joining or applying.
+    ...creatorTermsOf(campaign, terms),
   };
 }
 
@@ -715,4 +741,5 @@ module.exports = {
   SECTIONS,
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
+  creatorTermsOf,
 };

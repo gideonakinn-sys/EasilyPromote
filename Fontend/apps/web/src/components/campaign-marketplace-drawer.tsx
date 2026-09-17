@@ -6,19 +6,22 @@ import Image from "next/image";
 import { Drawer, DrawerContent } from "@ep/ui/components/drawer";
 import * as DrawerPrimitive from "vaul";
 import { cn } from "@ep/ui/lib/utils";
-import type { EligibilityFailure, JoinResult, MarketplaceCampaign } from "./types";
+import type { EligibilityFailure, JoinResult, MarketplaceCampaign, UsageRightsAcceptance } from "./types";
 import type { JoinOutcome } from "./creator-dashboard-context";
 import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { CampaignBriefDetails } from "./campaign-brief";
 import { ACCESS_LABELS, accessOf, formatBonus, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useCampaignPlaces } from "../lib/socket";
 import { CampaignApplyPanel, type ApplicationActions } from "./campaign-apply-panel";
+import { UsageRightsTerms } from "./usage-rights-terms";
+import { TrackedLinkCard } from "./tracked-link-card";
+import { USAGE_TERMS_NOT_ACCEPTED, isClicksCampaign, needsUsageAcceptance } from "../lib/creator-campaign-terms";
 
 interface MarketplaceDetailsDrawerProps {
   campaign: MarketplaceCampaign | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onJoin: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
+  onJoin: (campaignId: string, committedViews?: number, usageRightsAccepted?: UsageRightsAcceptance) => Promise<JoinOutcome>;
   // Why this creator can't take placements at all (no social account, no niches, at the limit).
   joinBlockedReason: string | null;
   onViewMyCampaigns: () => void;
@@ -119,11 +122,16 @@ function CampaignDrawerContent({
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState<JoinResult | null>(null);
   const [error, setError] = useState<{ message: string; failures: EligibilityFailure[] } | null>(null);
+  // M8 batch 7 (SPEC D30): custom usage terms must be accepted before joining.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedViews(commitsViews ? buildViewPresets(targetViews)[0] : undefined);
     setJoined(null);
     setError(null);
+    setTermsAccepted(false);
+    setTermsError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign.id]);
 
@@ -139,15 +147,23 @@ function CampaignDrawerContent({
   const places = livePlaces ?? placesLeftOf(campaign);
   const creatorPool = campaign.creatorPool ?? 0;
   const viewsReward = commitsViews && selectedViews ? Math.floor((creatorPool * selectedViews) / targetViews) : 0;
-  const canJoin = openCall && reasons.length === 0 && !joinBlockedReason && places > 0 && !joining;
+  const termsRequired = needsUsageAcceptance(campaign);
+  const canJoin =
+    openCall && reasons.length === 0 && !joinBlockedReason && places > 0 && !joining && (!termsRequired || termsAccepted);
 
   const join = async () => {
     setJoining(true);
     setError(null);
-    const outcome = await onJoin(campaign.id, commitsViews ? selectedViews : undefined);
+    setTermsError(null);
+    const acceptance = termsRequired && campaign.usageRights ? { version: campaign.usageRights.version } : undefined;
+    const outcome = await onJoin(campaign.id, commitsViews ? selectedViews : undefined, acceptance);
     setJoining(false);
     if (outcome.ok) setJoined(outcome.result);
-    else setError({ message: outcome.message, failures: outcome.failures });
+    else if (outcome.code === USAGE_TERMS_NOT_ACCEPTED) {
+      // The terms may have changed since the list loaded: ask for a fresh tick.
+      setTermsAccepted(false);
+      setTermsError("Accept these usage terms to join. If they just changed, read them again first.");
+    } else setError({ message: outcome.message, failures: outcome.failures });
   };
 
   return (
@@ -195,7 +211,9 @@ function CampaignDrawerContent({
                   Your place is saved. Here&apos;s the full brief. It&apos;s also in your campaigns on Home.
                 </p>
               </div>
-              {joined.referralCode && (
+              {isClicksCampaign(campaign) ? (
+                <TrackedLinkCard campaignId={campaign.id} referralCode={joined.referralCode} destinationDomain={campaign.destinationDomain} />
+              ) : joined.referralCode && (
                 <div className="border border-stone-200 rounded-2xl p-4 space-y-1">
                   <p className="text-xs font-medium text-stone-500">Your referral code</p>
                   <p className="font-rethink font-medium text-lg text-stone-900 tracking-tight">{joined.referralCode}</p>
@@ -234,7 +252,17 @@ function CampaignDrawerContent({
                 <DetailRow label="Access">{ACCESS_LABELS[access]}</DetailRow>
                 <DetailRow label="Places left">{places.toLocaleString()}</DetailRow>
                 {commitsViews && <DetailRow label="Campaign target">{targetViews.toLocaleString()} views</DetailRow>}
+                {isClicksCampaign(campaign) && campaign.destinationDomain && (
+                  <DetailRow label="Link goes to">{campaign.destinationDomain}</DetailRow>
+                )}
               </div>
+
+              {isClicksCampaign(campaign) && (
+                <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed">
+                  {openCall ? "Join to get your tracked link." : "You get your tracked link once the brand selects you."} You&apos;re paid
+                  for each valid click, once per person per day.
+                </p>
+              )}
 
               {commitsViews && openCall && (
                 <div className="space-y-4">
@@ -259,6 +287,19 @@ function CampaignDrawerContent({
                     <span className="font-medium text-stone-900">₦{viewsReward.toLocaleString()}</span>
                   </div>
                 </div>
+              )}
+
+              {openCall && (
+                <UsageRightsTerms
+                  campaign={campaign}
+                  accepted={termsAccepted}
+                  onAcceptedChange={(value) => {
+                    setTermsAccepted(value);
+                    if (value) setTermsError(null);
+                  }}
+                  error={termsError}
+                  disabled={joining}
+                />
               )}
 
               {openCall && (

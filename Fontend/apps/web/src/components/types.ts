@@ -790,3 +790,32 @@ export interface CampaignUsageRights {
 export interface CampaignSetup {
   usageRights?: CampaignUsageRights | null;
 }
+
+// M8 batch 7 (SPEC D29, D30): clicks campaigns and custom usage-rights terms, as creators see them.
+export type CreatorUsageTerms = UsageRightsTerms;
+
+export interface CreatorUsageRights {
+  type: UsageRightsType;
+  version: number;
+  terms: CreatorUsageTerms;
+}
+
+// Sent on join and apply for campaigns with custom terms.
+export interface UsageRightsAcceptance {
+  version: number;
+}
+
+export interface MarketplaceCampaign {
+  campaignObjective?: string;
+  contentDestination?: ContentDestination | null;
+  // Where a clicks campaign's tracked link lands (hostname only).
+  destinationDomain?: string | null;
+  usageRights?: CreatorUsageRights | null;
+}
+
+export interface CampaignItem {
+  campaignObjective?: string;
+  contentDestination?: ContentDestination | null;
+  destinationDomain?: string | null;
+  usageRights?: CreatorUsageRights | null;
+}

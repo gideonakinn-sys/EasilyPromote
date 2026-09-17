@@ -25,6 +25,8 @@ import type {
 import type { MyApplication } from "./types";
 import { applicationsApi } from "../lib/api";
 import { useApplicationUpdates } from "../lib/socket";
+// M8 batch 7: usage-rights acceptance on join and apply (SPEC D30)
+import type { UsageRightsAcceptance } from "./types";
 
 interface CreatorDashboardValue {
   profile: CreatorProfile;
@@ -66,19 +68,19 @@ interface CreatorDashboardValue {
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => Promise<void>;
   refreshCampaigns: () => Promise<void>;
-  handleJoinCampaign: (campaignId: string, committedViews?: number) => Promise<JoinOutcome>;
+  handleJoinCampaign: (campaignId: string, committedViews?: number, usageRightsAccepted?: UsageRightsAcceptance) => Promise<JoinOutcome>;
   refreshProfile: () => Promise<void>;
   applyProfileUpdate: (data: Partial<CreatorProfile>) => void;
   // Campaign engine: applications (ticket 06)
   applications: MyApplication[];
-  handleApplyToCampaign: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  handleApplyToCampaign: (campaignId: string, pitch: string, usageRightsAccepted?: UsageRightsAcceptance) => Promise<ApplyOutcome>;
   handleWithdrawApplication: (campaignId: string) => Promise<boolean>;
 }
 
 // Campaign engine: applications (ticket 06)
 export type ApplyOutcome =
   | { ok: true; application: MyApplication }
-  | { ok: false; message: string; failures: EligibilityFailure[] };
+  | { ok: false; message: string; failures: EligibilityFailure[]; code?: string };
 
 // canClaim is false when the creator can't take placements at all; lockReason says why
 // (no social account or niches) and a full placement limit shows as activeSlots >= maxSlots.
@@ -91,7 +93,7 @@ export interface MarketplaceMeta {
 
 export type JoinOutcome =
   | { ok: true; result: JoinResult }
-  | { ok: false; message: string; failures: EligibilityFailure[] };
+  | { ok: false; message: string; failures: EligibilityFailure[]; code?: string };
 
 // One response for the whole dashboard (GET /creators/dashboard).
 interface DashboardPayload {
@@ -189,6 +191,11 @@ function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): Cam
       pay: c.pay as CampaignItem["pay"],
       // Campaign engine: content approval (ticket 07)
       contentApproval: c.contentApproval as CampaignItem["contentApproval"],
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective: c.campaignObjective as string | undefined,
+      contentDestination: (c.contentDestination as CampaignItem["contentDestination"]) ?? null,
+      destinationDomain: (c.destinationDomain as string | null | undefined) ?? null,
+      usageRights: (c.usageRights as CampaignItem["usageRights"]) ?? null,
     };
   });
 }
@@ -234,6 +241,11 @@ export function mapMarketplaceItems(list: Array<Record<string, unknown>> | undef
       recommendationScore: typeof c.recommendationScore === "number" ? c.recommendationScore : undefined,
       recentCreators: typeof c.recentCreators === "number" ? c.recentCreators : 0,
       trending: Boolean(c.trending),
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective: c.campaignObjective as string | undefined,
+      contentDestination: (c.contentDestination as MarketplaceCampaign["contentDestination"]) ?? null,
+      destinationDomain: (c.destinationDomain as string | null | undefined) ?? null,
+      usageRights: (c.usageRights as MarketplaceCampaign["usageRights"]) ?? null,
     };
   });
 }
@@ -869,12 +881,20 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   useCampaignUpdates(handleCampaignUpdate);
 
   // Open Call join. Returns every failed rule when the creator can't join yet.
-  const handleJoinCampaign = async (campaignId: string, committedViews?: number): Promise<JoinOutcome> => {
+  const handleJoinCampaign = async (
+    campaignId: string,
+    committedViews?: number,
+    usageRightsAccepted?: UsageRightsAcceptance
+  ): Promise<JoinOutcome> => {
     try {
+      const joinBody = {
+        ...(committedViews !== undefined && { committedViews }),
+        ...(usageRightsAccepted && { usageRightsAccepted }),
+      };
       const result = await apiRequest<JoinResult>(`/campaigns/${campaignId}/join`, {
         method: "POST",
         token: getToken() || undefined,
-        ...(committedViews !== undefined && { body: JSON.stringify({ committedViews }) }),
+        ...(Object.keys(joinBody).length > 0 && { body: JSON.stringify(joinBody) }),
       });
       setMarketplaceCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
       await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
@@ -884,8 +904,9 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         ? (err.body.failures as EligibilityFailure[])
         : [];
       const message = err instanceof Error ? err.message : "Could not join this campaign. Try again.";
+      const code = err instanceof ApiRequestError && typeof err.body.code === "string" ? err.body.code : undefined;
       fetchMarketplace();
-      return { ok: false, message, failures };
+      return { ok: false, message, failures, code };
     }
   };
 
@@ -910,9 +931,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     });
   };
 
-  const handleApplyToCampaign = async (campaignId: string, pitch: string): Promise<ApplyOutcome> => {
+  const handleApplyToCampaign = async (
+    campaignId: string,
+    pitch: string,
+    usageRightsAccepted?: UsageRightsAcceptance
+  ): Promise<ApplyOutcome> => {
     try {
-      const application = await applicationsApi.apply(campaignId, pitch);
+      const application = await applicationsApi.apply(campaignId, pitch, usageRightsAccepted);
       const campaign = marketplaceCampaigns.find((c) => c.id === campaignId);
       upsertApplication({
         ...application,
@@ -926,7 +951,8 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
         ? (err.body.failures as EligibilityFailure[])
         : [];
       const message = err instanceof Error ? err.message : "Could not send your application. Try again.";
-      return { ok: false, message, failures };
+      const code = err instanceof ApiRequestError && typeof err.body.code === "string" ? err.body.code : undefined;
+      return { ok: false, message, failures, code };
     }
   };
 
