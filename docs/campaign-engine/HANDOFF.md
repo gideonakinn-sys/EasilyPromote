@@ -255,17 +255,18 @@ Recommended design (from reading the referral code): run a clicks campaign **on 
 
 ---
 
-## 7.6 Status of §7.2–§7.4 (18 Sep, stopped at owner's time limit)
+## 7.6 Status of §7.2–§7.4 (18 Sep)
 
-Backend-only work for Clicks (§7.2), age/gender hard filters (§7.3) and usage-rights terms (§7.4) is on branch **`wip/m8-clicks-filters-usage-rights`** (commit `f1b2001`), **not on `main`**. Unit tests 98/98 pass; end-to-end 216/217 (one failure — find it with `npm run test:e2e` on that branch). No frontend, no new tests, no SPEC rows yet.
+**Backend merged into `main`** (clicks, hard filters, usage-rights terms). Unit 99/99, end-to-end 220/220. Decisions: SPEC D29, D30, D8 (amended, M8). The click fraud issues found earlier are fixed and tested (`Backend/test/e2e/clicks.test.js`): Cloudflare IP / last forwarded entry, unique click insert before paying, stable event id, secret-derived hash key, redirect to the brand's page on errors.
 
-Fix before merging into `main`:
-1. `Backend/src/routes/redirect.js` trusts the first `X-Forwarded-For` value, which anyone can spoof to get unlimited paid clicks. Behind Cloudflare use `CF-Connecting-IP` (fall back to `req.ip` with Express `trust proxy` set correctly).
-2. Click dedupe is find-then-create — two simultaneous clicks both pay. Use a unique key (e.g. code + visitorHash + 24 h bucket) and pay only when the insert succeeds.
-3. The click `eventId` includes a timestamp, so its idempotency check can never match; derive it from the dedupe key.
-4. `HASH_SALT` falls back to a random value per process, so dedupe breaks across restarts and multiple API instances; derive it from `TOKEN_ENCRYPTION_KEY` instead of a new env var.
-5. On error it redirects to easilypromote.com instead of the brand's destination — decide and document.
-6. Fix the failing e2e test, add the tests listed in §7.2–§7.4, build the frontend, add SPEC D29/D30 and the D8 amendment, then merge.
+**Tracked link format is `/r/<campaignId>/<referral code>`** (codes are only unique per brand). Mounted in `Backend/src/app.js` on the API host, so the public link is `<API origin>/r/...` unless a short domain is routed there.
+
+Still to do (frontend only, no screens exist yet):
+1. Wizard: Clicks objective card with a destination URL field (http/https) and "reward set by our team" copy; age/gender "required" toggles with minimum share and a self-reported-data warning; usage rights choice (standard or custom terms) for brand page / both.
+2. Marketplace card and creator campaign page: `₦X / click`, the tracked link with a Copy button; custom terms shown with an "I accept these usage terms" checkbox that sends `usageRightsAccepted: { version }` on join (`POST /api/campaigns/:id/join`) and apply.
+3. Brand campaign page: valid clicks and spend (conversion rows with `eventType: "click"`). Admin referrals page: `click` in event type filters.
+4. Show accepted terms on submission/delivery screens and in admin.
+5. Typecheck both apps, browser check, tick LAUNCH_ROADMAP M8 items, update ADMIN_RUNBOOK and DEPLOY_CHECKLIST (new `clickevents` collection with a unique index and 30-day TTL; built at boot, can't conflict).
 
 ## 8. Known small gaps (fix when convenient; not blockers)
 
