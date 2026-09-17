@@ -190,3 +190,22 @@ Status: **accepted — defaults adopted 16 Sep 2026.**
 | D12 | Brand-page delivery | Download link at launch; file upload after launch |
 | D13 | Verified creator | At least one connected social account + admin identity check |
 | D14 | Launch scope | Content + fixed pay, performance (views, sign-ups), both access models, all destinations |
+
+### Amendments and decisions made during the build (17 Sep 2026)
+
+These refine D1–D14 where building showed a gap. The lead's recommendation was adopted for each.
+
+| # | Topic | Decision |
+|---|---|---|
+| D2 (clarified) | Content platform fee | 30% of the creator budget, added on top: 10 × ₦15,000 costs ₦195,000 |
+| D5 (amended) | Refund of unused budget | Unused deliverables × rate + the platform fee on them. Paystack fees are **not** deducted, matching views and referral refunds |
+| D8 (amended) | Interests | Not used in ranking until creators have interests data; location, age and gender rank creators |
+| D15 | When fixed pay is withdrawable | Credited at the D1 moment; withdrawable once delivery is confirmed (by the brand or after 72 hours) and 7 days have passed |
+| D16 | Brand never confirms delivery or a live post | Confirmed automatically after 72 hours, like content review (D10) |
+| D17 | Appeal window | 7 days after rejection; until then the deliverable isn't refundable |
+| D18 | Undelivered brand-page pay | Admin can void it 14 days after approval, or at once on a cancelled campaign |
+| D19 | Money actions by role | Refunds, voids, paying withdrawals, the payout run and cancelling a paid campaign: finance admins and super admins only |
+| D20 | Sign-ups after a referral budget runs out | Paid oldest first when the brand tops up, while the new budget lasts |
+| D21 | Rank for brand-picked creators | A place's rank requirement is skipped when a brand approves an applicant |
+| D22 | Cancelled campaigns | Never deleted once payments, placements, content, applications or conversions exist |
+| D23 | After launch (ticket 11) | Payout appeals, retrying failed views/referral refunds, an admin inbox for appeals |
