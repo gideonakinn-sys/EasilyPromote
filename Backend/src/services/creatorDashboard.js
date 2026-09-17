@@ -22,6 +22,7 @@ const { timeAgo } = require("../utils/timeAgo");
 const { campaignTerms, payPerUnit, briefSummary, fullBrief } = require("../utils/campaignPay");
 const { joinEligibility, campaignFailures } = require("./joinRules");
 const { recommendation, sortRecommended } = require("./recommendations");
+const { recentInterest, pickTrending } = require("./trending");
 const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
 const { myApplicationsFrom, CAMPAIGN_FIELDS_FOR_PAY } = require("./applications"); // Campaign engine: applications (ticket 06)
@@ -171,11 +172,13 @@ async function loadCreatorData(user, ctx, sections) {
     : [];
   openCampaigns.forEach(addBrand);
 
-  const [brands, availableSlots] = await Promise.all([
+  const [brands, availableSlots, interest] = await Promise.all([
     brandIds.size > 0 ? User.find({ _id: { $in: [...brandIds].map(toObjectId) } }).select("name avatar").lean() : [],
     openCampaigns.length > 0
       ? Slot.find({ campaignId: { $in: openCampaigns.map((c) => c._id) }, status: "available" }).sort({ createdAt: 1, _id: 1 }).lean()
       : [],
+    // Trending (ticket 11): creators who joined or applied in the last 72 hours, per open campaign.
+    openCampaigns.length > 0 ? recentInterest(openCampaigns.map((c) => c._id), now) : new Map(),
   ]);
   const brandById = new Map(brands.map((b) => [String(b._id), b]));
   const withBrand = (campaign) => (campaign ? { ...campaign, businessId: campaign.businessId ? brandById.get(String(campaign.businessId)) || null : campaign.businessId } : null);
@@ -195,6 +198,7 @@ async function loadCreatorData(user, ctx, sections) {
     events,
     openCampaigns,
     availableSlots,
+    interest,
     withBrand,
   };
 }
@@ -389,6 +393,9 @@ async function buildMarketplace(ctx, data = null) {
       matchScore: check.matchScore,
       nicheOverlap,
       recommended,
+      // Trending (ticket 11): different creators who joined or applied in the last 72 hours.
+      recentCreators: (data.interest && data.interest.get(String(campaign._id))) || 0,
+      trending: false,
       // Shown before claiming, so creators know a campaign also pays per referral.
       referralReward:
         campaign.referral &&
@@ -399,6 +406,9 @@ async function buildMarketplace(ctx, data = null) {
           : null,
     });
   }
+
+  // Trending: the eligible, not-recommended campaigns most creators joined or applied to lately.
+  for (const card of pickTrending(marketplace)) card.trending = true;
 
   // Recommended for You first, then New: everything else, newest first.
   marketplace.sort((a, b) => {

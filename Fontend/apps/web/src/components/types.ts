@@ -448,6 +448,9 @@ export interface MarketplaceCampaign {
   ineligibleReasons?: string[];
   matchScore?: number;
   recommended?: boolean;
+  // Trending (ticket 11): different creators who joined or applied in the last 72 hours.
+  recentCreators?: number;
+  trending?: boolean;
 }
 
 export interface CampaignItem {

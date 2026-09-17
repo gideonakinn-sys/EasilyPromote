@@ -33,3 +33,22 @@ test("recommended campaigns order by match score, then niche overlap", () => {
   ];
   assert.deepEqual(rows.sort(sortRecommended).map((r) => r.id), ["b", "c", "a"]);
 });
+
+test("Trending picks eligible, not recommended campaigns with 2+ recent creators, most first, at most 6", () => {
+  const { pickTrending } = require("../../src/services/trending");
+  const cardOf = (id, recentCreators, extra = {}) => ({ id, recentCreators, eligible: true, recommended: false, publishedAt: "2026-09-01", ...extra });
+  const cards = [
+    cardOf("one", 1),
+    cardOf("five", 5),
+    cardOf("recommended", 9, { recommended: true }),
+    cardOf("locked", 9, { eligible: false }),
+    cardOf("two-old", 2),
+    cardOf("two-new", 2, { publishedAt: "2026-09-10" }),
+    ...[3, 3, 3, 3].map((n, i) => cardOf(`three-${i}`, n)),
+  ];
+  const picked = pickTrending(cards).map((c) => c.id);
+  assert.equal(picked.length, 6);
+  assert.deepEqual(picked.slice(0, 5), ["five", "three-0", "three-1", "three-2", "three-3"]);
+  assert.equal(picked[5], "two-new", "the newer campaign breaks a tie");
+  assert.ok(!picked.includes("one") && !picked.includes("recommended") && !picked.includes("locked"));
+});

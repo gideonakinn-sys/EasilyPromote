@@ -220,6 +220,8 @@ function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): 
     ineligibleReasons: (c.ineligibleReasons as string[]) || [],
     matchScore: c.matchScore as number | undefined,
     recommended: Boolean(c.recommended),
+    recentCreators: typeof c.recentCreators === "number" ? c.recentCreators : 0,
+    trending: Boolean(c.trending),
   }));
 }
 

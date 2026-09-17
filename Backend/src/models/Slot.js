@@ -82,6 +82,8 @@ const slotSchema = new mongoose.Schema(
 slotSchema.index({ creatorId: 1, status: 1 });
 // Marketplace: open slots per live campaign, newest first.
 slotSchema.index({ campaignId: 1, status: 1, createdAt: -1 });
+// Marketplace Trending (ticket 11): places taken in the last 72 hours. Only taken places are indexed.
+slotSchema.index({ claimedAt: -1, campaignId: 1, creatorId: 1 }, { partialFilterExpression: { claimedAt: { $type: "date" } } });
 
 // A creator holds at most one placement per campaign; a released placement has no creator.
 slotSchema.index(

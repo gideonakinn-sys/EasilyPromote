@@ -32,6 +32,8 @@ campaignApplicationSchema.index({ campaign: 1, status: 1, matchScore: -1 });
 campaignApplicationSchema.index({ status: 1, appliedAt: 1 });
 // A creator's own applications, newest first (creator dashboard).
 campaignApplicationSchema.index({ creator: 1, appliedAt: -1 });
+// Marketplace Trending (ticket 11): applications in the last 72 hours.
+campaignApplicationSchema.index({ appliedAt: -1, campaign: 1, creator: 1 });
 
 const CampaignApplication = mongoose.model("CampaignApplication", campaignApplicationSchema);
 

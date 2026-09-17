@@ -159,3 +159,80 @@ test("a views card prices from the place a join would take", async () => {
   assert.equal(entry.pay.amount, Math.round((joined.body.reward / joined.body.viewTarget) * 1000 * 100) / 100);
   assert.equal(entry.reward, joined.body.reward);
 });
+
+test("Trending shows the eligible campaigns most creators joined or applied to in the last 72 hours, each creator once", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const Slot = require("../../src/models/Slot");
+  const CampaignApplication = require("../../src/models/CampaignApplication");
+  const { ensureCampaignSlots } = require("../../src/utils/ensureSlots");
+  const DAY = 24 * 60 * 60 * 1000;
+  const launch = async (body) => {
+    const brand = await harness.registerBrand();
+    const created = await harness.api("POST", "/api/campaigns", {
+      token: brand.token,
+      body: { name: "Trending", category: "Fashion", campaignObjective: "content", contentPay: { ratePerDeliverable: 10000, deliverables: 6 }, ...body },
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const campaign = await Campaign.findByIdAndUpdate(created.body.id, { $set: { status: "live" } }, { new: true });
+    await ensureCampaignSlots(campaign);
+    return { id: created.body.id, brand };
+  };
+  const join = async (id) => {
+    const creator = await harness.registerCreator();
+    const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+    assert.equal(joined.status, 200, JSON.stringify(joined.body));
+    return { creator, slotId: joined.body.id };
+  };
+
+  // Open call: three joins now and one four days ago.
+  const hot = await launch({ creatorAccess: "open_call" });
+  for (let i = 0; i < 3; i += 1) await join(hot.id);
+  const old = await join(hot.id);
+  await Slot.updateOne({ _id: old.slotId }, { $set: { claimedAt: new Date(Date.now() - 4 * DAY) } });
+
+  // Application required: two applicants, one approved (applied and given a place counts once), one from last week.
+  const picky = await launch({ creatorAccess: "application_required" });
+  let approvedApplication = null;
+  for (let i = 0; i < 3; i += 1) {
+    const creator = await harness.registerCreator();
+    const applied = await harness.api("POST", `/api/campaigns/${picky.id}/apply`, { token: creator.token, body: {} });
+    assert.equal(applied.status, 201, JSON.stringify(applied.body));
+    const application = await CampaignApplication.findOne({ campaign: picky.id, creator: creator.id }).lean();
+    if (i === 0) approvedApplication = application;
+    if (i === 2) await CampaignApplication.updateOne({ _id: application._id }, { $set: { appliedAt: new Date(Date.now() - 7 * DAY) } });
+  }
+  const approved = await harness.api("POST", `/api/campaigns/${picky.id}/applications/${approvedApplication._id}/approve`, { token: picky.brand.token });
+  assert.equal(approved.status, 200, JSON.stringify(approved.body));
+
+  // One join isn't a trend; a campaign the viewer can't join isn't shown as trending.
+  const quiet = await launch({ creatorAccess: "open_call" });
+  await join(quiet.id);
+  const locked = await launch({ creatorAccess: "open_call", creatorEligibility: { verifiedOnly: true } });
+  const lockedSlots = await Slot.find({ campaignId: locked.id }).limit(3).lean();
+  for (const slot of lockedSlots) {
+    const creator = await harness.registerCreator();
+    await Slot.updateOne({ _id: slot._id }, { $set: { creatorId: creator.id, status: "claimed", claimedAt: new Date() } });
+  }
+
+  const viewer = await harness.registerCreator();
+  const marketplace = await marketplaceFor(viewer);
+  const hotCard = card(marketplace, hot.id);
+  const pickyCard = card(marketplace, picky.id);
+  assert.deepEqual([hotCard.recentCreators, hotCard.trending], [3, true]);
+  assert.deepEqual([pickyCard.recentCreators, pickyCard.trending], [2, true]);
+  assert.deepEqual([card(marketplace, quiet.id).recentCreators, card(marketplace, quiet.id).trending], [1, false]);
+  const lockedCard = card(marketplace, locked.id);
+  assert.equal(lockedCard.recentCreators, 3);
+  assert.equal(lockedCard.eligible, false);
+  assert.equal(lockedCard.trending, false);
+  assert.ok(marketplace.campaigns.filter((c) => c.trending).length <= 6);
+  // Counts only: no creator is named.
+  assert.ok(!JSON.stringify(hotCard).includes(old.creator.username));
+
+  // Both halves of the query are served by their index.
+  const since = new Date(Date.now() - 3 * DAY);
+  const slotPlan = JSON.stringify(await Slot.find({ claimedAt: { $type: "date", $gte: since }, campaignId: { $in: [hot.id] } }).explain());
+  assert.match(slotPlan, /claimedAt_-1_campaignId_1_creatorId_1/);
+  const applicationPlan = JSON.stringify(await CampaignApplication.find({ appliedAt: { $gte: since }, campaign: { $in: [picky.id] } }).explain());
+  assert.match(applicationPlan, /appliedAt_-1_campaign_1_creator_1/);
+});

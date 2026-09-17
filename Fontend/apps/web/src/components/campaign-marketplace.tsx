@@ -82,6 +82,12 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
         {campaign.title} · {campaign.brandName}
       </h3>
 
+      {campaign.trending && (campaign.recentCreators || 0) > 0 && (
+        <p className="text-[11px] font-medium text-stone-500 -mt-1 mb-3">
+          {campaign.recentCreators} creators joined or applied in the last 3 days
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-1.5 mb-4">
         {platforms.map((platform) => (
           <span key={platform} className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px]">
@@ -161,7 +167,11 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
     [campaigns, tab]
   );
   const recommended = filtered.filter((c) => c.recommended);
-  const others = filtered.filter((c) => !c.recommended).sort(newestFirst);
+  // Trending (ticket 11): never repeats a recommended card; New is everything else.
+  const trending = filtered
+    .filter((c) => c.trending && !c.recommended)
+    .sort((a, b) => (b.recentCreators || 0) - (a.recentCreators || 0) || newestFirst(a, b));
+  const others = filtered.filter((c) => !c.recommended && !c.trending).sort(newestFirst);
 
   const selected = (selectedId && campaigns.find((c) => c.id === selectedId)) || selectedSnapshot;
   const isAtLimit = meta.activeSlots >= meta.maxSlots;
@@ -214,6 +224,15 @@ export function CampaignMarketplace({ campaigns, meta, onJoin, onViewMyCampaigns
                 <p className="text-xs font-medium text-stone-500">Campaigns you can join that suit where your audience is.</p>
               </div>
               <CardGrid campaigns={recommended} onOpen={open} appliedIds={appliedIds} />
+            </section>
+          )}
+          {trending.length > 0 && (
+            <section className="space-y-4">
+              <div>
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Trending</h2>
+                <p className="text-xs font-medium text-stone-500">Campaigns the most creators joined or applied to in the last 3 days.</p>
+              </div>
+              <CardGrid campaigns={trending} onOpen={open} appliedIds={appliedIds} />
             </section>
           )}
           {others.length > 0 && (
