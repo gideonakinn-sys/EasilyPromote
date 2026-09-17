@@ -13,8 +13,20 @@ const ACCOUNT_CRITERIA = ["socialAccount", "niches", "placementLimit"];
 const rankName = (rank) => (rank === "elite" ? "Elite" : `rank ${String(rank).replace("rank", "")}`);
 
 // Connected TikTok / Meta accounts count as social accounts on the platform they belong to.
-// Their follower count is unknown until the creator adds it.
+// Their follower count is unknown until the creator adds it. The marketplace checks one creator
+// against every live campaign, so the result is kept per profile object and platform list.
+const connectedAccountsCache = new WeakMap();
 function withConnectedAccounts(profile, connectedPlatforms) {
+  if (!profile) return buildWithConnectedAccounts(profile, connectedPlatforms);
+  const key = (connectedPlatforms || []).join(",");
+  const cached = connectedAccountsCache.get(profile);
+  if (cached && cached.key === key) return cached.creator;
+  const creator = buildWithConnectedAccounts(profile, connectedPlatforms);
+  connectedAccountsCache.set(profile, { key, creator });
+  return creator;
+}
+
+function buildWithConnectedAccounts(profile, connectedPlatforms) {
   const accounts = [...((profile && profile.socialAccounts) || [])];
   for (const platform of connectedPlatforms || []) {
     if (!accounts.some((a) => a.platform === platform)) accounts.push({ platform });

@@ -100,6 +100,122 @@ function waitingReleasedSubmissions(submissions, heldCampaignIds) {
   return [...latest.values()].filter((sub) => ["rejected", "appealed"].includes(sub.status));
 }
 
+// What a marketplace card, the join check and Recommended for You read from a live campaign the
+// creator has no rows on (load test, ticket 11): every live campaign is loaded for each marketplace
+// request, so only these fields are. The creator's own campaigns are still loaded whole.
+const MARKETPLACE_CAMPAIGN_FIELDS = [
+  "businessId",
+  "name",
+  "category",
+  "niches",
+  "platforms",
+  "coverImageUrl",
+  "contentBrief",
+  "keyMessageCta",
+  "brief.summary",
+  "targetViews",
+  "costPerView",
+  "creatorPool",
+  "endDate",
+  "status",
+  "createdAt",
+  "objective",
+  "campaignObjective",
+  "campaignModel",
+  "payShape",
+  "creatorAccess",
+  "contentPay",
+  "audienceTargeting",
+  "creatorEligibility",
+  "referral.enabled",
+  "referral.eventType",
+  "referral.eventTypes",
+  "referral.rewardPerConversion",
+  "referral.poolRemaining",
+  "hybridBonus.metric",
+  "hybridBonus.ratePerThousandViews",
+  "hybridBonus.capPerCreator",
+  "hybridBonus.poolRemaining",
+].join(" ");
+
+// Every live campaign, as the marketplace reads it (MARKETPLACE_CAMPAIGN_FIELDS), kept in this API
+// process while no live campaign changed (load test, ticket 11). Each request checks one summary row,
+// how many campaigns are live and when one last changed, and reloads the list only when that moved,
+// so a campaign that goes live, pauses, ends or changes shows on the next request. It's reloaded at
+// least every 30 seconds anyway, in case API instances' clocks disagree about "last changed". Places
+// left are never cached (openPlacesByCampaign). The list is shared between requests: never modify it.
+const LIVE_CAMPAIGN_CACHE_MAX_AGE_MS = 30 * 1000;
+let liveCampaignCache = { version: null, loadedAt: 0, campaigns: [], loading: null };
+
+async function liveMarketplaceCampaigns() {
+  const [summary] = await Campaign.aggregate([
+    { $match: { status: "live" } },
+    { $group: { _id: null, count: { $sum: 1 }, latest: { $max: "$updatedAt" } } },
+  ]);
+  const version = summary ? `${summary.count}:${new Date(summary.latest).getTime()}` : "0:0";
+  const fresh = Date.now() - liveCampaignCache.loadedAt < LIVE_CAMPAIGN_CACHE_MAX_AGE_MS;
+  if (liveCampaignCache.version === version && fresh) return liveCampaignCache.campaigns;
+  if (liveCampaignCache.loading && liveCampaignCache.loading.version === version) return liveCampaignCache.loading.promise;
+  const loadedAt = Date.now();
+  const promise = Campaign.find({ status: "live" })
+    .select(MARKETPLACE_CAMPAIGN_FIELDS)
+    .sort({ createdAt: -1 })
+    .lean()
+    .then((campaigns) => {
+      liveCampaignCache = { version, loadedAt, campaigns, loading: null };
+      return campaigns;
+    })
+    .catch((error) => {
+      liveCampaignCache.loading = null;
+      throw error;
+    });
+  liveCampaignCache.loading = { version, promise };
+  return promise;
+}
+
+// Campaign and brand ids as strings, worked out once per campaign object: the marketplace looks each
+// live campaign up several times per request, and the cached list is reused across requests.
+const campaignKeys = new WeakMap();
+function keysOf(campaign) {
+  let keys = campaignKeys.get(campaign);
+  if (!keys) {
+    keys = { id: String(campaign._id), brand: campaign.businessId ? String(campaign.businessId) : null };
+    campaignKeys.set(campaign, keys);
+  }
+  return keys;
+}
+
+// The open places of the given campaigns, summarised in the database (load test, ticket 11): for each
+// campaign and each rank requirement, how many places are open and the first one in join order.
+// That's all a card and the join check need: the place a creator would get is the first one their
+// rank allows, which is always the first of its rank group. Returns Map<campaignId, { count, slots }>
+// with slots in join order.
+async function openPlacesByCampaign(campaignIds) {
+  const rows = await Slot.aggregate([
+    { $match: { campaignId: { $in: campaignIds }, status: "available" } },
+    { $sort: { campaignId: 1, createdAt: 1, _id: 1 } },
+    {
+      $group: {
+        _id: { campaignId: "$campaignId", rankRequired: "$rankRequired" },
+        count: { $sum: 1 },
+        slot: { $first: { _id: "$_id", campaignId: "$campaignId", reward: "$reward", viewTarget: "$viewTarget", rankRequired: "$rankRequired", createdAt: "$createdAt" } },
+      },
+    },
+  ]);
+  const byCampaign = new Map();
+  for (const row of rows) {
+    const key = String(row._id.campaignId);
+    const entry = byCampaign.get(key) || { count: 0, slots: [] };
+    entry.count += row.count;
+    entry.slots.push(row.slot);
+    byCampaign.set(key, entry);
+  }
+  for (const entry of byCampaign.values()) {
+    entry.slots.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt) || (String(a._id) < String(b._id) ? -1 : 1));
+  }
+  return byCampaign;
+}
+
 // Loads what the requested sections need: { marketplace, myCampaigns, wallet, applications }.
 async function loadCreatorData(user, ctx, sections) {
   const creatorId = toObjectId(ctx.userId);
@@ -134,11 +250,12 @@ async function loadCreatorData(user, ctx, sections) {
 
   // Round 2: the campaigns those rows point at (and every live one for the marketplace), the
   // ledger rows the wallet reads, and the content timeline.
-  const campaignFilter = need("marketplace")
-    ? { $or: [{ status: "live" }, { _id: { $in: [...campaignIds].map(toObjectId) } }] }
-    : { _id: { $in: [...campaignIds].map(toObjectId) } };
-  const [campaigns, ledger, events] = await Promise.all([
-    need("marketplace") || campaignIds.size > 0 ? Campaign.find(campaignFilter).sort({ createdAt: -1 }).lean() : [],
+  const ownCampaignIds = [...campaignIds].map(toObjectId);
+  const [ownCampaigns, liveCampaigns, ledger, events] = await Promise.all([
+    campaignIds.size > 0 ? Campaign.find({ _id: { $in: ownCampaignIds } }).lean() : [],
+    need("marketplace")
+      ? liveMarketplaceCampaigns().then((live) => live.filter((c) => !campaignIds.has(keysOf(c).id)))
+      : [],
     need("wallet")
       ? Transaction.find({
           // Each branch is served by its own index. Older views releases carry only a submission.
@@ -156,11 +273,14 @@ async function loadCreatorData(user, ctx, sections) {
       : [],
     need("myCampaigns") && submissions.length > 0 ? listEventsForSubmissions(submissionIds) : [],
   ]);
-  const campaignById = new Map(campaigns.map((c) => [String(c._id), c]));
+  // The live list is already newest first.
+  const campaigns =
+    ownCampaigns.length > 0 ? [...ownCampaigns, ...liveCampaigns].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) : liveCampaigns;
+  const campaignById = new Map(campaigns.map((c) => [keysOf(c).id, c]));
 
   // Round 3: brands for everything that shows one, and the marketplace's open places.
   const brandIds = new Set();
-  const addBrand = (campaign) => campaign && campaign.businessId && brandIds.add(String(campaign.businessId));
+  const addBrand = (campaign) => campaign && campaign.businessId && brandIds.add(keysOf(campaign).brand);
   if (need("myCampaigns")) {
     slots.forEach((slot) => addBrand(campaignById.get(String(slot.campaignId))));
     released.forEach((sub) => addBrand(campaignById.get(String(sub.campaignId))));
@@ -168,20 +288,20 @@ async function loadCreatorData(user, ctx, sections) {
   applications.forEach((a) => addBrand(campaignById.get(String(a.campaign))));
   const heldForMarketplace = new Set(slots.filter((s) => HELD_PLACEMENT_STATUSES.includes(s.status)).map((s) => String(s.campaignId)));
   const openCampaigns = need("marketplace")
-    ? campaigns.filter((c) => c.status === "live" && !heldForMarketplace.has(String(c._id)))
+    ? campaigns.filter((c) => c.status === "live" && !heldForMarketplace.has(keysOf(c).id))
     : [];
   openCampaigns.forEach(addBrand);
 
-  const [brands, availableSlots, interest] = await Promise.all([
+  const [brands, openPlaces, interest] = await Promise.all([
     brandIds.size > 0 ? User.find({ _id: { $in: [...brandIds].map(toObjectId) } }).select("name avatar").lean() : [],
-    openCampaigns.length > 0
-      ? Slot.find({ campaignId: { $in: openCampaigns.map((c) => c._id) }, status: "available" }).sort({ createdAt: 1, _id: 1 }).lean()
-      : [],
+    openCampaigns.length > 0 ? openPlacesByCampaign(openCampaigns.map((c) => c._id)) : new Map(),
     // Trending (ticket 11): creators who joined or applied in the last 72 hours, per open campaign.
     openCampaigns.length > 0 ? recentInterest(openCampaigns.map((c) => c._id), now) : new Map(),
   ]);
   const brandById = new Map(brands.map((b) => [String(b._id), b]));
   const withBrand = (campaign) => (campaign ? { ...campaign, businessId: campaign.businessId ? brandById.get(String(campaign.businessId)) || null : campaign.businessId } : null);
+  // The brand of a campaign without copying the campaign (the marketplace reads every live one).
+  const brandOf = (campaign) => (campaign && campaign.businessId ? brandById.get(keysOf(campaign).brand) || null : null);
 
   return {
     now,
@@ -197,9 +317,10 @@ async function loadCreatorData(user, ctx, sections) {
     ledger,
     events,
     openCampaigns,
-    availableSlots,
+    openPlaces,
     interest,
     withBrand,
+    brandOf,
   };
 }
 
@@ -312,19 +433,15 @@ async function buildMarketplace(ctx, data = null) {
   const creatorRank = profile ? profile.rank : "rank1";
   const activeSlots = data.slots.filter((s) => ACTIVE_PLACEMENT_STATUSES.includes(s.status)).length;
 
-  // Open places for every campaign in one query, in the order a join takes them, so each card shows
-  // the pay of the place the creator would get.
-  const slotsByCampaign = new Map();
-  for (const slot of data.availableSlots) {
-    const key = slot.campaignId.toString();
-    if (!slotsByCampaign.has(key)) slotsByCampaign.set(key, []);
-    slotsByCampaign.get(key).push(slot);
-  }
+  // Open places for every campaign in one query: how many, and the first of each rank requirement in
+  // the order a join takes them, so each card shows the pay of the place the creator would get.
 
   const marketplace = [];
-  for (const campaign of data.openCampaigns.map(data.withBrand)) {
-    const slots = slotsByCampaign.get(campaign._id.toString()) || [];
-    if (slots.length === 0) continue;
+  for (const campaign of data.openCampaigns) {
+    const campaignKey = keysOf(campaign).id;
+    const open = data.openPlaces.get(campaignKey);
+    if (!open || open.count === 0) continue;
+    const slots = open.slots;
 
     const eligibleSlot = slots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
     const matchingSlot = eligibleSlot || slots[0];
@@ -333,7 +450,7 @@ async function buildMarketplace(ctx, data = null) {
     const daysLeft = campaign.endDate
       ? Math.max(Math.ceil((campaign.endDate - Date.now()) / (1000 * 60 * 60 * 24)), 1)
       : 7;
-    const brand = campaign.businessId;
+    const brand = data.brandOf(campaign);
     const campaignNiches = normalizeNiches(campaign.niches);
 
     // Same check as joining; account-wide rules (connection, niches, placement limit) are
@@ -355,7 +472,7 @@ async function buildMarketplace(ctx, data = null) {
     const targeting = campaign.audienceTargeting || {};
 
     marketplace.push({
-      id: campaign._id,
+      id: campaignKey,
       title: campaign.name,
       category: campaign.category,
       niches: campaignNiches,
@@ -365,7 +482,7 @@ async function buildMarketplace(ctx, data = null) {
       slotId: matchingSlot._id,
       rankRequired: matchingSlot.rankRequired,
       rankLocked,
-      slotsLeft: slots.length,
+      slotsLeft: open.count,
       targetViews: campaign.targetViews,
       coverImageUrl: campaign.coverImageUrl,
       contentBrief: campaign.contentBrief,
@@ -385,7 +502,7 @@ async function buildMarketplace(ctx, data = null) {
       pay: payPerUnit(campaign, matchingSlot),
       targetPlatforms: targeting.platforms && targeting.platforms.length ? targeting.platforms : campaign.platforms || [],
       targetLocations: targeting.locations || [],
-      placesLeft: slots.length,
+      placesLeft: open.count,
       briefSummary: briefSummary(campaign),
       publishedAt: campaign.createdAt,
       eligible: reasons.length === 0,
@@ -394,7 +511,7 @@ async function buildMarketplace(ctx, data = null) {
       nicheOverlap,
       recommended,
       // Trending (ticket 11): different creators who joined or applied in the last 72 hours.
-      recentCreators: (data.interest && data.interest.get(String(campaign._id))) || 0,
+      recentCreators: (data.interest && data.interest.get(campaignKey)) || 0,
       trending: false,
       // Shown before claiming, so creators know a campaign also pays per referral.
       referralReward:

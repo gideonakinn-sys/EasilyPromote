@@ -236,3 +236,66 @@ test("Trending shows the eligible campaigns most creators joined or applied to i
   const applicationPlan = JSON.stringify(await CampaignApplication.find({ appliedAt: { $gte: since }, campaign: { $in: [picky.id] } }).explain());
   assert.match(applicationPlan, /appliedAt_-1_campaign_1_creator_1/);
 });
+
+// The marketplace summarises each campaign's open places in the database (load test, ticket 11):
+// the card must still show the first place the creator's rank allows, in join order, and count
+// every open place.
+test("a card shows the first open place the creator's rank allows and counts every open place", async () => {
+  const Slot = require("../../src/models/Slot");
+  const id = await liveCampaign({ campaignObjective: "views", targetViews: 100000, platforms: ["tiktok"] });
+  const creator = await harness.registerCreator();
+  const places = await Slot.find({ campaignId: id }).sort({ createdAt: 1, _id: 1 });
+  assert.ok(places.length >= 4, `needs 4 places, has ${places.length}`);
+
+  // The first two places need rank 3; the third is open to anyone; one place is already taken.
+  const base = places[0].createdAt.getTime();
+  await Slot.updateOne({ _id: places[0]._id }, { $set: { rankRequired: "rank3", reward: 900, createdAt: new Date(base) } });
+  await Slot.updateOne({ _id: places[1]._id }, { $set: { rankRequired: "rank3", reward: 800, createdAt: new Date(base + 1) } });
+  await Slot.updateOne({ _id: places[2]._id }, { $set: { rankRequired: null, reward: 700, createdAt: new Date(base + 2) } });
+  for (const [i, place] of places.slice(3).entries()) {
+    await Slot.updateOne({ _id: place._id }, { $set: { rankRequired: null, reward: 600, createdAt: new Date(base + 3 + i) } });
+  }
+  const other = await harness.registerCreator();
+  await Slot.updateOne({ _id: places[places.length - 1]._id }, { $set: { creatorId: other.id, status: "claimed", claimedAt: new Date() } });
+
+  let view = card(await marketplaceFor(creator), id);
+  assert.equal(view.placesLeft, places.length - 1);
+  assert.equal(view.slotsLeft, places.length - 1);
+  assert.equal(view.reward, 700, "a rank 1 creator gets the first place without a rank requirement");
+  assert.equal(String(view.slotId), String(places[2]._id));
+  assert.equal(view.rankLocked, false);
+
+  // Every open place needs rank 3: the card shows the first place, locked, with the reason.
+  await Slot.updateMany({ campaignId: id, status: "available" }, { $set: { rankRequired: "rank3" } });
+  view = card(await marketplaceFor(creator), id);
+  assert.equal(view.rankLocked, true);
+  assert.equal(String(view.slotId), String(places[0]._id));
+  assert.equal(view.reward, 900);
+  assert.equal(view.eligible, false);
+  assert.ok(view.ineligibleReasons.some((r) => /rank 3/.test(r)), JSON.stringify(view.ineligibleReasons));
+
+  // No open places left: no card.
+  await Slot.updateMany({ campaignId: id, status: "available" }, { $set: { status: "closed" } });
+  assert.equal(card(await marketplaceFor(creator), id), undefined);
+});
+
+// Live campaigns are kept in the API between marketplace requests (load test, ticket 11); any change
+// to a live campaign must still show on the very next request.
+test("a campaign that changes, pauses or goes live shows on the next marketplace request", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const creator = await harness.registerCreator();
+  const id = await liveCampaign({ campaignObjective: "content", contentPay: { ratePerDeliverable: 15000, deliverables: 3 } });
+  assert.equal(card(await marketplaceFor(creator), id).pay.amount, 15000);
+
+  await Campaign.updateOne({ _id: id }, { $set: { name: "Renamed while live" } });
+  assert.equal(card(await marketplaceFor(creator), id).title, "Renamed while live");
+
+  await Campaign.updateOne({ _id: id }, { $set: { status: "paused" } });
+  assert.equal(card(await marketplaceFor(creator), id), undefined);
+
+  await Campaign.updateOne({ _id: id }, { $set: { status: "live" } });
+  assert.ok(card(await marketplaceFor(creator), id));
+
+  const second = await liveCampaign({ campaignObjective: "content", contentPay: { ratePerDeliverable: 9000, deliverables: 2 } });
+  assert.equal(card(await marketplaceFor(creator), second).pay.amount, 9000);
+});
