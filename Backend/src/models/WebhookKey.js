@@ -14,6 +14,13 @@ const webhookKeySchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    // Optional label from the brand, e.g. "Live app" or "Staging".
+    name: {
+      type: String,
+      trim: true,
+      maxlength: 40,
+      default: "",
+    },
     secretEncrypted: {
       type: String,
       required: true,

@@ -18,7 +18,12 @@ import { uploadFile } from "@ep/ui/lib/upload";
 import type { CampaignItem, CampaignReferral, TimelineEvent } from "./types";
 import { STATUS_BADGES } from "./campaign-card";
 import { ReferralCodeCard } from "./referral-code-card";
+import { TrackedLinkCard } from "./tracked-link-card";
+import { isClicksCampaign } from "../lib/creator-campaign-terms";
+import { CampaignBriefDetails } from "./campaign-brief";
 import { useReferralConversions } from "../lib/socket";
+// Campaign engine: content approval (ticket 07)
+import { ContentApprovalPanel } from "./content-approval-panel";
 
 // Events that represent a decision on the content itself, so they get the video card.
 const CONTENT_EVENT_TYPES = [
@@ -490,7 +495,17 @@ export function CampaignDetailsDrawer({
             </div>
           </div>
 
-          {referral && <ReferralCodeCard referral={referral} />}
+          {/* M8 batch 7 (SPEC D29): clicks campaigns share a tracked link instead of a code. */}
+          {isClicksCampaign(displayCampaign) ? (
+            <TrackedLinkCard
+              campaignId={displayCampaign.id}
+              referralCode={referral?.code ?? null}
+              destinationDomain={displayCampaign.destinationDomain}
+              referral={referral}
+            />
+          ) : (
+            referral && <ReferralCodeCard referral={referral} />
+          )}
 
           {/* Live CTA */}
           {displayCampaign.status === "live_tracking" && (
@@ -519,7 +534,7 @@ export function CampaignDetailsDrawer({
           {uploadOpen && !isMobile && displayCampaign.status === "live_tracking" && renderInlineUploadPanel()}
 
           {/* Views stats */}
-          {(displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
+          {displayCampaign.kind !== "deliverable" && (displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
             <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
               <div className="space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Total views</span>
@@ -569,6 +584,11 @@ export function CampaignDetailsDrawer({
             </div>
           )}
 
+          {/* Campaign engine: content approval (ticket 07). Content campaigns replace the views flow below. */}
+          {displayCampaign.contentApproval ? (
+            <ContentApprovalPanel campaign={displayCampaign} approval={displayCampaign.contentApproval} onChanged={onRefresh} />
+          ) : (
+          <>
           {/* Status alerts */}
           {displayCampaign.status === "under_review" && (
             <div className="flex items-center gap-4 border border-dashed rounded-[16px] p-2 pl-0 bg-[#FEFCE8] border-[#854D0E]">
@@ -620,7 +640,9 @@ export function CampaignDetailsDrawer({
               <div className="space-y-1">
                 <h4 className="font-rethink font-medium text-sm text-green-800 tracking-[-0.01em]">Delivered</h4>
                 <p className="font-rethink text-sm font-medium leading-normal text-green-800 tracking-[-0.01em]">
-                  Target reached and verified. ₦{displayCampaign.reward.toLocaleString()} was paid to your wallet
+                  {displayCampaign.kind === "deliverable"
+                    ? `Content posted. We'll add ₦${displayCampaign.reward.toLocaleString()} to your wallet once it's confirmed`
+                    : `Target reached and verified. ₦${displayCampaign.reward.toLocaleString()} was paid to your wallet`}
                 </p>
               </div>
             </div>
@@ -725,6 +747,11 @@ export function CampaignDetailsDrawer({
               </button>
             </div>
           )}
+          </>
+          )}
+
+          {/* Campaign engine: the full brief, unlocked by joining */}
+          <CampaignBriefDetails brief={displayCampaign.brief} />
 
           {/* The brief */}
           {(displayCampaign.description || displayCampaign.contentBrief || displayCampaign.keyMessageCta || displayCampaign.whatToAvoid || displayCampaign.contentStyle || displayCampaign.goal || displayCampaign.competitors || displayCampaign.uniqueSellingPoint || displayCampaign.funFact || displayCampaign.scriptUrl) && (
@@ -844,9 +871,11 @@ export function CampaignDetailsDrawer({
               )}
 
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                <span className="text-stone-500">Target</span>
+                <span className="text-stone-500">{displayCampaign.kind === "deliverable" ? "Deliverable" : "Target"}</span>
                 <span className="text-stone-800">
-                  {(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views
+                  {displayCampaign.kind === "deliverable"
+                    ? "1 approved deliverable"
+                    : `${(displayCampaign.viewTarget || displayCampaign.targetViews || 0).toLocaleString()} views`}
                 </span>
               </div>
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">

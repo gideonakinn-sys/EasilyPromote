@@ -39,6 +39,8 @@ export interface BrandStatsCampaign {
   endDate: string | null;
   hasReferral: boolean;
   conversions: number;
+  objective?: string;
+  campaignModel?: string;
 }
 
 export interface BrandStatsPayload {
@@ -57,7 +59,11 @@ export type BrandTransactionType =
   | "release"
   | "refund"
   | "topup"
-  | "unmatched_payment";
+  | "unmatched_payment"
+  | "transfer_fee"
+  | "fixed_credit"
+  | "fixed_void"
+  | "bonus_credit";
 
 export type BrandTransactionStatus =
   | "escrow_deposit"
@@ -66,7 +72,10 @@ export type BrandTransactionStatus =
   | "failed"
   | "refund_pending"
   | "refund_failed"
-  | "under_review";
+  | "under_review"
+  | "credited"
+  | "voided"
+  | "reinstated";
 
 export interface BrandTransaction {
   id: string;
@@ -75,7 +84,7 @@ export interface BrandTransaction {
   status: BrandTransactionStatus;
   amount: number;
   views: number | null;
-  bucket: "views" | "referral";
+  bucket: "views" | "referral" | "fixed" | "bonus";
   reference: string | null;
   campaignId: string | null;
   campaignName: string | null;
@@ -112,6 +121,10 @@ export const TRANSACTION_LABELS: Record<string, string> = {
   release: "Creator payout",
   refund: "Refund",
   unmatched_payment: "Unmatched payment",
+  transfer_fee: "Platform fee",
+  fixed_credit: "Fixed pay credit",
+  fixed_void: "Fixed pay void",
+  bonus_credit: "Bonus credit",
 };
 
 export function formatCompactViews(value: number): string {
@@ -126,6 +139,12 @@ export function formatNaira(value: number): string {
 
 export function formatInteger(value: number): string {
   return Math.round(value).toLocaleString("en-NG");
+}
+
+export function objectiveLabel(campaignModel?: string, objective?: string): string {
+  if (campaignModel === "content") return "Content";
+  if (objective === "actions") return "Actions";
+  return "Views";
 }
 
 export interface MonthPoint {

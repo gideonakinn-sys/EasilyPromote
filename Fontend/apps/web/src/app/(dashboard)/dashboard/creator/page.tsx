@@ -4,6 +4,8 @@ import { useCreatorDashboard } from "../../../../components/creator-dashboard-co
 import { OnboardingView } from "../../../../components/onboarding-view";
 import { OnboardingComplete } from "../../../../components/onboarding-complete";
 import { CampaignFeed } from "../../../../components/campaign-feed";
+import { AudienceDataPrompt } from "../../../../components/creator-profile-sections";
+import { MyApplications } from "../../../../components/my-applications";
 
 function CreatorHome() {
   const {
@@ -16,6 +18,8 @@ function CreatorHome() {
     setCampaignsFilter,
     handleSelectCampaign,
     handleBrowseCampaigns,
+    applications,
+    handleWithdrawApplication,
   } = useCreatorDashboard();
 
   if (showAllSet) {
@@ -34,14 +38,18 @@ function CreatorHome() {
   }
 
   return (
-    <CampaignFeed
-      profile={profile}
-      campaigns={filteredCampaigns}
-      filter={campaignsFilter}
-      onFilterChange={setCampaignsFilter}
-      onSelectCampaign={handleSelectCampaign}
-      onBrowseCampaign={handleBrowseCampaigns}
-    />
+    <div className="w-full">
+      <AudienceDataPrompt profile={profile} onAddAudience={() => openProfile("audience")} />
+      <MyApplications applications={applications} onWithdraw={handleWithdrawApplication} />
+      <CampaignFeed
+        profile={profile}
+        campaigns={filteredCampaigns}
+        filter={campaignsFilter}
+        onFilterChange={setCampaignsFilter}
+        onSelectCampaign={handleSelectCampaign}
+        onBrowseCampaign={handleBrowseCampaigns}
+      />
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const { z } = require("zod");
 const Submission = require("../models/Submission");
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
@@ -9,8 +10,79 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
 const { recordViewDelta } = require("../services/viewSnapshots");
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("../services/contentApproval");
+const { fullBrief } = require("../utils/campaignPay");
 
 const router = express.Router();
+
+// Campaign engine: content approval (ticket 07)
+// Loads a submission and its campaign for a content-campaign action by the brand or the
+// creator. Sends the error response and returns null when the action isn't allowed.
+async function loadContentSubmission(req, res, who) {
+  const submission = await Submission.findById(req.params.id);
+  if (!submission) {
+    res.status(404).json({ error: "Submission not found" });
+    return null;
+  }
+  const campaign = await Campaign.findById(submission.campaignId);
+  const owner = who === "brand" ? campaign && String(campaign.businessId) : String(submission.creatorId);
+  if (!campaign || owner !== String(req.user._id)) {
+    res.status(403).json({ error: "Not authorized" });
+    return null;
+  }
+  if (!contentApproval.isContentCampaign(campaign)) {
+    res.status(400).json({ error: "This only applies to content campaigns", code: "NOT_CONTENT_CAMPAIGN" });
+    return null;
+  }
+  return { submission, campaign };
+}
+
+function sendContentError(res, error, next) {
+  if (error instanceof contentApproval.ContentApprovalError) {
+    return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+  }
+  if (error instanceof z.ZodError) {
+    return res.status(400).json({ error: error.errors[0].message, code: "INVALID_BODY" });
+  }
+  return next(error);
+}
+
+const linkText = z.string({ invalid_type_error: "Links must be text" }).trim().max(2000, "That link is too long");
+const noteText = (message) => z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message).max(2000);
+const contentBodySchemas = {
+  submit: z.object({
+    videoUrl: linkText.url("Add a link to your content"),
+    caption: z.string().max(1000, "Captions can be up to 1,000 characters").optional(),
+    durationSeconds: z.number().min(0).optional(),
+  }),
+  edit: z.object({
+    videoUrl: linkText.url("Add a link to your content").optional(),
+    caption: z.string().max(1000, "Captions can be up to 1,000 characters").optional(),
+  }),
+  requestChanges: z.object({ notes: noteText("Tell the creator what to change") }),
+  reject: z.object({ reason: noteText("A rejection reason is required") }),
+  appeal: z.object({ reason: noteText("Say why the rejection should be reviewed") }),
+  deliver: z.object({
+    url: linkText.url("Add a download link the brand can open"),
+    acceptUsageRights: z.boolean().optional(),
+  }),
+  markPosted: z.object({
+    posts: z
+      .array(z.object({ platform: z.string().trim().max(40), postUrl: z.string().trim().max(2000) }), {
+        required_error: "Add the link to your live post",
+      })
+      .min(1, "Add the link to your live post")
+      .max(10),
+    caption: z.string().max(5000, "Captions can be up to 5,000 characters").optional(),
+  }),
+  empty: z.object({}).passthrough(),
+  disputePost: z.object({ notes: noteText("Tell the creator what's wrong with the post") }),
+};
+
+function contentResponse(submission, campaign) {
+  return { id: submission._id, ...contentApproval.contentApprovalView(submission, campaign) };
+}
 
 router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
@@ -23,6 +95,17 @@ router.post("/", protect, authorizeRoles("creator"), async (req, res, next) => {
     const campaign = await Campaign.findById(campaignId);
     if (!campaign || campaign.status !== "live") {
       return res.status(400).json({ error: "Campaign is not available for submissions" });
+    }
+
+    // Campaign engine: content approval (ticket 07)
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const body = contentBodySchemas.submit.parse({ videoUrl, caption, durationSeconds });
+        const created = await contentApproval.submitContent({ user: req.user, campaign, ...body });
+        return res.status(201).json({ id: created._id, status: created.status, campaignId: created.campaignId });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
     }
 
     const user = await User.findById(req.user._id);
@@ -80,6 +163,19 @@ router.put("/:id", protect, authorizeRoles("creator"), async (req, res, next) =>
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const body = contentBodySchemas.edit.parse({ videoUrl, caption });
+        const updated = await contentApproval.editOrResubmitContent({ submission, campaign: contentCampaign, user: req.user, ...body });
+        return res.json({ ...contentResponse(updated, contentCampaign), videoUrl: updated.videoUrl, caption: updated.caption });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (!["new", "rejected"].includes(submission.status)) {
       return res.status(400).json({ error: "Content can only be updated before approval" });
     }
@@ -131,44 +227,53 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       filter.status = status;
     }
 
-    const submissions = await Submission.find(filter).sort({ submittedAt: -1 });
-
+    // The list, what's been paid per submission and the counts per status, read together.
     // payoutAmount was never stored on submissions; report what has actually been paid
     // for each one from settled views releases in the ledger.
     const Transaction = require("../models/Transaction");
-    const releasedGroups = await Transaction.aggregate([
-      {
-        $match: {
-          campaignId: campaign._id,
-          type: "release",
-          status: "released",
-          bucket: { $ne: "referral" },
-          submissionId: { $ne: null },
+    const [submissions, releasedGroups, byStatus] = await Promise.all([
+      Submission.find(filter).sort({ submittedAt: -1 }),
+      Transaction.aggregate([
+        {
+          $match: {
+            campaignId: campaign._id,
+            type: "release",
+            status: "released",
+            bucket: { $nin: ["referral", "fixed", "bonus"] },
+            submissionId: { $ne: null },
+          },
         },
-      },
-      { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+        { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+      ]),
+      Submission.aggregate([
+        { $match: { campaignId: campaign._id } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
     ]);
     const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
+    const count = (value) => (byStatus.find((group) => group._id === value) || { count: 0 }).count;
 
     const counts = {
-      new: await Submission.countDocuments({ campaignId: req.params.campaignId, status: "new" }),
-      approved: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "awaiting_post",
-      }),
-      awaitingPost: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "awaiting_post",
-      }),
-      posted: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "posted",
-      }),
-      rejected: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "rejected",
-      }),
+      new: count("new"),
+      // Older clients read "approved" as content waiting to be posted.
+      approved: count("awaiting_post"),
+      awaitingPost: count("awaiting_post"),
+      posted: count("posted"),
+      rejected: count("rejected"),
     };
+
+    // Campaign engine: content approval (ticket 07)
+    const isContent = contentApproval.isContentCampaign(campaign);
+    if (isContent) {
+      Object.assign(counts, {
+        changesRequested: count("changes_requested"),
+        awaitingDelivery: count("awaiting_delivery"),
+        delivered: count("delivered"),
+        verifying: count("verifying"),
+        completed: count("completed"),
+        appealed: count("appealed"),
+      });
+    }
 
     const submissionsResponse = submissions.map((s) => ({
       id: s._id,
@@ -187,9 +292,23 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       submittedAt: s.submittedAt,
       reviewedAt: s.reviewedAt,
       postedAt: s.postedAt,
+      // Campaign engine: content approval (ticket 07)
+      ...(isContent && contentApproval.contentApprovalView(s, campaign)),
     }));
 
-    res.json({ counts, submissions: submissionsResponse });
+    res.json({
+      counts,
+      submissions: submissionsResponse,
+      // Campaign engine: content approval (ticket 07)
+      ...(isContent && {
+        contentApproval: {
+          destination: contentApproval.destinationOf(campaign),
+          maxChangeRequests: contentApproval.MAX_CHANGE_REQUESTS,
+          licence: contentApproval.USAGE_RIGHTS_LICENCE,
+          brief: fullBrief(campaign),
+        },
+      }),
+    });
   } catch (error) {
     next(error);
   }
@@ -206,6 +325,17 @@ router.patch("/:id/approve", protect, async (req, res, next) => {
     if (!campaign || campaign.businessId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const approved = await contentApproval.approveContent({ submission, campaign, actor: { kind: "brand", user: req.user } });
+        return res.json(contentResponse(approved, campaign));
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (submission.status !== "new") {
       return res.status(400).json({ error: "Can only approve new submissions" });
     }
@@ -253,6 +383,19 @@ router.patch("/:id/reject", protect, async (req, res, next) => {
     if (!campaign || campaign.businessId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07): the status is checked inside the update, so a
+    // rejection can't overwrite an approval that landed a moment earlier.
+    if (contentApproval.isContentCampaign(campaign)) {
+      try {
+        const body = contentBodySchemas.reject.parse(req.body);
+        const rejected = await contentApproval.rejectContent({ submission, campaign, actor: { kind: "brand", user: req.user }, reason: body.reason });
+        return res.json({ ...contentResponse(rejected, campaign), rejectionReason: rejected.rejectionReason });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     if (submission.status !== "new") {
       return res.status(400).json({ error: "Can only reject new submissions" });
     }
@@ -301,6 +444,19 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
     if (submission.creatorId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: "Not authorized" });
     }
+
+    // Campaign engine: content approval (ticket 07)
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const body = contentBodySchemas.markPosted.parse(req.body);
+        const posted = await contentApproval.markContentPosted({ submission, campaign: contentCampaign, user: req.user, ...body });
+        return res.json({ ...contentResponse(posted, contentCampaign), postedPlatforms: posted.postedPlatforms });
+      } catch (error) {
+        return sendContentError(res, error, next);
+      }
+    }
+
     // "posted" and "verifying" are allowed so a creator can add a second
     // platform's link later — they often post to TikTok first and Instagram
     // hours afterwards, by which point the sync jobs have already moved the
@@ -404,6 +560,67 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
   }
 });
 
+// ── Campaign engine: content approval (ticket 07) ──────────────────────────────
+// Content campaigns only; each route answers NOT_CONTENT_CAMPAIGN for views campaigns.
+
+function contentRoute(who, schema, action) {
+  return async (req, res, next) => {
+    try {
+      const loaded = await loadContentSubmission(req, res, who);
+      if (!loaded) return;
+      const body = schema.parse(req.body || {});
+      const updated = await action({ ...loaded, user: req.user, body });
+      res.json(contentResponse(updated, loaded.campaign));
+    } catch (error) {
+      sendContentError(res, error, next);
+    }
+  };
+}
+
+router.patch(
+  "/:id/request-changes",
+  protect,
+  contentRoute("brand", contentBodySchemas.requestChanges, ({ body, ...ctx }) => contentApproval.requestChanges({ ...ctx, notes: body.notes }))
+);
+
+router.patch(
+  "/:id/appeal",
+  protect,
+  authorizeRoles("creator"),
+  contentRoute("creator", contentBodySchemas.appeal, ({ body, ...ctx }) => contentApproval.appealRejection({ ...ctx, reason: body.reason }))
+);
+
+router.patch(
+  "/:id/deliver",
+  protect,
+  authorizeRoles("creator"),
+  contentRoute("creator", contentBodySchemas.deliver, ({ body, ...ctx }) =>
+    contentApproval.shareDelivery({ ...ctx, url: body.url, acceptUsageRights: body.acceptUsageRights })
+  )
+);
+
+router.patch(
+  "/:id/confirm-receipt",
+  protect,
+  contentRoute("brand", contentBodySchemas.empty, ({ user, submission, campaign }) =>
+    contentApproval.confirmReceipt({ submission, campaign, actor: { kind: "brand", user } })
+  )
+);
+
+router.patch(
+  "/:id/confirm-post",
+  protect,
+  contentRoute("brand", contentBodySchemas.empty, ({ user, submission, campaign }) =>
+    contentApproval.confirmPost({ submission, campaign, actor: { kind: "brand", user } })
+  )
+);
+
+router.patch(
+  "/:id/dispute-post",
+  protect,
+  contentRoute("brand", contentBodySchemas.disputePost, ({ body, ...ctx }) => contentApproval.disputePost({ ...ctx, notes: body.notes }))
+);
+
 router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), async (req, res, next) => {
   try {
     const { platform: rawPlatform, views, likes, comments } = req.body;
@@ -457,7 +674,7 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
         const Transaction = require("../models/Transaction");
         const released = await Transaction.aggregate([
           // The views pool only: referral payouts must not complete a views campaign.
-          { $match: { campaignId: campaign._id, status: "released", bucket: { $ne: "referral" } } },
+          { $match: { campaignId: campaign._id, status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } } },
           { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
         const totalReleased = released.length > 0 ? released[0].total : 0;

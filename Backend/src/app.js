@@ -17,6 +17,7 @@ const webhookRoutes = require("./routes/webhooks");
 const adminRoutes = require("./routes/admin");
 const adminReferralRoutes = require("./routes/adminReferrals");
 const adminActivityRoutes = require("./routes/adminActivity");
+const adminAlertRoutes = require("./routes/adminAlerts");
 const platformRoutes = require("./routes/platforms");
 const nicheRoutes = require("./routes/niches");
 const industryRoutes = require("./routes/industries");
@@ -25,6 +26,10 @@ const metaRoutes = require("./routes/meta");
 const waitlistRoutes = require("./routes/waitlist");
 const referralRoutes = require("./routes/referral");
 const referralCodeRoutes = require("./routes/referralCodes");
+// Campaign engine: applications (ticket 06)
+const applicationRoutes = require("./routes/applications");
+// M8 batch 7: clicks via tracked links (SPEC D29).
+const redirectRoutes = require("./routes/redirect");
 
 const app = express();
 
@@ -67,6 +72,8 @@ app.use((req, res, next) => {
 app.use(morgan("dev"));
 
 app.use("/api/webhooks", webhookRoutes);
+// M8 batch 7: public redirect for clicks campaigns (outside /api, no auth).
+app.use("/r", redirectRoutes);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -79,6 +86,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
 app.use("/api/creators", creatorRoutes);
 app.use("/api/campaigns", referralCodeRoutes);
+app.use("/api/campaigns", applicationRoutes); // Campaign engine: applications (ticket 06)
+app.use("/api/campaigns", require("./routes/ratings")); // Brand ratings (M8)
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -87,6 +96,9 @@ app.use("/api/payouts", payoutRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin/referrals", adminReferralRoutes);
 app.use("/api/admin/activity", adminActivityRoutes);
+app.use("/api/admin/alerts", adminAlertRoutes);
+app.use("/api/admin/pricing", require("./routes/adminPricing")); // Price Table (ticket 11)
+app.use("/api/admin", require("./routes/adminBadges")); // Ratings and badges (M8)
 app.use("/api/admin", adminRoutes);
 app.use("/api/platforms", platformRoutes);
 app.use("/api/niches", nicheRoutes);

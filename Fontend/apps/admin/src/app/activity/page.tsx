@@ -25,6 +25,9 @@ const TARGET_FILTERS = [
   { value: "referral_code", label: "Referral codes" },
   { value: "webhook_key", label: "Signing keys" },
   { value: "conversion", label: "Conversions" },
+  { value: "ops_alert", label: "Alerts" },
+  { value: "price_table", label: "Price table" },
+  { value: "rating", label: "Ratings" },
 ];
 
 const ACTION_LABELS: Record<string, string> = {
@@ -37,6 +40,13 @@ const ACTION_LABELS: Record<string, string> = {
   "referral_code.enabled": "Re-enabled referral code",
   "webhook_key.revoked": "Revoked signing key",
   "conversion.voided": "Voided conversion",
+  "ops_alert.resolved": "Resolved alert",
+  "pricing.view_tiers_updated": "Changed per-view price table",
+  "rating.hidden": "Hid brand rating",
+  "rating.unhidden": "Unhid brand rating",
+  "creator.badge_granted": "Granted badge",
+  "creator.badge_revoked": "Revoked badge",
+  "creator.badge_override_cleared": "Returned badge to automatic",
 };
 
 const ACTION_TONES: Record<string, string> = {
@@ -45,6 +55,9 @@ const ACTION_TONES: Record<string, string> = {
   "referral_code.disabled": "bg-red-100 text-red-800",
   "webhook_key.revoked": "bg-red-100 text-red-800",
   "conversion.voided": "bg-red-100 text-red-800",
+  "rating.hidden": "bg-red-100 text-red-800",
+  "creator.badge_revoked": "bg-red-100 text-red-800",
+  "creator.badge_granted": "bg-green-100 text-green-800",
   "withdrawal.approved": "bg-green-100 text-green-800",
   "user.activated": "bg-green-100 text-green-800",
   "referral_code.enabled": "bg-green-100 text-green-800",

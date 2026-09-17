@@ -6,14 +6,18 @@ const ConversionEvent = require("../models/ConversionEvent");
 const WebhookDelivery = require("../models/WebhookDelivery");
 const Campaign = require("../models/Campaign");
 const BusinessProfile = require("../models/BusinessProfile");
+const Notification = require("../models/Notification");
 const { decrypt } = require("../utils/crypto");
 const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
-const { reserveConversionReward } = require("../utils/referralEarnings");
+const { reserveConversionReward, payQueuedConversions } = require("../utils/referralEarnings");
+const { campaignEventTypes } = require("../utils/referralCodes");
+const { isConversionBonus, reserveConversionBonus } = require("../utils/hybridBonus");
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-const EVENT_TYPES = ["install", "signup", "purchase", "deposit", "custom"];
+// `lead` (ticket 11) pays Leads campaigns; Sales campaigns count `purchase`.
+const EVENT_TYPES = ["install", "signup", "lead", "purchase", "deposit", "custom"];
 
 const INVALID_CODE_MESSAGES = {
   not_found: "No creator in your account has this code",
@@ -102,14 +106,44 @@ function invalidPayload(error) {
   return reply(400, { error: "Invalid payload", details });
 }
 
-async function markConnected(key, now) {
-  await Promise.all([
-    WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } }),
-    BusinessProfile.updateOne(
-      { userId: key.businessId, referralConnectedAt: null },
-      { $set: { referralConnectedAt: now } }
-    ),
-  ]);
+// Every signed request marks its key as used. Only requests from the brand's own server
+// count toward verification: our dashboard's test sender signs with the brand's key too,
+// so it proves the key works, not that their app is wired up.
+async function markConnected(key, now, { kind, source }) {
+  const updates = [WebhookKey.updateOne({ _id: key._id }, { $set: { lastUsedAt: now } })];
+  const fromBrandServer = source !== "dashboard_test";
+  if (fromBrandServer) {
+    const field = kind === "code_check" ? "referralVerification.codeCheckAt" : "referralVerification.conversionAt";
+    updates.push(
+      BusinessProfile.updateOne({ userId: key.businessId, referralConnectedAt: null }, { $set: { referralConnectedAt: now } }),
+      BusinessProfile.updateOne({ userId: key.businessId, [field]: null }, { $set: { [field]: now } })
+    );
+  }
+  await Promise.all(updates);
+  if (fromBrandServer) await completeVerification(key.businessId, now);
+}
+
+// Verified once both proofs have arrived. The conditional update makes the first request
+// to complete the pair the only one that notifies the brand.
+async function completeVerification(businessId, now) {
+  const result = await BusinessProfile.updateOne(
+    {
+      userId: businessId,
+      "referralVerification.verifiedAt": null,
+      "referralVerification.codeCheckAt": { $ne: null },
+      "referralVerification.conversionAt": { $ne: null },
+    },
+    { $set: { "referralVerification.verifiedAt": now } }
+  );
+  if (result.modifiedCount !== 1) return;
+
+  await Notification.create({
+    businessId,
+    type: "referral_connected",
+    title: "Your app is connected",
+    body: "We received a code check and a conversion from your server. You can now launch referral campaigns.",
+  });
+  emitToUser(businessId, "referral-verified", { verifiedAt: now });
 }
 
 // Shared by conversions and code checks: key lookup, signature, rate limit, JSON.
@@ -174,7 +208,7 @@ async function evaluateCode(businessId, rawCode, now) {
   if (referralCode.status === "disabled") return { value, referralCode, campaign: null, reason: "disabled" };
 
   const campaign = await Campaign.findById(referralCode.campaignId).select(
-    "status endDate completedAt updatedAt referral businessId name"
+    "status endDate completedAt updatedAt referral businessId name payShape hybridBonus.metric"
   );
   if (!campaign || !campaignAcceptsConversions(campaign, now.getTime())) {
     return { value, referralCode, campaign, reason: "campaign_not_accepting" };
@@ -229,7 +263,7 @@ async function logDelivery(context, result, source) {
   }
 }
 
-async function processConversion(request, context) {
+async function processConversion(request, context, source) {
   const now = new Date();
   const auth = await authenticateSignedRequest(request, context, now);
   if (auth.failure) return auth.failure;
@@ -249,7 +283,7 @@ async function processConversion(request, context) {
   // Test events prove the key and signing work. They don't need a real code yet,
   // but report whether the code would match so a brand can check its setup.
   if (payload.test) {
-    await markConnected(key, now);
+    await markConnected(key, now, { kind: "conversion", source });
     return reply(200, {
       status: "test_ok",
       code: {
@@ -285,11 +319,13 @@ async function processConversion(request, context) {
   }
 
   // Every event is stored; only the campaign's chosen conversion type moves the counters.
-  const counted = payload.event === (campaign.referral && campaign.referral.eventType);
+  const counted = campaignEventTypes(campaign).includes(payload.event);
 
   // The event is saved first (it's the idempotency guard); only then is money
-  // reserved, so a duplicate delivery can never reserve a reward twice.
-  const reward = await reserveConversionReward(campaign, counted, now);
+  // reserved, so a duplicate delivery can never reserve a reward twice. A hybrid campaign's
+  // conversion earns a bonus from its bonus pool instead (ticket 10).
+  if (isConversionBonus(campaign)) return recordBonusConversion({ campaign, event, referralCode, counted, payload, key, now, source });
+  const reward = await reserveConversionReward(campaign, counted, now, { eventId: event._id });
 
   const [updatedCode] = await Promise.all([
     ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
@@ -308,8 +344,11 @@ async function processConversion(request, context) {
       }
     ),
     activateIfPending(referralCode, now),
-    markConnected(key, now),
+    markConnected(key, now, { kind: "conversion", source }),
   ]);
+
+  // Queued behind older unpaid conversions: pay whatever the pool covers now, oldest first.
+  if (reward.queued) await payQueuedConversions(campaign._id, now);
 
   const update = {
     campaignId: campaign._id,
@@ -326,9 +365,38 @@ async function processConversion(request, context) {
   return reply(200, { status: "recorded", counted });
 }
 
+// A counted conversion on a hybrid campaign: its bonus is reserved from the bonus pool, up to the
+// creator's cap, and recorded as bonusAmount (rewardAmount stays 0).
+async function recordBonusConversion({ campaign, event, referralCode, counted, payload, key, now, source }) {
+  const bonus = await reserveConversionBonus(campaign, event, counted, now);
+  const [updatedCode] = await Promise.all([
+    ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
+    counted ? Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } }) : Promise.resolve(),
+    ConversionEvent.updateOne(
+      { _id: event._id },
+      { $set: { counted, bonusAmount: bonus.bonusAmount, unpaidReason: bonus.bonusAmount > 0 ? null : bonus.unpaidReason, availableAt: bonus.availableAt } }
+    ),
+    activateIfPending(referralCode, now),
+    markConnected(key, now, { kind: "conversion", source }),
+  ]);
+  const update = {
+    campaignId: campaign._id,
+    referralCodeId: referralCode._id,
+    code: referralCode.code,
+    eventType: payload.event,
+    counted,
+    rewardAmount: 0,
+    bonusAmount: bonus.bonusAmount,
+    conversions: updatedCode ? updatedCode.conversions : referralCode.conversions,
+  };
+  emitToUser(referralCode.creatorId, "referral-conversion", update);
+  emitToUser(key.businessId, "referral-conversion", update);
+  return reply(200, { status: "recorded", counted });
+}
+
 // Called by a brand's sign-up flow when a user enters a code, so brands never have to
 // load or sync creators' codes. Records nothing; the conversion comes later.
-async function processCodeCheck(request, context) {
+async function processCodeCheck(request, context, source) {
   const now = new Date();
   const auth = await authenticateSignedRequest(request, context, now);
   if (auth.failure) return auth.failure;
@@ -337,7 +405,9 @@ async function processCodeCheck(request, context) {
   const parsed = codeCheckSchema.safeParse(json);
   if (!parsed.success) return invalidPayload(parsed.error);
 
-  const [evaluation] = await Promise.all([evaluateCode(key.businessId, parsed.data.code, now), markConnected(key, now)]);
+  const [evaluation] = await Promise.all([evaluateCode(key.businessId, parsed.data.code, now),
+    markConnected(key, now, { kind: "code_check", source }),
+  ]);
   if (evaluation.reason) {
     return reply(200, { valid: false, code: evaluation.value, reason: evaluation.reason });
   }
@@ -348,6 +418,7 @@ async function processCodeCheck(request, context) {
     code: evaluation.value,
     campaign_id: String(evaluation.campaign._id),
     event: evaluation.campaign.referral ? evaluation.campaign.referral.eventType : "signup",
+    events: campaignEventTypes(evaluation.campaign),
   });
 }
 
@@ -357,14 +428,14 @@ function emptyContext() {
 
 async function handleConversionWebhook({ headers, rawBody, source = "webhook" }) {
   const context = emptyContext();
-  const result = await processConversion({ headers, rawBody }, context);
+  const result = await processConversion({ headers, rawBody }, context, source);
   await logDelivery(context, result, source);
   return result;
 }
 
 async function handleCodeCheck({ headers, rawBody, source = "code_check" }) {
   const context = emptyContext();
-  const result = await processCodeCheck({ headers, rawBody }, context);
+  const result = await processCodeCheck({ headers, rawBody }, context, source);
   await logDelivery(context, result, source);
   return result;
 }

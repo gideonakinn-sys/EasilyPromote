@@ -97,21 +97,24 @@ async function topCampaigns(businessId, { from, to }, limit = 5) {
     .map((r) => {
       const c = byId.get(r._id.toString());
       if (!c) return null;
+      const targetViews = c.targetViews || 0;
       const progressPercent =
-        c.targetViews > 0 ? Math.min(Math.round((r.views / c.targetViews) * 100), 100) : 0;
+        targetViews > 0 ? Math.min(Math.round((r.views / targetViews) * 100), 100) : 0;
       return {
         id: c._id,
         name: c.name,
         category: c.category,
         status: c.status,
         coverImageUrl: c.coverImageUrl,
-        targetViews: c.targetViews,
+        targetViews,
         viewsDelivered: r.views,
         progressPercent,
         budget: c.budget,
         views: r.views,
         startDate: c.startDate,
         endDate: c.endDate,
+        objective: c.objective,
+        campaignModel: c.campaignModel,
         hasReferral: !!(c.referral && c.referral.enabled),
         conversions: c.referral && c.referral.enabled ? c.referral.conversions || 0 : 0,
       };

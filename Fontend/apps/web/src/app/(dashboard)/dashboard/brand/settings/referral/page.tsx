@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { Skeleton } from "../../../../../../components/ui/skeleton";
 import { getUser, isAuthenticated } from "../../../../../../lib/api";
+import { ConnectAppChecklist } from "../../../../../../components/connect-app-checklist";
 import {
   DEVELOPER_DOCS_URL,
+  MAX_KEY_NAME,
+  REFERRAL_HOW_IT_WORKS,
+  codeFormatText,
+  buildDeveloperMessage,
   formatWhen,
   referralApi,
   type ReferralStatus,
@@ -215,7 +220,13 @@ function ReferralSettingsContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [busyKeyId, setBusyKeyId] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState<{ keyId: string; secret: string; rotated: boolean } | null>(null);
+  const [revealed, setRevealed] = useState<{ keyId: string; name: string; secret: string; rotated: boolean } | null>(null);
+  // Naming a new key, or renaming an existing one.
+  const [nameDialog, setNameDialog] = useState<{ mode: "create" } | { mode: "rename"; key: WebhookKey } | null>(null);
+  const [nameInput, setNameInput] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: "rotate" | "revoke"; key: WebhookKey } | null>(null);
+  const cancelConfirmRef = useRef<HTMLButtonElement>(null);
   const [savedConfirmed, setSavedConfirmed] = useState(false);
   const [language, setLanguage] = useState<SnippetLanguage>("node");
   const [events, setEvents] = useState<WebhookDeliveryLog[]>([]);
@@ -255,6 +266,22 @@ function ReferralSettingsContent() {
     load();
   }, [router, load]);
 
+  // Until the app is connected, check every 10 seconds so the checklist ticks by itself.
+  const verified = Boolean(status?.verified);
+  useEffect(() => {
+    if (loading || error || verified) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await referralApi.status();
+        setStatus(next);
+        if (next.verified) toast("Your app is connected", "success");
+      } catch {
+        // The next check tries again.
+      }
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [loading, error, verified, toast]);
+
   const copy = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -264,16 +291,21 @@ function ReferralSettingsContent() {
     }
   };
 
-  const reveal = (keyId: string, secret: string, rotated: boolean) => {
+  const reveal = (key: WebhookKey, secret: string, rotated: boolean) => {
     setSavedConfirmed(false);
-    setRevealed({ keyId, secret, rotated });
+    setRevealed({ keyId: key.keyId, name: key.name, secret, rotated });
   };
 
-  const handleGenerate = async () => {
+  const openNameDialog = (dialog: { mode: "create" } | { mode: "rename"; key: WebhookKey }) => {
+    setNameInput(dialog.mode === "rename" ? dialog.key.name : "");
+    setNameDialog(dialog);
+  };
+
+  const handleGenerate = async (name: string) => {
     setGenerating(true);
     try {
-      const result = await referralApi.createKey();
-      reveal(result.key.keyId, result.secret, false);
+      const result = await referralApi.createKey(name);
+      reveal(result.key, result.secret, false);
       await load();
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "Could not generate a key", "error");
@@ -282,12 +314,22 @@ function ReferralSettingsContent() {
     }
   };
 
+  // Focus Cancel when the confirmation opens, and let Escape close it.
+  useEffect(() => {
+    if (!confirmAction) return;
+    cancelConfirmRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmAction(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmAction]);
+
   const handleRotate = async (key: WebhookKey) => {
-    if (!window.confirm(`Rotate ${key.keyId}? The current key keeps working for 24 hours while you swap in the new one.`)) return;
     setBusyKeyId(key.id);
     try {
       const result = await referralApi.rotateKey(key.id);
-      reveal(result.key.keyId, result.secret, true);
+      reveal(result.key, result.secret, true);
       await load();
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : "Could not rotate the key", "error");
@@ -297,7 +339,6 @@ function ReferralSettingsContent() {
   };
 
   const handleRevoke = async (key: WebhookKey) => {
-    if (!window.confirm(`Revoke ${key.keyId}? Requests signed with it will be rejected immediately.`)) return;
     setBusyKeyId(key.id);
     try {
       await referralApi.revokeKey(key.id);
@@ -308,6 +349,46 @@ function ReferralSettingsContent() {
     } finally {
       setBusyKeyId(null);
     }
+  };
+
+  const handleNameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nameDialog) return;
+    const name = nameInput.trim();
+    if (nameDialog.mode === "create") {
+      setNameDialog(null);
+      await handleGenerate(name);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await referralApi.renameKey(nameDialog.key.id, name);
+      toast(name ? "Key renamed" : "Key name removed", "success");
+      setNameDialog(null);
+      await load();
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : "Could not rename the key", "error");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  // Escape closes the name dialog.
+  useEffect(() => {
+    if (!nameDialog) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !savingName) setNameDialog(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [nameDialog, savingName]);
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return;
+    const { type, key } = confirmAction;
+    setConfirmAction(null);
+    if (type === "rotate") await handleRotate(key);
+    else await handleRevoke(key);
   };
 
   const handleRefreshStatus = async () => {
@@ -341,7 +422,8 @@ function ReferralSettingsContent() {
   };
 
   const webhookUrl = status?.webhookUrl || "";
-  const sampleKeyId = keys.find((key) => key.status === "active")?.keyId || "key_…";
+  const sampleKey = keys.find((key) => key.status === "active");
+  const sampleKeyId = sampleKey?.keyId || "key_…";
   const sampleValidate = [
     `POST ${status?.validateUrl || ""}`,
     "Content-Type: application/json",
@@ -365,6 +447,9 @@ function ReferralSettingsContent() {
     '  "timestamp": "2026-09-14T15:04:00Z"',
     "}",
   ].join("\n");
+
+  const hasKey = keys.some((key) => key.status === "active" || key.status === "expiring");
+  const verification = status?.verification;
 
   return (
     <div className="min-h-dvh bg-stone-50 text-stone-900 font-rethink">
@@ -410,25 +495,81 @@ function ReferralSettingsContent() {
           </div>
         ) : (
           <>
+            {/* How it works */}
+            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="how-heading">
+              <h2 id="how-heading" className="font-semibold text-sm text-stone-900">How referral tracking works</h2>
+              {status && (
+                <p className="bg-stone-50 rounded-xl px-3 py-2 text-xs text-stone-600 font-medium leading-relaxed">
+                  {codeFormatText(status.codePrefix)}
+                </p>
+              )}
+              <ol className="space-y-3">
+                {REFERRAL_HOW_IT_WORKS.map((item, index) => (
+                  <li key={item.title} className="flex gap-3">
+                    <span
+                      className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#1C1917] text-xs font-semibold flex items-center justify-center"
+                      aria-hidden="true"
+                    >
+                      {index + 1}
+                    </span>
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-medium text-stone-900">{item.title}</p>
+                      <p className="text-xs text-stone-500 font-medium leading-relaxed">{item.body}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-stone-900">What you need</p>
+                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                    A developer adds two small requests to your app. &quot;Send to your developer&quot; below gives them everything.
+                  </p>
+                </div>
+                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-stone-900">What we never see</p>
+                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                    Names, emails or phone numbers. Only the code and what happened.
+                  </p>
+                </div>
+              </div>
+            </section>
+
             {/* Connection */}
             <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="connection-heading">
               <div className="flex items-center justify-between gap-3">
-                <h2 id="connection-heading" className="font-semibold text-sm text-stone-900">Connection</h2>
+                <h2 id="connection-heading" className="font-semibold text-sm text-stone-900">Connect your app</h2>
                 <span
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1.5",
-                    status?.connected ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-600"
+                    verified ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-600"
                   )}
                 >
-                  <span className={cn("w-1.5 h-1.5 rounded-full", status?.connected ? "bg-[#176448]" : "bg-stone-400")} />
-                  {status?.connected ? "Connected" : "Not connected"}
+                  <span className={cn("w-1.5 h-1.5 rounded-full", verified ? "bg-[#176448]" : "bg-stone-400")} />
+                  {verified ? "Connected" : "Not connected yet"}
                 </span>
               </div>
               <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                {status?.connected
-                  ? `Last signed request ${formatWhen(status.lastEventAt).toLowerCase()}.`
-                  : "Generate a key, then send a test event. You'll show as connected once it arrives."}
+                {verified
+                  ? `Connected ${formatWhen(verification?.verifiedAt).toLowerCase()}. Last request ${formatWhen(status?.lastEventAt).toLowerCase()}.`
+                  : 'Your app counts as connected once both requests below arrive from your server. The "Try a request" button on this page only checks your key.'}
               </p>
+
+              <ConnectAppChecklist status={status} hasKey={hasKey} />
+
+              {!verified && (
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => copy(buildDeveloperMessage(status, sampleKeyId, sampleKey?.name), "Setup message")}
+                    className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold"
+                  >
+                    Send to your developer
+                  </button>
+                  <p className="text-[11px] text-stone-500 font-medium leading-relaxed">
+                    Copies the steps, both URLs and your key ID. Share your secret with them privately.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Webhook URL</span>
@@ -462,7 +603,7 @@ function ReferralSettingsContent() {
                   <p className="text-xs text-stone-500 font-medium">Up to {MAX_KEYS} at a time. Each request is signed with one.</p>
                 </div>
                 <button
-                  onClick={handleGenerate}
+                  onClick={() => openNameDialog({ mode: "create" })}
                   disabled={generating || keys.length >= MAX_KEYS}
                   className="shrink-0 px-4 py-2 bg-[#FEB604] text-[#1C1917] rounded-full text-xs font-semibold border border-stone-100 disabled:bg-stone-200 disabled:text-stone-400"
                 >
@@ -481,7 +622,10 @@ function ReferralSettingsContent() {
                     <li key={key.id} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-0.5">
-                          <p className="font-mono text-sm text-stone-900 break-all">{key.keyId}</p>
+                          <p className={cn("text-sm font-medium break-words", key.name ? "text-stone-900" : "text-stone-400")}>
+                            {key.name || "Unnamed key"}
+                          </p>
+                          <p className="font-mono text-xs text-stone-700 break-all">{key.keyId}</p>
                           <p className="text-xs text-stone-500 font-medium">Secret ending …{key.last4}</p>
                         </div>
                         <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium capitalize", KEY_STATUS_CHIPS[key.status])}>
@@ -494,9 +638,16 @@ function ReferralSettingsContent() {
                           {key.status === "expiring" && key.expiresAt && ` · stops working ${formatWhen(key.expiresAt)}`}
                         </span>
                         <div className="flex gap-2">
+                          <button
+                            onClick={() => openNameDialog({ mode: "rename", key })}
+                            disabled={busyKeyId === key.id}
+                            className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
+                          >
+                            Rename
+                          </button>
                           {key.status === "active" && (
                             <button
-                              onClick={() => handleRotate(key)}
+                              onClick={() => setConfirmAction({ type: "rotate", key })}
                               disabled={busyKeyId === key.id || keys.length >= MAX_KEYS}
                               className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
                             >
@@ -504,7 +655,7 @@ function ReferralSettingsContent() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleRevoke(key)}
+                            onClick={() => setConfirmAction({ type: "revoke", key })}
                             disabled={busyKeyId === key.id}
                             className="px-3 py-1.5 bg-red-50 border border-red-200 rounded-full text-xs font-semibold text-red-600 disabled:opacity-50"
                           >
@@ -523,7 +674,8 @@ function ReferralSettingsContent() {
               <div className="space-y-1">
                 <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Try a request</h2>
                 <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  We sign a request with your newest key and run it through the real checks. Nothing is recorded.
+                  We sign a request with your newest key and run it through the real checks. Nothing is recorded, and it
+                  doesn&apos;t connect your app: that needs requests from your own server.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Request type">
@@ -562,7 +714,7 @@ function ReferralSettingsContent() {
                   id="test-code"
                   value={testCode}
                   onChange={(e) => setTestCode(e.target.value.toUpperCase())}
-                  placeholder={testType === "validate" ? "Code to check, e.g. KUDA-TUNDE" : "Code to check (optional)"}
+                  placeholder={testType === "validate" ? `Code to check, e.g. ${status?.codePrefix || "KUDA"}-TUNDE` : "Code to check (optional)"}
                   autoComplete="off"
                   spellCheck={false}
                   className="flex-1 min-w-[180px] px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-mono text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
@@ -651,6 +803,7 @@ function ReferralSettingsContent() {
                           {event.eventType && ` · ${event.eventType}`}
                           {event.isTest && event.source !== "dashboard_test" && " · test"}
                           {event.result === "recorded" && !event.counted && " · stored, not counted (different event type)"}
+                          {event.keyName && ` · key: ${event.keyName}`}
                           {event.eventId && ` · ${event.eventId}`}
                         </p>
                         {event.error && <p className="text-xs font-medium text-red-700 break-words">{event.error}</p>}
@@ -685,7 +838,7 @@ function ReferralSettingsContent() {
                   <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{sampleRequest}</pre>
                 </div>
                 <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  <code className="font-mono text-stone-900">event</code> is one of install, signup, purchase, deposit or
+                  <code className="font-mono text-stone-900">event</code> is one of install, signup, lead, purchase, deposit or
                   custom. <code className="font-mono text-stone-900">event_id</code> must be unique per conversion — resending
                   it is safe and never counts twice.
                 </p>
@@ -734,8 +887,9 @@ function ReferralSettingsContent() {
               <div className="bg-[#EBF3FF] border border-dashed border-blue-200 rounded-2xl p-4 space-y-1">
                 <p className="text-sm font-medium text-blue-900">Test before going live</p>
                 <p className="text-xs text-blue-900/80 font-medium leading-relaxed">
-                  Send any event with <code className="font-mono">&quot;test&quot;: true</code>. We check the key and
-                  signature and mark you connected, without counting a conversion. The code doesn&apos;t need to exist yet.
+                  Send any event with <code className="font-mono">&quot;test&quot;: true</code> from your server. We check
+                  the key and signature without counting a conversion, and it ticks the test conversion step above. The code
+                  doesn&apos;t need to exist yet.
                 </p>
               </div>
 
@@ -755,6 +909,123 @@ function ReferralSettingsContent() {
         )}
       </main>
 
+      {nameDialog && (
+        <div
+          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          onClick={() => !savingName && setNameDialog(null)}
+        >
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="key-name-heading"
+            className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleNameSubmit}
+          >
+            <div className="space-y-1">
+              <h2 id="key-name-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+                {nameDialog.mode === "create" ? "Name your key" : "Rename key"}
+              </h2>
+              <p className={cn("text-xs text-stone-500 font-medium leading-relaxed", nameDialog.mode === "rename" && "font-mono break-all")}>
+                {nameDialog.mode === "create"
+                  ? "Optional. A name helps you tell keys apart, like Live app or Staging. Every key works for all your campaigns."
+                  : nameDialog.key.keyId}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="key-name" className="text-xs font-medium text-stone-500 block">
+                Key name
+              </label>
+              <input
+                id="key-name"
+                autoFocus
+                value={nameInput}
+                maxLength={MAX_KEY_NAME}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="Live app"
+                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
+              />
+              <p className="text-[11px] text-stone-400 font-medium text-right tabular-nums">
+                {nameInput.length}/{MAX_KEY_NAME}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setNameDialog(null)}
+                disabled={savingName}
+                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingName}
+                className="flex-1 py-3 bg-stone-900 text-white font-semibold text-sm rounded-full disabled:opacity-50"
+              >
+                {nameDialog.mode === "create" ? "Generate key" : savingName ? "Saving…" : "Save name"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          onClick={() => setConfirmAction(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-key-heading"
+            aria-describedby="confirm-key-body"
+            className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1">
+              <h2 id="confirm-key-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+                {confirmAction.type === "rotate" ? "Rotate this key?" : "Revoke this key?"}
+              </h2>
+              <p id="confirm-key-body" className="text-xs text-stone-500 font-medium leading-relaxed">
+                {confirmAction.type === "rotate"
+                  ? "We'll create a new key and secret. The current key keeps working for 24 hours while you swap in the new one."
+                  : "Requests signed with this key will be rejected immediately. This can't be undone."}
+              </p>
+            </div>
+
+            <div className="bg-stone-100 px-3 py-2 rounded-lg space-y-0.5">
+              {confirmAction.key.name && <p className="text-xs font-medium text-stone-900 break-words">{confirmAction.key.name}</p>}
+              <code className="block font-mono text-xs text-stone-900 break-all">{confirmAction.key.keyId}</code>
+            </div>
+            {confirmAction.type === "rotate" && confirmAction.key.name && (
+              <p className="text-xs text-stone-500 font-medium">The new key keeps the name &ldquo;{confirmAction.key.name}&rdquo;.</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                ref={cancelConfirmRef}
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAction}
+                className={cn(
+                  "flex-1 py-3 font-semibold text-sm rounded-full text-white",
+                  confirmAction.type === "rotate" ? "bg-stone-900" : "bg-red-600"
+                )}
+              >
+                {confirmAction.type === "rotate" ? "Rotate key" : "Revoke key"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {revealed && (
         <div
           className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
@@ -768,6 +1039,7 @@ function ReferralSettingsContent() {
                 Copy your secret key
               </h2>
               <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                {revealed.name && <span className="block font-medium text-stone-900 mb-1">{revealed.name}</span>}
                 This is the only time you&apos;ll see it. Store it in your server&apos;s environment variables.
                 {revealed.rotated && " Your previous key keeps working for 24 hours."}
               </p>

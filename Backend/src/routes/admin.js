@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const User = require("../models/User");
 const Campaign = require("../models/Campaign");
@@ -10,9 +11,13 @@ const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
 const Platform = require("../models/Platform");
 const Industry = require("../models/Industry");
+const TikTokConnection = require("../models/TikTokConnection");
+const MetaConnection = require("../models/MetaConnection");
+const { hasDependents } = require("../utils/cleanupCancelled");
+const { seedIndustries } = require("../utils/seedIndustries");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
-const { emitCampaignUpdate, emitCampaignStatus } = require("../utils/campaignUpdates");
+const { emitCampaignUpdate, emitCampaignStatus, emitPlacesLeft } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
 const { campaignEscrowBalance, refundViewsEscrow } = require("../utils/escrow");
@@ -23,8 +28,43 @@ const { recordEvent, listEventsForCampaign, labelFor } = require("../services/su
 const { timeAgo } = require("../utils/timeAgo");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
+const { RefundRetryError, refundRowState, retryBucketRefund } = require("../utils/refunds");
+const { autoRefundsEnabled } = require("../utils/autoRefundSwitch");
+const { hasConnectedSocial } = require("../utils/creatorVerification");
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("../services/contentApproval");
+// Fixed pay payouts and the money trail (ticket 09)
+const {
+  RefundError,
+  contentBudgetSummary,
+  refundUnusedContentBudget,
+  retryContentRefund,
+  voidUndeliveredPay,
+  reopenClosedPlaces,
+} = require("../utils/fixedPay");
+const { reconcileCampaignById } = require("../services/campaignReconciliation");
+// Hybrid pay (ticket 10)
+const { BonusError, bonusBudgetSummary, refundUnusedBonusPool } = require("../utils/hybridBonus");
+const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
+const { campaignHasPayments } = require("../utils/campaignPayments");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
+// Moving money (paying or reviewing withdrawals, the payout run and payout check, refunds, voids,
+// cancelling a paid campaign, which refunds it): finance admins and super admins only.
+const MONEY_ROLES = ["finance_admin", "super_admin"];
+const moneyGuard = [protect, authorizeRoles(...MONEY_ROLES)];
+const completeGuard = [protect, authorizeRoles(...COMPLETE_ROLES)];
+
+// Answers a completion, or its refusal.
+async function answerCompletion(req, res, next, { campaignId, note }) {
+  try {
+    const { campaign, closedPlaces } = await completeCampaign({ campaignId, req, note });
+    res.json({ success: true, status: campaign.status, closedPlaces });
+  } catch (error) {
+    if (error instanceof CompletionError) return res.status(error.status).json({ error: error.message, code: error.code });
+    next(error);
+  }
+}
 
 // ─── GET /api/admin/stats ─────────────────────────────────────────────────────
 router.get("/stats", adminGuard, async (req, res, next) => {
@@ -50,8 +90,9 @@ router.get("/stats", adminGuard, async (req, res, next) => {
         { $match: { status: { $in: ["live", "under_review", "paused"] } } },
         { $group: { _id: null, total: { $sum: "$budget" } } },
       ]),
+      // Creator payouts only; Paystack transfer fees are also "released" rows.
       Transaction.aggregate([
-        { $match: { status: "released" } },
+        { $match: { type: "release", status: "released" } },
         { $group: { _id: null, total: { $sum: "$amount" } } },
       ]),
       Submission.countDocuments({ status: { $in: ["new", "verifying", "posted"] } }),
@@ -86,6 +127,8 @@ router.get("/stats", adminGuard, async (req, res, next) => {
       pendingVerifications,
       openAppeals,
       recentUsers,
+      // The automatic refund job's on-switch (AUTO_REFUNDS_ENABLED); the panel says when it's off.
+      autoRefundsEnabled: autoRefundsEnabled(),
     });
   } catch (err) {
     next(err);
@@ -116,25 +159,36 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
       Campaign.countDocuments(filter),
     ]);
 
-    const CreatorProfile = require("../models/CreatorProfile");
-    const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
-    const creatorNiches = creatorProfiles.map((p) =>
-      (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
-    );
+    // Creators whose niches overlap each campaign's niches or category, counted in the database in
+    // one query rather than by loading every creator profile.
+    const nichesOf = (c) =>
+      [...(Array.isArray(c.niches) ? c.niches : []), c.category]
+        .map((n) => (n ? String(n).trim().toLowerCase() : ""))
+        .filter(Boolean);
+    const withNiches = campaigns.map((c, index) => ({ key: `c${index}`, niches: nichesOf(c) })).filter((c) => c.niches.length > 0);
+    const creatorCounts = new Map();
+    if (withNiches.length > 0) {
+      const [facets] = await CreatorProfile.aggregate([
+        { $match: { "niches.0": { $exists: true } } },
+        {
+          $project: {
+            niches: {
+              $map: { input: "$niches", as: "n", in: { $toLower: { $trim: { input: { $toString: "$$n" } } } } },
+            },
+          },
+        },
+        {
+          $facet: Object.fromEntries(
+            withNiches.map((c) => [c.key, [{ $match: { niches: { $in: c.niches } } }, { $count: "n" }]])
+          ),
+        },
+      ]);
+      for (const c of withNiches) creatorCounts.set(c.key, facets && facets[c.key][0] ? facets[c.key][0].n : 0);
+    }
 
     res.json({
-      campaigns: campaigns.map((c) => {
-        const campaignNiches = [
-          ...(Array.isArray(c.niches) ? c.niches : []),
-          c.category,
-        ]
-          .map((n) => (n ? String(n).trim().toLowerCase() : ""))
-          .filter(Boolean);
-
-        const creatorCount =
-          campaignNiches.length > 0
-            ? creatorNiches.filter((pn) => pn.some((n) => campaignNiches.includes(n))).length
-            : 0;
+      campaigns: campaigns.map((c, index) => {
+        const creatorCount = creatorCounts.get(`c${index}`) || 0;
 
         return {
         id: c._id,
@@ -152,12 +206,20 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
           ? Math.min(Math.round(((c.viewsDelivered || 0) / c.targetViews) * 100), 100)
           : 0,
         coverImageUrl: c.coverImageUrl,
-        contentBrief: c.contentBrief,
+        contentBrief: c.contentBrief || (c.brief && c.brief.summary) || null,
         platforms: c.platforms,
         contentStyle: c.contentStyle,
         niches: c.niches,
         slotCount: c.slotCount || 5,
         statusNote: c.statusNote,
+        campaignModel: c.campaignModel || "performance",
+        contentPay: c.campaignModel === "content" ? c.contentPay : undefined,
+        // Hybrid campaigns (ticket 10): budget, creatorPool and platformFee are the base; the bonus pool is beside them.
+        payShape: c.payShape || null,
+        hybridBonus:
+          c.hybridBonus && c.hybridBonus.metric
+            ? { metric: c.hybridBonus.metric, pool: c.hybridBonus.pool, platformFee: c.hybridBonus.platformFee || 0, poolRemaining: c.hybridBonus.poolRemaining || 0 }
+            : null,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }
@@ -179,9 +241,10 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
     const campaign = await Campaign.findById(req.params.id).populate("businessId", "name email");
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
-    const [slots, submissions] = await Promise.all([
+    const [slots, submissions, hasPayments] = await Promise.all([
       Slot.find({ campaignId: campaign._id }).populate("creatorId", "name email"),
       Submission.find({ campaignId: campaign._id }).populate("creatorId", "name email"),
+      campaignHasPayments(campaign._id),
     ]);
 
     res.json({
@@ -189,7 +252,7 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         id: campaign._id,
         name: campaign.name,
         category: campaign.category,
-        contentBrief: campaign.contentBrief,
+        contentBrief: campaign.contentBrief || (campaign.brief && campaign.brief.summary) || null,
         keyMessageCta: campaign.keyMessageCta,
         whatToAvoid: campaign.whatToAvoid,
         coverImageUrl: campaign.coverImageUrl,
@@ -205,6 +268,29 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         status: campaign.status,
         statusNote: campaign.statusNote,
         viewsDelivered: campaign.viewsDelivered || 0,
+        progressPercent: campaign.targetViews > 0 ? Math.min(Math.round(((campaign.viewsDelivered || 0) / campaign.targetViews) * 100), 100) : 0,
+        slotCount: campaign.slotCount || 5,
+        campaignModel: campaign.campaignModel || "performance",
+        payShape: campaign.payShape || null,
+        // Hybrid campaigns: the base is the fixed pay above (creatorPool, platformFee); the bonus is its own pot.
+        hybridBonus:
+          campaign.hybridBonus && campaign.hybridBonus.metric
+            ? {
+                metric: campaign.hybridBonus.metric,
+                pool: campaign.hybridBonus.pool,
+                platformFee: campaign.hybridBonus.platformFee || 0,
+                capPerCreator: campaign.hybridBonus.capPerCreator,
+                ratePerThousandViews: campaign.hybridBonus.ratePerThousandViews || 0,
+                poolRemaining: campaign.hybridBonus.poolRemaining || 0,
+                reserved: campaign.hybridBonus.reserved || 0,
+                refundedPool: campaign.hybridBonus.refundedPool || 0,
+              }
+            : null,
+        hasPayments,
+        // M8 batch 7: clicks destination and usage-rights terms (SPEC D29, D30).
+        campaignObjective: campaign.campaignObjective || null,
+        destinationUrl: campaign.destinationUrl || null,
+        usageRights: campaign.usageRights && campaign.usageRights.type ? campaign.usageRights : null,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
           ? { id: campaign.businessId._id, name: campaign.businessId.name, email: campaign.businessId.email }
@@ -213,6 +299,281 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
       slots,
       submissions,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Content campaigns: fixed pay and unused budget (ticket 09) ──────────────
+function sendRefundError(res, error, next) {
+  if (error instanceof RefundError) {
+    return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+  }
+  return next(error);
+}
+
+// Deliverables bought / completed / owed / unused, what's refundable now, and whether the
+// campaign's books balance.
+router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const loaded = await contentBudgetSummary(req.params.id);
+    if (!loaded) return res.status(404).json({ error: "Content campaign not found" });
+    // A hybrid campaign's figures above are its base; its bonus pool is summarised beside them.
+    const [bonus, reconciliation] = await Promise.all([bonusBudgetSummary(req.params.id), reconcileCampaignById(req.params.id)]);
+    res.json({ ...loaded.summary, payShape: loaded.campaign.payShape || "fixed", bonus: bonus ? bonus.summary : null, reconciliation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// Logs a refund attempt, tells the brand once Paystack has it, and answers with the real outcome:
+// 200 when sent or refunded, 502 when it failed or couldn't be sent (retryable).
+async function answerRefund(req, res, { refund, campaignId, action, note }) {
+  const campaign = await Campaign.findById(campaignId).select("name businessId");
+  await recordAdminActivity(req, {
+    action,
+    targetType: "campaign",
+    targetId: campaignId,
+    targetLabel: campaign ? campaign.name : null,
+    businessId: campaign ? campaign.businessId : null,
+    note,
+    metadata: {
+      refundId: refund.id,
+      amount: refund.amount,
+      deliverables: refund.deliverables,
+      creatorBudget: refund.creatorBudget,
+      platformFee: refund.platformFee,
+      state: refund.state,
+      error: refund.error,
+    },
+  });
+  if (campaign && ["sent", "refunded"].includes(refund.state)) {
+    await Notification.create({
+      businessId: campaign.businessId,
+      campaignId: campaign._id,
+      type: "campaign_refund",
+      title: "Unused budget refunded",
+      body: `₦${refund.amount.toLocaleString()} for ${refund.deliverables} unused deliverable${refund.deliverables === 1 ? "" : "s"} on "${campaign.name}" is being refunded to your payment method.`,
+    });
+  }
+  const summary = await contentBudgetSummary(campaignId);
+  const wentThrough = ["sent", "refunded"].includes(refund.state);
+  res.status(wentThrough ? 200 : 502).json({
+    success: wentThrough,
+    refund,
+    summary: summary ? summary.summary : null,
+  });
+}
+
+// D5 at launch: admin refunds a finished content campaign's unused deliverables to the brand.
+// The body carries the amount the admin confirmed, so a stale screen can't refund something else.
+router.post("/campaigns/:id/refund-unused", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const expected = req.body && req.body.expectedAmount;
+    if (!(Number(expected) > 0)) {
+      return res.status(400).json({ error: "Confirm the amount to refund", code: "AMOUNT_REQUIRED" });
+    }
+    const note = String((req.body && req.body.note) || "").trim() || null;
+    let result;
+    try {
+      result = await refundUnusedContentBudget({ campaignId: req.params.id, expectedAmount: Number(expected), note });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    await answerRefund(req, res, { refund: result.refund, campaignId: result.campaign._id, action: "campaign.unused_budget_refunded", note });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Hybrid pay (ticket 10): admin refunds a finished hybrid campaign's unused bonus pool plus the fee on
+// it. Like the base refund, the body carries the amount the admin confirmed.
+router.post("/campaigns/:id/refund-unused-bonus", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const expected = req.body && req.body.expectedAmount;
+    if (!(Number(expected) > 0)) {
+      return res.status(400).json({ error: "Confirm the amount to refund", code: "AMOUNT_REQUIRED" });
+    }
+    const note = String((req.body && req.body.note) || "").trim() || null;
+    let result;
+    try {
+      result = await refundUnusedBonusPool({ campaignId: req.params.id, expectedAmount: Number(expected), note });
+    } catch (error) {
+      if (error instanceof BonusError) return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+      return next(error);
+    }
+    const { refund, summary } = result;
+    const campaign = await Campaign.findById(req.params.id).select("name businessId");
+    await recordAdminActivity(req, {
+      action: "campaign.unused_bonus_refunded",
+      targetType: "campaign",
+      targetId: campaign._id,
+      targetLabel: campaign.name,
+      businessId: campaign.businessId,
+      note,
+      metadata: { refundId: refund.id, amount: refund.amount, status: refund.status, error: refund.error },
+    });
+    const wentThrough = refund.status !== "refund_failed";
+    if (wentThrough) {
+      await Notification.create({
+        businessId: campaign.businessId,
+        campaignId: campaign._id,
+        type: "campaign_refund",
+        title: "Unused bonus refunded",
+        body: `₦${refund.amount.toLocaleString()} of unused bonus pool on "${campaign.name}" is being refunded to your payment method.`,
+      });
+    }
+    res.status(wentThrough ? 200 : 502).json({ success: wentThrough, refund, bonus: summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Retries a failed or interrupted unused-budget refund from its own row.
+router.post("/campaigns/:id/refunds/:refundId/retry", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    let result;
+    try {
+      result = await retryContentRefund({ campaignId: req.params.id, refundId: req.params.refundId });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    await answerRefund(req, res, { refund: result.refund, campaignId: req.params.id, action: "campaign.unused_budget_refund_retried", note: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Refunds (D23) ────────────────────────────────────────────────────────────
+const REFUND_POTS = { views: "Views", referral: "Referral budget", fixed: "Content budget", bonus: "Bonus pool" };
+
+// Every refund row, newest first, with how it stands and whether it can be retried.
+// ?state=failed|not_sent|sent|refunded|attention (failed or not sent) narrows the list.
+router.get("/refunds", adminGuard, async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const wanted = String(req.query.state || "all");
+    const filter = { type: "refund" };
+    if (["failed", "not_sent", "attention"].includes(wanted)) filter.status = { $in: ["refund_pending", "refund_failed"] };
+    else if (wanted === "sent") filter.status = "refund_pending";
+    else if (wanted === "refunded") filter.status = "refunded";
+    if (["views", "referral", "fixed", "bonus"].includes(req.query.pot)) filter.bucket = req.query.pot;
+    const rows = await Transaction.find(filter).sort({ date: -1, createdAt: -1 }).limit(wanted === "all" || wanted === "refunded" ? limit : 1000).populate("campaignId", "name status businessId").lean();
+    const now = new Date();
+    const refunds = rows
+      .map((row) => {
+        const view = refundRowState(row, now);
+        return {
+          id: row._id,
+          campaignId: row.campaignId ? row.campaignId._id : null,
+          campaignName: row.campaignId ? row.campaignId.name : "Campaign",
+          campaignStatus: row.campaignId ? row.campaignId.status : null,
+          pot: row.bucket || "views",
+          potLabel: REFUND_POTS[row.bucket] || REFUND_POTS.views,
+          amount: row.amount,
+          status: row.status,
+          ...view,
+          parts: (row.refundParts || []).map((p) => ({ chargeReference: p.chargeReference, amount: p.amount, status: p.status, sent: Boolean(p.sentAt || p.paystackRefundId), error: p.error })),
+          note: row.adminNotes || null,
+          createdAt: row.date || row.createdAt,
+        };
+      })
+      .filter((r) => (wanted === "attention" ? ["failed", "not_sent"].includes(r.state) : ["failed", "not_sent", "sent"].includes(wanted) ? r.state === wanted : true))
+      .slice(0, limit);
+    res.json({ refunds, autoRefundsEnabled: autoRefundsEnabled() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Retries any failed or unsent refund from its own row: a content budget refund through its reserved
+// path, a views, referral or bonus refund through retryBucketRefund. Never refunds twice.
+router.post("/refunds/:refundId/retry", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.refundId)) return res.status(404).json({ error: "Refund not found" });
+    const row = await Transaction.findOne({ _id: req.params.refundId, type: "refund" }).select("campaignId bucket").lean();
+    if (!row) return res.status(404).json({ error: "Refund not found" });
+    if (row.bucket === "fixed") {
+      let result;
+      try {
+        result = await retryContentRefund({ campaignId: row.campaignId, refundId: row._id });
+      } catch (error) {
+        return sendRefundError(res, error, next);
+      }
+      return answerRefund(req, res, { refund: result.refund, campaignId: row.campaignId, action: "campaign.unused_budget_refund_retried", note: null });
+    }
+
+    let retried;
+    try {
+      retried = await retryBucketRefund({ refundId: row._id });
+    } catch (error) {
+      if (error instanceof RefundRetryError) return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+      return next(error);
+    }
+    const view = refundRowState(retried);
+    const campaign = await Campaign.findById(retried.campaignId).select("name businessId").lean();
+    await recordAdminActivity(req, {
+      action: "refund.retried",
+      targetType: "campaign",
+      targetId: retried.campaignId,
+      targetLabel: campaign ? campaign.name : null,
+      businessId: campaign ? campaign.businessId : null,
+      metadata: { refundId: retried._id, pot: retried.bucket, amount: retried.amount, state: view.state, error: view.error },
+    });
+    const wentThrough = ["sent", "refunded"].includes(view.state);
+    res.status(wentThrough ? 200 : 502).json({
+      success: wentThrough,
+      refund: { id: retried._id, pot: retried.bucket, amount: retried.amount, status: retried.status, ...view },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Voids fixed pay for approved brand-page content never delivered (14 days after approval, or on a
+// cancelled campaign). Idempotent; the creator is told and the action logged once.
+router.post("/submissions/:id/void-undelivered", moneyGuard, async (req, res, next) => {
+  try {
+    let result;
+    try {
+      result = await voidUndeliveredPay({ submissionId: req.params.id, voidedBy: req.user._id });
+    } catch (error) {
+      return sendRefundError(res, error, next);
+    }
+    const { voided, amount, submission, campaign } = result;
+    if (voided) {
+      const note = String((req.body && req.body.note) || "").trim() || null;
+      await recordEvent(await Submission.findById(submission._id), {
+        type: "fixed_pay_voided",
+        actor: "admin",
+        actorId: req.user._id,
+        actorName: req.user.name,
+        reason: note,
+        metadata: { amount },
+      });
+      await Notification.create({
+        creatorId: submission.creatorId,
+        campaignId: campaign._id,
+        type: "content_not_delivered",
+        title: "Pay removed: content not delivered",
+        body: `Your approved content for "${campaign.name}" was never delivered to the brand, so its ₦${amount.toLocaleString()} fixed pay was removed. If you did deliver it, you can appeal within 7 days from your wallet.`,
+      });
+      await recordAdminActivity(req, {
+        action: "submission.fixed_pay_voided",
+        targetType: "submission",
+        targetId: submission._id,
+        targetLabel: `${submission.creatorHandle || "Creator"} · ${campaign.name}`,
+        businessId: campaign.businessId,
+        note,
+        metadata: { amount, campaignId: campaign._id, creatorId: submission.creatorId },
+      });
+    }
+    res.json({ success: true, voided, amount });
   } catch (err) {
     next(err);
   }
@@ -236,9 +597,11 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
 
     await campaign.save();
 
-    // Rebuild available slots when the slot count is changed (e.g. while live).
-    if (slotCount !== undefined) {
+    // Rebuild available slots when the slot count is changed (e.g. while live). Content
+    // campaigns have one placement per deliverable bought, so their count can't change here.
+    if (slotCount !== undefined && campaign.campaignModel !== "content") {
       await syncCampaignSlots(campaign, slotCount);
+      await emitPlacesLeft(campaign._id);
     }
 
     res.json({
@@ -256,6 +619,14 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─── POST /api/admin/campaigns/:id/complete ───────────────────────────────────
+// Ends a live or paused campaign: open places close, the brand is told, and a content campaign's
+// unused budget becomes refundable.
+router.post("/campaigns/:id/complete", completeGuard, async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+  return answerCompletion(req, res, next, { campaignId: req.params.id, note: req.body && req.body.note });
 });
 
 // ─── PATCH /api/admin/campaigns/:id/status ────────────────────────────────────
@@ -291,6 +662,23 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
       });
     }
 
+    // Completing closes open places and opens the unused-budget refund: the same path as Complete Campaign.
+    if (status === "completed") {
+      if (!COMPLETE_ROLES.includes(req.user.role)) return res.status(403).json({ error: "Not authorized for this action" });
+      return answerCompletion(req, res, next, { campaignId: campaign._id, note });
+    }
+
+    // Cancelling a paid campaign refunds its views and referral budget automatically.
+    if (status === "cancelled" && !MONEY_ROLES.includes(req.user.role)) {
+      const paid = await campaignHasPayments(campaign._id);
+      if (paid) {
+        return res.status(403).json({
+          error: "Only finance admins and super admins can cancel a paid campaign, because cancelling sends refunds",
+          code: "MONEY_ROLE_REQUIRED",
+        });
+      }
+    }
+
     if (status === "live") {
       const depositExists = await Transaction.exists({
         campaignId: campaign._id,
@@ -316,6 +704,8 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
 
     if (status === "live") {
       await ensureCampaignSlots(campaign);
+      // Places closed by a void while it wasn't live come back.
+      await reopenClosedPlaces(campaign);
     }
 
     if (status === "cancelled") {
@@ -362,9 +752,16 @@ router.delete("/campaigns/:id", adminGuard, async (req, res, next) => {
     if (!deletable.includes(campaign.status)) {
       return res.status(400).json({ error: "Only draft, pending payment, or cancelled campaigns can be deleted" });
     }
+    // Payments, placements, content and conversions back refunds and pay owed, so a campaign
+    // with any of them is kept (cancelled) rather than deleted.
+    if (await hasDependents(campaign._id)) {
+      return res.status(409).json({
+        error: "This campaign has payments, creators or content on record, so it can't be deleted. It stays cancelled.",
+        code: "CAMPAIGN_HAS_RECORDS",
+      });
+    }
 
-    await Slot.deleteMany({ campaignId: campaign._id });
-    await Submission.deleteMany({ campaignId: campaign._id });
+    await Slot.deleteMany({ campaignId: campaign._id, creatorId: null });
     await campaign.deleteOne();
 
     res.json({ success: true, message: "Campaign deleted" });
@@ -438,6 +835,28 @@ router.patch("/submissions/:id/review", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
+    // Campaign engine: content approval (ticket 07): content is only reviewed while it waits for
+    // review, through the same guarded transitions the brand uses.
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      if (submission.status !== "new") {
+        return res.status(409).json({ error: "This content isn't waiting for review", code: "NOT_AWAITING_REVIEW" });
+      }
+      try {
+        const actor = { kind: "admin", user: req.user };
+        const reviewed = status === "approved"
+          ? await contentApproval.approveContent({ submission, campaign: contentCampaign, actor })
+          : await contentApproval.rejectContent({ submission, campaign: contentCampaign, actor, reason: rejectionReason });
+        if (adminNotes) await Submission.updateOne({ _id: reviewed._id }, { $set: { adminNotes } });
+        return res.json({ success: true, submission: reviewed });
+      } catch (error) {
+        if (error instanceof contentApproval.ContentApprovalError) {
+          return res.status(error.status === 400 ? 409 : error.status).json({ error: error.message, code: error.code });
+        }
+        throw error;
+      }
+    }
+
     submission.status = status === "approved" ? "awaiting_post" : "rejected";
     if (rejectionReason) submission.rejectionReason = rejectionReason;
     if (adminNotes) submission.adminNotes = adminNotes;
@@ -486,6 +905,30 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     const submission = await Submission.findById(req.params.id);
     if (!submission) return res.status(404).json({ error: "Submission not found" });
 
+    // Campaign engine: content approval (ticket 07): only an open appeal can be decided; upholding
+    // one takes the creator's place back only if it's still free.
+    const contentCampaign = await Campaign.findById(submission.campaignId);
+    if (contentApproval.isContentCampaign(contentCampaign)) {
+      try {
+        const decided = await contentApproval.decideAppeal({ submission, campaign: contentCampaign, admin: req.user, decision, notes });
+        await recordAdminActivity(req, {
+          action: decision === "approve" ? "submission.appeal_approved" : "submission.appeal_rejected",
+          targetType: "submission",
+          targetId: submission._id,
+          targetLabel: `${submission.creatorHandle || "Creator"} · ${contentCampaign.name}`,
+          businessId: contentCampaign.businessId,
+          note: notes || null,
+          metadata: { campaignId: contentCampaign._id, creatorId: submission.creatorId, status: decided.status },
+        });
+        return res.json({ success: true, submission: decided });
+      } catch (error) {
+        if (error instanceof contentApproval.ContentApprovalError) {
+          return res.status(error.status).json({ error: error.message, code: error.code });
+        }
+        throw error;
+      }
+    }
+
     if (decision === "approve") {
       submission.status = "awaiting_post";
       submission.adminNotes = notes || "Appeal approved by Admin";
@@ -506,6 +949,36 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     emitCampaignUpdate(submission);
 
     res.json({ success: true, submission });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Appeals inbox (D23) ──────────────────────────────────────────────────────
+// Content appeals and payout appeals in one list. ?kind=all|content|payout&status=open|resolved|all&q=&campaignId=
+router.get("/appeals", adminGuard, async (req, res, next) => {
+  try {
+    const { listAppeals } = require("../services/appealsInbox");
+    const { kind, status, q, campaignId, limit } = req.query;
+    res.json(await listAppeals({ kind, status, q, campaignId, limit }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Decides a payout appeal: deny (any admin, note required) or grant (finance / super admin: the
+// withdrawal goes back in the payout queue, or voided pay is restored).
+router.post("/payout-appeals/:id/resolve", adminGuard, async (req, res, next) => {
+  try {
+    const { resolvePayoutAppeal, PayoutAppealError } = require("../services/payoutAppeals");
+    const { decision, note } = req.body || {};
+    try {
+      const result = await resolvePayoutAppeal({ appealId: req.params.id, decision, note, req });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      if (error instanceof PayoutAppealError) return res.status(error.status).json({ error: error.message, code: error.code });
+      throw error;
+    }
   } catch (err) {
     next(err);
   }
@@ -535,6 +1008,18 @@ router.get("/users", adminGuard, async (req, res, next) => {
     ]);
 
     const userIds = users.map((u) => u._id);
+    const creatorIds = users.filter((u) => u.role === "creator").map((u) => u._id);
+    const [tiktokConnections, metaConnections] = creatorIds.length
+      ? await Promise.all([
+          TikTokConnection.find({ userId: { $in: creatorIds } }).select("userId username").lean(),
+          MetaConnection.find({ userId: { $in: creatorIds } }).select("userId provider username").lean(),
+        ])
+      : [[], []];
+    // Connected social accounts per creator: what verification (D13) requires.
+    const connectedMap = {};
+    for (const c of tiktokConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: "tiktok", username: c.username || null });
+    for (const c of metaConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: c.provider || "meta", username: c.username || null });
+
     const [campaignCounts, submissionCounts, creatorProfiles] = await Promise.all([
       Campaign.aggregate([
         { $match: { businessId: { $in: userIds } } },
@@ -580,6 +1065,13 @@ router.get("/users", adminGuard, async (req, res, next) => {
                 lifetimeEarnings: cp.lifetimeEarnings,
                 socialAccounts: cp.socialAccounts,
                 niches: cp.niches,
+                verifiedAt: cp.verifiedAt || null,
+                connectedAccounts: connectedMap[u._id.toString()] || [],
+                // M8: badges shown, brand rating (admins see the average from 1 rating) and whether
+                // badges kept from before automatic badges still need a review.
+                badges: cp.badges || [],
+                brandRating: { average: cp.brandRating ? cp.brandRating.average : null, count: (cp.brandRating && cp.brandRating.count) || 0 },
+                badgesNeedReview: (cp.badgeOverrides || []).some((o) => o.source === "migration"),
               }
             : null,
         };
@@ -641,7 +1133,9 @@ router.patch("/users/:id/status", adminGuard, async (req, res, next) => {
 });
 
 // ─── DELETE /api/admin/users/:id (cascade delete account) ────────────────────
-router.delete("/users/:id", adminGuard, async (req, res, next) => {
+// Same deletion a user gets when they delete themselves: payment, campaign and content
+// records are kept (anonymised) so refunds, owed pay and the books survive. Super admins only.
+router.delete("/users/:id", [protect, authorizeRoles("super_admin")], async (req, res, next) => {
   try {
     const targetId = req.params.id;
 
@@ -656,32 +1150,22 @@ router.delete("/users/:id", adminGuard, async (req, res, next) => {
       return res.status(400).json({ error: "Super admin accounts cannot be deleted" });
     }
 
-    const userId = user._id;
-
-    if (user.role === "business") {
-      const campaignIds = await Campaign.find({ businessId: userId }).distinct("_id");
-      if (campaignIds.length > 0) {
-        await Promise.all([
-          Slot.deleteMany({ campaignId: { $in: campaignIds } }),
-          Submission.deleteMany({ campaignId: { $in: campaignIds } }),
-          Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
-          Notification.deleteMany({ campaignId: { $in: campaignIds } }),
-        ]);
-      }
-      await Campaign.deleteMany({ businessId: userId });
-      await BusinessProfile.deleteMany({ userId });
-    } else if (user.role === "creator") {
-      const campaignIds = await Submission.find({ creatorId: userId }).distinct("campaignId");
-      await Promise.all([
-        Slot.deleteMany({ creatorId: userId }),
-        Submission.deleteMany({ creatorId: userId }),
-        Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
-        CreatorProfile.deleteMany({ userId }),
-      ]);
+    const { deleteAccount } = require("../services/accountDeletion");
+    const result = await deleteAccount(user);
+    if (!result.deleted) {
+      return res.status(409).json({
+        error: result.blockers[0] || "This account can't be deleted yet",
+        blockers: result.blockers,
+        code: "ACCOUNT_DELETION_BLOCKED",
+      });
     }
 
-    await Notification.deleteMany({ $or: [{ businessId: userId }, { creatorId: userId }] });
-    await User.findByIdAndDelete(userId);
+    await recordAdminActivity(req, {
+      action: "user.deleted",
+      targetType: "user",
+      targetId: user._id,
+      targetLabel: user.email,
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -732,6 +1216,49 @@ router.patch("/users/:id/rank", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── PATCH /api/admin/creators/:id/verification ──────────────────────────────
+// :id is the creator's user id, like the other /admin/users routes. Verified means admin
+// checked the creator's identity and they have at least one connected social account (D13).
+router.patch("/creators/:id/verification", adminGuard, async (req, res, next) => {
+  try {
+    const { verified } = req.body || {};
+    if (typeof verified !== "boolean") {
+      return res.status(400).json({ error: "verified must be true or false" });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.params.id });
+    if (!profile) return res.status(404).json({ error: "Creator not found" });
+
+    if (verified) {
+      if (!(await hasConnectedSocial(profile.userId))) {
+        return res.status(409).json({
+          error: "This creator needs a connected TikTok, Instagram or Facebook account before they can be verified",
+          code: "SOCIAL_ACCOUNT_REQUIRED",
+        });
+      }
+      if (!profile.verifiedAt) {
+        profile.verifiedAt = new Date();
+        profile.verifiedBy = req.user._id;
+      }
+    } else {
+      profile.verifiedAt = null;
+      profile.verifiedBy = null;
+    }
+    await profile.save();
+
+    await recordAdminActivity(req, {
+      action: verified ? "creator.verified" : "creator.unverified",
+      targetType: "user",
+      targetId: profile.userId,
+      targetLabel: profile.displayName || profile.username,
+    });
+
+    res.json({ verified: Boolean(profile.verifiedAt), verifiedAt: profile.verifiedAt });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/admin/campaigns/:id/activity ───────────────────────────────────
 router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
   try {
@@ -748,7 +1275,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
             campaignId: campaign._id,
             type: "release",
             status: "released",
-            bucket: { $ne: "referral" },
+            bucket: { $nin: ["referral", "fixed", "bonus"] },
             submissionId: { $ne: null },
           },
         },
@@ -758,6 +1285,13 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
 
     const submissionById = new Map(submissions.map((s) => [String(s._id), s]));
     const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
+    // M8 batch 7: usage-rights terms each creator accepted on their placement (SPEC D30).
+    const acceptedSlots = await Slot.find({ campaignId: campaign._id, "usageRightsAccepted.acceptedAt": { $ne: null } })
+      .select("creatorId usageRightsAccepted")
+      .lean();
+    const termsByCreator = new Map(
+      acceptedSlots.map((slot) => [String(slot.creatorId), { version: slot.usageRightsAccepted.version, acceptedAt: slot.usageRightsAccepted.acceptedAt }])
+    );
 
     res.json({
       campaign: {
@@ -787,6 +1321,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
         submittedAt: s.submittedAt,
         reviewedAt: s.reviewedAt,
         postedAt: s.postedAt,
+        usageRightsAccepted: termsByCreator.get(String(s.creatorId)) || null,
       })),
       events: events.map((e) => {
         const submission = submissionById.get(String(e.submissionId));
@@ -812,7 +1347,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
 });
 
 // ─── POST /api/admin/payouts/reconcile ───────────────────────────────────────
-router.post("/payouts/reconcile", adminGuard, async (req, res, next) => {
+router.post("/payouts/reconcile", moneyGuard, async (req, res, next) => {
   try {
     const summary = await reconcilePayouts();
     res.json({ success: true, message: "Payout reconciliation completed", summary });
@@ -958,12 +1493,10 @@ router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
 // ─── GET /api/admin/industries ─────────────────────────────────────────────────
 router.get("/industries", adminGuard, async (req, res, next) => {
   try {
-    const { seedIndustries } = require("../utils/seedIndustries");
     await seedIndustries();
 
     const industries = await Industry.find().sort({ sortOrder: 1, name: 1 });
 
-    const CreatorProfile = require("../models/CreatorProfile");
     const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
     const creatorNiches = creatorProfiles.map((p) =>
       (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
@@ -1160,8 +1693,15 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
             ? w.campaignId.viewsDelivered
             : 0,
         kind: w.kind || "views",
-        // Each withdrawal is paid from its own pot, so show the balance that will fund it.
+        viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
+        referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
+        bonusAmount: w.kind === "campaign" ? w.bonusAmount || 0 : 0,
+        // Each part is paid from its own pot, so show the balances that will fund it.
         escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId, w.kind === "referral" ? "referral" : "views") : 0,
+        referralEscrowBalance: w.campaignId && w.kind === "campaign" ? await campaignEscrowBalance(w.campaignId, "referral") : null,
+        fixedEscrowBalance: w.campaignId && w.kind === "campaign" && (w.fixedAmount || 0) > 0 ? await campaignEscrowBalance(w.campaignId, "fixed") : null,
+        bonusEscrowBalance: w.campaignId && w.kind === "campaign" && (w.bonusAmount || 0) > 0 ? await campaignEscrowBalance(w.campaignId, "bonus") : null,
         requestedAt: w.requestedAt,
         reviewedAt: w.reviewedAt,
         releasedAt: w.releasedAt,
@@ -1175,271 +1715,158 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
 });
 
 // ─── POST /api/admin/withdrawals/:id/review ──────────────────────────────────
-router.post("/withdrawals/:id/review", adminGuard, async (req, res, next) => {
+const { payWithdrawal, rejectWithdrawal, withdrawalParts, estimateTransferFee } = require("../services/withdrawalPayouts");
+const { payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
+
+router.post("/withdrawals/:id/review", moneyGuard, async (req, res, next) => {
   try {
     const { approve, note } = req.body || {};
+    const result =
+      approve === true
+        ? await payWithdrawal({ withdrawalId: req.params.id, note, req })
+        : await rejectWithdrawal({ withdrawalId: req.params.id, note, req });
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    next(err);
+  }
+});
 
-    // Atomically take the withdrawal out of the queue, so a double click or two admins
-    // reviewing at once can't both act on it.
-    let withdrawal;
+// ─── Weekly payout run ───────────────────────────────────────────────────────
+// Everything requested before this payout week began is due, grouped by campaign so each
+// brand's payouts and Paystack fees are reviewed together.
+async function buildPayoutRun(now) {
+  const dueBefore = payoutWeekStart(now);
+  const [due, upcomingGroups] = await Promise.all([
+    Withdrawal.find({ status: "pending", requestedAt: { $lt: dueBefore } })
+      .sort({ requestedAt: 1 })
+      .populate("campaignId", "name status")
+      .populate("businessId", "name")
+      .populate("creatorId", "name"),
+    Withdrawal.aggregate([
+      { $match: { status: "pending", requestedAt: { $gte: dueBefore } } },
+      { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: "$amount" } } },
+    ]),
+  ]);
+
+  const groups = new Map();
+  for (const w of due) {
+    const campaign = w.campaignId;
+    const key = campaign ? String(campaign._id) : "none";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        campaignId: campaign ? campaign._id : null,
+        campaignName: campaign ? campaign.name : "Campaign",
+        campaignStatus: campaign ? campaign.status : null,
+        brandName: w.businessId ? w.businessId.name : "Brand",
+        viewsEscrow: campaign ? await campaignEscrowBalance(campaign._id, "views") : 0,
+        referralEscrow: campaign ? await campaignEscrowBalance(campaign._id, "referral") : 0,
+        fixedEscrow: campaign ? await campaignEscrowBalance(campaign._id, "fixed") : 0,
+        bonusEscrow: campaign ? await campaignEscrowBalance(campaign._id, "bonus") : 0,
+        lines: [],
+      });
+    }
+    const parts = withdrawalParts(w);
+    groups.get(key).lines.push({
+      id: w._id,
+      creatorName: w.creatorId ? w.creatorId.name : "Creator",
+      kind: w.kind || "views",
+      viewsAmount: parts.filter((p) => p.bucket === "views").reduce((sum, p) => sum + p.amount, 0),
+      referralAmount: parts.filter((p) => p.bucket === "referral").reduce((sum, p) => sum + p.amount, 0),
+      fixedAmount: parts.filter((p) => p.bucket === "fixed").reduce((sum, p) => sum + p.amount, 0),
+      bonusAmount: parts.filter((p) => p.bucket === "bonus").reduce((sum, p) => sum + p.amount, 0),
+      amount: w.amount,
+      estimatedFee: estimateTransferFee(w.amount),
+      requestedAt: w.requestedAt,
+      attempts: w.payoutAttempts || 0,
+      adminNotes: w.adminNotes,
+    });
+  }
+
+  const list = [...groups.values()].map((group) => ({
+    ...group,
+    amount: Math.round(group.lines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100,
+    estimatedFees: group.lines.reduce((sum, line) => sum + line.estimatedFee, 0),
+  }));
+  const upcoming = upcomingGroups[0] || { count: 0, amount: 0 };
+
+  return {
+    dueBefore,
+    nextPayoutDate: nextPayoutDate(now),
+    groups: list,
+    totals: {
+      count: due.length,
+      amount: Math.round(list.reduce((sum, group) => sum + group.amount, 0) * 100) / 100,
+      estimatedFees: list.reduce((sum, group) => sum + group.estimatedFees, 0),
+    },
+    upcoming: { count: upcoming.count, amount: upcoming.amount },
+  };
+}
+
+// ─── GET /api/admin/payout-run ────────────────────────────────────────────────
+router.get("/payout-run", adminGuard, async (req, res, next) => {
+  try {
+    const run = await buildPayoutRun(new Date());
+    let paystackBalance = null;
     try {
-      withdrawal = await Withdrawal.findOneAndUpdate(
-        { _id: req.params.id, status: "pending" },
-        { $set: { status: "processing", reviewedAt: new Date() } },
-        { new: true }
-      )
-        .populate("campaignId")
-        .populate("submissionId");
+      paystackBalance = await paystack.fetchBalance("NGN");
     } catch (err) {
-      if (err.code === 11000) {
-        return res.status(409).json({ error: "Another payout for this creator on this campaign is already being processed" });
-      }
-      throw err;
+      console.error("[Payout run] Balance lookup failed:", err.message);
+    }
+    res.json({ ...run, paystackBalance });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/admin/payout-run/approve ───────────────────────────────────────
+// Pays the chosen due withdrawals one by one after one Paystack balance check for the total.
+router.post("/payout-run/approve", moneyGuard, async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.withdrawalIds) ? req.body.withdrawalIds.map(String) : [];
+    if (ids.length === 0) return res.status(400).json({ error: "Choose at least one withdrawal to pay" });
+    if (ids.length > 200) return res.status(400).json({ error: "Pay at most 200 withdrawals at a time" });
+
+    const due = await Withdrawal.find({
+      _id: { $in: ids.filter((id) => /^[a-f0-9]{24}$/i.test(id)) },
+      status: "pending",
+      requestedAt: { $lt: payoutWeekStart(new Date()) },
+    }).select("_id amount");
+    if (due.length === 0) return res.status(400).json({ error: "None of those withdrawals are due in this payout run" });
+
+    const total = due.reduce((sum, w) => sum + w.amount, 0);
+    let paystackBalance = null;
+    try {
+      paystackBalance = await paystack.fetchBalance("NGN");
+    } catch (err) {
+      console.error("[Payout run] Balance lookup failed:", err.message);
+    }
+    if (paystackBalance !== null && total > paystackBalance) {
+      return res.status(400).json({
+        error: `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which doesn't cover this ₦${total.toLocaleString()} run. Fund the balance or pay fewer withdrawals.`,
+        code: "INSUFFICIENT_PAYSTACK_BALANCE",
+        paystackBalance,
+      });
     }
 
-    if (!withdrawal) {
-      const exists = await Withdrawal.exists({ _id: req.params.id });
-      return exists
-        ? res.status(409).json({ error: "This withdrawal has already been reviewed" })
-        : res.status(404).json({ error: "Withdrawal not found" });
+    const note = String((req.body && req.body.note) || "").trim() || "Weekly payout run";
+    const results = [];
+    for (const w of due) {
+      const result = await payWithdrawal({ withdrawalId: w._id, note, req, skipBalanceCheck: true });
+      results.push({
+        id: w._id,
+        ok: result.status === 200,
+        status: result.status === 200 ? result.body.withdrawal.status : "failed",
+        error: result.status === 200 ? null : result.body.error,
+      });
     }
 
-    // Puts the withdrawal back in the queue when approval stops before any money moves.
-    const backToPending = () =>
-      Withdrawal.updateOne({ _id: withdrawal._id, status: "processing" }, { $set: { status: "pending" } });
-
-    if (approve === true) {
-      const { revertRelease } = require("../utils/payouts");
-      const campaign = withdrawal.campaignId;
-      if (!campaign) {
-        await backToPending();
-        return res.status(400).json({ error: "Campaign not found" });
-      }
-
-      // An earlier attempt that isn't marked failed may still be moving money. Resolve it
-      // against Paystack before anything new is sent.
-      if (withdrawal.reference) {
-        const previous = await Transaction.findOne({ type: "release", reference: withdrawal.reference });
-        if (previous && previous.status !== "failed") {
-          let prior = null;
-          try {
-            prior = await paystack.fetchTransfer(withdrawal.reference);
-          } catch (err) {
-            if (err.status !== 404) {
-              await backToPending();
-              return res.status(409).json({
-                error: `Couldn't confirm the previous payout attempt with Paystack (${err.message}). Try again shortly.`,
-              });
-            }
-          }
-          const priorStatus = prior && prior.status;
-          if (priorStatus === "success") {
-            await settleRelease(previous);
-            return res.status(409).json({ error: "The previous payout attempt already went through, so nothing more was sent" });
-          }
-          if (["pending", "processing", "otp", "receipt"].includes(priorStatus)) {
-            return res.status(409).json({ error: "The previous payout attempt is still in progress at Paystack" });
-          }
-          await revertRelease(previous, `Previous attempt cleared: Paystack reports ${priorStatus || "no transfer"}`);
-          return res.status(409).json({ error: "The previous payout attempt didn't go through and has been cleared. Approve again to retry." });
-        }
-      }
-
-      // Referral withdrawals are paid from the referral budget, views withdrawals from the views escrow.
-      // Cancelled campaigns stay payable: their refund leaves what creators are owed in escrow.
-      const bucket = withdrawal.kind === "referral" ? "referral" : "views";
-      const pendingInEscrow = await campaignEscrowBalance(campaign._id, bucket);
-
-      // Our ledger says the campaign is covered; the Paystack balance is what
-      // actually funds the transfer. If settlements sweep to the bank these two
-      // drift apart, and the transfer fails after we have already committed.
-      let paystackBalance = null;
-      try {
-        paystackBalance = await paystack.fetchBalance("NGN");
-      } catch (err) {
-        console.error("[Admin Withdrawals] Balance lookup failed:", err.message);
-      }
-      if (paystackBalance !== null && withdrawal.amount > paystackBalance) {
-        await backToPending();
-        return res.status(400).json({
-          error:
-            `Your Paystack balance is ₦${paystackBalance.toLocaleString()}, which does not cover this ` +
-            `₦${withdrawal.amount.toLocaleString()} payout. Fund the Paystack balance, or switch settlement ` +
-            `to manual so collections stay there, then approve again.`,
-          code: "INSUFFICIENT_PAYSTACK_BALANCE",
-          paystackBalance,
-        });
-      }
-
-      if (withdrawal.amount > pendingInEscrow) {
-        await backToPending();
-        return res.status(400).json({
-          error: `Insufficient funds in this campaign's ${bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(pendingInEscrow, 0).toLocaleString()}`,
-        });
-      }
-
-      const profile = await CreatorProfile.findOne({ userId: withdrawal.creatorId });
-      if (!profile || !(profile.payoutAccount && profile.payoutAccount.paystackRecipientCode)) {
-        await backToPending();
-        return res.status(400).json({ error: "Creator has no bank account on file" });
-      }
-      const recipient = profile.payoutAccount.paystackRecipientCode;
-
-      // Each attempt gets its own reference: Paystack rejects a reused one, and a failed
-      // attempt keeps its ledger row as history. It's saved before any transfer is sent.
-      const attempt = (withdrawal.payoutAttempts || 0) + 1;
-      const reference = `wd_${withdrawal._id}_${attempt}`;
-      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { reference, payoutAttempts: attempt } });
-      withdrawal.reference = reference;
-      withdrawal.payoutAttempts = attempt;
-
-      // Reserve the escrow before calling Paystack, so a crash after the transfer is sent
-      // still leaves a record the reconcile job can settle.
-      let releaseTransaction;
-      try {
-        releaseTransaction = await Transaction.create({
-          campaignId: campaign._id,
-          bucket,
-          creatorId: withdrawal.creatorId,
-          submissionId: withdrawal.submissionId ? withdrawal.submissionId._id : null,
-          creatorHandle: withdrawal.submissionId ? withdrawal.submissionId.creatorHandle : undefined,
-          type: "release",
-          amount: withdrawal.amount,
-          reference,
-          status: "escrow_deposit",
-          date: new Date(),
-        });
-      } catch (err) {
-        await backToPending();
-        throw err;
-      }
-
-      if (bucket === "views" && withdrawal.submissionId) {
-        await Submission.updateOne({ _id: withdrawal.submissionId._id }, { payoutStatus: "escrow_deposit" });
-      }
-
-      let transfer = null;
-      try {
-        transfer = await paystack.initiateTransfer({
-          amount: withdrawal.amount,
-          recipient,
-          reference,
-          reason: `Creator payout for ${campaign.name || "campaign"}`,
-        });
-      } catch (err) {
-        console.error("[Admin Withdrawals] Transfer failed:", err.message);
-        // A 4xx is Paystack refusing the transfer (balance, recipient, transfers disabled):
-        // nothing moved, so free the escrow and requeue. Anything else — a timeout or a
-        // 5xx — may still have gone through, so it stays processing until the reconcile
-        // job confirms it with Paystack.
-        if (err.status >= 400 && err.status < 500) {
-          await revertRelease(releaseTransaction, `Paystack rejected the transfer: ${err.message}`);
-          return res.status(502).json({
-            error: `Paystack rejected this payout: ${err.message}`,
-            paystackBalance,
-          });
-        }
-        return res.status(502).json({
-          error: `Paystack didn't confirm this payout (${err.message}). It stays in processing and will be checked against Paystack automatically, so don't send it again.`,
-          paystackBalance,
-        });
-      }
-
-      // Paystack returns the transfer's own state. Anything other than
-      // success/pending means no money moved, so nothing may be marked paid.
-      const transferStatus = transfer && transfer.status;
-
-      if (transferStatus === "otp") {
-        console.error("[Admin Withdrawals] Transfer requires OTP; aborting", reference);
-        await revertRelease(releaseTransaction, "Paystack required OTP, so the transfer was not sent");
-        return res.status(502).json({
-          error:
-            "Paystack is requiring OTP confirmation for transfers, so this payout did not go through. Disable OTP for transfers in your Paystack dashboard (Settings → Preferences), then approve again.",
-        });
-      }
-
-      if (!["success", "pending"].includes(transferStatus)) {
-        console.error("[Admin Withdrawals] Unexpected transfer status:", transferStatus, reference);
-        await revertRelease(releaseTransaction, `Paystack returned transfer status ${transferStatus || "unknown"}`);
-        return res.status(502).json({
-          error: `Paystack did not accept this payout (status: ${transferStatus || "unknown"}). No funds were moved.`,
-        });
-      }
-
-      await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { adminNotes: note || withdrawal.adminNotes || null } });
-
-      // Test mode settles instantly; live transfers come back "pending" and are
-      // finalised by the transfer.success webhook. settleRelease is idempotent.
-      if (transferStatus === "success") {
-        await settleRelease(releaseTransaction);
-      }
-
-      const settled = await Withdrawal.findById(withdrawal._id);
-
-      // Notify the creator about their payout (M7)
-      await Notification.create({
-        creatorId: withdrawal.creatorId,
-        campaignId: campaign._id,
-        type: "payout",
-        title: settled.status === "released" ? "Payout sent" : "Payout on the way",
-        body:
-          settled.status === "released"
-            ? `₦${withdrawal.amount.toLocaleString()} has been sent to your bank account for "${campaign.name || "campaign"}".`
-            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to your bank account for "${campaign.name || "campaign"}".`,
-      });
-
-      // Notify the brand for ledger awareness
-      await Notification.create({
-        businessId: withdrawal.businessId,
-        campaignId: campaign._id,
-        type: "payout",
-        title: settled.status === "released" ? "Payout released" : "Payout on the way",
-        body:
-          settled.status === "released"
-            ? `Creators have been paid ₦${withdrawal.amount.toLocaleString()} for this campaign.`
-            : `A payout of ₦${withdrawal.amount.toLocaleString()} is being sent to the creator.`,
-      });
-
-      await recordAdminActivity(req, {
-        action: "withdrawal.approved",
-        targetType: "withdrawal",
-        targetId: withdrawal._id,
-        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaign.name || "campaign"}`,
-        businessId: withdrawal.businessId,
-        note,
-        metadata: { amount: withdrawal.amount, reference, status: settled.status, creatorId: withdrawal.creatorId },
-      });
-
-      res.json({ success: true, withdrawal: settled, transfer });
-    } else {
-      withdrawal.status = "rejected";
-      withdrawal.adminNotes = note || null;
-      withdrawal.reviewedAt = new Date();
-      await withdrawal.save();
-
-      const campaignName = withdrawal.campaignId && withdrawal.campaignId.name;
-
-      // Notify creator of rejection (M7)
-      await Notification.create({
-        creatorId: withdrawal.creatorId,
-        campaignId: withdrawal.campaignId ? withdrawal.campaignId._id : null,
-        type: "payout_rejected",
-        title: "Withdrawal Rejected",
-        body: `Your withdrawal request for ₦${withdrawal.amount.toLocaleString()} on "${campaignName || "Campaign"}" was rejected.${note ? ` Reason: ${note}` : ""}`,
-      });
-
-      await recordAdminActivity(req, {
-        action: "withdrawal.rejected",
-        targetType: "withdrawal",
-        targetId: withdrawal._id,
-        targetLabel: `₦${withdrawal.amount.toLocaleString()} · ${campaignName || "campaign"}`,
-        businessId: withdrawal.businessId,
-        note,
-        metadata: { amount: withdrawal.amount, creatorId: withdrawal.creatorId },
-      });
-
-      res.json({ success: true, withdrawal });
-    }
+    res.json({
+      paid: results.filter((r) => r.ok && r.status === "released").length,
+      processing: results.filter((r) => r.ok && r.status !== "released").length,
+      failed: results.filter((r) => !r.ok).length,
+      skipped: ids.length - due.length,
+      results,
+    });
   } catch (err) {
     next(err);
   }

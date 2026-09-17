@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FilterIcon, ChevronDownIcon, Add01Icon, Link01Icon } from "@hugeicons/core-free-icons";
+import { FilterIcon, ChevronDownIcon, Add01Icon, Link01Icon, Invoice01Icon } from "@hugeicons/core-free-icons";
 import { CampaignCard } from "@ep/ui/components/campaign-card";
+import { conversionNounFor } from "../lib/referral";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import {
   DropdownMenu,
@@ -20,12 +21,17 @@ export interface BrandCampaign {
   name: string;
   category: string;
   status: string;
-  targetViews: number;
+  // Content campaigns have no view target.
+  targetViews?: number;
   viewsDelivered: number;
   budget: number;
   progressPercent: number;
   coverImageUrl?: string;
   contentBrief?: string;
+  objective?: "views" | "actions";
+  // A referral campaign draft that can't be paid for until the brand's app is connected.
+  needsAppConnection?: boolean;
+  referral?: { conversions: number; eventTypes: string[]; budgetUsedPercent: number } | null;
 }
 
 interface ActiveDashboardProps {
@@ -55,6 +61,7 @@ function mapStatus(s: string): "review_needed" | "live" | "draft" | "paused" | "
 export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogout, compact = false }: ActiveDashboardProps) {
   const router = useRouter();
   useReveal();
+  const hasReferralCampaign = campaigns.some((camp) => camp.objective === "actions");
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [selectedFilter, setSelectedFilter] = React.useState<string>("All Campaigns");
@@ -117,7 +124,8 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             </DropdownMenu>
           </div>
 
-          {/* Referral tracking settings — account-wide, so reachable without opening a campaign */}
+          {/* Only once the brand has a referral campaign; keys aren't needed before then. */}
+          {hasReferralCampaign && (
           <button
             onClick={() => router.push("/dashboard/brand/settings/referral")}
             aria-label="Referral tracking"
@@ -126,6 +134,18 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             <HugeiconsIcon icon={Link01Icon} size={20} className="text-stone-500 md:hidden" />
             <HugeiconsIcon icon={Link01Icon} size={16} className="text-stone-500 hidden md:block" />
             <span className="hidden md:inline text-sm font-medium text-stone-900">Referral tracking</span>
+          </button>
+          )}
+
+          {/* Payment statement (ticket 11): where the brand's money went, per campaign and overall. */}
+          <button
+            onClick={() => router.push("/dashboard/brand/statement")}
+            aria-label="Payment statement"
+            className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
+          >
+            <HugeiconsIcon icon={Invoice01Icon} size={20} className="text-stone-500 md:hidden" />
+            <HugeiconsIcon icon={Invoice01Icon} size={16} className="text-stone-500 hidden md:block" />
+            <span className="hidden md:inline text-sm font-medium text-stone-900">Statement</span>
           </button>
 
           {/* Create campaign button */}
@@ -173,9 +193,18 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               imageSrc={camp.coverImageUrl}
               progress={camp.progressPercent}
               currentViews={camp.viewsDelivered.toLocaleString()}
-              targetViews={camp.targetViews.toLocaleString()}
+              targetViews={camp.targetViews ? camp.targetViews.toLocaleString() : ""}
               onClick={() => handleCardClick(camp.id, camp.status)}
               onResume={() => handleCardClick(camp.id, camp.status)}
+              notice={camp.needsAppConnection ? "Connect your app to launch" : undefined}
+              referral={
+                camp.referral
+                  ? {
+                      label: `${camp.referral.conversions.toLocaleString()} ${conversionNounFor(camp.referral.eventTypes, camp.referral.conversions)}`,
+                      budgetUsedPercent: camp.referral.budgetUsedPercent,
+                    }
+                  : undefined
+              }
             />
           </div>
         ))}

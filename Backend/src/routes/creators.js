@@ -15,7 +15,16 @@ const {
   buildWallet,
   buildDashboard,
 } = require("../services/creatorDashboard");
+const { buildMarketplaceSections, buildMarketplaceSection, MarketplaceError } = require("../services/marketplace");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const {
+  audienceSchema,
+  categoriesSchema,
+  portfolioSchema,
+  ownAudience,
+  publicPortfolio,
+  brandSafeProfile,
+} = require("../utils/creatorProfile");
 
 const router = express.Router();
 
@@ -36,7 +45,9 @@ router.get("/profile/me", protect, async (req, res, next) => {
 // campaigns, marketplace, wallet and social connection state.
 router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const dashboard = await buildDashboard(req.user);
+    // ?marketplace=none leaves the marketplace out: web clients with marketplace paging (M8) load it
+    // from /marketplace/sections instead.
+    const dashboard = await buildDashboard(req.user, { marketplace: req.query.marketplace !== "none" });
     if (!dashboard) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
@@ -46,13 +57,20 @@ router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, ne
   }
 });
 
+const socialAccountSchema = z.object({
+  platform: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  handle: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  // Self-reported; null clears it.
+  followers: z.number().int("Followers must be a whole number").min(0).nullable().optional(),
+});
+
 router.post("/profile/socials", protect, async (req, res, next) => {
   try {
-    const { platform, handle } = req.body;
-
-    if (!platform || !handle) {
-      return res.status(400).json({ error: "Platform and handle are required" });
+    const parsed = socialAccountSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
     }
+    const { platform, handle, followers } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -65,11 +83,13 @@ router.post("/profile/socials", protect, async (req, res, next) => {
     if (existing) {
       existing.handle = handle;
       existing.verified = false;
+      if (followers !== undefined) existing.followers = followers === null ? undefined : followers;
     } else {
       profile.socialAccounts.push({
         platform: platform.toLowerCase(),
         handle,
         verified: false,
+        followers: followers === null ? undefined : followers,
       });
     }
 
@@ -109,7 +129,13 @@ router.post("/profile/niches", protect, async (req, res, next) => {
       const existingLower = new Set(existing.map((e) => e.name.toLowerCase()));
       const missing = uniqueNames.filter((n) => !existingLower.has(n.toLowerCase()));
       if (missing.length > 0) {
-        await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })));
+        // Another creator may add the same niche at the same moment; theirs is as good as ours.
+        try {
+          await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })), { ordered: false });
+        } catch (error) {
+          const writeErrors = error.writeErrors || (error.code === 11000 ? [error] : null);
+          if (!writeErrors || writeErrors.some((e) => (e.code || (e.err && e.err.code)) !== 11000)) throw error;
+        }
       }
     }
 
@@ -121,9 +147,25 @@ router.post("/profile/niches", protect, async (req, res, next) => {
   }
 });
 
+const basicsSchema = z.object({
+  displayName: z.string().trim().max(100).optional(),
+  bio: z.string().max(300).optional(),
+  country: z.string().trim().max(60).optional(),
+  city: z.string().trim().max(60).optional(),
+  state: z.string().trim().max(60).optional(),
+  legalName: z.string().trim().max(150).optional(),
+  phone: z.string().trim().max(30).optional(),
+  avatar: z.string().optional(),
+  categories: categoriesSchema.optional(),
+});
+
 router.put("/profile/me", protect, async (req, res, next) => {
   try {
-    const { displayName, bio, country, avatar } = req.body;
+    const parsed = basicsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+    const { displayName, bio, country, city, state, legalName, phone, avatar, categories } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -133,6 +175,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
     if (displayName !== undefined) profile.displayName = displayName;
     if (bio !== undefined) profile.bio = bio;
     if (country !== undefined) profile.country = country;
+    if (city !== undefined) profile.city = city;
+    if (state !== undefined) profile.state = state;
+    if (legalName !== undefined) profile.legalName = legalName;
+    if (phone !== undefined) profile.phone = phone;
+    if (categories !== undefined) profile.categories = categories;
 
     await profile.save();
 
@@ -147,6 +194,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
       displayName: profile.displayName,
       bio: profile.bio,
       country: profile.country,
+      city: profile.city || "",
+      state: profile.state || "",
+      legalName: profile.legalName || "",
+      phone: profile.phone || "",
+      categories: profile.categories || [],
       avatar: avatar !== undefined ? avatar : undefined,
     });
   } catch (error) {
@@ -154,10 +206,64 @@ router.put("/profile/me", protect, async (req, res, next) => {
   }
 });
 
+// Replaces the creator's audience breakdown. Each part sent overwrites that part only.
+router.put("/profile/audience", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = audienceSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    const { locations, ages, genders, proofUrl } = parsed.data;
+    // Self-reported numbers need a screenshot of the creator's analytics (D7).
+    if (!proofUrl && !(profile.audience && profile.audience.proofUrl)) {
+      return res.status(400).json({ error: "Add a screenshot of your analytics as proof" });
+    }
+    if (locations !== undefined) profile.set("audience.locations", locations);
+    if (ages !== undefined) profile.set("audience.ages", ages);
+    if (genders !== undefined) profile.set("audience.genders", genders);
+    if (proofUrl !== undefined) profile.set("audience.proofUrl", proofUrl);
+    profile.set("audience.source", "self_reported");
+    profile.set("audience.updatedAt", new Date());
+    await profile.save();
+
+    res.json({ audience: ownAudience(profile.audience) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Replaces the whole portfolio, so one call adds, removes or reorders items.
+router.put("/profile/portfolio", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = portfolioSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    profile.portfolio = parsed.data.items;
+    await profile.save();
+
+    res.json({ portfolio: publicPortfolio(profile.portfolio) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/", async (req, res, next) => {
   try {
-    const creators = await CreatorProfile.find().populate("userId", "name email");
-    res.json(creators);
+    const creators = await CreatorProfile.find().populate("userId", "name avatar");
+    res.json(creators.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -168,8 +274,8 @@ router.get("/leaderboard", async (req, res, next) => {
     const leaderboard = await CreatorProfile.find()
       .sort({ creatorScore: -1 })
       .limit(50)
-      .populate("userId", "name");
-    res.json(leaderboard);
+      .populate("userId", "name avatar");
+    res.json(leaderboard.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -180,6 +286,26 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
     const ctx = await loadContext(req.user._id);
     res.json(await buildMarketplace(ctx));
   } catch (error) {
+    next(error);
+  }
+});
+
+// Marketplace sections (M8): the first page of Recommended for You, Trending and New for a pay-shape
+// tab (?tab=all|fixed|performance|hybrid&limit=12), then one section's next page with its cursor.
+router.get("/marketplace/sections", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    res.json(await buildMarketplaceSections(req.user._id, req.query));
+  } catch (error) {
+    if (error instanceof MarketplaceError) return res.status(error.status).json({ error: error.message, code: error.code });
+    next(error);
+  }
+});
+
+router.get("/marketplace/sections/:section", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    res.json(await buildMarketplaceSection(req.user._id, req.params.section, req.query));
+  } catch (error) {
+    if (error instanceof MarketplaceError) return res.status(error.status).json({ error: error.message, code: error.code });
     next(error);
   }
 });
@@ -315,13 +441,25 @@ router.delete("/bank-account", protect, authorizeRoles("creator"), async (req, r
 });
 
 // ─── POST /creators/withdrawals ──────────────────────────────────────────────
+// Creators withdraw once a week per campaign: views earnings, and referral earnings and fixed
+// pay past their hold, go out together, and are paid on the Friday that ends the payout week.
 router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const { campaignId, amount } = req.body || {};
-    // Views and referral earnings are separate entitlements, withdrawn separately.
-    const kind = req.body && req.body.kind === "referral" ? "referral" : "views";
-    if (!campaignId || !amount) {
-      return res.status(400).json({ error: "campaignId and amount are required" });
+    const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate, formatPayoutDate } = require("../utils/payoutSchedule");
+    const { creatorViewsEarnings, floorKobo } = require("../utils/earnings");
+    const { creatorReferralEarnings } = require("../utils/referralEarnings");
+    const { creatorFixedEarnings } = require("../utils/fixedPay");
+    const { creatorBonusEarnings } = require("../utils/hybridBonus");
+
+    const { campaignId } = req.body || {};
+    // Older clients still send a kind and amount; they withdraw only that part.
+    const onlyKind = req.body && ["views", "referral"].includes(req.body.kind) ? req.body.kind : null;
+    const requestedAmount = onlyKind && req.body.amount !== undefined ? Number(req.body.amount) : null;
+    if (!campaignId) {
+      return res.status(400).json({ error: "campaignId is required" });
+    }
+    if (requestedAmount !== null && !(requestedAmount > 0)) {
+      return res.status(400).json({ error: "Amount must be greater than zero" });
     }
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
@@ -331,7 +469,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
 
     const slot = await Slot.findOne({ campaignId, creatorId: req.user._id }).populate({
       path: "campaignId",
-      select: "name status targetViews costPerView viewsDelivered creatorPool businessId",
+      select: "name status businessId",
     });
     if (!slot || !slot.campaignId) {
       return res.status(404).json({ error: "Campaign not found for this creator" });
@@ -339,65 +477,91 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
     const campaign = slot.campaignId;
 
     // Referral earnings stay owed after a cancellation, so they remain withdrawable.
-    const eligibleStatuses = kind === "referral" ? ["completed", "live", "paused", "cancelled"] : ["completed", "live", "paused"];
-    if (!eligibleStatuses.includes(campaign.status)) {
+    const viewsEligible = ["completed", "live", "paused"].includes(campaign.status);
+    const referralEligible = viewsEligible || campaign.status === "cancelled";
+    if (!referralEligible) {
       return res.status(400).json({ error: "This campaign is not eligible for withdrawal yet" });
     }
 
-    if (amount <= 0) {
-      return res.status(400).json({ error: "Amount must be greater than zero" });
-    }
-
+    const now = new Date();
+    const payoutDate = nextPayoutDate(now);
     // Checked before balances: with a request in flight, "nothing left" would mislead.
-    const existing = await Withdrawal.findOne({
-      campaignId,
-      creatorId: req.user._id,
-      kind: kind === "referral" ? "referral" : { $ne: "referral" },
-      status: { $in: ["pending", "processing"] },
-    });
-    if (existing) {
+    const [inFlight, thisWeek] = await Promise.all([
+      Withdrawal.findOne({ campaignId, creatorId: req.user._id, status: { $in: ["pending", "processing"] } }),
+      Withdrawal.findOne({
+        campaignId,
+        creatorId: req.user._id,
+        status: { $ne: "rejected" },
+        requestedAt: { $gte: payoutWeekStart(now) },
+      }),
+    ]);
+    if (inFlight) {
+      return res.status(409).json({ error: "You already have a withdrawal being processed for this campaign" });
+    }
+    if (thisWeek) {
       return res.status(409).json({
-        error: `You already have a ${kind === "referral" ? "referral " : ""}withdrawal being processed for this campaign`,
+        error: `You've already withdrawn from this campaign this week. You can withdraw again from ${formatPayoutDate(payoutDate)}.`,
       });
     }
 
-    let submission = null;
-    let alreadyClaimed = 0;
-    let available = 0;
-    let nothingAvailableMessage;
+    const key = String(campaign._id);
+    const [viewsMap, referralMap, fixedMap, bonusMap] = await Promise.all([
+      creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] }),
+      creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] }),
+      creatorFixedEarnings(req.user._id, { campaignIds: [campaign._id], now }),
+      creatorBonusEarnings(req.user._id, { campaignIds: [campaign._id], now }),
+    ]);
+    const views = viewsMap.get(key);
+    const referral = referralMap.get(key);
+    const fixed = fixedMap.get(key);
+    const bonus = bonusMap.get(key);
 
-    if (kind === "referral") {
-      const { creatorReferralEarnings } = require("../utils/referralEarnings");
-      const earnings = (await creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] })).get(String(campaign._id));
-      alreadyClaimed = earnings ? earnings.withdrawn : 0;
-      available = earnings ? earnings.availableToWithdraw : 0;
-      nothingAvailableMessage =
-        earnings && earnings.pending > 0
-          ? `₦${earnings.pending.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`
-          : alreadyClaimed > 0
-            ? `You've already withdrawn all your available referral earnings on this campaign (₦${alreadyClaimed.toLocaleString()}).`
-            : "You haven't earned anything from referrals on this campaign yet.";
-    } else {
-      // Same formula as the wallet: reward / viewTarget per view, capped at this
-      // creator's slot reward, minus views withdrawals already requested or paid.
-      const { creatorViewsEarnings } = require("../utils/earnings");
-      const earnings = (await creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] })).get(String(campaign._id));
-      submission = await Submission.findOne({ campaignId, creatorId: req.user._id }).sort({ createdAt: -1 });
-      alreadyClaimed = earnings ? earnings.withdrawn : 0;
-      available = earnings ? earnings.availableToWithdraw : 0;
-      nothingAvailableMessage = alreadyClaimed > 0
-        ? `You've already withdrawn everything earned so far on this campaign (₦${alreadyClaimed.toLocaleString()}).`
-        : "You haven't earned anything on this campaign yet.";
+    let viewsAmount = viewsEligible && onlyKind !== "referral" && views ? views.availableToWithdraw : 0;
+    let referralAmount = onlyKind !== "views" && referral ? referral.availableToWithdraw : 0;
+    // Fixed pay past its hold goes out with the rest; older kind-only requests leave it alone.
+    const fixedAmount = !onlyKind && fixed ? fixed.availableToWithdraw : 0;
+    // So does a hybrid campaign's bonus past its hold (ticket 10).
+    const bonusAmount = !onlyKind && bonus ? bonus.availableToWithdraw : 0;
+    if (requestedAmount !== null) {
+      const cap = onlyKind === "referral" ? referralAmount : viewsAmount;
+      if (requestedAmount > cap) {
+        return res.status(400).json({
+          error: `You can only withdraw up to ₦${cap.toLocaleString()} ${onlyKind === "referral" ? "of referral earnings " : ""}for this campaign`,
+        });
+      }
+      if (onlyKind === "referral") referralAmount = floorKobo(requestedAmount);
+      else viewsAmount = floorKobo(requestedAmount);
     }
 
-    if (available <= 0) {
-      return res.status(400).json({ error: nothingAvailableMessage });
+    const amount = floorKobo(viewsAmount + referralAmount + fixedAmount + bonusAmount);
+    if (amount <= 0) {
+      const onHold = referral ? referral.pending : 0;
+      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0) + (fixed ? fixed.withdrawn : 0) + (bonus ? bonus.withdrawn : 0);
+      const bonusHeld = bonus && !onlyKind ? bonus.onHold : 0;
+      const fixedHeld = fixed && !onlyKind ? fixed.onHold : 0;
+      const fixedAwaiting = fixed && !onlyKind ? fixed.awaitingDelivery : 0;
+      let error = "You haven't earned anything on this campaign yet.";
+      if (fixedHeld > 0) {
+        error = `₦${fixedHeld.toLocaleString()} of your fixed pay on this campaign is on hold until ${formatPayoutDate(fixed.holdUntil)}.`;
+      } else if (fixedAwaiting > 0) {
+        error = `₦${fixedAwaiting.toLocaleString()} of your fixed pay on this campaign is waiting for the brand to confirm delivery.`;
+      } else if (bonusHeld > 0) {
+        error = `₦${bonusHeld.toLocaleString()} of your bonus on this campaign is on hold until ${formatPayoutDate(bonus.holdUntil)}.`;
+      } else if (onHold > 0) {
+        error = `₦${onHold.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`;
+      } else if (withdrawn > 0) {
+        error = "You've already withdrawn everything earned so far on this campaign.";
+      }
+      return res.status(400).json({ error });
     }
-    if (amount > available) {
+    if (amount < MIN_CAMPAIGN_WITHDRAWAL) {
       return res.status(400).json({
-        error: `You can only withdraw up to ₦${available.toLocaleString()} ${kind === "referral" ? "of referral earnings " : ""}for this campaign`,
+        error: `You need at least ₦${MIN_CAMPAIGN_WITHDRAWAL.toLocaleString()} to withdraw from a campaign. You have ₦${amount.toLocaleString()}, which carries over until you reach it.`,
+        code: "BELOW_MINIMUM",
       });
     }
+
+    const submission = await Submission.findOne({ campaignId, creatorId: req.user._id }).sort({ createdAt: -1 });
 
     let withdrawal;
     try {
@@ -406,16 +570,18 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
         campaignId,
         businessId: campaign.businessId,
         submissionId: submission ? submission._id : null,
-        kind,
+        kind: "campaign",
         amount,
+        viewsAmount: floorKobo(viewsAmount),
+        referralAmount: floorKobo(referralAmount),
+        fixedAmount: floorKobo(fixedAmount),
+        bonusAmount: floorKobo(bonusAmount),
         status: "pending",
-        requestedAt: new Date(),
+        requestedAt: now,
       });
     } catch (err) {
       if (err.code === 11000) {
-        return res.status(409).json({
-          error: `You already have a ${kind === "referral" ? "referral " : ""}withdrawal being processed for this campaign`,
-        });
+        return res.status(409).json({ error: "You already have a withdrawal being processed for this campaign" });
       }
       throw err;
     }
@@ -424,8 +590,13 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       id: withdrawal._id,
       kind: withdrawal.kind,
       amount: withdrawal.amount,
+      viewsAmount: withdrawal.viewsAmount,
+      referralAmount: withdrawal.referralAmount,
+      fixedAmount: withdrawal.fixedAmount,
+      bonusAmount: withdrawal.bonusAmount,
       status: withdrawal.status,
-      message: "Withdrawal request received. It is under review — we'll get back to you within 24 hours.",
+      payoutDate,
+      message: `Withdrawal requested. It's paid on ${formatPayoutDate(payoutDate)}.`,
     });
   } catch (error) {
     next(error);
@@ -439,6 +610,7 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
       .sort({ createdAt: -1 })
       .populate("campaignId", "name targetViews");
 
+    const { nextPayoutDate } = require("../utils/payoutSchedule");
     res.json({
       withdrawals: withdrawals.map((w) => ({
         id: w._id,
@@ -446,6 +618,12 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
         campaignName: w.campaignId ? w.campaignId.name : "Campaign",
         kind: w.kind || "views",
         amount: w.amount,
+        viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
+        referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
+        bonusAmount: w.kind === "campaign" ? w.bonusAmount || 0 : 0,
+        // Requests are paid on the Friday that ends the week they were made in.
+        payoutDate: ["pending", "processing"].includes(w.status) ? nextPayoutDate(w.requestedAt) : null,
         status: w.status,
         adminNotes: w.adminNotes,
         requestedAt: w.requestedAt,
@@ -458,16 +636,40 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
   }
 });
 
+// ─── Payout appeals (D23) ────────────────────────────────────────────────────
+// A creator's appeals, and the rejected withdrawals and voided pay they can still appeal (7 days).
+router.get("/payout-appeals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { creatorPayoutAppeals } = require("../services/payoutAppeals");
+    res.json(await creatorPayoutAppeals(req.user._id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/payout-appeals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { fileAppeal, PayoutAppealError } = require("../services/payoutAppeals");
+    const { subjectType, subjectId, reason } = req.body || {};
+    try {
+      const appeal = await fileAppeal({ creator: req.user, subjectType, subjectId, reason });
+      res.status(201).json({ appeal, message: "Appeal sent. Our team will review it and let you know." });
+    } catch (error) {
+      if (error instanceof PayoutAppealError) return res.status(error.status).json({ error: error.message, code: error.code });
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id", async (req, res, next) => {
   try {
-    const creator = await CreatorProfile.findById(req.params.id).populate(
-      "userId",
-      "name email"
-    );
+    const creator = await CreatorProfile.findById(req.params.id).populate("userId", "name avatar");
     if (!creator) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
-    res.json(creator);
+    res.json(brandSafeProfile(creator, creator.userId));
   } catch (error) {
     next(error);
   }

@@ -1,25 +1,67 @@
-const CreatorProfile = require("../models/CreatorProfile");
+const { toObjectId } = require("../utils/objectId");
+const { loadCreatorAccounts } = require("../utils/creatorAccounts");
+const { ownAudience, publicPortfolio, publicRating, publicStats } = require("../utils/creatorProfile");
 const Campaign = require("../models/Campaign");
+const CampaignApplication = require("../models/CampaignApplication");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
-const { creatorReferralEarnings } = require("../utils/referralEarnings");
-const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
+const User = require("../models/User");
+const Withdrawal = require("../models/Withdrawal");
+const { creatorConversionGroups, referralEarningsFrom } = require("../utils/referralEarnings");
+const { campaignEventTypes } = require("../utils/referralCodes");
+const { latestSlotPerCampaign, viewsEarningsFrom, floorKobo, COMMITTED_WITHDRAWAL_STATUSES } = require("../utils/earnings");
+const { fixedEarningsFrom, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
+const { bonusEarningsFrom, BONUS_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/hybridBonus");
+const { roundMoney } = require("../utils/money");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
-const TikTokConnection = require("../models/TikTokConnection");
-const MetaConnection = require("../models/MetaConnection");
 const meta = require("./meta");
-const { rankAtLeast } = require("./creatorScore");
 const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
+const { payPerUnit, fullBrief, campaignTerms } = require("../utils/campaignPay");
+const { recentInterest } = require("./trending");
+const { loadCreatorHistory } = require("./creatorHistory");
+const {
+  liveMarketplaceCampaigns,
+  keysOf,
+  openPlacesByCampaign,
+  placeTotalsByCampaign,
+  viewerOf,
+  scoreCampaign,
+  cardOf,
+  sectionsOf,
+  SECTION_ORDER: sectionsOrder,
+  creatorTermsOf,
+} = require("./marketplace");
+const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
+const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
+const { myApplicationsFrom, CAMPAIGN_FIELDS_FOR_PAY } = require("./applications"); // Campaign engine: applications (ticket 06)
 
-// Everything the creator dashboard shows is derived from the same handful of
-// documents. Loading them once per request (instead of once per endpoint, and
-// again inside every helper) is where most of the round trips went.
+// Campaign engine: content approval (ticket 07)
+const contentApproval = require("./contentApproval");
+const { contentLabelFor } = require("./submissionEvents");
 
-const MAX_SLOTS = 3;
-const ACTIVE_SLOT_STATUSES = ["claimed", "submitted", "verifying"];
-const CLAIMED_SLOT_STATUSES = ["claimed", "submitted", "verifying", "approved", "paid"];
+// Everything the creator dashboard shows is derived from the same handful of documents. They're
+// loaded once per request by loadCreatorData, in three rounds of parallel queries (the creator's
+// own rows; the campaigns and ledger rows those point at; brands and open places), and every
+// section is built from them. The dashboard is about 15 queries whatever the creator holds.
+
+// Fields each section reads from a campaign. Sections see exactly these, as they did when each
+// loaded its own campaigns, so a response never gains or loses a field.
+const MY_CAMPAIGN_FIELDS =
+  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay hybridBonus creatorAccess objective contentDestination destinationUrl usageRights";
+const RELEASED_CAMPAIGN_FIELDS =
+  "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay hybridBonus contentDestination";
+const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral payShape";
+const VIEWS_EARNINGS_CAMPAIGN_FIELDS = "name status businessId";
+
+// A lean document reduced to _id and `fields` (those it has), like a mongoose select.
+function project(doc, fields) {
+  if (!doc) return null;
+  const out = { _id: doc._id };
+  for (const field of fields.split(" ")) if (field in doc) out[field] = doc[field];
+  return out;
+}
 
 function lockReasonFor({ hasSocial, hasNiches }) {
   if (hasSocial && hasNiches) return null;
@@ -28,30 +70,184 @@ function lockReasonFor({ hasSocial, hasNiches }) {
     : "Connect a social account to unlock campaigns";
 }
 
-// Profile + social connections, fetched in parallel. Shared by every builder below.
-async function loadContext(userId) {
-  const [profile, tiktok, metaConnections] = await Promise.all([
-    CreatorProfile.findOne({ userId }).lean(),
-    TikTokConnection.findOne({ userId }).lean(),
-    MetaConnection.find({ userId }).lean(),
-  ]);
+// Profile + social connections, in one query. Shared by every builder below. `options` go to
+// loadCreatorAccounts (only some profile fields, more of the creator's rows); ctx.extra carries those rows.
+async function loadContext(userId, options) {
+  const { profile, tiktok, metaConnections, extra } = await loadCreatorAccounts(userId, options);
 
   const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
   const hasSocial = Boolean(tiktok || metaConnections.length > 0);
   const hasNiches = niches.length > 0;
   const lockReason = lockReasonFor({ hasSocial, hasNiches });
 
+  const connectedPlatforms = [
+    ...(tiktok ? ["tiktok"] : []),
+    ...metaConnections.map((c) => c.provider).filter(Boolean),
+  ];
+
   return {
     userId,
     profile,
+    connectedPlatforms,
     tiktok,
     metaConnections,
     hasSocial,
     hasNiches,
     locked: lockReason !== null,
     lockReason,
+    extra,
   };
 }
+
+// ── Loading ─────────────────────────────────────────────────────────────────
+
+// Rejected or appealed content whose place went back to the campaign: the creator still sees the
+// campaign so they can read why and appeal. `submissions` are newest first.
+function waitingReleasedSubmissions(submissions, heldCampaignIds) {
+  const latest = new Map();
+  for (const sub of submissions) {
+    const key = String(sub.campaignId);
+    if (!heldCampaignIds.has(key) && sub.slotId && !latest.has(key)) latest.set(key, sub);
+  }
+  return [...latest.values()].filter((sub) => ["rejected", "appealed"].includes(sub.status));
+}
+
+// Loads what the requested sections need: { marketplace, myCampaigns, wallet, applications }.
+async function loadCreatorData(user, ctx, sections) {
+  const creatorId = toObjectId(ctx.userId);
+  const now = new Date();
+  const need = (...names) => names.some((name) => sections[name]);
+  const handle = ctx.profile ? ctx.profile.username : user && user.name;
+
+  // Round 1: the creator's own rows.
+  const [slots, submissions, withdrawals, conversionGroups, referralCodes, applications, recentTransactions] = await Promise.all([
+    Slot.find({ creatorId }).sort({ createdAt: -1 }).lean(),
+    need("myCampaigns", "wallet") ? Submission.find({ creatorId }).sort({ createdAt: -1 }).lean() : [],
+    need("myCampaigns", "wallet")
+      ? Withdrawal.find({ creatorId, status: { $ne: "rejected" } })
+          .select("campaignId kind amount viewsAmount referralAmount fixedAmount bonusAmount status requestedAt")
+          .sort({ _id: 1 })
+          .lean()
+      : [],
+    need("myCampaigns", "wallet") ? creatorConversionGroups(creatorId, now) : [],
+    need("myCampaigns") ? ReferralCode.find({ creatorId }).select("slotId code status conversions").lean() : [],
+    need("applications") ? CampaignApplication.find({ creator: creatorId }).sort({ appliedAt: -1 }).lean() : [],
+    need("wallet") ? Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean() : [],
+  ]);
+
+  const heldCampaignIds = new Set(slots.map((slot) => String(slot.campaignId)));
+  const released = need("myCampaigns") ? waitingReleasedSubmissions(submissions, heldCampaignIds) : [];
+  const campaignIds = new Set([
+    ...(need("myCampaigns", "wallet") ? heldCampaignIds : []),
+    ...applications.map((a) => String(a.campaign)),
+    ...released.map((s) => String(s.campaignId)),
+  ]);
+  const submissionIds = submissions.map((s) => s._id);
+
+  // Round 2: the campaigns those rows point at (and every live one for the marketplace), the
+  // ledger rows the wallet reads, and the content timeline.
+  const ownCampaignIds = [...campaignIds].map(toObjectId);
+  const [ownCampaigns, liveCampaigns, ledger, events] = await Promise.all([
+    campaignIds.size > 0 ? Campaign.find({ _id: { $in: ownCampaignIds } }).lean() : [],
+    need("marketplace")
+      ? liveMarketplaceCampaigns().then((live) => live.filter((c) => !campaignIds.has(keysOf(c).id)))
+      : [],
+    need("wallet")
+      ? Transaction.find({
+          // Each branch is served by its own index. Older views releases carry only a submission.
+          $or: [
+            { creatorId, type: "fixed_credit", status: "credited" },
+            { creatorId, type: "bonus_credit", status: "credited" },
+            { creatorId, type: "release", status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } },
+            ...(submissionIds.length > 0
+              ? [{ submissionId: { $in: submissionIds }, type: "release", status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } }]
+              : []),
+          ],
+        })
+          .select("type campaignId submissionId amount date")
+          .lean()
+      : [],
+    need("myCampaigns") && submissions.length > 0 ? listEventsForSubmissions(submissionIds) : [],
+  ]);
+  // The live list is already newest first.
+  const campaigns =
+    ownCampaigns.length > 0 ? [...ownCampaigns, ...liveCampaigns].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) : liveCampaigns;
+  const campaignById = new Map(campaigns.map((c) => [keysOf(c).id, c]));
+
+  // Round 3: brands for everything that shows one, and the marketplace's open places.
+  const brandIds = new Set();
+  const addBrand = (campaign) => campaign && campaign.businessId && brandIds.add(keysOf(campaign).brand);
+  if (need("myCampaigns")) {
+    slots.forEach((slot) => addBrand(campaignById.get(String(slot.campaignId))));
+    released.forEach((sub) => addBrand(campaignById.get(String(sub.campaignId))));
+  }
+  applications.forEach((a) => addBrand(campaignById.get(String(a.campaign))));
+  const heldForMarketplace = new Set(slots.filter((s) => HELD_PLACEMENT_STATUSES.includes(s.status)).map((s) => String(s.campaignId)));
+  const openCampaigns = need("marketplace")
+    ? campaigns.filter((c) => c.status === "live" && !heldForMarketplace.has(keysOf(c).id))
+    : [];
+  openCampaigns.forEach(addBrand);
+
+  const [brands, openPlaces, interest, placeTotals, history] = await Promise.all([
+    brandIds.size > 0 ? User.find({ _id: { $in: [...brandIds].map(toObjectId) } }).select("name avatar").lean() : [],
+    openCampaigns.length > 0 ? openPlacesByCampaign(openCampaigns.map((c) => c._id)) : new Map(),
+    // Trending (ticket 11, v2 M8): joins and applications in the last 72 hours, and every place, per open campaign.
+    openCampaigns.length > 0 ? recentInterest(openCampaigns.map((c) => c._id), now) : new Map(),
+    openCampaigns.length > 0 ? placeTotalsByCampaign(openCampaigns.map((c) => c._id)) : new Map(),
+    // Recommended for You v2 (M8): the creator's own campaign record.
+    need("marketplace") ? loadCreatorHistory(creatorId, slots, now.getTime()) : null,
+  ]);
+  const brandById = new Map(brands.map((b) => [String(b._id), b]));
+  const withBrand = (campaign) => (campaign ? { ...campaign, businessId: campaign.businessId ? brandById.get(String(campaign.businessId)) || null : campaign.businessId } : null);
+  // The brand of a campaign without copying the campaign (the marketplace reads every live one).
+  const brandOf = (campaign) => (campaign && campaign.businessId ? brandById.get(keysOf(campaign).brand) || null : null);
+
+  return {
+    now,
+    slots,
+    submissions,
+    withdrawals,
+    conversionGroups,
+    referralCodes,
+    applications,
+    recentTransactions,
+    released,
+    campaignById,
+    ledger,
+    events,
+    openCampaigns,
+    openPlaces,
+    interest,
+    placeTotals,
+    history,
+    withBrand,
+    brandOf,
+  };
+}
+
+// Requested or paid withdrawals summed per campaign, per pot, as the earnings helpers count them.
+function committedWithdrawals(withdrawals) {
+  const views = new Map();
+  const referral = new Map();
+  const fixed = [];
+  const bonus = [];
+  const add = (map, key, amount) => map.set(key, (map.get(key) || 0) + amount);
+  for (const w of withdrawals.filter((row) => COMMITTED_WITHDRAWAL_STATUSES.includes(row.status))) {
+    const key = String(w.campaignId);
+    if (w.kind !== "referral") add(views, key, w.kind === "campaign" ? w.viewsAmount || 0 : w.amount);
+    if (w.kind === "referral") add(referral, key, w.amount);
+    else if (w.kind === "campaign" && w.referralAmount > 0) add(referral, key, w.referralAmount);
+    if (w.kind === "campaign" && w.fixedAmount > 0) fixed.push({ campaignId: w.campaignId, withdrawn: w.fixedAmount });
+    if (w.kind === "campaign" && w.bonusAmount > 0) bonus.push({ campaignId: w.campaignId, withdrawn: w.bonusAmount });
+  }
+  return { views, referral, fixed, bonus };
+}
+
+function referralEarningsOf(data) {
+  return referralEarningsFrom({ groups: data.conversionGroups, withdrawnByCampaign: committedWithdrawals(data.withdrawals).referral });
+}
+
+// ── Sections ────────────────────────────────────────────────────────────────
 
 function buildProfile(user, ctx) {
   const profile = ctx.profile;
@@ -63,6 +259,17 @@ function buildProfile(user, ctx) {
     username: profile.username,
     bio: profile.bio || "",
     country: profile.country || "",
+    city: profile.city || "",
+    state: profile.state || "",
+    legalName: profile.legalName || "",
+    phone: profile.phone || "",
+    categories: profile.categories || [],
+    portfolio: publicPortfolio(profile.portfolio),
+    verified: Boolean(profile.verifiedAt),
+    badges: profile.badges || [],
+    rating: publicRating(profile.brandRating),
+    stats: publicStats(profile),
+    audience: ownAudience(profile.audience),
     socialAccounts: profile.socialAccounts || [],
     niches: profile.niches || [],
     rank: profile.rank,
@@ -116,119 +323,39 @@ function buildMetaStatus(ctx) {
   };
 }
 
-function normalizeNiches(list) {
-  return (Array.isArray(list) ? list : [])
-    .map((n) => String(n).trim().toLowerCase())
-    .filter(Boolean);
-}
+// Every open live campaign in one response, for web clients from before marketplace paging (M8). The
+// same sections and orders as the paged marketplace (services/marketplace.js).
+async function buildMarketplace(ctx, data = null) {
+  data = data || (await loadCreatorData(null, ctx, { marketplace: true }));
+  const viewer = viewerOf(ctx, data.slots, data.history);
 
-async function buildMarketplace(ctx) {
-  const { userId, profile } = ctx;
-  const creatorRank = profile ? profile.rank : "rank1";
-  const profileNiches = normalizeNiches(profile && profile.niches);
-
-  const [activeSlots, claimedCampaignIds, campaigns] = await Promise.all([
-    Slot.countDocuments({ creatorId: userId, status: { $in: ACTIVE_SLOT_STATUSES } }),
-    Slot.distinct("campaignId", { creatorId: userId, status: { $in: CLAIMED_SLOT_STATUSES } }),
-    Campaign.find({ status: "live" })
-      .populate("businessId", "name avatar")
-      .sort({ createdAt: -1 })
-      .lean(),
-  ]);
-
-  const claimedCampaignSet = new Set(claimedCampaignIds.map((id) => id.toString()));
-  const openCampaigns = campaigns.filter((c) => !claimedCampaignSet.has(c._id.toString()));
-
-  // One query for every campaign's open slots, instead of one query per campaign.
-  const availableSlots = openCampaigns.length > 0
-    ? await Slot.find({
-        campaignId: { $in: openCampaigns.map((c) => c._id) },
-        status: "available",
-      })
-        .sort({ createdAt: -1 })
-        .lean()
-    : [];
-
-  const slotsByCampaign = new Map();
-  for (const slot of availableSlots) {
-    const key = slot.campaignId.toString();
-    if (!slotsByCampaign.has(key)) slotsByCampaign.set(key, []);
-    slotsByCampaign.get(key).push(slot);
-  }
-
-  const marketplace = [];
-  for (const campaign of openCampaigns) {
-    const slots = slotsByCampaign.get(campaign._id.toString()) || [];
-    if (slots.length === 0) continue;
-
-    const eligibleSlot = slots.find((s) => rankAtLeast(creatorRank, s.rankRequired));
-    const matchingSlot = eligibleSlot || slots[0];
-    const rankLocked = !eligibleSlot;
-
-    const daysLeft = campaign.endDate
-      ? Math.max(Math.ceil((campaign.endDate - Date.now()) / (1000 * 60 * 60 * 24)), 1)
-      : 7;
-    const brand = campaign.businessId;
-    const campaignNiches = normalizeNiches(campaign.niches);
-
-    let matchScore = 0;
-    if (profileNiches.length > 0) {
-      const overlap = campaignNiches.filter((n) => profileNiches.includes(n)).length;
-      matchScore += overlap * 3;
-      if (campaign.category && profileNiches.includes(String(campaign.category).trim().toLowerCase())) {
-        matchScore += 2;
-      }
-      if (campaignNiches.length === 0) matchScore += 1;
-    }
-
-    marketplace.push({
-      id: campaign._id,
-      title: campaign.name,
-      category: campaign.category,
-      niches: campaignNiches,
-      reward: matchingSlot.reward,
-      creatorPool: campaign.creatorPool,
-      viewTarget: matchingSlot.viewTarget,
-      slotId: matchingSlot._id,
-      rankRequired: matchingSlot.rankRequired,
-      rankLocked,
-      slotsLeft: slots.length,
-      targetViews: campaign.targetViews,
-      coverImageUrl: campaign.coverImageUrl,
-      contentBrief: campaign.contentBrief,
-      keyMessageCta: campaign.keyMessageCta,
-      platforms: campaign.platforms,
-      description: campaign.contentBrief || "",
-      minViews: 1000,
-      maxViews: matchingSlot.viewTarget,
-      costPerView: campaign.costPerView,
-      daysLeft,
-      brandName: brand ? brand.name || "Brand" : "Brand",
-      brandAvatar: brand ? brand.avatar || null : null,
-      matchScore,
-      recommended: matchScore > 0,
-      // Shown before claiming, so creators know a campaign also pays per referral.
-      referralReward:
-        campaign.referral &&
-        campaign.referral.enabled &&
-        campaign.referral.rewardPerConversion > 0 &&
-        campaign.referral.poolRemaining >= campaign.referral.rewardPerConversion
-          ? { amount: campaign.referral.rewardPerConversion, eventType: campaign.referral.eventType }
-          : null,
+  const scored = [];
+  for (const campaign of data.openCampaigns) {
+    const id = keysOf(campaign).id;
+    const entry = scoreCampaign(viewer, campaign, {
+      open: data.openPlaces.get(id),
+      totals: data.placeTotals.get(id),
+      interest: data.interest.get(id),
+      now: data.now,
     });
+    if (entry) scored.push(entry);
   }
-
-  marketplace.sort((a, b) => {
-    if (b.recommended !== a.recommended) return b.recommended - a.recommended;
-    if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-    return b.slotsLeft - a.slotsLeft;
-  });
+  const sections = sectionsOf(scored, "all");
+  const card = (entry, trending) => cardOf(viewer, entry, data.brandOf(entry.campaign), { trending });
+  // As before paging: Recommended for You first, then every other campaign newest first, trending
+  // ones flagged (older clients build Trending from the flag).
+  const trendingIds = new Set(sections.trending.map((entry) => entry.id));
+  const others = [...sections.trending, ...sections.new].sort((a, b) => sectionsOrder.new(a, b));
+  const campaigns = [
+    ...sections.recommended.map((entry) => card(entry, false)),
+    ...others.map((entry) => card(entry, trendingIds.has(entry.id))),
+  ];
 
   return {
-    campaigns: marketplace,
-    activeSlots,
-    maxSlots: MAX_SLOTS,
-    canClaim: ctx.locked ? false : activeSlots < MAX_SLOTS,
+    campaigns,
+    activeSlots: viewer.activeSlots,
+    maxSlots: MAX_ACTIVE_PLACEMENTS,
+    canClaim: ctx.locked ? false : viewer.activeSlots < MAX_ACTIVE_PLACEMENTS,
     locked: ctx.locked,
     lockReason: ctx.lockReason,
   };
@@ -255,12 +382,18 @@ function buildCreatorReferral(campaign, code, earnings) {
   const totals = earnings || emptyReferralEarnings();
   return {
     eventType: campaign.referral.eventType,
+    eventTypes: campaignEventTypes(campaign),
     code: code ? code.code : null,
     status: code ? code.status : "awaiting_code",
     conversions: code ? code.conversions : 0,
     rewardPerConversion: campaign.referral.rewardPerConversion || 0,
-    // Whether new conversions are currently being paid (the brand has budget left).
-    paying: (campaign.referral.rewardPerConversion || 0) > 0 && (campaign.referral.poolRemaining || 0) >= (campaign.referral.rewardPerConversion || 0),
+    // Whether new conversions are currently being paid (the brand has budget left). A hybrid
+    // campaign's conversions are paid from its bonus pool (ticket 10).
+    paying:
+      (campaign.referral.rewardPerConversion || 0) > 0 &&
+      (campaign.payShape === "hybrid" && campaign.hybridBonus
+        ? (campaign.hybridBonus.poolRemaining || 0) > 0
+        : (campaign.referral.poolRemaining || 0) >= (campaign.referral.rewardPerConversion || 0)),
     earnings: {
       earned: totals.earned,
       pending: totals.pending,
@@ -272,78 +405,98 @@ function buildCreatorReferral(campaign, code, earnings) {
   };
 }
 
-async function buildMyCampaigns(ctx) {
-  const { userId } = ctx;
+// Campaign engine: content approval (ticket 07)
+// Content campaigns carry where their approval and delivery stand; a creator with no
+// submission yet still learns the destination and the brief's required hashtags.
+function contentApprovalFields(campaign, submission, timeline) {
+  if (!contentApproval.isContentCampaign(campaign)) return {};
+  const view = submission
+    ? contentApproval.contentApprovalView(submission, campaign)
+    : {
+        status: null,
+        destination: contentApproval.destinationOf(campaign),
+        maxChangeRequests: contentApproval.MAX_CHANGE_REQUESTS,
+        changeRequestsLeft: contentApproval.MAX_CHANGE_REQUESTS,
+        changeRequests: [],
+        licence: contentApproval.destinationOf(campaign) === "creator_page" ? null : contentApproval.USAGE_RIGHTS_LICENCE,
+      };
+  return {
+    contentApproval: { ...view, requiredHashtags: (campaign.brief && campaign.brief.hashtags) || [] },
+    timeline: timeline.map((event) => ({ ...event, label: contentLabelFor(event.type, event.metadata) })),
+  };
+}
 
-  const [slots, submissions, referralCodes, referralEarnings] = await Promise.all([
-    Slot.find({ creatorId: userId })
-      .populate({
-        path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral",
-        populate: { path: "businessId", select: "name avatar" },
-      })
-      .sort({ createdAt: -1 })
-      .lean(),
-    Submission.find({ creatorId: userId }).sort({ createdAt: -1 }).lean(),
-    ReferralCode.find({ creatorId: userId }).select("slotId code status conversions").lean(),
-    creatorReferralEarnings(userId),
-  ]);
+// Rejected content gives its place back to the campaign, but the creator still sees the campaign
+// so they can read why and appeal.
+function releasedContentCampaigns(data, eventsBySubmission) {
+  return data.released
+    .map((sub) => ({ sub, campaign: data.withBrand(project(data.campaignById.get(String(sub.campaignId)), RELEASED_CAMPAIGN_FIELDS)) }))
+    .filter(({ campaign }) => campaign && contentApproval.isContentCampaign(campaign))
+    .map(({ sub, campaign }) => {
+      const pay = payPerUnit(campaign, null);
+      return {
+        id: campaign._id,
+        slotId: null,
+        title: campaign.name,
+        category: campaign.category,
+        coverImageUrl: campaign.coverImageUrl,
+        status: campaign.status === "cancelled" ? "cancelled" : mapStatusToCreator(sub, campaign, null),
+        reward: pay.amount || 0,
+        submissionId: sub._id,
+        videoUrl: sub.videoUrl,
+        caption: sub.caption,
+        contentBrief: campaign.contentBrief,
+        description: campaign.contentBrief || undefined,
+        platforms: campaign.platforms,
+        kind: "deliverable",
+        brief: fullBrief(campaign),
+        pay,
+        brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
+        brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
+        delivery: sub.status === "appealed" ? "Appealed" : "Rejected",
+        submittedAgo: timeAgo(sub.submittedAt),
+        reviewedAgo: timeAgo(sub.reviewedAt),
+        referral: null,
+        ...contentApprovalFields(campaign, sub, eventsBySubmission[sub._id.toString()] || []),
+      };
+    });
+}
 
+async function buildMyCampaigns(ctx, data = null) {
+  data = data || (await loadCreatorData(null, ctx, { myCampaigns: true }));
+  const { submissions } = data;
+  const referralEarnings = referralEarningsOf(data);
   const submissionMap = indexSubmissionsByCampaign(submissions);
-  const referralBySlot = new Map(referralCodes.map((code) => [code.slotId.toString(), code]));
+  const referralBySlot = new Map(data.referralCodes.map((code) => [code.slotId.toString(), code]));
 
   // Newest first, matching how the drawer stacks its activity list.
   const eventsBySubmission = {};
-  if (submissions.length > 0) {
-    const events = await listEventsForSubmissions(submissions.map((s) => s._id));
-    for (const event of events) {
-      const key = event.submissionId.toString();
-      if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
-      eventsBySubmission[key].unshift({
-        id: event._id,
-        type: event.type,
-        label: labelFor(event.type),
-        actor: event.actor,
-        actorName: event.actorName,
-        reason: event.reason,
-        statusAfter: event.statusAfter,
-        metadata: event.metadata,
-        at: event.createdAt,
-        time: timeAgo(event.createdAt),
-      });
-    }
+  for (const event of data.events) {
+    const key = event.submissionId.toString();
+    if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
+    eventsBySubmission[key].unshift({
+      id: event._id,
+      type: event.type,
+      label: labelFor(event.type),
+      actor: event.actor,
+      actorName: event.actorName,
+      reason: event.reason,
+      statusAfter: event.statusAfter,
+      metadata: event.metadata,
+      at: event.createdAt,
+      time: timeAgo(event.createdAt),
+    });
   }
 
-  const campaigns = slots
-    .filter((slot) => slot.campaignId)
-    .map((slot) => {
-      const campaign = slot.campaignId;
+  const campaigns = data.slots
+    .map((slot) => ({ slot, campaign: data.withBrand(project(data.campaignById.get(String(slot.campaignId)), MY_CAMPAIGN_FIELDS)) }))
+    .filter(({ campaign }) => campaign)
+    .map(({ slot, campaign }) => {
       const submission = submissionMap[campaign._id.toString()];
 
-      let status;
-      if (submission) {
-        switch (submission.status) {
-          case "new":
-            status = "under_review";
-            break;
-          case "awaiting_post":
-          case "approved":
-            status = "approved_post";
-            break;
-          case "posted":
-            status = submission.viewsDelivered >= campaign.targetViews ? "delivered" : "live_tracking";
-            break;
-          case "rejected":
-            status = "changes_requested";
-            break;
-          default:
-            status = "under_review";
-        }
-      } else {
-        status = "needs_content";
-      }
-
+      let status = mapStatusToCreator(submission, campaign, slot);
       if (campaign.status === "cancelled") status = "cancelled";
+      const deliverable = slot.kind === "deliverable";
 
       return {
         id: campaign._id,
@@ -354,14 +507,12 @@ async function buildMyCampaigns(ctx) {
         status,
         reward: slot.reward,
         viewTarget: slot.viewTarget,
-        minViews: 1000,
-        maxViews: slot.viewTarget,
+        // Deliverable placements have no views to commit to.
+        ...(!deliverable && { minViews: 1000, maxViews: slot.viewTarget }),
         costPerView: campaign.costPerView,
         submissionId: submission ? submission._id : null,
         comment: submission && submission.status === "rejected" ? submission.rejectionReason : undefined,
-        progress: submission && submission.viewsDelivered > 0
-          ? Math.min(Number(((submission.viewsDelivered / (slot.viewTarget || campaign.targetViews)) * 100).toFixed(3)), 100)
-          : 0,
+        progress: deliveryProgress(submission, slot, campaign),
         currentViews: submission ? submission.viewsDelivered : undefined,
         targetViews: campaign.targetViews,
         videoUrl: submission ? submission.videoUrl : undefined,
@@ -382,6 +533,10 @@ async function buildMyCampaigns(ctx) {
         contentStyle: campaign.contentStyle,
         scriptUrl: campaign.scriptUrl,
         scriptFileName: campaign.scriptFileName,
+        // Campaign engine: the full brief unlocks once the creator holds a placement.
+        kind: slot.kind || "views",
+        brief: fullBrief(campaign),
+        pay: payPerUnit(campaign, slot),
         brandName: campaign.businessId ? campaign.businessId.name || undefined : undefined,
         brandAvatar: campaign.businessId ? campaign.businessId.avatar || undefined : undefined,
         delivery: slot.status === "claimed"
@@ -400,37 +555,65 @@ async function buildMyCampaigns(ctx) {
           referralBySlot.get(slot._id.toString()),
           referralEarnings.get(campaign._id.toString())
         ),
+        // M8 batch 7 (SPEC D29, D30): objective, clicks destination domain and usage terms.
+        ...creatorTermsOf(campaign, campaignTerms(campaign)),
+        // Campaign engine: content approval (ticket 07)
+        ...contentApprovalFields(campaign, submission, submission ? eventsBySubmission[submission._id.toString()] || [] : []),
       };
     });
 
-  return { campaigns, locked: ctx.locked, lockReason: ctx.lockReason };
+  // Campaign engine: content approval (ticket 07)
+  const released = releasedContentCampaigns(data, eventsBySubmission);
+  return { campaigns: [...campaigns, ...released], locked: ctx.locked, lockReason: ctx.lockReason };
 }
 
-async function buildWallet(user, ctx) {
-  const { userId, profile } = ctx;
-  const handle = profile ? profile.username : user.name;
+async function buildWallet(user, ctx, data = null) {
+  data = data || (await loadCreatorData(user, ctx, { wallet: true }));
+  const { profile } = ctx;
+  const { now } = data;
+  const withdrawn = committedWithdrawals(data.withdrawals);
 
-  const [transactions, submissions, slots, referralEarnings, viewsEarnings] = await Promise.all([
-    Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean(),
-    Submission.find({ creatorId: userId }).select("_id").lean(),
-    Slot.find({ creatorId: userId })
-      .populate({ path: "campaignId", select: "name status targetViews costPerView viewsDelivered referral" })
-      .lean(),
-    creatorReferralEarnings(userId),
-    creatorViewsEarnings(userId),
-  ]);
+  const referralEarnings = referralEarningsOf(data);
+
+  // Views earnings per campaign, with the same formula as withdrawals: views placements, most recent
+  // claim first, and views delivered across the creator's submissions.
+  const viewsSlots = data.slots
+    .filter((slot) => slot.kind !== "deliverable")
+    .map((slot) => ({ ...slot, campaignId: project(data.campaignById.get(String(slot.campaignId)), VIEWS_EARNINGS_CAMPAIGN_FIELDS) }))
+    .sort((a, b) => new Date(b.claimedAt || 0) - new Date(a.claimedAt || 0) || new Date(b.createdAt) - new Date(a.createdAt));
+  const viewsByCampaign = new Map();
+  for (const sub of data.submissions) {
+    const key = String(sub.campaignId);
+    viewsByCampaign.set(key, (viewsByCampaign.get(key) || 0) + (sub.viewsDelivered || 0));
+  }
+  const viewsEarnings = viewsEarningsFrom({
+    slotByCampaign: latestSlotPerCampaign(viewsSlots),
+    viewsByCampaign,
+    withdrawnByCampaign: withdrawn.views,
+  });
+
+  const credits = data.ledger.filter((t) => t.type === "fixed_credit");
+  const fixedEarnings = fixedEarningsFrom({
+    credits,
+    submissionById: new Map(data.submissions.map((s) => [String(s._id), s])),
+    withdrawals: withdrawn.fixed,
+    now,
+  });
+  // Hybrid campaigns' bonus (ticket 10): held 7 days per credit, then withdrawable.
+  const bonusEarnings = bonusEarningsFrom({ credits: data.ledger.filter((t) => t.type === "bonus_credit"), withdrawals: withdrawn.bonus, now });
 
   // Paid views payouts come from the ledger. Older releases carry only a submission;
   // newer ones also record the creator.
-  const totalReleased = await releasedViewsTotal({
-    $or: [
-      { creatorId: new (require("mongoose").Types.ObjectId)(String(userId)) },
-      { submissionId: { $in: submissions.map((s) => s._id) } },
-    ],
-  });
+  const totalReleased = data.ledger.filter((t) => t.type === "release").reduce((sum, t) => sum + t.amount, 0);
+
+  // Placements in the order the wallet always listed them (the creatorId + status index: by status,
+  // then oldest first), each with the campaign fields the wallet reads.
+  const slots = [...data.slots]
+    .sort((a, b) => (a.status === b.status ? (String(a._id) < String(b._id) ? -1 : 1) : a.status < b.status ? -1 : 1))
+    .map((slot) => ({ ...slot, campaignId: project(data.campaignById.get(String(slot.campaignId)), WALLET_CAMPAIGN_FIELDS) }));
 
   // Every campaign with views earnings, using the same formula as withdrawals.
-  const viewsByCampaign = [...viewsEarnings.values()]
+  const viewsByCampaignList = [...viewsEarnings.values()]
     .filter((entry) => entry.views > 0 || entry.withdrawn > 0)
     .map((entry) => ({
       id: entry.campaignId,
@@ -446,11 +629,11 @@ async function buildWallet(user, ctx) {
     }));
 
   const withdrawableBalance = floorKobo(
-    viewsByCampaign.filter((c) => c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+    viewsByCampaignList.filter((c) => c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
   );
 
   // Kept for older clients: earnings on campaigns that aren't finished yet.
-  const pendingByCampaign = viewsByCampaign
+  const pendingByCampaign = viewsByCampaignList
     .filter((c) => ["live", "paused", "under_review"].includes(c.status))
     .map((c) => ({
       id: c.id,
@@ -463,9 +646,104 @@ async function buildWallet(user, ctx) {
 
   // Earned but not withdrawable until the campaign is approved.
   const pendingBalance = floorKobo(
-    viewsByCampaign.filter((c) => !c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+    viewsByCampaignList.filter((c) => !c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
   );
   const payout = profile && profile.payoutAccount;
+
+  // Withdrawals are once a week per campaign: views earnings, and referral earnings and fixed
+  // pay past their hold, go out together.
+  const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
+  const weekStart = payoutWeekStart(now);
+  const recentWithdrawals = data.withdrawals.filter(
+    (w) => ["pending", "processing"].includes(w.status) || new Date(w.requestedAt) >= weekStart
+  );
+
+  const withdrawCampaigns = [];
+  const seenCampaigns = new Set();
+  for (const slot of slots) {
+    const campaign = slot.campaignId;
+    if (!campaign) continue;
+    const key = String(campaign._id);
+    if (seenCampaigns.has(key)) continue;
+    seenCampaigns.add(key);
+
+    const views = viewsEarnings.get(key);
+    const referralTotals = referralEarnings.get(key);
+    const fixedTotals = fixedEarnings.get(key);
+    const viewsEligible = ["live", "paused", "completed"].includes(campaign.status);
+    const referralEligible = viewsEligible || campaign.status === "cancelled";
+    const viewsAvailable = viewsEligible && views ? views.availableToWithdraw : 0;
+    const referralAvailable = referralEligible && referralTotals ? referralTotals.availableToWithdraw : 0;
+    const referralOnHold = referralTotals ? referralTotals.pending : 0;
+    const fixedAvailable = fixedTotals && FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES.includes(campaign.status) ? fixedTotals.availableToWithdraw : 0;
+    const fixedOnHold = fixedTotals ? fixedTotals.onHold : 0;
+    const fixedAwaitingDelivery = fixedTotals ? fixedTotals.awaitingDelivery : 0;
+    const bonusTotals = bonusEarnings.get(key);
+    const bonusAvailable = bonusTotals && BONUS_WITHDRAWABLE_CAMPAIGN_STATUSES.includes(campaign.status) ? bonusTotals.availableToWithdraw : 0;
+    const bonusOnHold = bonusTotals ? bonusTotals.onHold : 0;
+    const total = floorKobo(viewsAvailable + referralAvailable + fixedAvailable + bonusAvailable);
+
+    const forCampaign = recentWithdrawals.filter((w) => String(w.campaignId) === key);
+    const inFlight = forCampaign.find((w) => ["pending", "processing"].includes(w.status));
+    const thisWeek = forCampaign.find((w) => new Date(w.requestedAt) >= weekStart);
+    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0 && fixedOnHold <= 0 && fixedAwaitingDelivery <= 0 && bonusOnHold <= 0) continue;
+
+    // Money not withdrawable yet, and why: one line per unlock date, each with its own amount.
+    const onHold = [];
+    if (fixedAwaitingDelivery > 0) {
+      onHold.push({ pot: "fixed", amount: fixedAwaitingDelivery, reason: "Waiting for the brand to confirm delivery", until: null });
+    }
+    for (const unlock of (fixedTotals && fixedTotals.unlocks) || []) {
+      onHold.push({ pot: "fixed", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
+    }
+    for (const unlock of (referralTotals && referralTotals.unlocks) || []) {
+      onHold.push({ pot: "referral", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
+    }
+    for (const unlock of (bonusTotals && bonusTotals.unlocks) || []) {
+      onHold.push({ pot: "bonus", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
+    }
+
+    withdrawCampaigns.push({
+      id: campaign._id,
+      title: campaign.name,
+      status: campaign.status,
+      // A hybrid campaign's fixed pay is its base; its bonus is its own pot (ticket 10).
+      payShape: campaign.payShape || null,
+      viewsAvailable,
+      referralAvailable,
+      referralOnHold,
+      fixedAvailable,
+      fixedOnHold,
+      fixedAwaitingDelivery,
+      fixedHoldUntil: fixedTotals ? fixedTotals.holdUntil : null,
+      bonusAvailable,
+      bonusOnHold,
+      // What the campaign has earned per pot, withdrawn or not.
+      earnings: {
+        fixed: fixedTotals ? fixedTotals.earned : 0,
+        performance: views ? views.earned : 0,
+        referral: referralTotals ? referralTotals.earned : 0,
+        bonus: bonusTotals ? bonusTotals.earned : 0,
+      },
+      onHold,
+      onHoldTotal: roundMoney(fixedAwaitingDelivery + fixedOnHold + referralOnHold + bonusOnHold),
+      payoutDate: inFlight ? nextPayoutDate(inFlight.requestedAt) : nextPayoutDate(now),
+      total,
+      // available | below_minimum | nothing_yet | requested | withdrawn_this_week
+      state: inFlight
+        ? "requested"
+        : thisWeek
+          ? "withdrawn_this_week"
+          : total <= 0
+            ? "nothing_yet"
+            : total < MIN_CAMPAIGN_WITHDRAWAL
+              ? "below_minimum"
+              : "available",
+      requested: inFlight
+        ? { amount: inFlight.amount, status: inFlight.status, payoutDate: nextPayoutDate(inFlight.requestedAt) }
+        : null,
+    });
+  }
 
   // Referral earnings are their own pot: held 7 days per conversion, then withdrawable.
   const referralByCampaign = [];
@@ -481,6 +759,7 @@ async function buildWallet(user, ctx) {
       title: campaign.name,
       status: campaign.status,
       eventType: campaign.referral ? campaign.referral.eventType : null,
+      eventTypes: campaign.referral ? campaignEventTypes(campaign) : [],
       rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
       paidConversions: totals.paidConversions,
       earned: totals.earned,
@@ -493,12 +772,52 @@ async function buildWallet(user, ctx) {
   const sumReferral = (field) =>
     Math.round(referralByCampaign.reduce((sum, c) => sum + c[field], 0) * 100) / 100;
 
+  // Fixed pay from content campaigns: credited per deliverable, withdrawable once the brand has
+  // confirmed delivery and the 7-day hold is over.
+  const campaignById = new Map(slots.filter((s) => s.campaignId).map((s) => [String(s.campaignId._id), s.campaignId]));
+  const fixedByCampaign = [...fixedEarnings.values()].map((entry) => {
+    const campaign = campaignById.get(String(entry.campaignId));
+    return {
+      id: entry.campaignId,
+      title: campaign ? campaign.name : "Campaign",
+      status: campaign ? campaign.status : null,
+      deliverables: entry.deliverables,
+      earned: entry.earned,
+      awaitingDelivery: entry.awaitingDelivery,
+      onHold: entry.onHold,
+      holdUntil: entry.holdUntil,
+      unlocks: entry.unlocks,
+      withdrawn: entry.withdrawn,
+      availableToWithdraw: entry.availableToWithdraw,
+    };
+  });
+  const sumFixed = (field) => roundMoney(fixedByCampaign.reduce((sum, c) => sum + c[field], 0));
+
+  // Hybrid campaigns' bonus, beside their base (the fixed pay above).
+  const bonusByCampaign = [...bonusEarnings.values()].map((entry) => {
+    const campaign = campaignById.get(String(entry.campaignId));
+    return {
+      id: entry.campaignId,
+      title: campaign ? campaign.name : "Campaign",
+      status: campaign ? campaign.status : null,
+      earned: entry.earned,
+      onHold: entry.onHold,
+      holdUntil: entry.holdUntil,
+      unlocks: entry.unlocks,
+      withdrawn: entry.withdrawn,
+      availableToWithdraw: entry.availableToWithdraw,
+    };
+  });
+  const sumBonus = (field) => roundMoney(bonusByCampaign.reduce((sum, c) => sum + c[field], 0));
+
   return {
     balance: withdrawableBalance,
     withdrawableBalance,
     pendingBalance,
     pendingByCampaign,
-    viewsByCampaign,
+    viewsByCampaign: viewsByCampaignList,
+    withdrawCampaigns,
+    payoutSchedule: { nextPayoutDate: nextPayoutDate(now), minimumPerCampaign: MIN_CAMPAIGN_WITHDRAWAL },
     hasBankAccount: !!(payout && payout.paystackRecipientCode),
     bankName: payout ? payout.bankName : null,
     accountName: payout ? payout.accountName : null,
@@ -514,7 +833,24 @@ async function buildWallet(user, ctx) {
       holdDays: 7,
       byCampaign: referralByCampaign,
     },
-    recentTransactions: transactions.map((t) => ({
+    fixed: {
+      earned: sumFixed("earned"),
+      awaitingDelivery: sumFixed("awaitingDelivery"),
+      onHold: sumFixed("onHold"),
+      availableToWithdraw: sumFixed("availableToWithdraw"),
+      withdrawn: sumFixed("withdrawn"),
+      holdDays: 7,
+      byCampaign: fixedByCampaign,
+    },
+    bonus: {
+      earned: sumBonus("earned"),
+      onHold: sumBonus("onHold"),
+      availableToWithdraw: sumBonus("availableToWithdraw"),
+      withdrawn: sumBonus("withdrawn"),
+      holdDays: 7,
+      byCampaign: bonusByCampaign,
+    },
+    recentTransactions: data.recentTransactions.map((t) => ({
       id: t._id,
       createdAt: t.date,
       date: t.date,
@@ -526,17 +862,28 @@ async function buildWallet(user, ctx) {
   };
 }
 
-// The whole dashboard in one round trip. The per-section builders share one
-// context, so the profile and social lookups happen once, not six times.
-async function buildDashboard(user) {
+// "My applications", with each campaign's pay fields and brand.
+function buildApplications(data) {
+  return myApplicationsFrom(
+    data.applications.map((application) => ({
+      ...application,
+      campaign: data.withBrand(project(data.campaignById.get(String(application.campaign)), CAMPAIGN_FIELDS_FOR_PAY)),
+    }))
+  );
+}
+
+// The whole dashboard in one round trip, from one load shared by every section. `marketplace: false`
+// leaves the marketplace out (null), for clients that page it (M8).
+async function buildDashboard(user, { marketplace: withMarketplace = true } = {}) {
   const ctx = await loadContext(user._id);
   const profile = buildProfile(user, ctx);
   if (!profile) return null;
 
+  const data = await loadCreatorData(user, ctx, { marketplace: withMarketplace, myCampaigns: true, wallet: true, applications: true });
   const [campaigns, marketplace, wallet] = await Promise.all([
-    buildMyCampaigns(ctx),
-    buildMarketplace(ctx),
-    buildWallet(user, ctx),
+    buildMyCampaigns(ctx, data),
+    withMarketplace ? buildMarketplace(ctx, data) : null,
+    buildWallet(user, ctx, data),
   ]);
 
   return {
@@ -544,6 +891,7 @@ async function buildDashboard(user) {
     campaigns,
     marketplace,
     wallet,
+    applications: buildApplications(data),
     tiktok: buildTikTokStatus(ctx),
     meta: buildMetaStatus(ctx),
   };
@@ -551,6 +899,7 @@ async function buildDashboard(user) {
 
 module.exports = {
   loadContext,
+  loadCreatorData,
   buildProfile,
   buildTikTokStatus,
   buildMetaStatus,

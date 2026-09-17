@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@ep/ui/components/card";
 import { StatusChip } from "./status-chip";
-import { formatCompactViews } from "../../lib/brand";
+import { formatCompactViews, objectiveLabel } from "../../lib/brand";
 import type { BrandStatsCampaign } from "../../lib/brand";
 
 interface TopCampaignsProps {
@@ -68,7 +68,7 @@ export function TopCampaigns({ campaigns }: TopCampaignsProps) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-stone-900">{c.name}</p>
                     <p className="mt-0.5 truncate text-xs font-medium text-stone-500">
-                      {c.category || "General"}
+                      {c.category || "General"} · {objectiveLabel(c.campaignModel, c.objective)}
                     </p>
                   </div>
                   <StatusChip status={c.status} className="hidden sm:inline-flex" />

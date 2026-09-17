@@ -4,9 +4,9 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
 import { useToast } from "@ep/ui/components/toast";
-import { API_URL, apiRequest, clearAuth, getToken, getUser } from "../lib/api";
+import { API_URL, ApiRequestError, apiRequest, clearAuth, getToken, getUser } from "../lib/api";
 import { readCache, writeCache, updateCache } from "../lib/cache";
-import { useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
+import { useCampaignPlaces, useCampaignUpdates, type CampaignUpdate } from "../lib/socket";
 import type {
   CreatorProfile,
   ActiveTab,
@@ -14,11 +14,19 @@ import type {
   MarketplaceCampaign,
   WalletData,
   ProfileForm,
-  ProfileFocusSection,
+  ProfileSection,
+  EligibilityFailure,
+  JoinResult,
   TikTokStatus,
   MetaStatus,
   MetaProvider,
 } from "./types";
+// Campaign engine: applications (ticket 06)
+import type { MyApplication } from "./types";
+import { applicationsApi } from "../lib/api";
+import { useApplicationUpdates } from "../lib/socket";
+// M8 batch 7: usage-rights acceptance on join and apply (SPEC D30)
+import type { UsageRightsAcceptance } from "./types";
 
 interface CreatorDashboardValue {
   profile: CreatorProfile;
@@ -29,8 +37,8 @@ interface CreatorDashboardValue {
   navigateTab: (tab: ActiveTab) => void;
   isMobile: boolean;
   showProfile: boolean;
-  profileFocus: ProfileFocusSection | null;
-  openProfile: (section: ProfileFocusSection) => void;
+  profileFocus: ProfileSection | null;
+  openProfile: (section: ProfileSection) => void;
   closeProfile: () => void;
   showAllSet: boolean;
   profileComplete: boolean;
@@ -41,11 +49,12 @@ interface CreatorDashboardValue {
   handleBrowseCampaigns: () => void;
   handleLogout: () => void;
   marketplaceCampaigns: MarketplaceCampaign[];
-  marketplaceMeta: { activeSlots: number; maxSlots: number; canClaim: boolean };
+  marketplaceMeta: MarketplaceMeta;
+  setMarketplaceMeta: React.Dispatch<React.SetStateAction<MarketplaceMeta>>;
+  upsertMarketplaceCampaigns: (items: MarketplaceCampaign[]) => void;
   walletData: WalletData | null;
   selectedCampaign: CampaignItem | null;
   setSelectedCampaign: (camp: CampaignItem | null) => void;
-  handleClaimSlot: (campaignId: string, views: number) => void;
   handleRemoveSocial: (platform: string) => void;
   handleSaveNiches: (niches: string[]) => void;
   handleSaveProfile: () => void;
@@ -59,7 +68,32 @@ interface CreatorDashboardValue {
   handleUpdateContent: (campaignId: string, videoUrl: string, caption: string) => void;
   handleDetailsSubmitPostUrl: (campaignId: string, urls: Record<string, string>) => Promise<void>;
   refreshCampaigns: () => Promise<void>;
+  handleJoinCampaign: (campaignId: string, committedViews?: number, usageRightsAccepted?: UsageRightsAcceptance) => Promise<JoinOutcome>;
+  refreshProfile: () => Promise<void>;
+  applyProfileUpdate: (data: Partial<CreatorProfile>) => void;
+  // Campaign engine: applications (ticket 06)
+  applications: MyApplication[];
+  handleApplyToCampaign: (campaignId: string, pitch: string, usageRightsAccepted?: UsageRightsAcceptance) => Promise<ApplyOutcome>;
+  handleWithdrawApplication: (campaignId: string) => Promise<boolean>;
 }
+
+// Campaign engine: applications (ticket 06)
+export type ApplyOutcome =
+  | { ok: true; application: MyApplication }
+  | { ok: false; message: string; failures: EligibilityFailure[]; code?: string };
+
+// canClaim is false when the creator can't take placements at all; lockReason says why
+// (no social account or niches) and a full placement limit shows as activeSlots >= maxSlots.
+export interface MarketplaceMeta {
+  activeSlots: number;
+  maxSlots: number;
+  canClaim: boolean;
+  lockReason: string | null;
+}
+
+export type JoinOutcome =
+  | { ok: true; result: JoinResult }
+  | { ok: false; message: string; failures: EligibilityFailure[]; code?: string };
 
 // One response for the whole dashboard (GET /creators/dashboard).
 interface DashboardPayload {
@@ -70,10 +104,12 @@ interface DashboardPayload {
     activeSlots: number;
     maxSlots: number;
     canClaim: boolean;
+    lockReason?: string | null;
   };
   wallet: WalletData;
   tiktok: TikTokStatus;
   meta: MetaStatus;
+  applications?: MyApplication[]; // Campaign engine: applications (ticket 06)
 }
 
 const DASHBOARD_CACHE = "creator-dashboard";
@@ -92,75 +128,126 @@ function mapProfile(data: Record<string, unknown>): CreatorProfile {
     creatorScore: (data.creatorScore as number) || 0,
     lifetimeEarnings: (data.lifetimeEarnings as number) || 0,
     completionRate: (data.completionRate as number) || 0,
+    city: (data.city as string) || "",
+    state: (data.state as string) || "",
+    legalName: (data.legalName as string) || "",
+    phone: (data.phone as string) || "",
+    categories: (data.categories as string[]) || [],
+    audience: (data.audience as CreatorProfile["audience"]) ?? null,
+    portfolio: (data.portfolio as CreatorProfile["portfolio"]) || [],
+    verified: Boolean(data.verified),
+    badges: (data.badges as string[]) || [],
+    rating: data.rating as CreatorProfile["rating"],
+    stats: data.stats as CreatorProfile["stats"],
   };
 }
 
 function mapCampaignItems(list: Array<Record<string, unknown>> | undefined): CampaignItem[] {
-  return (list || []).map((c) => ({
-    id: c.id as string,
-    slotId: c.slotId as string,
-    title: c.title as string,
-    category: c.category as string,
-    coverImageUrl: c.coverImageUrl as string,
-    delivery: c.delivery as string,
-    status: c.status as CampaignItem["status"],
-    reward: c.reward as number,
-    viewTarget: c.viewTarget as number,
-    minViews: c.minViews as number | undefined,
-    maxViews: c.maxViews as number | undefined,
-    costPerView: c.costPerView as number | undefined,
-    comment: c.comment as string,
-    progress: c.progress as number,
-    currentViews: c.currentViews as number,
-    targetViews: c.targetViews as number,
-    videoUrl: c.videoUrl as string,
-    caption: c.caption as string,
-    videoDuration: c.videoDuration as string,
-    submittedAgo: c.submittedAgo as string,
-    postedPlatforms: c.postedPlatforms as Array<{ platform: string; views: number }>,
-    creatorHandle: c.creatorHandle as string | undefined,
-    submissionId: c.submissionId as string,
-    contentBrief: c.contentBrief as string,
-    description: c.description as string,
-    keyMessageCta: c.keyMessageCta as string,
-    whatToAvoid: c.whatToAvoid as string,
-    goal: c.goal as string | undefined,
-    competitors: c.competitors as string | undefined,
-    uniqueSellingPoint: c.uniqueSellingPoint as string | undefined,
-    funFact: c.funFact as string | undefined,
-    platforms: c.platforms as string[],
-    contentStyle: c.contentStyle as string[],
-    brandName: c.brandName as string | undefined,
-    brandAvatar: c.brandAvatar as string | undefined,
-    scriptUrl: c.scriptUrl as string | undefined,
-    scriptFileName: c.scriptFileName as string | undefined,
-    timeline: (c.timeline as CampaignItem["timeline"]) || [],
-    referral: (c.referral as CampaignItem["referral"]) ?? null,
-  }));
+  return (list || []).map((c, idx) => {
+    const rawId = c.id ?? c._id;
+    const id = rawId != null && String(rawId).trim() !== "" ? String(rawId) : `campaign-item-${idx}`;
+    return {
+      id,
+      slotId: (c.slotId || "") as string,
+      title: (c.title || c.name || "") as string,
+      category: (c.category || "") as string,
+      coverImageUrl: (c.coverImageUrl || "") as string,
+      delivery: (c.delivery || "") as string,
+      status: c.status as CampaignItem["status"],
+      reward: typeof c.reward === "number" ? c.reward : 0,
+      viewTarget: typeof c.viewTarget === "number" ? c.viewTarget : 0,
+      minViews: c.minViews as number | undefined,
+      maxViews: c.maxViews as number | undefined,
+      costPerView: c.costPerView as number | undefined,
+      comment: (c.comment || "") as string,
+      progress: typeof c.progress === "number" ? c.progress : 0,
+      currentViews: typeof c.currentViews === "number" ? c.currentViews : 0,
+      targetViews: typeof c.targetViews === "number" ? c.targetViews : 0,
+      videoUrl: (c.videoUrl || "") as string,
+      caption: (c.caption || "") as string,
+      videoDuration: (c.videoDuration || "") as string,
+      submittedAgo: (c.submittedAgo || "") as string,
+      postedPlatforms: (c.postedPlatforms as Array<{ platform: string; views: number }>) || [],
+      creatorHandle: c.creatorHandle as string | undefined,
+      submissionId: (c.submissionId || "") as string,
+      contentBrief: (c.contentBrief || "") as string,
+      description: (c.description || "") as string,
+      keyMessageCta: (c.keyMessageCta || "") as string,
+      whatToAvoid: (c.whatToAvoid || "") as string,
+      goal: c.goal as string | undefined,
+      competitors: c.competitors as string | undefined,
+      uniqueSellingPoint: c.uniqueSellingPoint as string | undefined,
+      funFact: c.funFact as string | undefined,
+      platforms: (c.platforms as string[]) || [],
+      contentStyle: (c.contentStyle as string[]) || [],
+      brandName: c.brandName as string | undefined,
+      brandAvatar: c.brandAvatar as string | undefined,
+      scriptUrl: c.scriptUrl as string | undefined,
+      scriptFileName: c.scriptFileName as string | undefined,
+      timeline: (c.timeline as CampaignItem["timeline"]) || [],
+      referral: (c.referral as CampaignItem["referral"]) ?? null,
+      kind: c.kind as CampaignItem["kind"],
+      brief: c.brief as CampaignItem["brief"],
+      pay: c.pay as CampaignItem["pay"],
+      // Campaign engine: content approval (ticket 07)
+      contentApproval: c.contentApproval as CampaignItem["contentApproval"],
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective: c.campaignObjective as string | undefined,
+      contentDestination: (c.contentDestination as CampaignItem["contentDestination"]) ?? null,
+      destinationDomain: (c.destinationDomain as string | null | undefined) ?? null,
+      usageRights: (c.usageRights as CampaignItem["usageRights"]) ?? null,
+    };
+  });
 }
 
-function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): MarketplaceCampaign[] {
-  return (list || []).map((c) => ({
-    id: c.id as string,
-    title: c.title as string,
-    category: c.category as string,
-    coverImageUrl: c.coverImageUrl as string,
-    reward: c.reward as number,
-    platforms: (c.platforms as string[]) || [],
-    slotsLeft: c.slotsLeft as number,
-    daysLeft: c.daysLeft as number,
-    targetViews: c.targetViews as number,
-    costPerView: c.costPerView as number,
-    creatorPool: c.creatorPool as number | undefined,
-    referralReward: (c.referralReward as MarketplaceCampaign["referralReward"]) ?? null,
-    contentBrief: c.contentBrief as string,
-    brandName: (c.brandName as string) || "Brand",
-    brandAvatar: c.brandAvatar as string | undefined,
-    minViews: (c.minViews as number) || 1000,
-    maxViews: (c.maxViews as number) || undefined,
-    viewTarget: (c.viewTarget as number) || undefined,
-    description: (c.description as string) || "",
-  }));
+export function mapMarketplaceItems(list: Array<Record<string, unknown>> | undefined): MarketplaceCampaign[] {
+  return (list || []).map((c, idx) => {
+    const rawId = c.id ?? c._id;
+    const id = rawId != null && String(rawId).trim() !== "" ? String(rawId) : `marketplace-item-${idx}`;
+    return {
+      id,
+      title: (c.title || c.name || "") as string,
+      category: (c.category || "") as string,
+      coverImageUrl: (c.coverImageUrl || "") as string,
+      reward: typeof c.reward === "number" ? c.reward : 0,
+      platforms: (c.platforms as string[]) || [],
+      slotsLeft: typeof c.slotsLeft === "number" ? c.slotsLeft : 0,
+      daysLeft: typeof c.daysLeft === "number" ? c.daysLeft : 7,
+      targetViews: typeof c.targetViews === "number" ? c.targetViews : 0,
+      costPerView: typeof c.costPerView === "number" ? c.costPerView : 0,
+      creatorPool: c.creatorPool as number | undefined,
+      referralReward: (c.referralReward as MarketplaceCampaign["referralReward"]) ?? null,
+      contentBrief: (c.contentBrief || "") as string,
+      brandName: (c.brandName as string) || "Brand",
+      brandAvatar: c.brandAvatar as string | undefined,
+      minViews: (c.minViews as number) || 1000,
+      maxViews: (c.maxViews as number) || undefined,
+      viewTarget: (c.viewTarget as number) || undefined,
+      description: (c.description as string) || (c.contentBrief as string) || "",
+      campaignModel: c.campaignModel as MarketplaceCampaign["campaignModel"],
+      payShape: c.payShape as MarketplaceCampaign["payShape"],
+      creatorAccess: c.creatorAccess as MarketplaceCampaign["creatorAccess"],
+      pay: c.pay as MarketplaceCampaign["pay"],
+      targetPlatforms: (c.targetPlatforms as string[]) || undefined,
+      targetLocations: (c.targetLocations as string[]) || [],
+      placesLeft: c.placesLeft as number | undefined,
+      briefSummary: (c.briefSummary as string) || "",
+      publishedAt: c.publishedAt as string | undefined,
+      eligible: c.eligible as boolean | undefined,
+      ineligibleReasons: (c.ineligibleReasons as string[]) || [],
+      matchScore: c.matchScore as number | undefined,
+      recommended: Boolean(c.recommended),
+      why: (c.why as string[]) || [],
+      recommendationScore: typeof c.recommendationScore === "number" ? c.recommendationScore : undefined,
+      recentCreators: typeof c.recentCreators === "number" ? c.recentCreators : 0,
+      trending: Boolean(c.trending),
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective: c.campaignObjective as string | undefined,
+      contentDestination: (c.contentDestination as MarketplaceCampaign["contentDestination"]) ?? null,
+      destinationDomain: (c.destinationDomain as string | null | undefined) ?? null,
+      usageRights: (c.usageRights as MarketplaceCampaign["usageRights"]) ?? null,
+    };
+  });
 }
 
 const CreatorDashboardContext = React.createContext<CreatorDashboardValue | null>(null);
@@ -203,16 +290,17 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   const [showAllSet, setShowAllSet] = React.useState(false);
   const [showProfile, setShowProfile] = React.useState(false);
-  const [profileFocus, setProfileFocus] = React.useState<ProfileFocusSection | null>(null);
+  const [profileFocus, setProfileFocus] = React.useState<ProfileSection | null>(null);
   const [campaignsFilter, setCampaignsFilter] = React.useState<string>("all");
   const [campaigns, setCampaigns] = React.useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
-  const [marketplaceMeta, setMarketplaceMeta] = React.useState({ activeSlots: 0, maxSlots: 3, canClaim: true });
+  const [marketplaceMeta, setMarketplaceMeta] = React.useState<MarketplaceMeta>({ activeSlots: 0, maxSlots: 3, canClaim: true, lockReason: null });
   const [walletData, setWalletData] = React.useState<WalletData | null>(null);
   const [tiktokStatus, setTiktokStatus] = React.useState<TikTokStatus>({ connected: false });
   const [metaStatus, setMetaStatus] = React.useState<MetaStatus>({ instagram: { connected: false }, facebook: { connected: false } });
   const [selectedCampaign, setSelectedCampaign] = React.useState<CampaignItem | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [applications, setApplications] = React.useState<MyApplication[]>([]); // Campaign engine: applications (ticket 06)
 
   const [profileForm, setProfileForm] = React.useState<ProfileForm>({
     name: "",
@@ -345,11 +433,12 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     if (data.wallet) setWalletData(data.wallet);
     if (data.tiktok) setTiktokStatus(data.tiktok);
     if (data.meta) setMetaStatus(data.meta);
+    if (data.applications) setApplications(data.applications); // Campaign engine: applications (ticket 06)
   };
 
   const fetchAllData = async () => {
     try {
-      const data = await apiRequest<DashboardPayload>("/creators/dashboard", {
+      const data = await apiRequest<DashboardPayload>("/creators/dashboard?marketplace=none", {
         token: getToken() || undefined,
       });
       applyDashboard(data);
@@ -436,8 +525,19 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       activeSlots: data.activeSlots || 0,
       maxSlots: data.maxSlots || 3,
       canClaim: data.canClaim ?? true,
+      lockReason: data.lockReason ?? null,
     });
   };
+
+  const upsertMarketplaceCampaigns = React.useCallback((items: MarketplaceCampaign[]) => {
+    setMarketplaceCampaigns((prev) => {
+      const byId = new Map(prev.map((c) => [c.id, c]));
+      for (const item of items) {
+        byId.set(item.id, { ...(byId.get(item.id) || {}), ...item });
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
 
   const fetchMarketplace = async () => {
     try {
@@ -612,7 +712,7 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
-  const openProfile = (section: ProfileFocusSection) => {
+  const openProfile = (section: ProfileSection) => {
     setProfileFocus(section);
     setShowProfile(true);
   };
@@ -740,6 +840,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
       return;
     }
 
+    // Campaign engine: content approval (ticket 07): the update doesn't carry the approval
+    // state (feedback, delivery, auto-approval), so reload content campaigns.
+    if (campaigns.some((c) => c.id === data.campaignId && c.contentApproval)) {
+      fetchCampaigns();
+      return;
+    }
+
     setCampaigns((prev) =>
       prev.map((c) =>
         c.id !== data.campaignId
@@ -762,7 +869,8 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     );
 
     if (data.status === "delivered") {
-      toast("Campaign delivered — you hit your view target!", "success");
+      const deliverable = campaigns.find((c) => c.id === data.campaignId)?.kind === "deliverable";
+      toast(deliverable ? "Content delivered." : "Campaign delivered — you hit your view target!", "success");
       fetchWallet();
     } else if (data.status === "cancelled") {
       toast("Campaign cancelled", "error");
@@ -772,20 +880,110 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
 
   useCampaignUpdates(handleCampaignUpdate);
 
-  const handleClaimSlot = async (campaignId: string, views: number) => {
+  // Open Call join. Returns every failed rule when the creator can't join yet.
+  const handleJoinCampaign = async (
+    campaignId: string,
+    committedViews?: number,
+    usageRightsAccepted?: UsageRightsAcceptance
+  ): Promise<JoinOutcome> => {
     try {
-      await apiRequest("/slots/claim", {
+      const joinBody = {
+        ...(committedViews !== undefined && { committedViews }),
+        ...(usageRightsAccepted && { usageRightsAccepted }),
+      };
+      const result = await apiRequest<JoinResult>(`/campaigns/${campaignId}/join`, {
         method: "POST",
         token: getToken() || undefined,
-        body: JSON.stringify({ campaignId, committedViews: views }),
+        ...(Object.keys(joinBody).length > 0 && { body: JSON.stringify(joinBody) }),
       });
-
-      toast("Placement claimed! Check Home for your campaign.", "success");
-      await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to claim placement";
-      toast(message, "error");
+      setMarketplaceCampaigns((prev) => prev.filter((c) => c.id !== campaignId));
       await Promise.allSettled([fetchCampaigns(), fetchMarketplace()]);
+      return { ok: true, result };
+    } catch (err) {
+      const failures = err instanceof ApiRequestError && Array.isArray(err.body.failures)
+        ? (err.body.failures as EligibilityFailure[])
+        : [];
+      const message = err instanceof Error ? err.message : "Could not join this campaign. Try again.";
+      const code = err instanceof ApiRequestError && typeof err.body.code === "string" ? err.body.code : undefined;
+      fetchMarketplace();
+      return { ok: false, message, failures, code };
     }
+  };
+
+  // Places left change live as other creators join.
+  useCampaignPlaces(({ campaignId, placesLeft }) => {
+    setMarketplaceCampaigns((prev) =>
+      prev
+        .map((c) => (c.id === campaignId ? { ...c, placesLeft, slotsLeft: placesLeft } : c))
+        .filter((c) => c.id !== campaignId || placesLeft > 0)
+    );
+  });
+
+  // Campaign engine: applications (ticket 06)
+  // Keeps the list's campaign details (brand, cover) when a response only carries the application.
+  const upsertApplication = (next: MyApplication) => {
+    setApplications((prev) => {
+      const existing = prev.find((a) => a.campaignId === next.campaignId);
+      const merged = existing ? { ...existing, ...next } : next;
+      const list = [merged, ...prev.filter((a) => a.campaignId !== next.campaignId)];
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { applications: list });
+      return list;
+    });
+  };
+
+  const handleApplyToCampaign = async (
+    campaignId: string,
+    pitch: string,
+    usageRightsAccepted?: UsageRightsAcceptance
+  ): Promise<ApplyOutcome> => {
+    try {
+      const application = await applicationsApi.apply(campaignId, pitch, usageRightsAccepted);
+      const campaign = marketplaceCampaigns.find((c) => c.id === campaignId);
+      upsertApplication({
+        ...application,
+        brandName: campaign?.brandName,
+        brandAvatar: campaign?.brandAvatar ?? null,
+        coverImageUrl: campaign?.coverImageUrl ?? null,
+      });
+      return { ok: true, application };
+    } catch (err) {
+      const failures = err instanceof ApiRequestError && Array.isArray(err.body.failures)
+        ? (err.body.failures as EligibilityFailure[])
+        : [];
+      const message = err instanceof Error ? err.message : "Could not send your application. Try again.";
+      const code = err instanceof ApiRequestError && typeof err.body.code === "string" ? err.body.code : undefined;
+      return { ok: false, message, failures, code };
+    }
+  };
+
+  const handleWithdrawApplication = async (campaignId: string): Promise<boolean> => {
+    try {
+      upsertApplication(await applicationsApi.withdraw(campaignId));
+      return true;
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not withdraw your application. Try again.", "error");
+      return false;
+    }
+  };
+
+  // A decision or expiry. The status shows at once; the placement and brief (also sent with
+  // an approval) arrive in full with the fresh dashboard.
+  useApplicationUpdates((update) => {
+    if (update.status) {
+      setApplications((prev) =>
+        prev.map((a) => (a.campaignId === update.campaignId ? { ...a, status: update.status as MyApplication["status"] } : a))
+      );
+    }
+    if (update.type === "application_approved") toast("You've been selected. Your brief is unlocked.", "success");
+    fetchAllData();
+  });
+
+  const applyProfileUpdate = (data: Partial<CreatorProfile>) => {
+    setProfile((prev) => {
+      const next = { ...prev, ...data };
+      updateCache<DashboardPayload>(DASHBOARD_CACHE, { profile: next as unknown as Record<string, unknown> });
+      return next;
+    });
   };
 
   const handleSelectCampaign = (camp: CampaignItem) => {
@@ -840,10 +1038,11 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleLogout,
     marketplaceCampaigns,
     marketplaceMeta,
+    setMarketplaceMeta,
+    upsertMarketplaceCampaigns,
     walletData,
     selectedCampaign,
     setSelectedCampaign,
-    handleClaimSlot,
     handleRemoveSocial,
     handleSaveNiches,
     handleSaveProfile,
@@ -857,6 +1056,13 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
     refreshCampaigns,
+    handleJoinCampaign,
+    refreshProfile: fetchProfile,
+    applyProfileUpdate,
+    // Campaign engine: applications (ticket 06)
+    applications,
+    handleApplyToCampaign,
+    handleWithdrawApplication,
   };
 
   return (

@@ -37,7 +37,17 @@ npm run start            # node src/server.js (production)
 ```
 
 ### Testing
-No test framework configured. Run `npx tsc --noEmit` for type checking.
+Frontend: no test framework; run `npx tsc --noEmit` for type checking.
+
+Backend end-to-end tests (run from `Backend/`):
+```bash
+npm test                 # unit then end-to-end
+npm run test:unit        # pure calculations (budget, eligibility), no database
+npm run test:e2e         # node:test against a throwaway local mongod, Paystack stubbed
+```
+- Needs `mongod` installed locally (set `MONGOD_PATH` if it isn't found). Tests never read `Backend/.env` and clear outside-service keys (email, S3, Cloudinary, social APIs).
+- Tests live in `Backend/test/e2e/*.test.js` and drive the HTTP API through `test/e2e/harness.js` (`api`, `registerBrand`, `registerCreator`, `paystack.markPaid`).
+- `views-campaign.test.js` is the regression guard for live campaigns; keep it passing.
 
 ## Key Ports
 
@@ -70,7 +80,7 @@ No test framework configured. Run `npx tsc --noEmit` for type checking.
 - **`strict: true`** in all tsconfig.json, `moduleResolution: "bundler"`
 - Path aliases: `@/*` → `./src/*`, `@ep/ui/*` → `../../packages/ui/src/*`
 - Next.js config rewrites `/api/*` → `http://localhost:5000/api/*` (dev proxy)
-- No eslint config file (uses `next lint` defaults), no test framework
+- No eslint config file (uses `next lint` defaults), no frontend test framework (backend: `npm run test:e2e`)
 - UI package exports from `@ep/ui` map via `package.json` `"exports"` field: `./components/*`, `./lib/*`, `./assets/*`, `./hooks/*`
 
 ## Code Style Guidelines

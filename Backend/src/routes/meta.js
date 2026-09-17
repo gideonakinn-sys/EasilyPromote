@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { dropVerificationIfUnconnected } = require("../utils/creatorVerification");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const CreatorProfile = require("../models/CreatorProfile");
@@ -307,6 +308,7 @@ router.post("/disconnect/:provider", protect, authorizeRoles("creator"), async (
       profile.socialAccounts = profile.socialAccounts.filter((s) => s.platform !== provider);
       await profile.save();
     }
+    await dropVerificationIfUnconnected(req.user._id);
 
     res.json({ message: `${provider} disconnected` });
   } catch (error) {

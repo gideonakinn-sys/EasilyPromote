@@ -20,23 +20,24 @@ const COMMITTED_RELEASE_STATUSES = ["escrow_deposit", "released"];
 const SERIES_DAYS = 14;
 
 function campaignBrief(c) {
+  const targetViews = c.targetViews || 0;
   const progressPercent =
-    c.targetViews > 0
-      ? Math.min(Math.round((c.viewsDelivered / c.targetViews) * 100), 100)
-      : 0;
+    targetViews > 0 ? Math.min(Math.round((c.viewsDelivered / targetViews) * 100), 100) : 0;
   return {
     id: c._id,
     name: c.name,
     category: c.category,
     status: c.status,
     coverImageUrl: c.coverImageUrl,
-    targetViews: c.targetViews,
-    viewsDelivered: c.viewsDelivered,
+    targetViews,
+    viewsDelivered: c.viewsDelivered || 0,
     progressPercent,
     budget: c.budget,
-    views: c.viewsDelivered,
+    views: c.viewsDelivered || 0,
     startDate: c.startDate,
     endDate: c.endDate,
+    objective: c.objective,
+    campaignModel: c.campaignModel,
     hasReferral: !!(c.referral && c.referral.enabled),
     conversions: c.referral && c.referral.enabled ? c.referral.conversions || 0 : 0,
   };
@@ -82,8 +83,8 @@ async function buildAggregateStats(userId) {
   const funded = campaigns.filter((c) =>
     ["under_review", "live", "paused", "completed"].includes(c.status)
   );
-  const viewsTarget = funded.reduce((sum, c) => sum + c.targetViews, 0);
-  const viewsDelivered = funded.reduce((sum, c) => sum + c.viewsDelivered, 0);
+  const viewsTarget = funded.reduce((sum, c) => sum + (c.targetViews || 0), 0);
+  const viewsDelivered = funded.reduce((sum, c) => sum + (c.viewsDelivered || 0), 0);
 
   const deposited = transactions
     .filter((t) => DEPOSIT_TYPES.includes(t.type) && t.status === "escrow_deposit")
@@ -160,6 +161,9 @@ async function buildAggregateStats(userId) {
 
 // Billing feed: the brand's money movement across all its campaigns.
 async function listTransactions(userId) {
+  const campaigns = await Campaign.find({ businessId: userId }).select("_id name").lean();
+  const campaignIds = campaigns.map((c) => c._id);
+  if (campaignIds.length === 0) return { total: 0, transactions: [] };
 
   const rows = await Transaction.find({ campaignId: { $in: campaignIds } })
     .populate("campaignId", "name")

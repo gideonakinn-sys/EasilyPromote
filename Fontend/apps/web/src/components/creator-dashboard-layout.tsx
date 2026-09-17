@@ -38,6 +38,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
     handleUpdateContent,
     handleDetailsSubmitPostUrl,
     refreshCampaigns,
+    applyProfileUpdate,
   } = useCreatorDashboard();
 
   return (
@@ -89,6 +90,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
             metaStatus={metaStatus}
             onConnectMeta={handleConnectMeta}
             onDisconnectMeta={handleDisconnectMeta}
+            onProfileUpdated={applyProfileUpdate}
           />
         ) : (
           children

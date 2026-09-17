@@ -1,11 +1,12 @@
 import { API_URL, apiRequest, getToken } from "./api";
 
-export type ReferralEventType = "install" | "signup" | "purchase" | "deposit" | "custom";
+export type ReferralEventType = "install" | "signup" | "lead" | "purchase" | "deposit" | "custom";
 export type ReferralCodeSource = "easilypromote" | "business";
 
 export const REFERRAL_EVENT_TYPES: { value: ReferralEventType; label: string }[] = [
   { value: "signup", label: "Sign-ups" },
   { value: "install", label: "App installs" },
+  { value: "lead", label: "Leads" },
   { value: "purchase", label: "Purchases" },
   { value: "deposit", label: "Deposits" },
   { value: "custom", label: "Custom event" },
@@ -29,6 +30,7 @@ export const CODE_SOURCE_OPTIONS: { value: ReferralCodeSource; label: string; sh
 const CONVERSION_NOUNS: Record<ReferralEventType, [string, string]> = {
   signup: ["sign-up", "sign-ups"],
   install: ["install", "installs"],
+  lead: ["lead", "leads"],
   purchase: ["purchase", "purchases"],
   deposit: ["deposit", "deposits"],
   custom: ["conversion", "conversions"],
@@ -37,6 +39,17 @@ const CONVERSION_NOUNS: Record<ReferralEventType, [string, string]> = {
 export function conversionNoun(eventType: string | undefined, count: number): string {
   const nouns = CONVERSION_NOUNS[(eventType as ReferralEventType) || "custom"] || CONVERSION_NOUNS.custom;
   return count === 1 ? nouns[0] : nouns[1];
+}
+
+// A campaign can count several types; the specific noun only reads right when there's one.
+export function conversionNounFor(eventTypes: string[] | undefined, count: number): string {
+  return conversionNoun(eventTypes && eventTypes.length === 1 ? eventTypes[0] : "custom", count);
+}
+
+export function eventTypeLabels(eventTypes: string[] | undefined): string {
+  return (eventTypes || [])
+    .map((type) => REFERRAL_EVENT_TYPES.find((option) => option.value === type)?.label || type)
+    .join(", ");
 }
 
 export function formatWhen(iso: string | null | undefined): string {
@@ -52,6 +65,47 @@ export function formatWhen(iso: string | null | undefined): string {
 
 export const DEVELOPER_DOCS_URL = "https://www.easilypromote.com/developers";
 
+// Plain-language explanation for brands, shown in the campaign wizard and on the referral screen.
+export const REFERRAL_HOW_IT_WORKS: { title: string; body: string }[] = [
+  {
+    title: "Every creator gets their own code",
+    body: "We create it when they join your campaign, for example KUDA-TUNDE. They share it in their videos.",
+  },
+  {
+    title: "People join your app with the code",
+    body: "They type it in when they sign up, download your app or buy something.",
+  },
+  {
+    title: "Your app checks the code with us",
+    body: "We answer yes or no instantly. When the sign-up is done, your app tells us.",
+  },
+  {
+    title: "You see results per creator",
+    body: "Sign-ups show up per creator as they happen, and creators are paid per real sign-up from your referral budget.",
+  },
+];
+
+// Everything a developer needs to connect the brand's app, except the secret, which is shared privately.
+export function buildDeveloperMessage(
+  status: { webhookUrl?: string; validateUrl?: string } | null,
+  keyId: string,
+  keyName?: string
+): string {
+  return [
+    "Please connect our app to Easily Promote referral tracking.",
+    "",
+    `Key ID (EP_KEY_ID): ${keyId}${keyName ? ` (${keyName})` : ""}`,
+    "Secret (EP_WEBHOOK_SECRET): I'll share it privately.",
+    "",
+    `1. When a user enters a referral code, POST { "code": "..." } to ${status?.validateUrl || ""} and accept it only if the answer has "valid": true.`,
+    `2. When they finish signing up, POST the conversion to ${status?.webhookUrl || ""}.`,
+    '3. Sign every request with the X-EP-Key-Id and X-EP-Signature headers (HMAC-SHA256 of "timestamp.body").',
+    "",
+    'To finish setup, send one code check and one conversion with "test": true from our server.',
+    `Docs and code samples: ${DEVELOPER_DOCS_URL}`,
+  ].join("\n");
+}
+
 export interface WebhookDeliveryLog {
   id: string;
   createdAt: string;
@@ -65,6 +119,7 @@ export interface WebhookDeliveryLog {
   isTest: boolean;
   counted: boolean;
   keyId: string | null;
+  keyName?: string | null;
 }
 
 export type TestRequestType = "validate" | "conversion";
@@ -88,6 +143,13 @@ export interface TestEventResult {
 }
 
 export const MIN_REFERRAL_BUDGET = 1000;
+export const MAX_KEY_NAME = 40;
+
+// How a brand's codes look: their name, then the creator's username.
+export function codeFormatText(prefix: string | undefined): string {
+  const start = prefix || "BRAND";
+  return `Your codes look like ${start}-CREATORNAME, for example ${start}-TUNDE. Each creator gets their own when they join.`;
+}
 
 export function formatNaira(value: number | null | undefined): string {
   return `₦${(value || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
@@ -96,10 +158,13 @@ export function formatNaira(value: number | null | undefined): string {
 export interface ReferralSettings {
   enabled: boolean;
   eventType: ReferralEventType;
+  eventTypes: ReferralEventType[];
   codeSource: ReferralCodeSource;
   conversions: number;
-  // What a creator earns per counted conversion, and the separately funded budget that pays it.
+  // What a creator earns per counted conversion, set by Easily Promote (0 until it's set),
+  // and the separately funded budget that pays it.
   rewardPerConversion: number;
+  requestedBudget?: number;
   budget: number;
   platformFee: number;
   platformFeePercent?: number;
@@ -112,6 +177,8 @@ export interface ReferralSettings {
 export interface WebhookKey {
   id: string;
   keyId: string;
+  // Optional label from the brand, e.g. "Live app".
+  name: string;
   last4: string;
   status: "active" | "expiring" | "revoked" | "expired";
   expiresAt: string | null;
@@ -120,10 +187,15 @@ export interface WebhookKey {
 }
 
 export interface ReferralStatus {
+  // True once a code check and a conversion have arrived from the brand's own server.
+  verified: boolean;
+  verification: { codeCheckAt: string | null; conversionAt: string | null; verifiedAt: string | null };
   connected: boolean;
   connectedAt: string | null;
   lastEventAt: string | null;
   activeKeys: number;
+  // Every code we create for this brand starts with it, e.g. KUDA in KUDA-TUNDE.
+  codePrefix?: string;
   webhookUrl: string;
   validateUrl: string;
 }
@@ -144,6 +216,7 @@ export interface ReferralCodeRow {
 
 export interface ReferralCodesPayload {
   referral: ReferralSettings;
+  codePrefix?: string;
   summary: { creators: number; active: number; awaitingBusiness: number; missing: number; conversions: number };
   codes: ReferralCodeRow[];
 }
@@ -154,14 +227,22 @@ export interface ReferralImportResult {
   results: { row: number; creatorUsername: string; code: string | null; status: "saved" | "error"; error?: string }[];
 }
 
-export type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventType" | "codeSource" | "rewardPerConversion">>;
+// Brands can't set the reward per conversion; Easily Promote does.
+export type SettingsChanges = Partial<Pick<ReferralSettings, "enabled" | "eventTypes" | "codeSource">>;
 
 const auth = () => ({ token: getToken() || undefined });
 
 export const referralApi = {
   status: () => apiRequest<ReferralStatus>("/referral/status", auth()),
   listKeys: () => apiRequest<WebhookKey[]>("/referral/keys", auth()),
-  createKey: () => apiRequest<{ key: WebhookKey; secret: string }>("/referral/keys", { method: "POST", ...auth() }),
+  createKey: (name?: string) =>
+    apiRequest<{ key: WebhookKey; secret: string }>("/referral/keys", {
+      method: "POST",
+      body: JSON.stringify({ name: name || "" }),
+      ...auth(),
+    }),
+  renameKey: (id: string, name: string) =>
+    apiRequest<WebhookKey>(`/referral/keys/${id}`, { method: "PATCH", body: JSON.stringify({ name }), ...auth() }),
   rotateKey: (id: string) =>
     apiRequest<{ key: WebhookKey; secret: string; previousKey: WebhookKey }>(`/referral/keys/${id}/rotate`, {
       method: "POST",

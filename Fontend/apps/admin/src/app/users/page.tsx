@@ -3,7 +3,24 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { CreatorVerificationDialog, type ConnectedAccount } from "../../components/creator-verification-dialog";
+import { DeleteUserDialog } from "../../components/delete-user-dialog";
+import { CreatorBadgesDialog } from "../../components/creator-badges-dialog";
+
+const BADGE_LABELS: Record<string, string> = {
+  top_creator: "Top Creator",
+  high_performer: "High Performer",
+  reliable_creator: "Reliable Creator",
+  campaign_pro: "Campaign Pro",
+};
+
+interface BadgeReviewCreator {
+  creatorId: string;
+  name: string;
+  username: string;
+  keptBadges: string[];
+}
 
 interface UserItem {
   id: string;
@@ -22,6 +39,11 @@ interface UserItem {
     lifetimeEarnings: number;
     socialAccounts?: Array<{ platform: string; handle: string; verified: boolean }>;
     niches?: string[];
+    verifiedAt?: string | null;
+    connectedAccounts?: ConnectedAccount[];
+    badges?: string[];
+    brandRating?: { average: number | null; count: number };
+    badgesNeedReview?: boolean;
   } | null;
 }
 
@@ -35,6 +57,24 @@ export default function AdminUsersPage() {
   const [rankInput, setRankInput] = useState<string>("rank1");
   const [scoreInput, setScoreInput] = useState<number>(50);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserItem | null>(null);
+  // Only super admins can delete accounts (the API refuses everyone else).
+  const [canDeleteUsers, setCanDeleteUsers] = useState(false);
+  useEffect(() => {
+    setCanDeleteUsers(getUser()?.role === "super_admin");
+  }, []);
+  const [verifyingUser, setVerifyingUser] = useState<UserItem | null>(null);
+  const [badgesFor, setBadgesFor] = useState<{ id: string; name: string } | null>(null);
+  const [badgeReview, setBadgeReview] = useState<BadgeReviewCreator[]>([]);
+
+  const fetchBadgeReview = useCallback(async () => {
+    try {
+      const data = await apiRequest<{ creators: BadgeReviewCreator[] }>("/admin/badges/review", { token: getToken() || undefined });
+      setBadgeReview(data.creators || []);
+    } catch {
+      setBadgeReview([]);
+    }
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -60,7 +100,8 @@ export default function AdminUsersPage() {
       return;
     }
     fetchUsers();
-  }, [router, fetchUsers]);
+    fetchBadgeReview();
+  }, [router, fetchUsers, fetchBadgeReview]);
 
   const toggleUserStatus = async (id: string, currentStatus: boolean) => {
     try {
@@ -78,21 +119,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  const deleteUser = async (user: UserItem) => {
-    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, placements, transactions, and notifications. This cannot be undone.`)) return;
-    try {
-      setActionLoading(true);
-      await apiRequest(`/admin/users/${user.id}`, {
-        method: "DELETE",
-        token: getToken() || undefined,
-      });
-      fetchUsers();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleSaveRank = async () => {
     if (!selectedUser) return;
@@ -139,6 +165,26 @@ export default function AdminUsersPage() {
             />
           </div>
         </header>
+
+        {badgeReview.length > 0 && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 space-y-2">
+            <p className="text-xs font-medium text-amber-900">
+              {badgeReview.length} creator{badgeReview.length === 1 ? " has" : "s have"} badges set before automatic badges. They&apos;re kept until you review them.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {badgeReview.map((c) => (
+                <button
+                  key={c.creatorId}
+                  type="button"
+                  onClick={() => setBadgesFor({ id: c.creatorId, name: c.name })}
+                  className="px-3 py-1.5 bg-white border border-amber-200 text-amber-900 rounded-full text-xs font-semibold"
+                >
+                  Review {c.name} ({c.keptBadges.map((b) => BADGE_LABELS[b] || b).join(", ")})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6">
@@ -220,6 +266,27 @@ export default function AdminUsersPage() {
                             {u.creatorProfile?.rank || "rank1"}
                           </span>
                           <span className="text-[11px] text-stone-400 block">Score: {u.creatorProfile?.creatorScore || 0}/100</span>
+                          {(u.creatorProfile?.brandRating?.count ?? 0) > 0 && (
+                            <span className="text-[11px] text-stone-500 block">
+                              Rating: {u.creatorProfile?.brandRating?.average?.toFixed(2) ?? "–"} ({u.creatorProfile?.brandRating?.count})
+                            </span>
+                          )}
+                          {(u.creatorProfile?.badges || []).length > 0 && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {(u.creatorProfile?.badges || []).map((b) => (
+                                <span key={b} className="px-2 py-0.5 rounded-full bg-amber-50 text-[10px] font-medium text-amber-800">
+                                  {BADGE_LABELS[b] || b}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                          {u.creatorProfile?.verifiedAt ? (
+                            <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-medium text-blue-700">Verified</span>
+                          ) : (
+                            <span className="mt-1 block text-[10px] font-medium text-stone-400">
+                              {(u.creatorProfile?.connectedAccounts || []).length > 0 ? "Not Verified" : "No Connected Account"}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-stone-400">N/A</span>
@@ -254,6 +321,24 @@ export default function AdminUsersPage() {
                             Edit Rank
                           </button>
                         )}
+                        {u.role === "creator" && u.creatorProfile && (
+                          <button
+                            onClick={() => setBadgesFor({ id: u.id, name: u.name })}
+                            className={`px-3 py-1.5 border rounded-full text-xs font-semibold ${
+                              u.creatorProfile.badgesNeedReview ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-white border-stone-200 text-stone-800"
+                            }`}
+                          >
+                            Badges &amp; Ratings
+                          </button>
+                        )}
+                        {u.role === "creator" && u.creatorProfile && (
+                          <button
+                            onClick={() => setVerifyingUser(u)}
+                            className="px-3 py-1.5 bg-white border border-stone-200 text-stone-800 rounded-full text-xs font-semibold"
+                          >
+                            {u.creatorProfile.verifiedAt ? "Remove Verification" : "Verify Creator"}
+                          </button>
+                        )}
                         <button
                           onClick={() => toggleUserStatus(u.id, u.isActive)}
                           disabled={actionLoading}
@@ -265,9 +350,9 @@ export default function AdminUsersPage() {
                         >
                           {u.isActive ? "Deactivate" : "Activate"}
                         </button>
-                        {u.role !== "admin" && u.role !== "super_admin" && (
+                        {canDeleteUsers && u.role !== "admin" && u.role !== "super_admin" && (
                           <button
-                            onClick={() => deleteUser(u)}
+                            onClick={() => setDeletingUser(u)}
                             disabled={actionLoading}
                             className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
                           >
@@ -337,6 +422,48 @@ export default function AdminUsersPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {verifyingUser && verifyingUser.creatorProfile && (
+          <CreatorVerificationDialog
+            creatorId={verifyingUser.id}
+            creatorName={verifyingUser.name}
+            verifiedAt={verifyingUser.creatorProfile.verifiedAt || null}
+            connectedAccounts={verifyingUser.creatorProfile.connectedAccounts || []}
+            onClose={() => setVerifyingUser(null)}
+            onChanged={(verifiedAt) => {
+              const id = verifyingUser.id;
+              setUsers((current) =>
+                current.map((u) => (u.id === id && u.creatorProfile ? { ...u, creatorProfile: { ...u.creatorProfile, verifiedAt } } : u))
+              );
+              setVerifyingUser(null);
+            }}
+          />
+        )}
+
+        {badgesFor && (
+          <CreatorBadgesDialog
+            creatorId={badgesFor.id}
+            creatorName={badgesFor.name}
+            onClose={() => setBadgesFor(null)}
+            onChanged={() => {
+              fetchUsers();
+              fetchBadgeReview();
+            }}
+          />
+        )}
+
+        {deletingUser && (
+          <DeleteUserDialog
+            userId={deletingUser.id}
+            userName={deletingUser.name}
+            role={deletingUser.role}
+            onClose={() => setDeletingUser(null)}
+            onDeleted={() => {
+              setDeletingUser(null);
+              fetchUsers();
+            }}
+          />
         )}
       </main>
     </div>

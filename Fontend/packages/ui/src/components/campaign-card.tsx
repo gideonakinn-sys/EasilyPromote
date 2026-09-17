@@ -13,6 +13,10 @@ export interface CampaignCardProps {
   onResume?: () => void;
   onClick?: () => void;
   className?: string;
+  // Something the brand needs to do before this campaign can move on, e.g. connect their app.
+  notice?: string;
+  // Referral campaigns: e.g. "12 sign-ups", with the share of the referral budget used.
+  referral?: { label: string; budgetUsedPercent: number };
 }
 
 export function CampaignCard({
@@ -27,6 +31,8 @@ export function CampaignCard({
   onResume,
   onClick,
   className,
+  notice,
+  referral,
 }: CampaignCardProps) {
   // Determine badge colors and labels
   const getBadges = () => {
@@ -109,6 +115,12 @@ export function CampaignCard({
         {description && (
           <p className="font-rethink text-xs text-stone-500 font-medium truncate mt-1 mb-5 tracking-[-0.01em]">{description}</p>
         )}
+        {notice && (
+          <p className="inline-flex items-center gap-1.5 mb-4 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-medium font-rethink tracking-[-0.01em]">
+            <span className="w-1 h-1 rounded-full bg-amber-600" aria-hidden="true" />
+            {notice}
+          </p>
+        )}
       </div>
 
       {status === "draft" || status === "pending_payment" ? (
@@ -139,6 +151,16 @@ export function CampaignCard({
             <span className="w-1 h-1 rounded-full bg-stone-300" />
             <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{currentViews} / {targetViews} views</span>
           </div>
+          {referral && (
+            <div className="flex items-center gap-3 mt-2">
+              <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all bg-[#176448]" style={{ width: `${referral.budgetUsedPercent}%` }} />
+              </div>
+              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.budgetUsedPercent}%</span>
+              <span className="w-1 h-1 rounded-full bg-stone-300" />
+              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.label}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

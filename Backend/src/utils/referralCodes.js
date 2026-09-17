@@ -24,11 +24,22 @@ function parseReferralSettings(input) {
     if (typeof input.enabled !== "boolean") return { error: "referral.enabled must be true or false" };
     value.enabled = input.enabled;
   }
-  if (input.eventType !== undefined) {
+  if (input.eventTypes !== undefined) {
+    if (!Array.isArray(input.eventTypes) || input.eventTypes.length === 0) {
+      return { error: "referral.eventTypes must list at least one conversion type" };
+    }
+    const invalid = input.eventTypes.find((type) => !EVENT_TYPES.includes(type));
+    if (invalid !== undefined) {
+      return { error: `referral.eventTypes must only contain: ${EVENT_TYPES.join(", ")}` };
+    }
+    value.eventTypes = [...new Set(input.eventTypes)];
+    value.eventType = value.eventTypes[0];
+  } else if (input.eventType !== undefined) {
     if (!EVENT_TYPES.includes(input.eventType)) {
       return { error: `referral.eventType must be one of: ${EVENT_TYPES.join(", ")}` };
     }
     value.eventType = input.eventType;
+    value.eventTypes = [input.eventType];
   }
   if (input.codeSource !== undefined) {
     if (!CODE_SOURCES.includes(input.codeSource)) {
@@ -36,14 +47,25 @@ function parseReferralSettings(input) {
     }
     value.codeSource = input.codeSource;
   }
-  if (input.rewardPerConversion !== undefined) {
-    const amount = Number(input.rewardPerConversion);
-    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000) {
-      return { error: "referral.rewardPerConversion must be a number between 0 and 1,000,000" };
+  // rewardPerConversion is ignored here: brands fund the budget, admin sets the reward.
+  if (input.requestedBudget !== undefined) {
+    const { MIN_REFERRAL_TOPUP, MAX_REFERRAL_TOPUP } = require("./referralEarnings");
+    const amount = Math.round(Number(input.requestedBudget));
+    if (!Number.isFinite(amount) || (amount !== 0 && (amount < MIN_REFERRAL_TOPUP || amount > MAX_REFERRAL_TOPUP))) {
+      return {
+        error: `referral.requestedBudget must be between ₦${MIN_REFERRAL_TOPUP.toLocaleString()} and ₦${MAX_REFERRAL_TOPUP.toLocaleString()}`,
+      };
     }
-    value.rewardPerConversion = Math.round(amount * 100) / 100;
+    value.requestedBudget = amount;
   }
   return { value };
+}
+
+// Campaigns saved before multi-select only have eventType.
+function campaignEventTypes(campaign) {
+  const referral = (campaign && campaign.referral) || {};
+  if (Array.isArray(referral.eventTypes) && referral.eventTypes.length) return [...referral.eventTypes];
+  return [referral.eventType || "signup"];
 }
 
 function normalizeCode(value) {
@@ -61,6 +83,12 @@ function slugPart(value, max = 12) {
 
 function buildDisplayCode(brandName, creatorHandle) {
   return `${slugPart(brandName) || "EP"}-${slugPart(creatorHandle) || "CREATOR"}`;
+}
+
+// Every code we create for a brand starts with this, e.g. KUDA in KUDA-TUNDE.
+async function brandCodePrefix(businessId) {
+  const brand = await BusinessProfile.findOne({ userId: businessId }).select("companyName").lean();
+  return slugPart(brand && brand.companyName) || "EP";
 }
 
 function randomSuffix(length = 3) {
@@ -142,8 +170,10 @@ module.exports = {
   EVENT_TYPES,
   CODE_SOURCES,
   parseReferralSettings,
+  campaignEventTypes,
   normalizeCode,
   buildDisplayCode,
+  brandCodePrefix,
   createReferralCode,
   backfillReferralCodes,
 };

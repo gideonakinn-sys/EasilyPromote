@@ -11,12 +11,29 @@ import { Skeleton } from "./ui/skeleton";
 import { useReveal } from "../hooks/use-reveal";
 import { apiRequest, getToken } from "../lib/api";
 import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
-import type { ReferralSettings } from "../lib/referral";
+import { codeFormatText, conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
 import { CampaignReferrals } from "./campaign-referrals";
+import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
+import { ConfirmDeleteModal } from "./confirm-delete-modal";
+import { CampaignApplicants } from "./campaign-applicants"; // Campaign engine: applications (ticket 06)
+import { CreatorRatings } from "./creator-ratings"; // Brand ratings (M8)
+import type { CampaignSetup } from "./types";
+// Campaign engine: content approval (ticket 07)
+import { ContentSubmissionsReview } from "./content-submissions-review";
+// M8 batch 7: clicks destination and usage-rights terms (SPEC D29, D30)
+import {
+  DestinationLinkCard,
+  TermsAcceptedNote,
+  UsageRightsCard,
+  isClicksObjective,
+  type CampaignUsageRights,
+  type WithTermsAccepted,
+} from "./campaign-usage-rights";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
 import payoutsEmpty from "@ep/ui/assets/Payouts empty.png";
+import { CampaignStatementCard } from "./payment-statement";
 
 type TabType = "Overview" | "Submission" | "Payouts" | "Referrals";
 
@@ -126,12 +143,13 @@ function IncreaseViewsContent({
   );
 }
 
-interface CampaignData {
+interface CampaignData extends Partial<CampaignSetup> {
   id: string;
   name: string;
   category: string;
   coverImageUrl?: string;
-  targetViews: number;
+  // Content campaigns have no view target.
+  targetViews?: number;
   budget: number;
   costPerView: number;
   startDate: string;
@@ -158,7 +176,11 @@ interface CampaignData {
   submissionsReceived: number;
   submissionsApproved: number;
   submissionsAwaitingReview: number;
-  referral?: ReferralSettings;
+  referral?: ReferralSettings & { budgetUsedPercent?: number };
+  objective?: "views" | "actions";
+  // M8 batch 7 (SPEC D29, D30)
+  destinationUrl?: string | null;
+  usageRights?: CampaignUsageRights | null;
 }
 
 interface SubmissionData {
@@ -177,6 +199,16 @@ interface SubmissionData {
   payoutAmount?: number;
   postedAt?: string;
   reviewedAt?: string;
+}
+
+// A content campaign's money, from GET /payouts/campaign/:id (ticket 09).
+interface ContentPayouts {
+  deliverables: number;
+  paidOut: number;
+  owed: number;
+  refundable: number;
+  refunded: number;
+  refundPending: number;
 }
 
 interface SubmissionCounts {
@@ -203,6 +235,8 @@ function CreatorAvatar({ seed }: { seed: string }) {
 
 export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetailsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("Overview");
+  const [referralCodes, setReferralCodes] = useState<ReferralCodeRow[] | null>(null);
+  const [codePrefix, setCodePrefix] = useState<string | undefined>(undefined);
 
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [submissions, setSubmissions] = useState<SubmissionData[]>([]);
@@ -218,6 +252,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const [paying, setPaying] = useState(false);
   const [topupSuccess, setTopupSuccess] = useState(false);
   const [topupError, setTopupError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [contentPayouts, setContentPayouts] = useState<ContentPayouts | null>(null);
 
   useReveal(activeTab);
 
@@ -245,6 +281,43 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       setSubmissionsError("Failed to load submissions");
     }
   }, [campaignId]);
+
+  // Each creator's code, shown on the overview so brands can see them without opening Referrals.
+  const referralEnabled = Boolean(campaign?.referral?.enabled);
+  useEffect(() => {
+    if (!referralEnabled) return;
+    let cancelled = false;
+    referralApi
+      .listCodes(campaignId)
+      .then((payload) => {
+        if (cancelled) return;
+        setReferralCodes(payload.codes);
+        setCodePrefix(payload.codePrefix);
+      })
+      .catch(() => {
+        if (!cancelled) setReferralCodes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, referralEnabled]);
+
+  // Content campaigns: what's been paid out, what creators are still owed and what's refundable.
+  const isContentCampaign = campaign?.campaignModel === "content";
+  useEffect(() => {
+    if (!isContentCampaign || activeTab !== "Payouts") return;
+    let cancelled = false;
+    apiRequest<{ content: ContentPayouts | null }>(`/payouts/campaign/${campaignId}`, { token: getToken() || undefined })
+      .then((data) => {
+        if (!cancelled) setContentPayouts(data.content);
+      })
+      .catch(() => {
+        if (!cancelled) setContentPayouts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, isContentCampaign, activeTab]);
 
   useEffect(() => {
     const load = async () => {
@@ -308,14 +381,21 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     return () => clearTimeout(timer);
   }, [topupError]);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeleteDraft = async () => {
-    if (!window.confirm("Are you sure you want to delete this campaign? This cannot be undone.")) return;
+    setDeleting(true);
     try {
       const token = getToken();
       await apiRequest(`/campaigns/${campaignId}`, { method: "DELETE", token: token || undefined });
+      setShowDeleteConfirm(false);
       onClose?.();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to delete campaign");
+      setShowDeleteConfirm(false);
+      setActionError(err instanceof Error ? err.message : "We couldn't delete this campaign.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -361,7 +441,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       });
       window.location.href = data.authorization_url;
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to initialize payment");
+      setActionError(err instanceof Error ? err.message : "Failed to initialize payment");
       setPaying(false);
     }
   }, [campaignId, additionalViews, additionalCost]);
@@ -424,12 +504,23 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
   const currentStatus = campaign.status;
   const formattedBudget = `₦${campaign.budget.toLocaleString()}`;
-  const formattedTarget = `${campaign.targetViews.toLocaleString()} views`;
+  const formattedTarget = `${(campaign.targetViews || 0).toLocaleString()} views`;
+  const isContent = campaign.campaignModel === "content";
+  const isClicks = isClicksObjective(campaign.campaignObjective);
+  const showsUsageRights =
+    campaign.usageRights?.type === "custom" ||
+    campaign.contentDestination === "brand_page" ||
+    campaign.contentDestination === "both";
 
   const totalEscrowed = campaign.budget;
   // platformFeePercent is stored as a whole percentage (30 means 30%).
   const feePercent = campaign.platformFeePercent ?? 30;
-  const platformFee = campaign.platformFee || Math.round(campaign.budget * (feePercent / 100));
+  // Content campaigns add the fee on top of creators' pay (D2); views campaigns take it from inside the price.
+  const platformFee =
+    campaign.platformFee ||
+    (isContent
+      ? Math.round(campaign.budget - campaign.budget / (1 + feePercent / 100))
+      : Math.round(campaign.budget * (feePercent / 100)));
   const creatorPool = campaign.creatorPool || totalEscrowed - platformFee;
   // Settled views payouts from the ledger; submissions never stored payout amounts.
   const releasedTotal = campaign.viewsReleased ?? 0;
@@ -439,7 +530,18 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const creatorsOnCampaign = campaign.creatorCount ?? uniqueCreatorCount;
 
   return (
-    <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex")}>
+    <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex relative")}>
+      {!isMobile && onClose && (
+        <button
+          onClick={onClose}
+          aria-label="Close campaign details"
+          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      )}
       {/* Mobile Header */}
       {isMobile && (
         <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-100 flex-shrink-0">
@@ -457,7 +559,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             { label: "Overview",    value: "Overview"   as TabType },
             { label: "Submissions", value: "Submission" as TabType },
             { label: "Payouts",     value: "Payouts"    as TabType },
-            { label: "Referrals",   value: "Referrals"  as TabType },
+            { label: isClicks ? "Clicks" : "Referrals", value: "Referrals" as TabType },
           ]).map(({ label, value }) => {
             const isActive = activeTab === value;
             return (
@@ -486,7 +588,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               { label: "Overview",    value: "Overview"   as TabType },
               { label: "Submissions", value: "Submission" as TabType },
               { label: "Payouts",     value: "Payouts"    as TabType },
-              { label: "Referrals",   value: "Referrals"  as TabType },
+              { label: isClicks ? "Clicks" : "Referrals", value: "Referrals" as TabType },
             ]).map(({ label, value }) => {
               const isActive = activeTab === value;
               return (
@@ -548,10 +650,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {/* Action Button */}
             <div>
               {(currentStatus === "draft" || currentStatus === "pending_payment") ? (
-                <button onClick={handleDeleteDraft} className="w-full py-3 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink">
+                <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink">
                   Delete campaign
                 </button>
-              ) : (
+              ) : isContent ? null : (
                 <button
                   onClick={() => setShowIncreaseViews(!showIncreaseViews)}
                   className="w-full py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
@@ -582,10 +684,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Campaign Details Key-Value List */}
             <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                <span className="text-stone-500">Target Views</span>
-                <span className="text-stone-800">{formattedTarget}</span>
-              </div>
+              {!isContent && (
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500">Target Views</span>
+                  <span className="text-stone-800">{formattedTarget}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">Budget</span>
                 <span className="text-stone-800">{formattedBudget}</span>
@@ -719,8 +823,38 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               </div>
             )}
 
+            {/* Campaign engine: applications (ticket 06) */}
+            {campaign.creatorAccess === "application_required" && campaign.status !== "draft" && campaign.status !== "pending_payment" && (
+              <CampaignApplicants campaignId={campaign.id} />
+            )}
+
+            {/* Brand ratings (M8): shows once a creator's work on the campaign is complete */}
+            {!["draft", "pending_payment", "under_review"].includes(campaign.status) && <CreatorRatings campaignId={campaign.id} />}
+
+            {campaign.campaignObjective && (
+              <CampaignSetupSummary
+                setup={{
+                  campaignObjective: campaign.campaignObjective,
+                  contentPay: campaign.contentPay ?? null,
+                  hybridBonus: campaign.hybridBonus ?? null,
+                  targetViews: isContent ? undefined : campaign.targetViews,
+                  referralBudget: campaign.referral?.requestedBudget,
+                  contentDestination: campaign.contentDestination ?? null,
+                  creatorAccess: campaign.creatorAccess ?? null,
+                  audienceTargeting: campaign.audienceTargeting || {},
+                  creatorEligibility: campaign.creatorEligibility || {},
+                  brief: campaign.brief || {},
+                }}
+              />
+            )}
+
+            {isClicks && <DestinationLinkCard url={campaign.destinationUrl} />}
+
+            {showsUsageRights && <UsageRightsCard usageRights={campaign.usageRights} />}
+
             <div className="border border-dashed border-stone-200 rounded-2xl p-4 space-y-4">
-              {/* Campaign Progress */}
+              {/* Campaign Progress (views campaigns) */}
+              {!isContent && (<>
               <div className="space-y-2">
                 <span className="text-xs font-medium text-stone-500 block">Campaign progress</span>
                 <div className="flex items-center gap-3">
@@ -733,12 +867,78 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.progressPercent}%</span>
                 </div>
                 <span className="text-xs text-stone-500 font-medium font-rethink">
-                  {campaign.viewsDelivered.toLocaleString()} / {campaign.targetViews.toLocaleString()} views
+                  {campaign.viewsDelivered.toLocaleString()} / {(campaign.targetViews || 0).toLocaleString()} views
                 </span>
               </div>
+              </>)}
 
-              {/* Divider */}
-              <div className="border-t border-dashed border-stone-200" />
+              {campaign.referral?.enabled && (
+                <>
+                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Click progress" : "Referral progress"}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#176448] rounded-full transition-all"
+                          style={{ width: `${campaign.referral.budgetUsedPercent ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.referral.budgetUsedPercent ?? 0}%</span>
+                    </div>
+                    <span className="text-xs text-stone-500 font-medium font-rethink">
+                      {campaign.referral.conversions.toLocaleString()}{" "}
+                      {isClicks
+                        ? `valid click${campaign.referral.conversions === 1 ? "" : "s"} through creators' links`
+                        : `${conversionNounFor(campaign.referral.eventTypes, campaign.referral.conversions)} through creators' codes`}
+                      {" · "}
+                      {campaign.referral.budgetUsedPercent ?? 0}% of referral budget used
+                    </span>
+                  </div>
+
+                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Creators' links" : "Referral codes"}</span>
+                      {referralCodes && referralCodes.length > 0 && (
+                        <button
+                          onClick={() => setActiveTab("Referrals")}
+                          className="text-xs font-semibold text-stone-900 underline underline-offset-2"
+                        >
+                          View all
+                        </button>
+                      )}
+                    </div>
+                    {referralCodes === null ? (
+                      <Skeleton className="h-8 rounded-xl" />
+                    ) : referralCodes.length === 0 ? (
+                      <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+                        {isClicks ? "Each creator gets a tracked link when they join." : codeFormatText(codePrefix)} No creators have joined yet.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {referralCodes.slice(0, 5).map((row) => (
+                          <li key={row.slotId} className="flex items-center justify-between gap-3 text-xs font-rethink">
+                            <span className="min-w-0 flex flex-col">
+                              <span className="text-stone-500 font-medium truncate">
+                                {row.creatorUsername ? `@${row.creatorUsername}` : row.creatorName || "Creator"}
+                              </span>
+                              <TermsAcceptedNote accepted={(row as ReferralCodeRow & WithTermsAccepted).usageRightsAccepted} />
+                            </span>
+                            <span className="font-mono text-stone-900 shrink-0">
+                              {isClicks
+                                ? `${row.conversions.toLocaleString()} click${row.conversions === 1 ? "" : "s"}`
+                                : row.code || "Code pending"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {!isContent && <div className="border-t border-dashed border-stone-200" />}
 
               {/* Creators on Campaign */}
               <div className="space-y-1">
@@ -753,8 +953,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
         {/* ================= TAB 2: SUBMISSION ================= */}
         {activeTab === "Submission" && (
-          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : "w-[350px] mx-auto")}>
-            {submissionsError ? (
+          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : campaign.campaignModel === "content" ? "w-[520px] mx-auto" : "w-[350px] mx-auto")}>
+            {/* Campaign engine: content approval (ticket 07) */}
+            {campaign.campaignModel === "content" ? (
+              <ContentSubmissionsReview campaignId={campaign.id} isMobile={isMobile} />
+            ) : submissionsError ? (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
@@ -802,14 +1005,34 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         {/* ================= TAB 3: PAYOUTS ================= */}
         {activeTab === "Payouts" && (
           <div className={cn("space-y-10 pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {!["draft", "pending_payment"].includes(campaign.status) && <CampaignStatementCard campaignId={campaign.id} />}
+            {isContent ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Paid Out", value: contentPayouts?.paidOut ?? 0 },
+                  { label: "Owed To Creators", value: contentPayouts?.owed ?? 0 },
+                  {
+                    label: "Refundable",
+                    value: contentPayouts?.refundable ?? 0,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+                    <span className="text-[10px] font-medium text-stone-500 block">{item.label}</span>
+                    <span className="font-rethink font-medium text-xl text-stone-900 block">₦{item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+                {contentPayouts && contentPayouts.refunded + contentPayouts.refundPending > 0 && (
+                  <p className="sm:col-span-3 font-rethink text-xs text-stone-500 font-medium">
+                    ₦{(contentPayouts.refunded + contentPayouts.refundPending).toLocaleString()} of unused budget refunded to you
+                    {contentPayouts.refundPending > 0 && " (on its way)"}.
+                  </p>
+                )}
+              </div>
+            ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{totalEscrowed.toLocaleString()}</span>
-              </div>
-              <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block">Creator pool</span>
-                <span className="font-rethink font-medium text-xl text-stone-900 block">₦{creatorPool.toLocaleString()}</span>
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Paid</span>
@@ -820,14 +1043,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{pendingEscrow.toLocaleString()}</span>
               </div>
             </div>
-
-            {/* Platform fee note */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] font-medium text-stone-500 block">Platform fee</span>
-              <p className="text-[10px] text-stone-400 font-rethink font-medium leading-relaxed">
-                {feePercent}% of funded budget (₦{platformFee.toLocaleString()}), already deducted from your total.
-              </p>
-            </div>
+            )}
 
             {submissions.filter(s => s.payoutStatus).length === 0 && (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
@@ -848,6 +1064,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               initialSettings={campaign.referral}
               topupReference={referralTopupReference}
               onTopupHandled={() => setReferralTopupReference(null)}
+              campaignObjective={campaign.campaignObjective}
             />
           </div>
         )}
@@ -884,6 +1101,19 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         </div>
       )}
 
+      {/* Delete and payment errors */}
+      {actionError && (
+        <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3" role="alert">
+          <div className="space-y-1">
+            <p className="font-rethink font-medium text-sm text-red-800">Something went wrong</p>
+            <p className="font-rethink text-xs text-red-600 font-medium">{actionError}</p>
+          </div>
+          <button onClick={() => setActionError("")} aria-label="Dismiss" className="text-red-400 ml-auto">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      )}
+
       {/* Topup error banner */}
       {topupError && (
         <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
@@ -899,6 +1129,14 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
           </button>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        open={showDeleteConfirm}
+        title="Delete this campaign?"
+        busy={deleting}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteDraft}
+      />
     </div>
   );
 }

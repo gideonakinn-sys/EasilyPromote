@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
@@ -7,19 +8,68 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { reopenClosedPlaces } = require("../utils/fixedPay");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
-const { parseReferralSettings } = require("../utils/referralCodes");
+const { parseReferralSettings, campaignEventTypes } = require("../utils/referralCodes");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
-const { bookEscrowDeposit, refundViewsEscrow } = require("../utils/escrow");
+const { refundViewsEscrow } = require("../utils/escrow");
 const { recordUnmatchedPayment } = require("../utils/refunds");
+const { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified } = require("../utils/campaignPayments");
+const { MIN_REFERRAL_TOPUP } = require("../utils/referralEarnings");
+
+function sendSetupError(res, setup) {
+  return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+}
+
+// Top-ups buy more views, which content campaigns don't have. Returns true when it refused.
+function refuseContentTopup(res, campaign) {
+  if (campaign.campaignModel !== "content") return false;
+  res.status(409).json({
+    error: "Top-ups buy more views, so they aren't available for content campaigns.",
+    code: "TOPUP_NOT_FOR_CONTENT",
+  });
+  return true;
+}
+
+// True when an edit changes what the brand's open checkout should charge.
+// People who came in through creators' codes, and how much of the referral budget they've used.
+// The share is taken from the creator pool so the platform fee never shows.
+function referralProgress(campaign) {
+  const referral = campaign.referral || {};
+  const pool = referral.pool || 0;
+  return {
+    conversions: referral.conversions || 0,
+    eventTypes: campaignEventTypes(campaign),
+    budgetUsedPercent: pool > 0 ? Math.min(100, Math.round(((pool - (referral.poolRemaining || 0)) / pool) * 100)) : 0,
+  };
+}
+
+function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
+  if (targetViews !== undefined && Number(targetViews) !== campaign.targetViews) return true;
+  const nextObjective = objective !== undefined ? objective : campaign.objective;
+  if (nextObjective !== campaign.objective) return true;
+  const currentBudget = (campaign.referral && campaign.referral.requestedBudget) || 0;
+  return nextObjective === "actions" && requestedBudget !== undefined && Math.round(Number(requestedBudget)) !== currentBudget;
+}
 const { releasedViewsTotal } = require("../utils/earnings");
+const { resolveCampaignSetup, editSetupUpdates, campaignSetupView, matchCountSchema } = require("../utils/campaignSetup");
+const { matchCount } = require("../services/creatorMatchCount");
+const { refreshPriceTable } = require("../config/pricing");
+const { createRateLimiter } = require("../utils/rateLimit");
 
 const router = express.Router();
 
+// Quotes, drafts and checkouts price from the per-view table admin sets (ticket 11); re-read it when
+// it's more than a minute old, so a change made on another API instance applies here too.
+router.use(async (req, res, next) => {
+  await refreshPriceTable();
+  next();
+});
+
 router.get("/pricing", async (req, res, next) => {
   try {
-    const { COST_PER_VIEW, TIER_PRICING } = require("../config/pricing");
+    const { COST_PER_VIEW, getTierPricing } = require("../config/pricing");
     const Industry = require("../models/Industry");
     const categories = { ...COST_PER_VIEW.categories };
     const industries = await Industry.find({ enabled: true, costPerView: { $gt: 0 } });
@@ -29,7 +79,7 @@ router.get("/pricing", async (req, res, next) => {
     res.json({
       default: COST_PER_VIEW.default,
       categories,
-      tiers: TIER_PRICING,
+      tiers: getTierPricing(),
     });
   } catch (err) {
     next(err);
@@ -49,9 +99,10 @@ router.get("/", protect, async (req, res, next) => {
       }
     }
 
-    const [campaigns, draftCount] = await Promise.all([
+    const [campaigns, draftCount, appVerified] = await Promise.all([
       Campaign.find(filter).sort({ createdAt: -1 }).lean(),
       Campaign.countDocuments({ businessId: req.user._id, status: "draft" }),
+      brandAppVerified(req.user._id),
     ]);
 
     const campaignsResponse = campaigns.map((c) => {
@@ -76,6 +127,10 @@ router.get("/", protect, async (req, res, next) => {
         startDate: c.startDate,
         endDate: c.endDate,
         contentBrief: c.contentBrief,
+        objective: c.objective || "views",
+        // A referral campaign can't be paid for until the brand's app is connected.
+        needsAppConnection: c.objective === "actions" && ["draft", "pending_payment"].includes(c.status) && !appVerified,
+        referral: c.objective === "actions" ? referralProgress(c) : null,
       };
     });
 
@@ -87,25 +142,36 @@ router.get("/", protect, async (req, res, next) => {
 
 router.post("/", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
-    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral } = req.body;
+    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral, objective } = req.body;
+
+    const setup = resolveCampaignSetup(req.body);
+    if (setup.error) return sendSetupError(res, setup);
 
     const referralSettings = parseReferralSettings(referral);
     if (referralSettings.error) {
       return res.status(400).json({ error: referralSettings.error });
     }
-
-    const { getPriceForViews } = require("../config/pricing");
-    const budget = getPriceForViews(targetViews);
-    const costPerView = Math.round((budget / targetViews) * 1000) / 1000;
+    // Older clients send only `objective` (or referral.enabled); the setup maps both ways.
+    const campaignObjective = setup.legacyObjective;
+    const referralValues = { ...referralSettings.value, enabled: campaignObjective === "actions" };
+    if (setup.referralEventTypes) {
+      referralValues.eventTypes = setup.referralEventTypes;
+      referralValues.eventType = setup.referralEventTypes[0];
+    }
+    // A sign-up or download bonus is tracked with referral codes; the bonus pool pays it, not a referral budget.
+    if (setup.bonusReferralEventTypes) {
+      Object.assign(referralValues, { enabled: true, requestedBudget: 0, codeSource: "easilypromote", eventTypes: setup.bonusReferralEventTypes, eventType: setup.bonusReferralEventTypes[0] });
+    }
+    if (campaignObjective === "views") referralValues.requestedBudget = 0;
+    const isContent = setup.updates.campaignModel === "content";
 
     const campaign = await Campaign.create({
       businessId: req.user._id,
       coverImageUrl: coverImageUrl || null,
       name,
       category,
-      targetViews,
-      costPerView,
-      budget,
+      targetViews: isContent ? undefined : targetViews,
+      ...setup.updates,
       contentBrief: contentBrief || null,
       keyMessageCta: keyMessageCta || null,
       whatToAvoid: whatToAvoid || null,
@@ -118,8 +184,10 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       niches: niches || [],
       scriptUrl: scriptUrl || null,
       scriptFileName: scriptFileName || null,
-      referral: referralSettings.value,
+      objective: campaignObjective,
+      referral: referralValues,
       status: "draft",
+      wizardStep: req.body.wizardStep,
     });
 
     res.status(201).json({
@@ -127,7 +195,44 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       status: campaign.status,
       budget: campaign.budget,
       costPerView: campaign.costPerView,
+      quote: setup.quote,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// What the wizard shows the brand before saving: the same calculator checkout charges from.
+// With a campaignId, the setup is quoted as an edit of that campaign, at its own platform fee.
+router.post("/quote", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    const { campaignId, ...body } = req.body || {};
+    let current = null;
+    if (campaignId !== undefined) {
+      current = mongoose.isValidObjectId(campaignId) ? await Campaign.findById(campaignId) : null;
+      if (!current || current.businessId.toString() !== req.user._id.toString()) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+    }
+    const setup = resolveCampaignSetup(body, current);
+    if (setup.error) return sendSetupError(res, setup);
+    res.json({ quote: setup.quote });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// The wizard's live "about N creators match" count (ticket 11): a rounded count of creators who could
+// join with this audience targeting and creator eligibility. Brands only, rate-limited per brand.
+const allowMatchCount = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
+router.post("/match-count", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    if (!allowMatchCount(String(req.user._id))) {
+      return res.status(429).json({ error: "Too many match counts. Try again in a minute.", code: "RATE_LIMITED" });
+    }
+    const parsed = matchCountSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    res.json(await matchCount(parsed.data));
   } catch (error) {
     next(error);
   }
@@ -145,6 +250,53 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Campaign cannot be paid" });
     }
+    const isContent = campaign.campaignModel === "content";
+    if (campaign.payShape === "hybrid" && !(campaign.hybridBonus && campaign.hybridBonus.metric)) {
+      return res.status(400).json({ error: "Set the bonus pool and the per-creator cap before paying.", code: "HYBRID_BONUS_REQUIRED" });
+    }
+    if (isContent && !(campaign.contentPay && campaign.contentPay.ratePerDeliverable)) {
+      return res.status(400).json({ error: "Set what creators earn per deliverable before paying.", code: "CONTENT_PAY_REQUIRED" });
+    }
+    // Hybrid pay (ticket 10): the bonus pool is paid in the same checkout. A sign-up or download bonus
+    // is verified by the brand's server, so its app must be connected first, as for referral campaigns.
+    if (campaign.payShape === "hybrid" && campaign.hybridBonus.metric !== "views" && !(await brandAppVerified(req.user._id))) {
+      return res.status(409).json({
+        error: "Connect your app before paying for a sign-up or download bonus. We need a code check and a test conversion from your server.",
+        code: "INTEGRATION_REQUIRED",
+      });
+    }
+    // Referral campaigns pay their referral budget in the same checkout, and only once the
+    // brand's app is connected: Paystack can't hold the money while they finish setup.
+    // M8 batch 7: clicks campaigns are tracked internally, so they skip this check.
+    const isClicksCampaign = campaign.campaignObjective === "clicks";
+    const referralAmount =
+      campaign.objective === "actions" ? Math.round((campaign.referral && campaign.referral.requestedBudget) || 0) : 0;
+    if (campaign.objective === "actions") {
+      if (referralAmount < MIN_REFERRAL_TOPUP) {
+        return res.status(400).json({
+          error: `Add a referral budget of at least ₦${MIN_REFERRAL_TOPUP.toLocaleString()} before paying.`,
+          code: "REFERRAL_BUDGET_REQUIRED",
+        });
+      }
+      if (!isClicksCampaign && !(await brandAppVerified(req.user._id))) {
+        return res.status(409).json({
+          error: "Connect your app before paying for a referral campaign. We need a code check and a test conversion from your server.",
+          code: "INTEGRATION_REQUIRED",
+        });
+      }
+    }
+    // A draft is charged the calculator's total as it stands, so one priced under an older
+    // price table pays what the wizard quotes today. An open checkout keeps its price: a
+    // payment still arriving from an earlier checkout tab must match it.
+    let total = campaign.budget + referralAmount + bonusCheckoutAmount(campaign);
+    if (campaign.status === "draft") {
+      const setup = resolveCampaignSetup({}, campaign);
+      if (setup.error) return sendSetupError(res, setup);
+      for (const [field, value] of Object.entries(setup.money)) {
+        if (field !== "contentPay") campaign[field] = value;
+      }
+      total = setup.quote.total;
+    }
 
     const reference = `ep_${campaign._id}_${Date.now()}`;
 
@@ -153,18 +305,25 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
 
     const paymentData = await initializeTransaction({
       email: req.user.email,
-      amount: campaign.budget,
+      amount: total,
       reference,
       metadata: {
         campaignId: campaign._id.toString(),
         businessId: req.user._id.toString(),
         campaignName: campaign.name,
+        // The campaign's own price (views price, or a content campaign's pay plus fee) and the
+        // referral budget. viewsAmount stays for performance campaigns' older readers.
+        campaignAmount: campaign.budget,
+        ...(!isContent && { viewsAmount: campaign.budget }),
+        referralAmount,
+        ...(campaign.payShape === "hybrid" && { bonusAmount: bonusCheckoutAmount(campaign) }),
       },
       callback_url,
     });
 
     campaign.status = "pending_payment";
     campaign.paymentReference = reference;
+    campaign.paymentAmount = total;
     await campaign.save();
 
     res.json({
@@ -212,14 +371,10 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
           if (
             paystackData.status === "success" &&
             currency === "NGN" &&
-            Math.round(paidAmount) === Math.round(campaign.budget)
+            Math.round(paidAmount) === Math.round(expectedPaymentAmount(campaign))
           ) {
             // The webhook may be booking the same payment right now; only one wins.
-            const booked = await bookEscrowDeposit({
-              campaignId: campaign._id,
-              amount: campaign.budget,
-              reference: campaign.paymentReference,
-            });
+            const booked = await bookCampaignPayment(campaign, campaign.paymentReference);
 
             const updated = await Campaign.findOneAndUpdate(
               { _id: campaign._id, status: "pending_payment" },
@@ -247,7 +402,7 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
               reference: campaign.paymentReference,
               amount: paidAmount,
               currency,
-              reason: `Payment doesn't match the campaign budget of ₦${campaign.budget.toLocaleString()} NGN.`,
+              reason: `Payment doesn't match the checkout total of ₦${expectedPaymentAmount(campaign).toLocaleString()} NGN.`,
             });
           }
         } catch {
@@ -278,12 +433,10 @@ router.patch("/:id", protect, async (req, res, next) => {
       return res.status(400).json({ error: "Can only edit draft campaigns" });
     }
 
-    // A new size mid-checkout is a new price. The campaign goes back to draft so the old
-    // checkout can't put it live; a payment still made on it is recorded for refund.
-    const repriced =
-      campaign.status === "pending_payment" &&
-      req.body.targetViews !== undefined &&
-      Number(req.body.targetViews) !== campaign.targetViews;
+    // A new size or referral budget mid-checkout is a new price. The campaign goes back to
+    // draft so the old checkout can't put it live; a payment still made on it is recorded for refund.
+    const edit = editSetupUpdates(req.body, campaign);
+    if (edit.error) return sendSetupError(res, edit);
 
     const allowedFields = [
       "coverImageUrl",
@@ -304,9 +457,12 @@ router.patch("/:id", protect, async (req, res, next) => {
       "platforms",
       "contentStyle",
       "niches",
+      "wizardStep",
     ];
     const updates = {};
     for (const field of allowedFields) {
+      // Content campaigns have no view target; the setup below owns targetViews for the rest.
+      if (field === "targetViews") continue;
       if (req.body[field] !== undefined) {
         updates[field] =
           field === "contentStyle" && typeof req.body[field] === "string"
@@ -326,15 +482,22 @@ router.patch("/:id", protect, async (req, res, next) => {
       }
     }
 
-    if (req.body.targetViews !== undefined) {
-      const { getPriceForViews } = require("../config/pricing");
-      updates.budget = getPriceForViews(req.body.targetViews);
-      updates.costPerView = Math.round((updates.budget / req.body.targetViews) * 1000) / 1000;
-    }
+    // Objective, setup and — only when size or pay changes — price, fee and creator pool from
+    // one quote, so the pool can't go stale (findOneAndUpdate skips the model's save hook).
+    Object.assign(updates, edit.updates);
 
+    const repriced =
+      campaign.status === "pending_payment" &&
+      (edit.priceChanged ||
+        changesPrice(campaign, {
+          targetViews: edit.isContent ? undefined : req.body.targetViews,
+          objective: updates.objective,
+          requestedBudget: req.body.referral ? req.body.referral.requestedBudget : undefined,
+        }));
     if (repriced) {
       updates.status = "draft";
       updates.paymentReference = null;
+      updates.paymentAmount = 0;
     }
 
     // Only if the status is still what we checked, so a payment confirmed meanwhile isn't undone.
@@ -367,6 +530,7 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
 
     const { step, data } = req.body;
     const updates = {};
+    let priceChanged = false;
 
     if (step === 1) {
       if (data.coverImageUrl !== undefined) updates.coverImageUrl = data.coverImageUrl;
@@ -375,10 +539,10 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.startDate !== undefined) updates.startDate = data.startDate;
       if (data.endDate !== undefined) updates.endDate = data.endDate;
       if (data.targetViews !== undefined) {
-        updates.targetViews = data.targetViews;
-        const { getPriceForViews } = require("../config/pricing");
-        updates.budget = getPriceForViews(data.targetViews);
-        updates.costPerView = Math.round((updates.budget / data.targetViews) * 1000) / 1000;
+        const edit = editSetupUpdates({ targetViews: data.targetViews }, campaign);
+        if (edit.error) return sendSetupError(res, edit);
+        Object.assign(updates, edit.updates);
+        priceChanged = priceChanged || edit.priceChanged;
       }
       if (data.scriptUrl !== undefined) updates.scriptUrl = data.scriptUrl;
       if (data.scriptFileName !== undefined) updates.scriptFileName = data.scriptFileName;
@@ -389,16 +553,37 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.platforms !== undefined) updates.platforms = data.platforms;
       if (data.contentStyle !== undefined) updates.contentStyle = data.contentStyle;
       if (data.niches !== undefined) updates.niches = data.niches;
+    } else if (step === 3) {
+      if (data.objective !== undefined || data.referral !== undefined) {
+        const edit = editSetupUpdates({ objective: data.objective, referral: data.referral }, campaign);
+        if (edit.error) return sendSetupError(res, edit);
+        Object.assign(updates, edit.updates);
+        priceChanged = priceChanged || edit.priceChanged;
+      }
+      if (data.referral !== undefined) {
+        const referralSettings = parseReferralSettings(data.referral);
+        if (referralSettings.error) {
+          return res.status(400).json({ error: referralSettings.error });
+        }
+        for (const key of ["eventType", "eventTypes", "requestedBudget"]) {
+          if (referralSettings.value[key] !== undefined) updates[`referral.${key}`] = referralSettings.value[key];
+        }
+      }
     }
 
-    // As in PATCH /:id: a new size mid-checkout is a new price, so back to draft.
+    // As in PATCH /:id: a new size or referral budget mid-checkout is a new price, so back to draft.
     if (
       campaign.status === "pending_payment" &&
-      updates.targetViews !== undefined &&
-      Number(updates.targetViews) !== campaign.targetViews
+      (priceChanged ||
+        changesPrice(campaign, {
+          targetViews: updates.targetViews,
+          objective: updates.objective,
+          requestedBudget: updates["referral.requestedBudget"],
+        }))
     ) {
       updates.status = "draft";
       updates.paymentReference = null;
+      updates.paymentAmount = 0;
     }
 
     const updated = await Campaign.findOneAndUpdate({ _id: campaign._id, status: campaign.status }, updates, {
@@ -460,6 +645,7 @@ router.post("/:id/topup-init", protect, authorizeRoles("business"), async (req, 
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
+    if (refuseContentTopup(res, campaign)) return;
 
     const reference = `ep_topup_${campaign._id}_${Date.now()}`;
 
@@ -502,6 +688,7 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
+    if (refuseContentTopup(res, campaign)) return;
 
     // The callback URL carries `amount` in the query string, so the request body
     // is not evidence of anything. Only Paystack decides what was paid, and only
@@ -596,6 +783,7 @@ router.patch("/:id/resume", protect, async (req, res, next) => {
     campaign.status = "live";
     await campaign.save();
     await ensureCampaignSlots(campaign);
+    await reopenClosedPlaces(campaign);
 
     emitCampaignStatus(campaign);
 
@@ -635,6 +823,21 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
   }
 });
 
+// Open Call join: runs the creator's eligibility and reserves a placement in one step.
+router.post("/:id/join", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { joinCampaign } = require("../services/placements");
+    // Views campaigns may commit to a share of the views, as the older claim did.
+    const committedViews = req.body ? req.body.committedViews : undefined;
+    // M8 batch 7: usage rights acceptance (SPEC D30).
+    const usageRightsAccepted = req.body ? req.body.usageRightsAccepted : undefined;
+    const result = await joinCampaign({ user: req.user, campaignId: req.params.id, committedViews, usageRightsAccepted });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id", protect, async (req, res, next) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
@@ -655,12 +858,15 @@ router.get("/:id", protect, async (req, res, next) => {
         Submission.countDocuments({ campaignId: campaign._id }),
         Submission.countDocuments({
           campaignId: campaign._id,
-          status: { $in: ["approved", "awaiting_post", "posted"] },
+          // Campaign engine: content approval (ticket 07) adds verifying, the delivery statuses and completed.
+          status: { $in: ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"] },
         }),
         Submission.countDocuments({ campaignId: campaign._id, status: "new" }),
+        // Distinct creators holding a place; open and closed places have no creator.
         Slot.distinct("creatorId", {
           campaignId: campaign._id,
-          status: { $ne: "available" },
+          creatorId: { $ne: null },
+          status: { $nin: ["available", "closed"] },
         }).then((ids) => ids.length),
       ]);
 
@@ -700,9 +906,15 @@ router.get("/:id", protect, async (req, res, next) => {
       submissionsApproved,
       submissionsAwaitingReview,
       creatorCount,
+      objective: campaign.objective || "views",
+      ...campaignSetupView(campaign),
+      paymentAmount: campaign.paymentAmount || 0,
+      wizardStep: campaign.wizardStep || null,
       referral: {
+        requestedBudget: campaign.referral ? campaign.referral.requestedBudget || 0 : 0,
         enabled: Boolean(campaign.referral && campaign.referral.enabled),
         eventType: campaign.referral ? campaign.referral.eventType : "signup",
+        eventTypes: campaignEventTypes(campaign),
         codeSource: campaign.referral ? campaign.referral.codeSource : "easilypromote",
         conversions: campaign.referral ? campaign.referral.conversions : 0,
         rewardPerConversion: campaign.referral ? campaign.referral.rewardPerConversion || 0 : 0,
@@ -711,6 +923,7 @@ router.get("/:id", protect, async (req, res, next) => {
         pool: campaign.referral ? campaign.referral.pool || 0 : 0,
         poolRemaining: campaign.referral ? campaign.referral.poolRemaining || 0 : 0,
         earned: campaign.referral ? campaign.referral.earned || 0 : 0,
+        budgetUsedPercent: referralProgress(campaign).budgetUsedPercent,
       },
     });
   } catch (error) {
@@ -729,6 +942,10 @@ router.delete("/:id", protect, authorizeRoles("business"), async (req, res, next
     }
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only delete draft or pending payment campaigns" });
+    }
+    const { hasDependents } = require("../utils/cleanupCancelled");
+    if (await hasDependents(campaign._id)) {
+      return res.status(409).json({ error: "A payment for this campaign is on record, so it can't be deleted", code: "CAMPAIGN_HAS_RECORDS" });
     }
 
     await Campaign.findByIdAndDelete(req.params.id);

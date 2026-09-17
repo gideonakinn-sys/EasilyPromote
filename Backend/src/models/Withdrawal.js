@@ -27,6 +27,29 @@ const withdrawalSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Campaign withdrawals pay views, referral and fixed pay together; each part is
+    // paid from its own pot.
+    fixedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    viewsAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    referralAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // Hybrid campaigns' bonus (ticket 10), paid from the bonus pot.
+    bonusAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     status: {
       type: String,
       enum: ["pending", "processing", "rejected", "released"],
@@ -57,11 +80,16 @@ const withdrawalSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    // Views earnings and referral earnings are separate entitlements with separate
-    // escrow. Older withdrawals have no kind and are views withdrawals.
+    // Set when a payout appeal put a rejected withdrawal back in the payout queue (D23).
+    appealReinstatedAt: {
+      type: Date,
+      default: undefined,
+    },
+    // "campaign": the weekly per-campaign withdrawal, views and referral together.
+    // "views" / "referral": older single-pot withdrawals. No kind means views.
     kind: {
       type: String,
-      enum: ["views", "referral"],
+      enum: ["views", "referral", "campaign"],
       default: "views",
     },
   },
@@ -69,6 +97,8 @@ const withdrawalSchema = new mongoose.Schema(
 );
 
 withdrawalSchema.index({ creatorId: 1, status: 1 });
+// Ops alerts and payout reconciliation: withdrawals by status, oldest review first.
+withdrawalSchema.index({ status: 1, reviewedAt: 1 });
 withdrawalSchema.index({ campaignId: 1, creatorId: 1, status: 1 });
 withdrawalSchema.index({ creatorId: 1, kind: 1, campaignId: 1, status: 1 });
 // At most one pending and one processing withdrawal per creator, campaign and kind, so

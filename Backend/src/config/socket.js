@@ -1,5 +1,5 @@
 const { Server } = require("socket.io");
-const jwt = require("jsonwebtoken");
+const { verifyToken } = require("../utils/jwt");
 
 let io;
 const onlineUsers = new Map();
@@ -20,11 +20,12 @@ function initSocket(server) {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = verifyToken(token, process.env.JWT_SECRET);
       const userId = (decoded.id || decoded._id).toString();
       socket.userId = userId;
       onlineUsers.set(userId, socket.id);
       socket.join(`user:${userId}`);
+      if (decoded.role) socket.join(`role:${decoded.role}`);
       console.log(`[Socket] User connected: ${userId}`);
     } catch {
       socket.disconnect();
@@ -56,4 +57,10 @@ function emitToUser(userId, event, data) {
   }
 }
 
-module.exports = { initSocket, getIO, emitToUser };
+// Everyone signed in with this role, e.g. every creator for marketplace updates.
+function emitToRole(role, event, data) {
+  if (!io || !role) return;
+  io.to(`role:${role}`).emit(event, data);
+}
+
+module.exports = { initSocket, getIO, emitToUser, emitToRole };

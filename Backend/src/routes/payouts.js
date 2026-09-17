@@ -1,9 +1,60 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
-const { protect } = require("../middleware/auth");
+const { protect, authorizeRoles } = require("../middleware/auth");
+const { brandStatement, statementCsv } = require("../services/brandStatement");
+const { isContentCampaign } = require("../utils/campaignPay");
+const { contentBudgetSummary } = require("../utils/fixedPay");
 
 const router = express.Router();
+
+// ─── Brand payment statement (ticket 11) ─────────────────────────────────────
+// Per campaign and overall: paid in, deliverables paid, performance paid (views, referrals, bonus),
+// platform fee, refunds issued and pending, remaining; the reconciliation's figures to the kobo.
+// ?campaignId= narrows it to one of the brand's campaigns.
+async function loadStatement(req, res) {
+  const { campaignId } = req.query;
+  if (campaignId !== undefined && !mongoose.isValidObjectId(campaignId)) {
+    res.status(404).json({ error: "Campaign not found" });
+    return null;
+  }
+  if (campaignId) {
+    const campaign = await Campaign.findById(campaignId).select("businessId").lean();
+    if (!campaign) {
+      res.status(404).json({ error: "Campaign not found" });
+      return null;
+    }
+    if (String(campaign.businessId) !== String(req.user._id)) {
+      res.status(403).json({ error: "Not authorized" });
+      return null;
+    }
+  }
+  return brandStatement(req.user._id, { campaignId: campaignId || null });
+}
+
+router.get("/statement", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    const statement = await loadStatement(req, res);
+    if (statement) res.json(statement);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/statement.csv", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    const statement = await loadStatement(req, res);
+    if (!statement) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const name = req.query.campaignId && statement.campaigns[0] ? `-${statement.campaigns[0].name.replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40)}` : "";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="payment-statement${name}-${stamp}.csv"`);
+    res.send(statementCsv(statement));
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get("/campaign/:campaignId", protect, async (req, res, next) => {
   try {
@@ -16,7 +67,7 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
     }
 
     // Unmatched payments wait for an admin refund and were never part of this campaign's budget.
-    const allTransactions = await Transaction.find({ campaignId: campaign._id, type: { $ne: "unmatched_payment" } }).sort({
+    const allTransactions = await Transaction.find({ campaignId: campaign._id, type: { $nin: ["unmatched_payment", "transfer_fee"] } }).sort({
       date: -1,
     });
     // The views escrow and the referral budget are separate pots; these totals are views only.
@@ -47,15 +98,32 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       creator: t.creatorHandle || null,
       views: t.views || null,
       amount: t.amount,
+      type: t.type,
       status: t.status,
     }));
 
+    // Content campaigns: money creators are owed and the fee on delivered work are never
+    // refundable. Paid out, owed and refundable (the D5 formula) are shown separately.
+    let content = null;
+    if (isContentCampaign(campaign)) {
+      const { summary } = await contentBudgetSummary(campaign._id);
+      content = {
+        deliverables: summary.deliverables,
+        paidOut: summary.paidOut,
+        owed: summary.owedAmount,
+        refundable: summary.refundable.amount,
+        refunded: summary.refundedAmount,
+        refundPending: summary.refundPendingAmount,
+      };
+    }
+
     res.json({
-      totalEscrowed: deposited,
+      totalEscrowed: content ? deposited - transactions.filter((t) => t.type === "release" && t.status === "escrow_deposit").reduce((sum, t) => sum + t.amount, 0) : deposited,
       creatorPool: campaign.creatorPool,
-      released,
-      pendingInEscrow: Math.max(pendingInEscrow, 0),
-      refundable,
+      released: content ? content.paidOut : released,
+      pendingInEscrow: content ? content.owed : Math.max(pendingInEscrow, 0),
+      refundable: content ? content.refundable : refundable,
+      content,
       platformFeePercent: campaign.platformFeePercent,
       platformFeeAmount: campaign.platformFee,
       ledger,
@@ -83,7 +151,7 @@ router.get("/campaign/:campaignId/statement", protect, async (req, res, next) =>
       return res.status(403).json({ error: "Not authorized" });
     }
 
-    const transactions = await Transaction.find({ campaignId: campaign._id, type: { $ne: "unmatched_payment" } }).sort({
+    const transactions = await Transaction.find({ campaignId: campaign._id, type: { $nin: ["unmatched_payment", "transfer_fee"] } }).sort({
       date: 1,
     });
 

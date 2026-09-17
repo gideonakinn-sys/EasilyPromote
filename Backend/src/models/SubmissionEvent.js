@@ -12,6 +12,15 @@ const EVENT_TYPES = [
   "appeal_approved",
   "appeal_rejected",
   "paid",
+  // Campaign engine: content approval (ticket 07)
+  "changes_requested",
+  "delivery_shared",
+  "receipt_confirmed",
+  "post_verified",
+  "post_disputed",
+  "fixed_pay_due",
+  "completed",
+  "fixed_pay_voided",
 ];
 
 const submissionEventSchema = new mongoose.Schema(
@@ -72,6 +81,8 @@ const submissionEventSchema = new mongoose.Schema(
 
 submissionEventSchema.index({ campaignId: 1, createdAt: -1 });
 submissionEventSchema.index({ submissionId: 1, createdAt: 1 });
+// Admin appeals inbox: decided content appeals, newest first.
+submissionEventSchema.index({ type: 1, createdAt: -1 });
 
 module.exports = mongoose.model("SubmissionEvent", submissionEventSchema);
 module.exports.EVENT_TYPES = EVENT_TYPES;

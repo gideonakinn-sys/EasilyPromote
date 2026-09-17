@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { ContentBudgetPanel } from "../../components/content-budget-panel";
+import { CompleteCampaignDialog } from "../../components/complete-campaign-dialog";
+import { COMPLETE_ROLES, MONEY_ROLES } from "../../lib/roles";
+import {
+  CampaignTermsPanel,
+  TermsAcceptedText,
+  acceptedTermsByCreator,
+  type CampaignUsageRights,
+  type SlotWithTerms,
+} from "../../components/campaign-terms-panel";
 
 interface CampaignItem {
   id: string;
@@ -25,6 +35,10 @@ interface CampaignItem {
   slotCount?: number;
   creatorCount?: number;
   statusNote?: string;
+  campaignModel?: "content" | "performance";
+  // Hybrid pay (ticket 10): budget, creator pool and fee are the base; the bonus pool is paid beside them.
+  payShape?: "fixed" | "performance" | "hybrid" | null;
+  hybridBonus?: { metric: string; pool: number; platformFee: number; poolRemaining: number } | null;
   createdAt: string;
   brand?: { id: string; name: string; email: string };
 }
@@ -69,6 +83,12 @@ interface IndustryItem {
   enabled: boolean;
 }
 
+// Share of what the brand paid. Content campaigns add the fee on top (D2), so their split
+// isn't the 70/30 of views campaigns.
+function sharePercent(part: number, total: number) {
+  return total > 0 ? `${Math.round((part / total) * 100)}%` : "—";
+}
+
 export default function AdminCampaignsPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
@@ -89,12 +109,16 @@ export default function AdminCampaignsPage() {
   const [statusNote, setStatusNote] = useState("");
   const [platformOptions, setPlatformOptions] = useState<string[]>(PLATFORM_OPTIONS);
   const [industryOptions, setIndustryOptions] = useState<string[]>([]);
+  const [role, setRole] = useState("");
+  const [completing, setCompleting] = useState<CampaignItem | null>(null);
+  const [linkError, setLinkError] = useState("");
+  const openedFromLink = useRef(false);
   const [campaignDetail, setCampaignDetail] = useState<{
     submissions: Array<{
       _id?: string;
       id?: string;
       creatorHandle: string;
-      creatorId?: { name?: string; email?: string };
+      creatorId?: { _id?: string; name?: string; email?: string };
       status: string;
       viewsDelivered: number;
       postedPlatforms?: Array<{ platform: string; postUrl?: string; views?: number; likes?: number; comments?: number }>;
@@ -102,6 +126,15 @@ export default function AdminCampaignsPage() {
       postedAt?: string;
       submittedAt?: string;
     }>;
+    // The API's cancel rule: the brand paid something (checkout or top-up).
+    campaign?: {
+      hasPayments?: boolean;
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective?: string | null;
+      destinationUrl?: string | null;
+      usageRights?: CampaignUsageRights | null;
+    };
+    slots?: SlotWithTerms[];
   } | null>(null);
 
   const fetchPlatforms = useCallback(async () => {
@@ -174,6 +207,20 @@ export default function AdminCampaignsPage() {
     fetchIndustries();
   }, [router, fetchCampaigns, fetchPlatforms, fetchIndustries]);
 
+  useEffect(() => {
+    setRole(getUser()?.role || "");
+  }, []);
+
+  const canComplete = COMPLETE_ROLES.includes(role);
+  const canMoveMoney = MONEY_ROLES.includes(role);
+
+  const closeCampaign = () => {
+    setSelectedCampaign(null);
+    setCampaignDetail(null);
+    // A campaign opened from an alert link: drop ?open= so a reload doesn't reopen it.
+    if (typeof window !== "undefined" && window.location.search.includes("open=")) router.replace("/campaigns");
+  };
+
   const handleStatusChange = async (campaignId: string, newStatus: string) => {
     if (newStatus === "cancelled" && !statusNote.trim()) {
       alert("A reason is required to cancel a campaign.");
@@ -221,6 +268,7 @@ export default function AdminCampaignsPage() {
           postedAt?: string;
           submittedAt?: string;
         }>;
+        campaign?: { hasPayments?: boolean };
       }>(`/admin/campaigns/${campaignId}`, {
         token: getToken() || undefined,
       });
@@ -229,6 +277,27 @@ export default function AdminCampaignsPage() {
       setCampaignDetail(null);
     }
   }, []);
+
+  // Alerts link to /campaigns?open=<id>: open that campaign once the list has loaded, fetching it
+  // on its own when the current filter doesn't include it.
+  useEffect(() => {
+    if (loading || openedFromLink.current) return;
+    const openId = new URLSearchParams(window.location.search).get("open");
+    if (!openId) return;
+    openedFromLink.current = true;
+    const listed = campaigns.find((c) => c.id === openId);
+    if (listed) {
+      setSelectedCampaign(listed);
+      fetchCampaignDetail(listed.id);
+      return;
+    }
+    apiRequest<{ campaign: CampaignItem }>(`/admin/campaigns/${openId}`, { token: getToken() || undefined })
+      .then((data) => {
+        setSelectedCampaign(data.campaign);
+        fetchCampaignDetail(openId);
+      })
+      .catch(() => setLinkError("The campaign from that link couldn't be found."));
+  }, [loading, campaigns, fetchCampaignDetail]);
 
   const handleDeleteCampaign = async () => {
     if (!selectedCampaign) return;
@@ -316,6 +385,8 @@ export default function AdminCampaignsPage() {
           </div>
         </header>
 
+        {linkError && <p className="mb-4 text-xs font-medium text-red-700">{linkError}</p>}
+
         {/* Status Filters */}
         <div className="flex gap-2 overflow-x-auto pb-4 mb-4">
           {["all", "pending_approval", "under_review", "live", "paused", "completed", "cancelled", "draft"].map((st) => (
@@ -393,7 +464,10 @@ export default function AdminCampaignsPage() {
 
                       <td className="px-6 py-4">
                         <p className="font-bold text-stone-900">{formatCurrency(c.budget)}</p>
-                        <p className="text-[11px] text-stone-500">Creator Pool: {formatCurrency(c.creatorPool)}</p>
+                        <p className="text-[11px] text-stone-500">
+                          {c.hybridBonus ? "Base Pool" : "Creator Pool"}: {formatCurrency(c.creatorPool)}
+                        </p>
+                        {c.hybridBonus && <p className="text-[11px] text-stone-500">Bonus Pool: {formatCurrency(c.hybridBonus.pool)}</p>}
                       </td>
 
                       <td className="px-6 py-4">
@@ -413,7 +487,7 @@ export default function AdminCampaignsPage() {
                         <div className="w-36">
                           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700 mb-1">
                             <span>{c.viewsDelivered.toLocaleString()}</span>
-                            <span className="text-stone-400">/ {c.targetViews.toLocaleString()}</span>
+                            <span className="text-stone-400">/ {(c.targetViews ?? 0).toLocaleString()}</span>
                           </div>
                           <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
                             <div
@@ -473,10 +547,7 @@ export default function AdminCampaignsPage() {
                   <p className="text-xs text-stone-500">Brand: {selectedCampaign.brand?.name} ({selectedCampaign.brand?.email})</p>
                 </div>
                 <button
-                  onClick={() => {
-                    setSelectedCampaign(null);
-                    setCampaignDetail(null);
-                  }}
+                  onClick={closeCampaign}
                   className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 font-bold"
                 >
                   ✕
@@ -487,18 +558,41 @@ export default function AdminCampaignsPage() {
                 {/* Financial Summary */}
                 <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Budget</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">{selectedCampaign.hybridBonus ? "Base Budget" : "Total Budget"}</span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.budget)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Creator Pool (70%)</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                      {selectedCampaign.hybridBonus ? "Base Pool" : "Creator Pool"} ({sharePercent(selectedCampaign.creatorPool, selectedCampaign.budget)})
+                    </span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.creatorPool)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Platform Fee (30%)</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Platform Fee ({sharePercent(selectedCampaign.platformFee, selectedCampaign.budget)})</span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.platformFee)}</span>
                   </div>
                 </div>
+
+                {selectedCampaign.hybridBonus && (
+                  <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Pool</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.pool)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Fee</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.platformFee)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Left</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.poolRemaining)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {selectedCampaign.campaignModel === "content" && (
+                  <ContentBudgetPanel campaignId={selectedCampaign.id} campaignName={selectedCampaign.name} />
+                )}
 
                 {/* Content Brief */}
                 <div>
@@ -508,12 +602,21 @@ export default function AdminCampaignsPage() {
                   </p>
                 </div>
 
+                {campaignDetail?.campaign && (
+                  <CampaignTermsPanel
+                    campaignObjective={campaignDetail.campaign.campaignObjective}
+                    destinationUrl={campaignDetail.campaign.destinationUrl}
+                    usageRights={campaignDetail.campaign.usageRights}
+                    slots={campaignDetail.slots}
+                  />
+                )}
+
                 {/* Platform Metrics per Creator */}
                 <div className="pt-4 border-t border-stone-200">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">Platform Metrics</h4>
                     <span className="text-[11px] text-stone-400">
-                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {selectedCampaign.targetViews.toLocaleString()} views
+                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {(selectedCampaign.targetViews ?? 0).toLocaleString()} views
                     </span>
                   </div>
 
@@ -536,9 +639,14 @@ export default function AdminCampaignsPage() {
                                   {sub.creatorId?.name || sub.creatorHandle || "Creator"}
                                 </p>
                                 <p className="text-[11px] text-stone-400">@{sub.creatorHandle} · {sub.status}</p>
+                                <TermsAcceptedText
+                                  accepted={
+                                    sub.creatorId?._id ? acceptedTermsByCreator(campaignDetail.slots).get(sub.creatorId._id) : null
+                                  }
+                                />
                               </div>
                               <span className="text-sm font-bold text-stone-900">
-                                {sub.viewsDelivered.toLocaleString()} views
+                                {(sub.viewsDelivered ?? 0).toLocaleString()} views
                               </span>
                             </div>
 
@@ -879,7 +987,19 @@ export default function AdminCampaignsPage() {
                       </button>
                     )}
 
-                    {selectedCampaign.status !== "cancelled" && (
+                    {canComplete && ["live", "paused"].includes(selectedCampaign.status) && (
+                      <button
+                        onClick={() => setCompleting(selectedCampaign)}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-blue-700 text-white rounded-full font-rethink font-semibold text-xs disabled:opacity-50"
+                      >
+                        Complete Campaign
+                      </button>
+                    )}
+
+                    {/* Cancelling a paid campaign sends refunds: finance and super admins only. */}
+                    {selectedCampaign.status !== "cancelled" &&
+                      (canMoveMoney || campaignDetail?.campaign?.hasPayments === false) && (
                       <button
                         onClick={() => handleStatusChange(selectedCampaign.id, "cancelled")}
                         disabled={actionLoading || !statusNote.trim()}
@@ -900,10 +1020,31 @@ export default function AdminCampaignsPage() {
                       </button>
                     )}
                   </div>
+                  {!canMoveMoney && selectedCampaign.status !== "cancelled" && campaignDetail?.campaign?.hasPayments === true && (
+                    <p className="mt-3 text-[11px] font-medium text-stone-500">
+                      Cancelling a paid campaign sends refunds, so only finance admins and super admins can do it.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
+        )}
+
+        {completing && (
+          <CompleteCampaignDialog
+            campaignId={completing.id}
+            campaignName={completing.name}
+            isContent={completing.campaignModel === "content"}
+            note={statusNote}
+            onClose={() => setCompleting(null)}
+            onCompleted={() => {
+              setCompleting(null);
+              setStatusNote("");
+              closeCampaign();
+              fetchCampaigns();
+            }}
+          />
         )}
       </main>
     </div>

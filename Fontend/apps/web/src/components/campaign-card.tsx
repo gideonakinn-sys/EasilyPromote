@@ -51,6 +51,13 @@ export const STATUS_BADGES: Record<CampaignItem["status"], { label: string; bg: 
     text: "text-[#176448]",
     dot: "bg-[#176448]",
   },
+  // Campaign engine: content approval (ticket 07)
+  rejected: {
+    label: "Rejected",
+    bg: "bg-[#F8C9D2]",
+    text: "text-[#710E21]",
+    dot: "bg-[#710E21]",
+  },
   cancelled: {
     label: "Cancelled",
     bg: "bg-[#F8C9D2]",
@@ -62,10 +69,13 @@ export const STATUS_BADGES: Record<CampaignItem["status"], { label: string; bg: 
 export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   const camp = campaign;
   const badge = STATUS_BADGES[camp.status];
-  const hasProgress = camp.status === "live_tracking" || camp.status === "delivered";
+  // Deliverable placements pay a fixed rate, so there's no views progress to show.
+  const hasProgress = camp.kind !== "deliverable" && (camp.status === "live_tracking" || camp.status === "delivered");
 
   const targetViews = camp.maxViews ?? camp.viewTarget;
-  const targetLabel = targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
+  const targetLabel = camp.kind === "deliverable"
+    ? "1 approved deliverable"
+    : targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
 
   const rewardLabel = `₦${camp.reward.toLocaleString()}`;
 

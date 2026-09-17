@@ -6,7 +6,7 @@ const ReferralCode = require("../models/ReferralCode");
 const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const ConversionEvent = require("../models/ConversionEvent");
-const { parseReferralSettings, normalizeCode, backfillReferralCodes } = require("../utils/referralCodes");
+const { parseReferralSettings, campaignEventTypes, normalizeCode, backfillReferralCodes, brandCodePrefix } = require("../utils/referralCodes");
 const {
   MIN_REFERRAL_TOPUP,
   MAX_REFERRAL_TOPUP,
@@ -41,9 +41,12 @@ function serializeSettings(campaign) {
   return {
     enabled: Boolean(referral.enabled),
     eventType: referral.eventType || "signup",
+    eventTypes: campaignEventTypes(campaign),
     codeSource: referral.codeSource || "easilypromote",
     conversions: referral.conversions || 0,
+    // Set by admin; 0 means our team hasn't set it yet.
     rewardPerConversion: referral.rewardPerConversion || 0,
+    requestedBudget: referral.requestedBudget || 0,
     budget: referral.budget || 0,
     platformFee: referral.platformFee || 0,
     platformFeePercent: Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30,
@@ -96,6 +99,11 @@ async function buildCodeRows(campaign) {
       conversions: code ? code.conversions : 0,
       earned: earnedByCreator.get(creatorKey) || 0,
       loadedAt: code ? code.loadedAt : null,
+      // M8 batch 7: the usage-rights version the creator accepted on joining (SPEC D30).
+      usageRightsAccepted:
+        slot.usageRightsAccepted && slot.usageRightsAccepted.acceptedAt
+          ? { version: slot.usageRightsAccepted.version, acceptedAt: slot.usageRightsAccepted.acceptedAt }
+          : null,
     };
   });
 }
@@ -188,6 +196,9 @@ router.patch("/:id/referral", ...businessOnly, async (req, res, next) => {
     for (const [key, value] of Object.entries(parsed.value)) {
       campaign.set(`referral.${key}`, value);
     }
+    if (parsed.value.enabled !== undefined) {
+      campaign.objective = parsed.value.enabled ? "actions" : "views";
+    }
     await campaign.save();
 
     let codesCreated = 0;
@@ -213,6 +224,14 @@ router.post("/:id/referral-budget/init", ...businessOnly, async (req, res, next)
     if (!campaign) return;
     if (!["live", "paused", "under_review"].includes(campaign.status)) {
       return res.status(400).json({ error: "You can add a referral budget once the campaign is live." });
+    }
+    const { brandAppVerified } = require("../utils/campaignPayments");
+    // M8 batch 7: clicks campaigns are tracked internally, so they skip this check.
+    if (campaign.campaignObjective !== "clicks" && !(await brandAppVerified(req.user._id))) {
+      return res.status(409).json({
+        error: "Connect your app before adding a referral budget. We need a code check and a test conversion from your server.",
+        code: "INTEGRATION_REQUIRED",
+      });
     }
 
     const amount = Math.round(Number(req.body && req.body.amount));
@@ -289,15 +308,25 @@ router.get("/:id/referral-codes", ...businessOnly, async (req, res, next) => {
     const campaign = await loadOwnedCampaign(req, res);
     if (!campaign) return;
 
-    const rows = await buildCodeRows(campaign);
+    const unpaidMatch = (reason) => ({ campaignId: campaign._id, counted: true, voidedAt: null, unpaidReason: reason, rewardAmount: { $not: { $gt: 0 } } });
+    const [rows, codePrefix, waitingForBudget, waitingForReward] = await Promise.all([
+      buildCodeRows(campaign),
+      brandCodePrefix(campaign.businessId),
+      // M8 batch 7: counted conversions (or clicks) not paid yet; paid oldest first after a top-up or once a reward is set.
+      ConversionEvent.countDocuments(unpaidMatch("budget_exhausted")),
+      ConversionEvent.countDocuments(unpaidMatch("rate_not_set")),
+    ]);
     res.json({
       referral: serializeSettings(campaign),
+      codePrefix,
       summary: {
         creators: rows.length,
         active: rows.filter((row) => row.status === "active").length,
         awaitingBusiness: rows.filter((row) => row.status === "awaiting_business").length,
         missing: rows.filter((row) => row.status === "missing").length,
         conversions: campaign.referral ? campaign.referral.conversions : 0,
+        waitingForBudget,
+        waitingForReward,
       },
       codes: rows,
     });

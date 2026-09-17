@@ -1,0 +1,3 @@
+# Creator Approval and Content Approval never share state
+
+Whether a creator may take part (Creator Approval, on the application) and whether their content meets the brief (Content Approval, on the submission) are recorded on different records with different statuses, and neither ever changes the other. A single "participation status" would be simpler to query, but it can't express common real cases: an approved creator whose content is rejected, an Open Call creator who never needed Creator Approval, or a withdrawn application with an earlier approved submission. Keeping them apart also stops a brand's content decision from silently removing a creator's place.

@@ -7,6 +7,10 @@ const { decrypt } = require("../utils/crypto");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
 const { recordViewDelta } = require("../services/viewSnapshots");
+// Campaign engine: content approval (ticket 07)
+const { isContentCampaign } = require("./campaignPay");
+// Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
+const { viewsBonusSubmissionFilter, accrueAllViewsBonuses } = require("./hybridBonus");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -48,6 +52,9 @@ function extractFacebookVideoId(url) {
 async function updateCampaignFromSubmission(submission) {
   const campaign = await Campaign.findById(submission.campaignId);
   if (!campaign) return;
+  // Campaign engine: content approval (ticket 07). Content campaigns have no view target, and
+  // their live posts sit in "verifying"; views never complete them.
+  if (isContentCampaign(campaign)) return;
 
   const totalViews = await Submission.aggregate([
     { $match: { campaignId: campaign._id, status: { $in: ["posted", "verifying"] } } },
@@ -156,9 +163,10 @@ async function syncMetaViews() {
   }
 
   const userIds = Object.keys(byUser);
+  const bonusPosts = await viewsBonusSubmissionFilter();
   const submissions = await Submission.find({
     creatorId: { $in: userIds },
-    status: { $in: ["posted", "verifying"] },
+    $or: [{ status: { $in: ["posted", "verifying"] } }, ...(bonusPosts ? [bonusPosts] : [])],
   });
   console.log(`[Meta Sync] connections=${connections.length} postedSubmissions=${submissions.length}`);
 
@@ -243,6 +251,7 @@ async function syncMetaViews() {
       console.error(`[Meta Sync] Failed for user ${userId}:`, error.message);
     }
   }
+  await accrueAllViewsBonuses();
 }
 
 function startMetaSync() {

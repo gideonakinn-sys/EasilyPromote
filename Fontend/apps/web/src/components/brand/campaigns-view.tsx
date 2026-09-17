@@ -10,12 +10,14 @@ import { Skeleton } from "../ui/skeleton";
 import { StatusChip } from "./status-chip";
 import { apiRequest, getToken } from "../../lib/api";
 import { useBrandGuard } from "../../hooks/use-brand-guard";
+import { objectiveLabel } from "../../lib/brand";
 import type { BrandCampaign } from "../active-dashboard";
 
 export interface CampaignRow extends BrandCampaign {
   costPerView?: number;
   startDate?: string | null;
   endDate?: string | null;
+  campaignModel?: string;
 }
 
 const FILTERS = [
@@ -191,8 +193,7 @@ export function CampaignsView() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-stone-900">{c.name}</p>
                         <p className="truncate text-xs font-medium text-stone-500">
-                          {c.category || "General"}
-                          {c.costPerView ? ` · ₦${c.costPerView.toFixed(3)} per view` : ""}
+                          {c.category || "General"} · {objectiveLabel(c.targetViews == null ? "content" : c.campaignModel, c.objective)}
                         </p>
                       </div>
                     </div>
@@ -203,9 +204,13 @@ export function CampaignsView() {
                   <td className="hidden px-5 py-4 lg:table-cell">
                     <p className="text-sm font-medium text-stone-900">
                       {c.viewsDelivered.toLocaleString()}
-                      <span className="text-stone-400"> / {c.targetViews.toLocaleString()}</span>
+                      {c.targetViews != null && (
+                        <span className="text-stone-400"> / {c.targetViews.toLocaleString()}</span>
+                      )}
                     </p>
-                    <p className="text-[11px] font-medium text-stone-400">{c.progressPercent}% delivered</p>
+                    <p className="text-[11px] font-medium text-stone-400">
+                      {c.targetViews != null ? `${c.progressPercent}% delivered` : "Content"}
+                    </p>
                   </td>
                   <td className="hidden px-5 py-4 sm:table-cell">
                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-stone-100">
