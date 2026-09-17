@@ -98,6 +98,12 @@ API equivalent: `PATCH $API/admin/creators/<userId>/verification` with `{"verifi
 
 The badge is removed automatically when the creator disconnects their last social account. Each change is logged as `creator.verified` / `creator.unverified`.
 
+### Social Connections page
+
+**Social Connections** (sidebar, under Users & Creators; any admin role) lists every connected TikTok, Instagram and Facebook account, one row per account: creator (with a check mark when verified), platform, handle, followers (**From Instagram** etc. when read from the platform, otherwise self-reported), connected date, last synced, and **Healthy** or **Needs Reconnecting since <date>** with the platform's reason (SPEC D32). Cards at the top count connected creators, accounts per platform and accounts needing reconnecting (click one to filter). Filter by platform and status, or search by creator name, email or handle. **Open In Users** goes to Users & Creators; search the creator's email there. It is read-only: only the creator can reconnect. No tokens are ever shown.
+
+API equivalent: `GET $API/admin/social-connections?platform=all|tiktok|instagram|facebook&status=all|healthy|needs_reconnect&q=<text>&page=1&limit=20` (limit max 100), newest connection first, with `totals`.
+
 ---
 
 ## 2a. Badges and brand ratings (M8, SPEC D24 / D25)
