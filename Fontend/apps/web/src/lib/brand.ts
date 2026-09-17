@@ -143,7 +143,7 @@ export function formatInteger(value: number): string {
 
 export function objectiveLabel(campaignModel?: string, objective?: string): string {
   if (campaignModel === "content") return "Content";
-  if (objective === "actions") return "Actions";
+  if (objective === "actions") return "Referrals";
   return "Views";
 }
 
