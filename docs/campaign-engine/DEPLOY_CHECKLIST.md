@@ -207,6 +207,8 @@ New indexes in this release (from the models):
 | `opsalerts` | `{ resolvedAt: 1, firstSeenAt: -1 }`, `{ active: 1, kind: 1 }` | | `OpsAlert.js` |
 | `paystackwebhookfailures` | `{ createdAt: 1 }` | TTL 30 days | `PaystackWebhookFailure.js` |
 
+M8 marketplace sections (SPEC D28) add `campaigns` `{ status: 1, updatedAt: -1 }` (`Campaign.js`, not unique, so it can't conflict); the API builds it on start. Until it exists the marketplace's live-campaign check reads campaign documents instead of the index, which is slower but correct. API first: the new endpoints are additive and the current web client keeps using the whole-list marketplace.
+
 `jobstates` (the ops alerts job's last full reconciliation pass) is also new and has only its `_id` index. New collections can't have conflicts.
 
 Also confirm these unique indexes from `main` exist, since the budget-first rollout may not have built them in production yet: `transactions` `{ reference: 1, type: 1 }` (partial), `withdrawals` `one_pending_withdrawal` and `one_processing_withdrawal`.
