@@ -245,8 +245,10 @@ When on, an hourly job (`services/autoRefunds.js`) refunds unused budget on camp
 |---|---|---|
 | Content base | As soon as the campaign is completed or cancelled, and again whenever more becomes unused | Unused deliverables × rate + the fee on them (as the button above) |
 | Hybrid bonus pool | When **Refund Unused Bonus** would allow it, and no content on the campaign is under appeal or can still be appealed | Unused pool + its fee |
-| Views | Cancelled: the cancel refund, if it never happened. Completed: 7 days after completion | Completed: only what no creator holding a place can still earn (each keeps their full place reward less what they were paid). Once per campaign |
-| Referral budget | Cancelled: the cancel refund, if it never happened or a crash cut it short. Completed: 7 days after completion | The unearned pool grossed up by its fee. Once per campaign. Held while sign-ups wait for a reward (set it, §1) |
+| Views | Cancelled: the cancel refund, if it never happened. Completed: 7 days after completion (using `completedAt`, or `updatedAt` for older campaigns where `completedAt` is unset) | Completed: only what no creator holding a place can still earn (each keeps their full place reward less what they were paid). Once per campaign |
+| Referral budget | Cancelled: the cancel refund, if it never happened or a crash cut it short. Completed: 7 days after completion (using `completedAt`, or `updatedAt` for older campaigns where `completedAt` is unset) | The unearned pool grossed up by its fee. Once per campaign. Held while sign-ups wait for a reward (set it, §1) |
+
+Older completed campaigns where `completedAt` was not recorded fall back to `updatedAt` for calculating the 7-day completion wait, ensuring legacy completed campaigns are auto-refunded once eligible.
 
 Refund rows left unsent by a crash are retried from themselves after 10 minutes. A refund Paystack refuses stays **Failed** for you to retry. Anything the job couldn't refund raises **Automatic Refund Failed** (§9a) until a run goes through. The job is skipped when `AUTO_REFUNDS_ENABLED` isn't `true` (log: `[AutoRefunds] Off`) or `PAYSTACK_SECRET_KEY` isn't set (log: `[AutoRefunds] Skipped`).
 

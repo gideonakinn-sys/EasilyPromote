@@ -128,7 +128,7 @@ async function attempt(result, campaign, pot, send) {
 async function refundEndedCampaign(campaign, now = new Date()) {
   const result = { refunds: [], failures: [] };
   const cancelled = campaign.status === "cancelled";
-  const completedAt = campaign.completedAt ? new Date(campaign.completedAt) : null;
+  const completedAt = campaign.completedAt ? new Date(campaign.completedAt) : (campaign.updatedAt ? new Date(campaign.updatedAt) : null);
   const waitedAfterCompletion = cancelled || (completedAt && now.getTime() - completedAt.getTime() >= COMPLETED_WAIT_MS);
 
   if (isContentCampaign(campaign)) {

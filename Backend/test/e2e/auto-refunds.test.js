@@ -298,6 +298,33 @@ test("views and referral: a completed campaign keeps every placed creator's rewa
   assert.equal(Math.round(escrowBalanceFrom(txs, "views", campaign.creatorPool) * 100) / 100, slot.reward);
 });
 
+test("views: an older completed campaign with completedAt unset falls back to updatedAt and is refunded after 7 days", async () => {
+  const brand = await harness.registerBrand();
+  const { id } = await pay(brand, {
+    name: "Legacy completed views",
+    category: "Tech",
+    campaignObjective: "views",
+    targetViews: 100000,
+    creatorAccess: "open_call",
+    brief: { summary: "Watch it" },
+  });
+  const finance = await harness.registerAdmin({ role: "finance_admin" });
+  await complete(finance, id);
+
+  // Simulate an older campaign where completedAt was unset, but updatedAt was set 8 days ago
+  const eightDaysAgo = new Date(Date.now() - 8 * DAY);
+  await model("Campaign").updateOne(
+    { _id: id },
+    { $unset: { completedAt: 1 }, $set: { updatedAt: eightDaysAgo } },
+    { timestamps: false }
+  );
+
+  await run();
+  const rows = await refundRows(id, "views");
+  assert.equal(rows.length, 1, "the unused views escrow was refunded using updatedAt");
+  await assertBalanced(id);
+});
+
 test("referral: sign-ups waiting for a reward hold the refund and raise an alert; a crash after the pool was claimed is finished once", async () => {
   const { runOpsAlerts } = require("../../src/services/opsAlerts");
   const brand = await harness.registerBrand();

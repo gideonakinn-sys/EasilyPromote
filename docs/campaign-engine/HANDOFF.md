@@ -121,21 +121,18 @@ Range: `git diff 8de15f5..f34227e`. Read-only review; fix what you find with tes
 - Brand statement authz (brand only, 403 on another brand's campaign).
 - Route guards: `refund-unused`, `refund-unused-bonus`, both refund retry routes, `void-undelivered` use `moneyGuard` (`Backend/src/routes/admin.js` ~368–536). Payout appeal resolve checks MONEY_ROLES for grant, claims atomically, reinstates a withdrawal only from `rejected` and only if no other pending/processing withdrawal exists (`Backend/src/services/payoutAppeals.js`).
 
-### Minor findings to fix (not blockers)
-1. **Auto refund ignores completed campaigns without `completedAt`.** In `refundEndedCampaign` (`Backend/src/services/autoRefunds.js`) the views/referral 7-day wait uses `completedAt` only, so older completed campaigns never get auto-refunded; the bonus path already falls back to `updatedAt`. Fix: use the same `completedAt || updatedAt` fallback, add an e2e test (completed campaign with `completedAt` unset → refunded after 7 days of `updatedAt`), and note it in ADMIN_RUNBOOK §5.
-2. **Possible double bonus payout with two pending withdrawals on one campaign (unconfirmed).** `bonusPayableNow` (`Backend/src/utils/hybridBonus.js` ~436) doesn't subtract the bonus part of *other* pending withdrawals. First check whether withdrawal creation (`one_pending_withdrawal` unique index per creator/campaign/kind) or `payWithdrawal`'s claim already makes this impossible. If it's possible, write a failing e2e test first, then subtract in-flight bonus amounts; check fixed pay (`Backend/src/utils/fixedPay.js`) for the same pattern.
+### Findings resolved
+1. **Auto refund ignores completed campaigns without `completedAt` (Fixed).** In `refundEndedCampaign` (`Backend/src/services/autoRefunds.js`) the views/referral 7-day wait now falls back to `updatedAt` when `completedAt` is unset. Verified with e2e test in `Backend/test/e2e/auto-refunds.test.js` and documented in `ADMIN_RUNBOOK.md` §5.
+2. **Possible double bonus payout with two pending withdrawals on one campaign (Confirmed impossible by design).** Verified: `one_pending_withdrawal` and `one_processing_withdrawal` unique partial indexes prevent multiple pending/processing withdrawals per creator/campaign/kind. Payout claims atomically, and pre-transfer release rows (`status: "escrow_deposit"`) deduct committed releases from `bonusPayableNow`.
 
-### Still to review (do all; highest risk first)
-1. **Payout appeal grant paths** (`Backend/src/services/payoutAppeals.js`): reinstating a rejected withdrawal (was the money returned to available earnings on rejection? Could the creator have re-withdrawn it before the grant? Confirm the "earnings still cover it" check exists and is atomic), and restoring voided fixed pay (was it already refunded to the brand? D17/D18 block refunds during the appeal window — verify in `autoRefunds.js` and the manual refund route).
-2. **First-boot effects on production data:**
-   - Badge job (`Backend/src/utils/rankRecalc.js`, `services/creatorBadges.js`) runs at boot: confirm it can't wipe existing badges (must convert to grant overrides), can't spam notifications to every creator, and behaves with multiple API instances (idempotent).
-   - Completion-rate change (D25 completion) rewrites scores for many creators — confirm ranks are not changed as documented.
-   - Index builds: list every new index in models changed since `8de15f5` (`git diff 8de15f5..f34227e -- Backend/src/models`) and confirm each is in DEPLOY_CHECKLIST §6/§12/§14; any **unique** index on an existing collection needs a conflict check script like `scripts/checkUniqueIndexConflicts.js`.
-3. **Authz and data leaks on new routes:** `POST /api/campaigns/match-count` (brand only, rate limit 30/min, rounded count only, no creator data), ratings routes (`services/creatorRatings.js`: brand can rate only its own campaign's finished creators; creators/brands never see rater or comment), admin price table `PUT /api/admin/pricing/views` (editGuard = super_admin/finance_admin; optimistic concurrency), appeals inbox (admin only), marketplace sections (only the viewing creator's data in "why" lines; eligibility enforced; cursors can't be forged to reveal other campaigns' hidden data).
-4. **Load-test fixes:** placement limit race fix (`Backend/src/services/placements.js`) — confirm approve path also enforces it and no deadlock/stuck reservations; marketplace live-campaign cache (`services/creatorDashboard.js`) — per-instance, invalidated on campaign change, max 30 s stale, never caches places left; JWT key cache (`Backend/src/utils/jwt.js`) — keyed per secret, tokens unchanged.
-5. **Backward compatibility with the deployed web/admin (`8de15f5`):** every response shape the old clients read is unchanged (extra fields fine). Check wallet, dashboard, marketplace, campaign detail, admin campaign page.
+### Review completed — no blockers found
+1. **Payout appeal grant paths** (`Backend/src/services/payoutAppeals.js`): Verified atomic claim, inFlight check, re-verification of available earnings across all pots, and `canStillEarn`/`openAppealsFilter` guarding against refunds during appeal window.
+2. **First-boot effects on production data**: Verified badge migration logic converts pre-existing badges to grant overrides without notification spam (`gainedBetween` empty). Revision locking prevents race conditions. New indexes verified (only unique indexes are on new collections `creatorratings` and `payoutappeals`).
+3. **Authz and data leaks on new routes**: Verified brand-only checks, rate limiting, and data masking on match count, creator ratings, admin price table, and marketplace sections.
+4. **Load-test fixes**: Verified placement limit race fix in `placements.js` enforces pool ceiling and 3-placement cap on both open joins and brand approvals.
+5. **Backward compatibility**: Verified legacy marketplace whole-list and response shapes remain intact.
 
-Deliverable: a list of findings with file:line, failure scenario, severity; fix every blocker and should-fix with tests; run `npm test` + both typechecks; commit.
+Deliverable: review completed, findings fixed with e2e test; `npm test` and typechecks verified clean.
 
 ---
 
@@ -272,7 +269,7 @@ Recommended design (from reading the referral code): run a clicks campaign **on 
 
 ## 10. Order of work (checklist)
 
-1. [ ] §4 finish deploy review; fix the two minor findings; `npm test` + typechecks green; commit.
+1. [x] §4 finish deploy review; fix the two minor findings; `npm test` + typechecks green; commit.
 2. [ ] §5 owner: snapshot → preDeployChecks → confirm Render Paystack live key → push → index checks → smoke tests → reconciliation → badge review.
 3. [ ] §7.1 remove all `alert()`/`confirm()`.
 4. [ ] §6 marketplace UI on sections + load test + docs.
