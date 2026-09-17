@@ -37,10 +37,14 @@ function formatPayoutDay(iso?: string | null) {
   });
 }
 
-const POT_LABEL: Record<"fixed" | "referral", string> = {
+const POT_LABEL: Record<"fixed" | "referral" | "bonus", string> = {
   fixed: "Fixed Pay On Hold",
   referral: "Referral Pay On Hold",
+  bonus: "Bonus On Hold",
 };
+
+// A hybrid campaign's fixed pay is its base pay (ticket 10).
+const isHybrid = (c: { payShape?: string | null }) => c.payShape === "hybrid";
 
 const roundKobo = (value: number) => Math.round(value * 100) / 100;
 
@@ -59,7 +63,8 @@ function formatHoldDate(iso: string) {
 // What a campaign has ready to withdraw, pot by pot: fixed pay, performance (views) pay, referral pay.
 function availableParts(c: WithdrawCampaign) {
   const parts: string[] = [];
-  if ((c.earnings?.fixed ?? 0) > 0 || (c.fixedAvailable ?? 0) > 0) parts.push(`Fixed ₦${(c.fixedAvailable ?? 0).toLocaleString()}`);
+  if ((c.earnings?.fixed ?? 0) > 0 || (c.fixedAvailable ?? 0) > 0) parts.push(`${isHybrid(c) ? "Base" : "Fixed"} ₦${(c.fixedAvailable ?? 0).toLocaleString()}`);
+  if (isHybrid(c) || (c.bonusAvailable ?? 0) > 0) parts.push(`Bonus ₦${(c.bonusAvailable ?? 0).toLocaleString()}`);
   parts.push(`Performance ₦${c.viewsAvailable.toLocaleString()}`);
   parts.push(`Referrals ₦${c.referralAvailable.toLocaleString()}`);
   return parts.join(" · ");
@@ -116,6 +121,11 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   // Fixed pay: credited per deliverable, withdrawable once delivery is confirmed and 7 days have passed.
   const fixed = walletData?.fixed;
   const fixedCampaigns = fixed?.byCampaign ?? [];
+
+  // Hybrid bonus: credited as views or conversions are verified, withdrawable after its 7-day hold.
+  const bonus = walletData?.bonus;
+  const bonusCampaigns = bonus?.byCampaign ?? [];
+  const hybridIds = new Set(withdrawCampaigns.filter(isHybrid).map((c) => String(c.id)));
 
   const fetchWithdrawals = React.useCallback(async () => {
     try {
@@ -364,7 +374,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                           className="font-rethink text-[11px] font-medium text-stone-500 flex justify-between gap-3"
                         >
                           <span>
-                            {POT_LABEL[hold.pot]} · {hold.until ? `Unlocks ${formatHoldDate(hold.until)}` : hold.reason}
+                            {hold.pot === "fixed" && isHybrid(c) ? "Base Pay On Hold" : POT_LABEL[hold.pot]} · {hold.until ? `Unlocks ${formatHoldDate(hold.until)}` : hold.reason}
                           </span>
                           <span className="tabular-nums shrink-0">₦{hold.amount.toLocaleString()}</span>
                         </li>
@@ -445,7 +455,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       {fixedCampaigns.length > 0 && (
         <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-stone-500">Fixed Pay</span>
+            <span className="text-[10px] font-medium text-stone-500">{bonusCampaigns.length > 0 ? "Fixed and Base Pay" : "Fixed Pay"}</span>
             <span className="font-rethink text-sm font-medium text-stone-900">₦{(fixed?.earned ?? 0).toLocaleString()}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -466,8 +476,43 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 <div className="min-w-0">
                   <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
                   <p className="font-rethink text-xs text-stone-500">
+                    {hybridIds.has(String(c.id)) && "Base pay · "}
                     {c.deliverables} deliverable{c.deliverables === 1 ? "" : "s"}
                     {c.awaitingDelivery > 0 && ` · ₦${c.awaitingDelivery.toLocaleString()} waiting for the brand to confirm delivery`}
+                    {c.onHold > 0 && (c.unlocks ?? []).length > 0 && ` · ${unlockText(c.unlocks ?? [])}`}
+                    {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
+                  </p>
+                </div>
+                <span className="font-rethink font-medium text-stone-900 shrink-0">₦{c.earned.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {bonusCampaigns.length > 0 && (
+        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium text-stone-500">Bonus</span>
+            <span className="font-rethink text-sm font-medium text-stone-900">₦{(bonus?.earned ?? 0).toLocaleString()}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-medium text-stone-500 block">On Hold ({bonus?.holdDays ?? 7} Days)</span>
+              <span className="font-rethink text-sm font-medium text-stone-900">₦{(bonus?.onHold ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-medium text-stone-500 block">Withdrawable</span>
+              <span className="font-rethink text-sm font-medium text-green-700">₦{(bonus?.availableToWithdraw ?? 0).toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {bonusCampaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
+                  <p className="font-rethink text-xs text-stone-500">
+                    Performance bonus
                     {c.onHold > 0 && (c.unlocks ?? []).length > 0 && ` · ${unlockText(c.unlocks ?? [])}`}
                     {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
                   </p>
@@ -541,6 +586,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 {w.kind === "campaign" && (
                   <p className="font-rethink text-[11px] text-stone-500 font-medium mt-0.5">
                     {(w.fixedAmount ?? 0) > 0 && `Fixed ₦${(w.fixedAmount ?? 0).toLocaleString()} · `}
+                    {(w.bonusAmount ?? 0) > 0 && `Bonus ₦${(w.bonusAmount ?? 0).toLocaleString()} · `}
                     Views ₦{(w.viewsAmount ?? 0).toLocaleString()} · Referrals ₦{(w.referralAmount ?? 0).toLocaleString()}
                   </p>
                 )}
@@ -592,8 +638,14 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
             <dl className="bg-stone-50 rounded-2xl p-4 space-y-2 text-sm font-rethink">
               {(confirmCampaign.fixedAvailable ?? 0) > 0 && (
                 <div className="flex justify-between gap-3">
-                  <dt className="text-stone-500 font-medium">Fixed Pay</dt>
+                  <dt className="text-stone-500 font-medium">{isHybrid(confirmCampaign) ? "Base Pay" : "Fixed Pay"}</dt>
                   <dd className="text-stone-900 font-medium tabular-nums">₦{(confirmCampaign.fixedAvailable ?? 0).toLocaleString()}</dd>
+                </div>
+              )}
+              {(confirmCampaign.bonusAvailable ?? 0) > 0 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-stone-500 font-medium">Bonus</dt>
+                  <dd className="text-stone-900 font-medium tabular-nums">₦{(confirmCampaign.bonusAvailable ?? 0).toLocaleString()}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-3">

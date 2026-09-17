@@ -23,11 +23,11 @@ interface CampaignMarketplaceProps {
   applications: ApplicationActions; // Campaign engine: applications (ticket 06)
 }
 
-// Hybrid campaigns (ticket 10) only show under All.
 const PAY_TABS = [
   { value: "all", label: "All" },
   { value: "fixed", label: "Fixed Pay" },
   { value: "performance", label: "Performance" },
+  { value: "hybrid", label: "Hybrid" },
 ] as const;
 
 type PayTab = (typeof PAY_TABS)[number]["value"];

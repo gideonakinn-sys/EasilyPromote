@@ -10,7 +10,7 @@ import type { EligibilityFailure, JoinResult, MarketplaceCampaign } from "./type
 import type { JoinOutcome } from "./creator-dashboard-context";
 import { AccessBadge, targetLocationLabel } from "./campaign-access-badge";
 import { CampaignBriefDetails } from "./campaign-brief";
-import { ACCESS_LABELS, accessOf, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
+import { ACCESS_LABELS, accessOf, formatBonus, formatPay, placesLeftOf, platformLabel, platformsOf } from "../lib/campaign-pay";
 import { useCampaignPlaces } from "../lib/socket";
 import { CampaignApplyPanel, type ApplicationActions } from "./campaign-apply-panel";
 
@@ -175,9 +175,17 @@ function CampaignDrawerContent({
             </div>
           </div>
 
-          <p className="font-rethink font-medium text-2xl tracking-tight text-stone-900">
-            {formatPay(campaign.pay, campaign.reward)}
-          </p>
+          <div className="space-y-1">
+            <p className="font-rethink font-medium text-2xl tracking-tight text-stone-900">
+              {formatPay(campaign.pay, campaign.reward)}
+            </p>
+            {/* Hybrid pay (ticket 10): base per approved deliverable, and what the bonus pays for. */}
+            {campaign.pay?.bonus && (
+              <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed">
+                {formatPay({ amount: campaign.pay.amount, unit: campaign.pay.unit })} base. {formatBonus(campaign.pay)}.
+              </p>
+            )}
+          </div>
 
           {joined ? (
             <div className="space-y-6">
