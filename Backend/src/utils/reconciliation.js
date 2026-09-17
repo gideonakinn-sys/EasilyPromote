@@ -167,7 +167,7 @@ function reconcileFixed({ campaign, rows, submissions, now }, problems) {
     problems.push(`fixed: ${creditIds.length} credit rows don't match the ${reservedIds.length} submissions the pool reserved for`);
   }
   for (const voided of rows.filter((t) => t.type === "fixed_credit" && t.status === "voided")) {
-    const reversal = rows.find((t) => t.type === "fixed_void" && String(t.submissionId) === String(voided.submissionId));
+    const reversal = rows.find((t) => t.type === "fixed_void" && t.status === "voided" && String(t.submissionId) === String(voided.submissionId));
     if (!reversal || toKobo(reversal.amount) !== toKobo(voided.amount)) problems.push(`fixed: voided credit for submission ${voided.submissionId} has no matching reversal`);
   }
 

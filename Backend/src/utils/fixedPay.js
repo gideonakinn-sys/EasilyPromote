@@ -91,7 +91,7 @@ async function creditFixedPay({ submission, campaign, trigger = null, now = new 
   if (!(amount > 0)) return { credited: false, reason: "no_reward" };
 
   const submissionId = toObjectId(submission._id);
-  const existingVoid = await Transaction.exists({ reference: voidReference(submissionId), type: "fixed_void" });
+  const existingVoid = await Transaction.exists({ reference: voidReference(submissionId), type: "fixed_void", status: "voided" });
   if (existingVoid) return { credited: false, amount, reason: "voided" };
 
   const reserved = await Campaign.findOneAndUpdate(
@@ -185,7 +185,10 @@ async function voidUndeliveredPay({ submissionId, voidedBy = null, now = new Dat
     }
     const claimed = await Submission.findOneAndUpdate(
       { _id: submission._id, status: "awaiting_delivery" },
-      { $set: { status: "not_delivered", notDeliveredAt: now, notDeliveredBy: voidedBy }, $unset: { awaitingBrandSince: 1 } },
+      {
+        $set: { status: "not_delivered", notDeliveredAt: now, notDeliveredBy: voidedBy, voidAppealableUntil: new Date(now.getTime() + rules.APPEAL_WINDOW_MS) },
+        $unset: { awaitingBrandSince: 1, voidAppealOpen: 1 },
+      },
       { new: true }
     );
     if (claimed) voided = true;
@@ -217,6 +220,8 @@ async function voidUndeliveredPay({ submissionId, voidedBy = null, now = new Dat
       });
     } catch (error) {
       if (error.code !== 11000) throw error;
+      // Voided again after a payout appeal restored it: the reversal row counts again.
+      await Transaction.updateOne({ reference: voidReference(submission._id), type: "fixed_void", status: "reinstated" }, { $set: { status: "voided", amount: credit.amount, date: now } });
     }
     await Transaction.updateOne({ _id: credit._id, status: "credited" }, { $set: { status: "voided" } });
     await Campaign.updateOne(
@@ -226,6 +231,96 @@ async function voidUndeliveredPay({ submissionId, voidedBy = null, now = new Dat
   }
   await freeVoidedPlacement(submission, campaign._id);
   return { voided, amount, submission, campaign };
+}
+
+// A payout appeal granted on voided pay (D23): the content goes back to awaiting delivery, the creator
+// takes their place back (if nobody else has it) and, if pay had been credited, it's credited again from
+// the creator pool (if the pool still has room: nothing credited or refunded since used it). Every step is
+// conditional and keyed on the submission, so a repeat after a crash finishes what's left and never
+// credits twice. Order: place, reservation on the campaign, credit row, reversal row, submission.
+// Returns { restoredAmount, submission, campaign }.
+async function restoreVoidedPay({ submissionId, now = new Date() }) {
+  if (!mongoose.isValidObjectId(submissionId)) throw new FixedPayError(404, "NOT_FOUND", "Submission not found");
+  const submission = await Submission.findById(submissionId);
+  if (!submission) throw new FixedPayError(404, "NOT_FOUND", "Submission not found");
+  const campaign = await Campaign.findById(submission.campaignId);
+  if (!campaign || !isContentCampaign(campaign)) throw new FixedPayError(400, "NOT_CONTENT_CAMPAIGN", "This only applies to content campaigns");
+  const restoring = submission.status === "not_delivered";
+  if (!restoring && !submission.voidReinstatedAt) {
+    throw new FixedPayError(409, "NOT_VOIDED", "This content's pay isn't voided any more");
+  }
+
+  const credit = await Transaction.findOne({ reference: creditReference(submission._id), type: "fixed_credit" }).lean();
+  const creator = submission.creatorId;
+
+  // The creator's place back, unless another creator holds it now.
+  let retaken = null;
+  let tookFreePlace = false;
+  if (restoring && submission.slotId) {
+    const slot = await Slot.findById(submission.slotId).select("creatorId status").lean();
+    tookFreePlace = Boolean(slot && !slot.creatorId);
+    try {
+      retaken = await Slot.findOneAndUpdate(
+        { _id: submission.slotId, $or: [{ creatorId: creator }, { creatorId: null, status: { $in: ["available", "closed"] } }] },
+        { $set: { creatorId: creator, status: "submitted", claimedAt: now } },
+        { new: true }
+      );
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+    }
+    if (!retaken) {
+      throw new FixedPayError(409, "PLACEMENT_TAKEN", "The creator's place in this campaign has been taken by another creator, so their pay can't be restored");
+    }
+  }
+  const giveBackPlace = async () => {
+    if (retaken && tookFreePlace) {
+      const reopen = campaign.status === "live";
+      await Slot.updateOne({ _id: retaken._id, creatorId: creator }, { $set: { creatorId: null, status: reopen ? "available" : "closed", claimedAt: null } });
+    }
+  };
+
+  let restoredAmount = 0;
+  if (credit) {
+    restoredAmount = credit.amount;
+    if (credit.status === "voided") {
+      const reserved = await Campaign.findOneAndUpdate(
+        {
+          _id: campaign._id,
+          "fixedPay.creditedSubmissions": { $ne: submission._id },
+          $expr: {
+            $and: [
+              { $lt: [{ $add: [creditedCountExpr, reservedDeliverablesExpr] }, { $ifNull: ["$contentPay.deliverables", 0] }] },
+              { $lte: [{ $add: [{ $ifNull: ["$fixedPay.credited", 0] }, reservedBudgetExpr, credit.amount] }, "$creatorPool"] },
+            ],
+          },
+        },
+        { $push: { "fixedPay.creditedSubmissions": submission._id }, $inc: { "fixedPay.credited": credit.amount } },
+        { new: true, projection: { _id: 1 } }
+      );
+      if (!reserved && !(await Campaign.exists({ _id: campaign._id, "fixedPay.creditedSubmissions": submission._id }))) {
+        await giveBackPlace();
+        throw new FixedPayError(409, "NO_BUDGET_FOR_APPEAL", "This campaign's creator budget is fully used or refunded, so the voided pay can't be restored");
+      }
+      await Transaction.updateOne({ _id: credit._id, status: "voided" }, { $set: { status: "credited", adminNotes: "Fixed pay restored on appeal" } });
+    }
+    await Transaction.updateOne({ reference: voidReference(submission._id), type: "fixed_void", status: "voided" }, { $set: { status: "reinstated" } });
+  } else if (restoring && !(await canPayAnotherDeliverable(campaign._id))) {
+    await giveBackPlace();
+    throw new FixedPayError(409, "NO_BUDGET_FOR_APPEAL", "This campaign's creator budget is fully used or refunded, so there's no budget left to pay for this deliverable");
+  }
+
+  const updated = restoring
+    ? (await Submission.findOneAndUpdate(
+        { _id: submission._id, status: "not_delivered" },
+        {
+          $set: { status: "awaiting_delivery", reviewedAt: now, voidReinstatedAt: now },
+          $unset: { notDeliveredAt: 1, notDeliveredBy: 1, voidAppealOpen: 1, voidAppealableUntil: 1 },
+        },
+        { new: true }
+      )) || (await Submission.findById(submission._id))
+    : submission;
+  if (retaken && tookFreePlace) await announcePlaces(campaign._id);
+  return { restoredAmount, submission: updated, campaign };
 }
 
 // The creator's place stops counting toward their active placements. On a live campaign that can
@@ -409,7 +504,7 @@ async function contentBudgetSummary(campaignId, now = new Date()) {
 
   const [credits, submissions, refundRows, releases] = await Promise.all([
     Transaction.find({ campaignId: campaign._id, type: "fixed_credit", status: "credited" }).select("submissionId amount").lean(),
-    Submission.find({ campaignId: campaign._id }).select("status completedAt appealableUntil reviewedAt fixedPayDueAt creatorHandle").lean(),
+    Submission.find({ campaignId: campaign._id }).select("status completedAt appealableUntil voidAppealableUntil voidAppealOpen reviewedAt fixedPayDueAt creatorHandle").lean(),
     Transaction.find({ campaignId: campaign._id, type: "refund", bucket: "fixed" }).sort({ date: 1, createdAt: 1 }).lean(),
     Transaction.find({ campaignId: campaign._id, type: "release", bucket: "fixed", status: { $in: COMMITTED_RELEASE_STATUSES } }).select("amount status").lean(),
   ]);
@@ -691,6 +786,7 @@ module.exports = {
   creditFixedPay,
   ensureFixedCredit,
   voidUndeliveredPay,
+  restoreVoidedPay,
   reopenClosedPlaces,
   creatorFixedEarnings,
   fixedEarningsFrom,

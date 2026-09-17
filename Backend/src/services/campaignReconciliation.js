@@ -21,7 +21,7 @@ async function loadBatch(campaignIds) {
   const [campaigns, transactions, submissions, slots, conversionEvents] = await Promise.all([
     Campaign.find({ _id: { $in: campaignIds } }).lean(),
     Transaction.find({ campaignId: { $in: campaignIds } }).lean(),
-    Submission.find({ campaignId: { $in: campaignIds } }).select("campaignId creatorId status completedAt appealableUntil viewsDelivered").lean(),
+    Submission.find({ campaignId: { $in: campaignIds } }).select("campaignId creatorId status completedAt appealableUntil voidAppealableUntil voidAppealOpen viewsDelivered").lean(),
     Slot.find({ campaignId: { $in: campaignIds }, creatorId: { $ne: null } }).select("campaignId creatorId kind reward viewTarget").lean(),
     ConversionEvent.find({ campaignId: { $in: campaignIds }, rewardAmount: { $gt: 0 } }).select("campaignId creatorId rewardAmount voidedAt").lean(),
   ]);

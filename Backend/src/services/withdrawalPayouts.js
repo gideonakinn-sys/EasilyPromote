@@ -374,7 +374,7 @@ async function rejectWithdrawal({ withdrawalId, note = null, req = null }) {
     campaignId: withdrawal.campaignId ? withdrawal.campaignId._id : null,
     type: "payout_rejected",
     title: "Withdrawal rejected",
-    body: `Your withdrawal of ₦${withdrawal.amount.toLocaleString()} on "${campaignName || "Campaign"}" was rejected.${note ? ` Reason: ${note}` : ""}`,
+    body: `Your withdrawal of ₦${withdrawal.amount.toLocaleString()} on "${campaignName || "Campaign"}" was rejected.${note ? ` Reason: ${note}` : ""} You can appeal within 7 days from your wallet.`,
   });
 
   if (req) {

@@ -613,6 +613,33 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
   }
 });
 
+// ─── Payout appeals (D23) ────────────────────────────────────────────────────
+// A creator's appeals, and the rejected withdrawals and voided pay they can still appeal (7 days).
+router.get("/payout-appeals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { creatorPayoutAppeals } = require("../services/payoutAppeals");
+    res.json(await creatorPayoutAppeals(req.user._id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/payout-appeals", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { fileAppeal, PayoutAppealError } = require("../services/payoutAppeals");
+    const { subjectType, subjectId, reason } = req.body || {};
+    try {
+      const appeal = await fileAppeal({ creator: req.user, subjectType, subjectId, reason });
+      res.status(201).json({ appeal, message: "Appeal sent. Our team will review it and let you know." });
+    } catch (error) {
+      if (error instanceof PayoutAppealError) return res.status(error.status).json({ error: error.message, code: error.code });
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id", async (req, res, next) => {
   try {
     const creator = await CreatorProfile.findById(req.params.id).populate("userId", "name avatar");

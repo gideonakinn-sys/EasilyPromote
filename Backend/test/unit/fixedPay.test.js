@@ -17,6 +17,13 @@ test("content that can still earn its pay: in progress, under appeal, or rejecte
   assert.equal(canStillEarn({ status: "not_delivered" }, now), false);
 });
 
+test("voided pay can still be earned while its payout appeal is open or can still be filed (D23)", () => {
+  const now = new Date("2026-11-06T12:00:00Z");
+  assert.equal(canStillEarn({ status: "not_delivered", voidAppealableUntil: new Date(now.getTime() + DAY) }, now), true);
+  assert.equal(canStillEarn({ status: "not_delivered", voidAppealableUntil: new Date(now.getTime() - 1) }, now), false);
+  assert.equal(canStillEarn({ status: "not_delivered", voidAppealableUntil: new Date(now.getTime() - DAY), voidAppealOpen: true }, now), true);
+});
+
 test("a credit waits for delivery, is held 7 days from completion, then is available", () => {
   const now = new Date("2026-11-06T12:00:00Z");
   assert.equal(FIXED_HOLD_MS, 7 * DAY);

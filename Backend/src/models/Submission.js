@@ -199,6 +199,19 @@ const submissionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // Payout appeals (D23): voided pay can be appealed until then (7 days after the void); while an
+    // appeal is open or can still be filed, the deliverable isn't refundable. Both are cleared when the
+    // appeal is decided.
+    voidAppealableUntil: {
+      type: Date,
+    },
+    voidAppealOpen: {
+      type: Boolean,
+    },
+    // Set when a payout appeal restored voided pay: the content went back to awaiting delivery.
+    voidReinstatedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );

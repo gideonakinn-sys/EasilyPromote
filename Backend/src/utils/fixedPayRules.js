@@ -19,11 +19,14 @@ function fixedCreditState(submission, now = new Date()) {
 }
 
 // Whether a submission without a credit can still earn its fixed pay, so its deliverable isn't
-// unused: anything still moving through review, delivery or an appeal, and rejected content
-// while it can still be appealed. Voided (not delivered) and finally rejected content can't.
+// unused: anything still moving through review, delivery or an appeal, rejected content while it
+// can still be appealed, and voided (not delivered) pay while its payout appeal is open or can still
+// be filed (D23). Finally rejected content and voided pay past its appeal can't.
 function canStillEarn(submission, now = new Date()) {
   if (!submission) return false;
-  if (submission.status === "not_delivered") return false;
+  if (submission.status === "not_delivered") {
+    return submission.voidAppealOpen === true || (Boolean(submission.voidAppealableUntil) && new Date(submission.voidAppealableUntil) > now);
+  }
   if (submission.status === "rejected") {
     return Boolean(submission.appealableUntil) && new Date(submission.appealableUntil) > now;
   }

@@ -554,7 +554,7 @@ router.post("/submissions/:id/void-undelivered", moneyGuard, async (req, res, ne
         campaignId: campaign._id,
         type: "content_not_delivered",
         title: "Pay removed: content not delivered",
-        body: `Your approved content for "${campaign.name}" was never delivered to the brand, so its ₦${amount.toLocaleString()} fixed pay was removed.`,
+        body: `Your approved content for "${campaign.name}" was never delivered to the brand, so its ₦${amount.toLocaleString()} fixed pay was removed. If you did deliver it, you can appeal within 7 days from your wallet.`,
       });
       await recordAdminActivity(req, {
         action: "submission.fixed_pay_voided",
@@ -904,6 +904,15 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     if (contentApproval.isContentCampaign(contentCampaign)) {
       try {
         const decided = await contentApproval.decideAppeal({ submission, campaign: contentCampaign, admin: req.user, decision, notes });
+        await recordAdminActivity(req, {
+          action: decision === "approve" ? "submission.appeal_approved" : "submission.appeal_rejected",
+          targetType: "submission",
+          targetId: submission._id,
+          targetLabel: `${submission.creatorHandle || "Creator"} · ${contentCampaign.name}`,
+          businessId: contentCampaign.businessId,
+          note: notes || null,
+          metadata: { campaignId: contentCampaign._id, creatorId: submission.creatorId, status: decided.status },
+        });
         return res.json({ success: true, submission: decided });
       } catch (error) {
         if (error instanceof contentApproval.ContentApprovalError) {
@@ -933,6 +942,36 @@ router.patch("/submissions/:id/appeal", adminGuard, async (req, res, next) => {
     emitCampaignUpdate(submission);
 
     res.json({ success: true, submission });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Appeals inbox (D23) ──────────────────────────────────────────────────────
+// Content appeals and payout appeals in one list. ?kind=all|content|payout&status=open|resolved|all&q=&campaignId=
+router.get("/appeals", adminGuard, async (req, res, next) => {
+  try {
+    const { listAppeals } = require("../services/appealsInbox");
+    const { kind, status, q, campaignId, limit } = req.query;
+    res.json(await listAppeals({ kind, status, q, campaignId, limit }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Decides a payout appeal: deny (any admin, note required) or grant (finance / super admin: the
+// withdrawal goes back in the payout queue, or voided pay is restored).
+router.post("/payout-appeals/:id/resolve", adminGuard, async (req, res, next) => {
+  try {
+    const { resolvePayoutAppeal, PayoutAppealError } = require("../services/payoutAppeals");
+    const { decision, note } = req.body || {};
+    try {
+      const result = await resolvePayoutAppeal({ appealId: req.params.id, decision, note, req });
+      res.json({ success: true, ...result });
+    } catch (error) {
+      if (error instanceof PayoutAppealError) return res.status(error.status).json({ error: error.message, code: error.code });
+      throw error;
+    }
   } catch (err) {
     next(err);
   }

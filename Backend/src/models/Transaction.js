@@ -53,7 +53,8 @@ const transactionSchema = new mongoose.Schema(
       // Refunds: refund_pending until Paystack confirms every part, refund_failed when any
       // part needs a manual refund. Unmatched payments sit in under_review. Fixed credits
       // are "credited" while owed and "voided" once reversed.
-      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review", "credited", "voided"],
+      // A fixed_void is "reinstated" when a payout appeal restored the pay it reversed (D23).
+      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review", "credited", "voided", "reinstated"],
       required: true,
     },
     adminNotes: {

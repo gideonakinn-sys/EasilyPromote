@@ -716,8 +716,11 @@ test("admin voids pay for approved content never delivered: reversed, back in th
   assert.equal((await walletCampaign(creator, id)).wallet.fixed.earned, 0);
 
   await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: admin.token, body: { status: "cancelled", note: "Brand request" } });
-  const budget = await budgetOf(admin, id);
-  assert.equal(budget.refundable.deliverables, 2, "the voided deliverable is refundable");
+  let budget = await budgetOf(admin, id);
+  assert.equal(budget.refundable.deliverables, 1, "not while the creator can still appeal the void (D23)");
+  await Submission.updateOne({ _id: creator.submissionId }, { $set: { voidAppealableUntil: new Date(Date.now() - 1000) } });
+  budget = await budgetOf(admin, id);
+  assert.equal(budget.refundable.deliverables, 2, "the voided deliverable is refundable once its appeal window has passed");
   assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
 
   // On a cancelled campaign there's no 14-day wait.
@@ -793,6 +796,8 @@ test("voided undelivered pay frees the creator's placement: reopened on a live c
   assert.equal((await harness.api("POST", `/api/admin/campaigns/${ended.id}/complete`, { token: admin.token })).status, 200);
   assert.equal(await Slot.countDocuments({ campaignId: ended.id, status: "closed", creatorId: null }), 2);
   assert.equal((await harness.api("GET", `/api/campaigns/${ended.id}`, { token: ended.brand.token })).body.creatorCount, 0);
+  assert.equal((await budgetOf(admin, ended.id)).refundable.deliverables, 1, "the voided one waits for its appeal window (D23)");
+  await Submission.updateOne({ _id: third.submissionId }, { $set: { voidAppealableUntil: new Date(Date.now() - 1000) } });
   assert.equal((await budgetOf(admin, ended.id)).refundable.deliverables, 2);
 });
 

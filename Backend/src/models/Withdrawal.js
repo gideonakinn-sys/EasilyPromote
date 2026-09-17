@@ -80,6 +80,11 @@ const withdrawalSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Set when a payout appeal put a rejected withdrawal back in the payout queue (D23).
+    appealReinstatedAt: {
+      type: Date,
+      default: undefined,
+    },
     // "campaign": the weekly per-campaign withdrawal, views and referral together.
     // "views" / "referral": older single-pot withdrawals. No kind means views.
     kind: {
