@@ -306,7 +306,7 @@ For beta, Fixed payouts use the existing withdrawal pipeline: approved/delivered
 - [ ] Engagement / Leads / Sales / Other objectives out of "Coming soon" where tracking exists
 - [ ] Trending section (joins + applications in the last 72h)
 - [ ] Live "≈ N creators match" count in the wizard
-- [ ] Original file upload for brand-page delivery (S3 multipart, ≤ 500MB)
+- [x] ~~Original file upload for brand-page delivery (S3 multipart, ≤ 500MB)~~ Dropped 17 Sep: storage is Cloudinary (100 MB max); delivery stays a download link
 - [ ] Automatic unused-budget refunds at campaign end
 - [ ] Brand statement: deliverables paid, performance paid, fee, refund due
 - [ ] Admin per-view rate table screen

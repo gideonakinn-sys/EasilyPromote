@@ -17,7 +17,7 @@
 - [x] Brand payment statement: deliverables paid, performance paid, fee, refund (after 09), per campaign and overall, with CSV
 - [x] Admin screen for the per-view price table (existing per-industry rates keep working)
 - [x] Engagement, Leads, Sales and Other objectives leave "Coming soon" where tracking exists: Leads and Sales are open; Engagement and Other stay Coming soon (SPEC, ticket 11 rows)
-- [ ] Load test on marketplace, join, apply and approve
+- [x] Load test on marketplace, join, apply and approve: results, fixes and known limits in `docs/campaign-engine/LOAD_TEST.md`
 
 ## D23 items (built with the money follow-ups)
 
@@ -34,5 +34,7 @@ Automatic refunds are off until `AUTO_REFUNDS_ENABLED=true` (SPEC D5 (switch), D
 - Live match count: `POST /api/campaigns/match-count`, `services/creatorMatchCount.js`; tests `match-count.test.js`, `unit/creatorMatchCount.test.js`
 - Price table: admin **Price Table**, `routes/adminPricing.js`, `models/PriceTable.js`, `config/pricing.js`; tests `admin-pricing.test.js`, `unit/campaignBudget.test.js`
 - Leads and Sales: `lead` conversion event, `utils/campaignObjectives.js`; tests `referral-join-paths.test.js`, `launch-matrix.test.js`
+- Load test: `npm run load-test` (`scripts/loadTest/`, local only); fixes: marketplace loading (`services/creatorDashboard.js`), the 3 active placements limit under concurrent joins (`services/placements.js`), JWT key reuse (`utils/jwt.js`); tests `creator-marketplace.test.js`, `open-call-join.test.js`, `unit/jwt.test.js`, `unit/loadTestSafety.test.js`
+- Brand-page file upload: dropped 17 Sep (storage is Cloudinary, 100 MB max); delivery stays a download link (SPEC D12 (dropped))
 
 Decisions: SPEC.md rows D5 (automatic), D5 (switch), D23 (built), Ticket 11 statement, D4 (repaired), and the Ticket 11 rows for Trending, the live match count, the price table, Leads and Sales, Engagement and Other. Code: `Backend/src/services/autoRefunds.js`, `payoutAppeals.js`, `appealsInbox.js`, `brandStatement.js`, `utils/refunds.js`; tests: `test/e2e/auto-refunds.test.js`, `refund-retries.test.js`, `payout-appeals.test.js`, `brand-statement.test.js`.

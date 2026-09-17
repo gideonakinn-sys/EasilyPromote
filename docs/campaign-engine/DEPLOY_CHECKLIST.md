@@ -416,3 +416,22 @@ None is unique, so none can conflict. On a large `slots` collection check `db.cu
 
 **Rollback:** the API code is safe to roll back while no Leads campaign exists. Older code ignores `pricetables` (it prices from `config/pricing.js` again, so a saved table stops applying), the extra indexes and the Trending fields. Older code's schema doesn't know `lead`, so once a Leads campaign or `lead` conversion exists, forward-fix instead.
 
+---
+
+## 13. Load test fixes (ticket 11: marketplace loading, placement limit under concurrent joins, JWT)
+
+**API only. No migration, no new environment variable, no new index, nothing on S3 or Cloudinary.** Results and how to rerun: `docs/campaign-engine/LOAD_TEST.md`. The brand-page file upload was dropped, so there is no bucket CORS or lifecycle step.
+
+**Before deploying:** `cd Backend && npm test` must be green. Optionally `npm run load-test` on a developer machine (about 5 minutes; it starts its own throwaway `mongod` and refuses any non-local database or API). **Never run it against production**, and never pass it a production URI: it writes thousands of users and campaigns.
+
+**What changes:**
+- **Sessions survive.** JWTs are signed and verified with the same secret as before (the key object is just made once), so nobody is logged out.
+- **Placement limit:** joins or approvals that land at the same moment can no longer take a creator past 3 active placements; the extra ones are refused as a normal placement-limit refusal (runbook §9c).
+- **Marketplace:** same response, less work per request. Each API instance keeps the live campaigns' card fields in memory until a live campaign changes (a few MB at 2,000 live campaigns) and checks one summary row per request.
+
+**Smoke tests after deploy:**
+- As a creator, the marketplace loads with the same sections and cards as before; places left match the campaign.
+- If a test campaign exists, pause it (brand or admin): a creator's next marketplace load no longer shows it; resume it and it's back. Don't pause a real brand's campaign for this.
+- Log in, reload the web app after the deploy: still logged in.
+
+**Rollback:** safe. Nothing new is stored. Rolling back brings back the slower marketplace and the placement-limit race.

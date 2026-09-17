@@ -466,6 +466,16 @@ What a change does and doesn't do:
 
 ---
 
+## 9c. Load test findings support may hear about (ticket 11)
+
+Engineering load tested the marketplace, join, apply and approve (`docs/campaign-engine/LOAD_TEST.md`). What changed for creators and brands:
+
+- **The 3 active placements limit now holds when a creator joins several campaigns at the same moment** (for example tapping Join on several cards quickly). Before, all of them could go through; now the first three stand and the rest are refused with "You have 3 active placements. Finish one to join another". The same applies when brands approve several of one creator's applications at once: an approval past the limit is refused as "This creator can't take a place right now", and the application stays pending.
+- **Marketplace changes show on the creator's next load**: a campaign that goes live, is paused or completed, or has its details edited. Places left are always current.
+- **Brand-page delivery stays a download link.** The planned original-file upload was dropped (storage is Cloudinary, 100 MB max). If a brand can't open a link, ask the creator to share a new link that anyone with the link can open. Until the brand confirms receipt the creator can replace the link from their campaign page, which gives the brand a fresh 72 hours.
+
+---
+
 ## 10. Things the admin panel can't do yet
 
 | Task | Do it this way |
