@@ -134,12 +134,39 @@ export function ProfileView({
     twitter: "Twitter",
   };
 
+  // SPEC D32: a connection the platform stopped accepting. Still linked, but views don't sync until reconnected.
+  const renderReconnectRow = (label: string, handle: string, onReconnect: () => void, onDisconnect: () => void) => (
+    <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-amber-900">{label}: Needs reconnecting</p>
+        <p className="text-xs font-medium text-amber-700 truncate">{handle}</p>
+        <p className="text-[11px] font-medium text-amber-700">Reconnect so your views keep counting.</p>
+      </div>
+      <button
+        onClick={onReconnect}
+        className="px-4 py-2 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+      >
+        Reconnect
+      </button>
+      <button
+        onClick={onDisconnect}
+        className="px-4 py-2 bg-white border border-amber-200 text-amber-800 rounded-full font-semibold text-xs font-rethink"
+      >
+        Disconnect
+      </button>
+    </div>
+  );
+
   const renderMetaRow = (provider: MetaProvider, label: string, hint: string) => {
     const status = metaStatus?.[provider];
     const connected = !!status?.connected;
     // Hide a provider this deployment has no app credentials for, unless the
     // creator is already connected — then they still need a way to disconnect.
     if (status && status.configured === false && !connected) return null;
+    if (connected && status?.needsReconnect) {
+      const handle = provider === "instagram" ? `@${status.username || status.displayName || "instagram"}` : status.displayName || status.username || "Facebook";
+      return renderReconnectRow(label, handle, () => onConnectMeta(provider), () => onDisconnectMeta(provider));
+    }
     if (connected) {
       const handle =
         provider === "instagram"
@@ -406,7 +433,9 @@ export function ProfileView({
           </div>
 
           <div className="space-y-3 mb-5">
-            {tiktokConnected ? (
+            {tiktokConnected && tiktokStatus.needsReconnect ? (
+              renderReconnectRow("TikTok", `@${tiktokStatus.username || tiktokStatus.displayName || "TikTok"}`, onConnectTikTok, onDisconnectTikTok)
+            ) : tiktokConnected ? (
               <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">

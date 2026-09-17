@@ -100,6 +100,8 @@ export function CampaignDetailsDrawer({
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [submittingLinks, setSubmittingLinks] = useState(false);
+  // Shown under the link inputs, e.g. a post already linked to another campaign (POST_ALREADY_USED).
+  const [linkError, setLinkError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -150,9 +152,12 @@ export function CampaignDetailsDrawer({
     }
 
     setSubmittingLinks(true);
+    setLinkError("");
     try {
       await onSubmitPostUrl(displayCampaign.id, payload);
       setLinkInputs({});
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Could not submit your link. Try again.");
     } finally {
       setSubmittingLinks(false);
     }
@@ -728,6 +733,12 @@ export function CampaignDetailsDrawer({
               {!isAddingMore && (
                 <p className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">
                   Add at least one link. You can come back and add the others later.
+                </p>
+              )}
+
+              {linkError && (
+                <p role="alert" className="text-xs font-medium text-red-600 font-rethink tracking-[-0.01em]">
+                  {linkError}
                 </p>
               )}
 
