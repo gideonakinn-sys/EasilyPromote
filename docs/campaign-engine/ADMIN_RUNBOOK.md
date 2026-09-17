@@ -26,8 +26,9 @@ Roles come from `authorizeRoles` in `Backend/src/routes/admin.js` and `adminRefe
 | **Approve or reject withdrawals, run the weekly payout** | `POST /admin/withdrawals/:id/review`, `/admin/payout-run/approve` | ✗ | ✓ | ✓ | ✗ |
 | **Check stuck payouts against Paystack** | `POST /admin/payouts/reconcile` | ✗ | ✓ | ✓ | ✗ |
 | **Refund unused content budget, retry a refund** | `POST /admin/campaigns/:id/refund-unused`, `/refunds/:refundId/retry` | ✗ | ✓ | ✓ | ✗ |
+| **Refund a hybrid campaign's unused bonus pool** | `POST /admin/campaigns/:id/refund-unused-bonus` | ✗ | ✓ | ✓ | ✗ |
 | **Void undelivered fixed pay** | `POST /admin/submissions/:id/void-undelivered` | ✗ | ✓ | ✓ | ✗ |
-| Set or change a sign-up reward | `PATCH /admin/referrals/campaigns/:id/reward` | ✓ | ✓ | ✓ | ✗ |
+| Set or change a sign-up reward (also a hybrid sign-up / download bonus) | `PATCH /admin/referrals/campaigns/:id/reward` | ✓ | ✓ | ✓ | ✗ |
 | **Void a conversion** (its reward goes back to the pool, D19) | `POST /admin/referrals/conversions/:id/void` | ✗ | ✓ | ✓ | ✗ |
 | Disable a code, revoke a signing key | `/admin/referrals/codes/...`, `/keys/...` | ✓ | ✓ | ✗ | ✗ |
 | Create an admin | `POST /admin/create-admin` | ✗ | ✓ | ✗ | ✗ |
@@ -172,6 +173,15 @@ Example: ₦15,000 × 10 deliverables = ₦150,000 creator budget + ₦45,000 fe
 6. Later, if more becomes unused (an appeal window closes, pay is voided), the button offers the new amount. You can refund again.
 
 Refusals: `CAMPAIGN_NOT_FINISHED`, `NOTHING_TO_REFUND`, `REFUND_NEEDS_RETRY` (an earlier refund must be retried first).
+
+### Hybrid campaigns: unused base and unused bonus pool (ticket 10)
+
+A hybrid campaign pays a base per approved deliverable (fixed pay, exactly as above) plus a bonus from a pool the brand paid at checkout, with the fee on top of both (D2 amended). In **Campaigns** the budget, pool and fee are labelled **Base**, with **Bonus Pool / Bonus Fee / Bonus Left** beside them, and the content panel reads **Deliverables And Base Pay** with a **Bonus Pool** section (rate, cap, credited, paid out, owed, left, refunds).
+
+- **Unused base:** **Refund Unused Budget**, as for any content campaign.
+- **Unused bonus:** **Refund Unused Bonus** (finance / super admin). Allowed once the campaign is cancelled, or completed for a views bonus, or **7 days after completion** for a sign-up / download bonus (conversions still count in that window; refused with `CAMPAIGN_NOT_FINISHED` and the date). The modal shows Unused Pool, Platform Fee On It (pro rata, rounded down) and the Refund. Confirming claims the pool at once, so no more bonus can be earned from it; bonus already credited stays owed. Refusals: `REFUND_CHANGED` (a bonus was credited or voided since you loaded it; reload), `NOTHING_TO_REFUND`.
+- A bonus refund works like views / referral refunds: **no retry**. A refused part shows **Failed, Refund By Hand In Paystack**; refund it in the Paystack dashboard. If the API crashed after claiming the pool but before writing the refund, pressing the button again sends that claim (reconciliation shows "refund the unused bonus again" until then).
+- Sign-up / download bonuses use the brand's referral codes and your reward (§1). Setting the first reward pays earlier sign-ups from the bonus pool, oldest first, up to each creator's cap. Voiding a conversion in its hold gives its bonus back to the pool.
 
 ### Reading refund states
 
@@ -405,6 +415,7 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 | Refund, apply or close an unmatched payment | Paystack dashboard; record it elsewhere (§7) |
 | Retry a failed views / referral refund | Paystack dashboard (§5) |
 | Mark a Sent content refund as refunded, or refund a part with no payment reference | Paystack dashboard; can't be recorded in the panel (§5) |
+| Retry a failed hybrid bonus refund | Paystack dashboard (§5) |
 | See whether jobs are running | API logs and the database queries in §9 |
 | Appeal a payout | Not a feature (§3) |
 

@@ -325,6 +325,7 @@ db.campaigns.countDocuments({ creatorAccess: "application_required", status: "li
 ### Not safe once content campaigns have money (forward-fix instead)
 
 Once any of the counts above is non-zero, rolling the API back to `main` would:
+- **Hybrid pay (ticket 10) needs no migration, index or environment variable.** Its fields (`Campaign.hybridBonus`, `Withdrawal.bonusAmount`, `ConversionEvent.bonusAmount`, the `bonus` ledger bucket and `bonus_credit` rows) are additive. Rolling back past it once a hybrid campaign is paid is **not safe**: older code reads the `bonus` bucket as views escrow and pays sign-up bonuses from the (empty) referral budget. Forward-fix instead.
 - **Treat the fixed pot as views escrow.** `main` reads any bucket other than `referral` as views, so a cancel would refund the content payment as views escrow and views withdrawals could draw on it.
 - **Ignore fixed pay credits** in withdrawals, so creators owed fixed pay can't withdraw it, and a mixed withdrawal's `fixedAmount` wouldn't be paid.
 - **Break saves** of content campaigns (`main` requires `targetViews`) and of submissions in the new statuses (`changes_requested`, `awaiting_delivery`, `awaiting_receipt`, `completed`, `not_delivered` aren't in `main`'s enum).
