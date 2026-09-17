@@ -9,7 +9,6 @@
 //
 //   MONGODB_URI=<connection string> node scripts/checkUniqueIndexConflicts.js
 
-require("dotenv").config();
 const mongoose = require("mongoose");
 
 async function duplicates(collection, match, groupId, extra) {
@@ -24,14 +23,8 @@ async function duplicates(collection, match, groupId, extra) {
     .toArray();
 }
 
-async function main() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.error("Set MONGODB_URI");
-    process.exit(1);
-  }
-  await mongoose.connect(uri);
-
+// Every unique index check on the connected database: [{ label, rows }], rows being duplicated groups.
+async function findUniqueIndexConflicts() {
   const checks = [
     {
       label: "transactions {reference, type}",
@@ -63,7 +56,18 @@ async function main() {
       ),
     });
   }
+  return checks;
+}
 
+async function main() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.error("Set MONGODB_URI");
+    process.exit(1);
+  }
+  await mongoose.connect(uri);
+
+  const checks = await findUniqueIndexConflicts();
   let conflicts = 0;
   for (const check of checks) {
     if (check.rows.length === 0) {
@@ -79,7 +83,12 @@ async function main() {
   process.exit(conflicts === 0 ? 0 : 2);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  require("dotenv").config();
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = { findUniqueIndexConflicts };
