@@ -303,6 +303,38 @@ test("back-pay that crashes after reserving the reward never reserves it twice",
   await expectTwoPaidOnce(id, exhausted);
 });
 
+test("the 15-minute job finishes back-pay a crash stranded, with no new top-up or sign-up", async () => {
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const earnings = require("../../src/utils/referralEarnings");
+  const { runScheduledOpsAlerts } = require("../../src/services/opsAlerts");
+  const { id, exhausted } = await exhaustedSignupCampaign();
+
+  earnings.backPayHooks.afterClaim = async () => {
+    earnings.backPayHooks.afterClaim = null;
+    throw new Error("process died after the claim");
+  };
+  const error = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await creditTwoRewards(id, "job")).credited, true);
+  } finally {
+    console.error = error;
+    earnings.backPayHooks.afterClaim = null;
+  }
+  assert.ok((await ConversionEvent.findById(exhausted[0]._id).lean()).payingClaim);
+
+  // Within 5 minutes the claim is still fresh: the job leaves it.
+  await runScheduledOpsAlerts({ now: new Date(Date.now() + 2 * 60 * 1000), notify: async () => {} });
+  assert.equal((await ConversionEvent.findById(exhausted[0]._id).lean()).rewardAmount, 0);
+
+  const later = new Date(Date.now() + 6 * 60 * 1000);
+  const first = await runScheduledOpsAlerts({ now: later, notify: async () => {} });
+  assert.equal(first.backPay.paid, 2);
+  const again = await runScheduledOpsAlerts({ now: new Date(later.getTime() + 15 * 60 * 1000), notify: async () => {} });
+  assert.equal(again.backPay.paid, 0, "never pays twice");
+  await expectTwoPaidOnce(id, exhausted);
+});
+
 test("a sign-up arriving while a top-up is credited never jumps ahead of older unpaid sign-ups", async () => {
   const ConversionEvent = require("../../src/models/ConversionEvent");
   const earnings = require("../../src/utils/referralEarnings");

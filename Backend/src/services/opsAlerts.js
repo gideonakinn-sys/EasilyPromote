@@ -35,6 +35,7 @@ const { isContentCampaign } = require("../utils/campaignPay");
 const { toObjectId } = require("../utils/objectId");
 const { plural } = require("../utils/plural");
 const { sendEmail } = require("./email");
+const { retryStrandedBackPay } = require("../utils/referralEarnings");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -563,7 +564,13 @@ async function runOpsAlerts({ now = new Date(), full = false, notify = null } = 
 async function runScheduledOpsAlerts({ now = new Date(), notify = null } = {}) {
   const state = await JobState.findById(JOB_NAME).lean();
   const full = !state || !state.lastFullPassAt || now.getTime() - new Date(state.lastFullPassAt).getTime() >= FULL_PASS_INTERVAL_MS;
-  const summary = await runOpsAlerts({ now, full, notify });
+  // Referral back-pay stranded by a crash (or never triggered) is retried here first, through the
+  // same claim / reserve path, so it never pays twice. A failure can't stop the alerts.
+  const backPay = await retryStrandedBackPay(now).catch((error) => {
+    console.error("[OpsAlerts] Referral back-pay retry failed:", error.message);
+    return { campaigns: 0, paid: 0, error: error.message };
+  });
+  const summary = { ...(await runOpsAlerts({ now, full, notify })), backPay };
   if (full) {
     try {
       await JobState.updateOne({ _id: JOB_NAME }, { $set: { lastFullPassAt: now } }, { upsert: true });

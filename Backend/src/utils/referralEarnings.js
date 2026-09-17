@@ -446,6 +446,35 @@ async function payWaitingConversions(campaignId, { now = new Date(), cause }) {
   }
 }
 
+// Scheduled recovery (run by the 15-minute ops alerts job): back-pay a crash left stranded or that no
+// new top-up or sign-up triggered. Retries every campaign with conversions waiting for pay whose
+// reward is set and whose pool can cover one, or that has a claim older than PAYING_CLAIM_STALE_MS.
+// Uses the same claim / reserve path, so it never pays twice. Returns { campaigns, paid }.
+async function retryStrandedBackPay(now = new Date()) {
+  const campaignIds = await ConversionEvent.distinct("campaignId", {
+    counted: true,
+    voidedAt: null,
+    unpaidReason: { $in: PAYABLE_LATER_REASONS },
+    rewardAmount: { $not: { $gt: 0 } },
+  });
+  if (campaignIds.length === 0) return { campaigns: 0, paid: 0 };
+  const staleBefore = new Date(now.getTime() - PAYING_CLAIM_STALE_MS);
+  const [campaigns, withStaleClaims] = await Promise.all([
+    Campaign.find({ _id: { $in: campaignIds }, "referral.rewardPerConversion": { $gt: 0 } }).select("referral.rewardPerConversion referral.poolRemaining").lean(),
+    ConversionEvent.distinct("campaignId", { campaignId: { $in: campaignIds }, "payingClaim.at": { $lte: staleBefore } }),
+  ]);
+  const stale = new Set(withStaleClaims.map(String));
+  let paid = 0;
+  let retried = 0;
+  for (const campaign of campaigns) {
+    const coverable = (campaign.referral.poolRemaining || 0) >= campaign.referral.rewardPerConversion;
+    if (!coverable && !stale.has(String(campaign._id))) continue;
+    retried += 1;
+    paid += (await payQueuedConversions(campaign._id, now)).paid;
+  }
+  return { campaigns: retried, paid };
+}
+
 // After a referral top-up: pays sign-ups the empty budget left unpaid (only once a reward is set).
 const payConversionsAfterTopup = (campaignId, now = new Date()) => payWaitingConversions(campaignId, { now, cause: "topup" });
 // After a conversion queued behind older unpaid ones is recorded.
@@ -454,6 +483,7 @@ const payQueuedConversions = (campaignId, now = new Date()) => payWaitingConvers
 module.exports = {
   backPayHooks,
   payQueuedConversions,
+  retryStrandedBackPay,
   payUnpaidConversions,
   REFERRAL_HOLD_MS,
   MIN_REFERRAL_TOPUP,
