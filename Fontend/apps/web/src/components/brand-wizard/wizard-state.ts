@@ -207,6 +207,11 @@ export interface WizardData {
   otherNiches: string[];
   // Clicks (SPEC D29): the http/https page creators' tracked links send people to.
   destinationUrl: string;
+  // M8 (SPEC D8 amended): opt-in hard filters for age and gender. Shares are whole percents as typed.
+  requireAgeMatch: boolean;
+  minAgeShare: string;
+  requireGenderMatch: boolean;
+  minGenderShare: string;
 }
 
 export const EMPTY_BRIEF: WizardBrief = {
@@ -221,6 +226,16 @@ export const EMPTY_BRIEF: WizardBrief = {
   productInfo: "",
   approvalRequirements: "",
 };
+
+// The share a hard age or gender filter asks for when the brand doesn't change it (matches the API).
+export const DEFAULT_HARD_FILTER_SHARE = 50;
+
+// Genders a hard filter can require: "Everyone" isn't one.
+export const specificGenders = (genders: string[]) => genders.filter((gender) => gender !== "all");
+
+// Whether each hard filter is on and has something to match.
+export const ageFilterActive = (data: WizardData) => data.requireAgeMatch && data.ageRanges.length > 0;
+export const genderFilterActive = (data: WizardData) => data.requireGenderMatch && specificGenders(data.genders).length > 0;
 
 export const INITIAL_WIZARD_DATA: WizardData = {
   name: "",
@@ -254,6 +269,10 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   scriptFileName: "",
   otherNiches: [],
   destinationUrl: "",
+  requireAgeMatch: false,
+  minAgeShare: String(DEFAULT_HARD_FILTER_SHARE),
+  requireGenderMatch: false,
+  minGenderShare: String(DEFAULT_HARD_FILTER_SHARE),
 };
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
@@ -315,6 +334,10 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.platforms.length === 0) problems.push("Choose at least one platform.");
     const share = data.minLocationShare.trim();
     if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
+    const ageShare = data.minAgeShare.trim();
+    if (ageFilterActive(data) && (wholeNumber(ageShare) === null || Number(ageShare) > 100)) problems.push("The required age share must be a whole number from 0 to 100.");
+    const genderShare = data.minGenderShare.trim();
+    if (genderFilterActive(data) && (wholeNumber(genderShare) === null || Number(genderShare) > 100)) problems.push("The required gender share must be a whole number from 0 to 100.");
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
     const engagement = data.minEngagementRate.trim();
     if (engagement && !(Number(engagement) >= 0 && Number(engagement) <= 100)) problems.push("Engagement rate must be from 0 to 100.");
@@ -440,6 +463,10 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     scriptFileName: saved.scriptFileName || "",
     otherNiches: list(saved.niches).filter((niche) => !CREATOR_CATEGORIES.includes(niche)),
     destinationUrl: saved.destinationUrl || "",
+    requireAgeMatch: Boolean(targeting.requireAgeMatch),
+    minAgeShare: String(targeting.minAgeShare ?? DEFAULT_HARD_FILTER_SHARE),
+    requireGenderMatch: Boolean(targeting.requireGenderMatch),
+    minGenderShare: String(targeting.minGenderShare ?? DEFAULT_HARD_FILTER_SHARE),
   };
 }
 
@@ -489,6 +516,9 @@ export function targetingPayload(data: WizardData): { audienceTargeting: Record<
       genders: data.genders,
       interests: data.interests,
       platforms: data.platforms,
+      // Hard filters only go out when on and there's something to match.
+      ...(ageFilterActive(data) && { requireAgeMatch: true, minAgeShare: optionalWhole(data.minAgeShare) ?? DEFAULT_HARD_FILTER_SHARE }),
+      ...(genderFilterActive(data) && { requireGenderMatch: true, minGenderShare: optionalWhole(data.minGenderShare) ?? DEFAULT_HARD_FILTER_SHARE }),
     },
     creatorEligibility: {
       minFollowers: optionalWhole(data.minFollowers),

@@ -14,6 +14,10 @@ import {
   USAGE_RIGHTS_TEXT,
   usesReferralBudget,
   actionNoun,
+  ageFilterActive,
+  genderFilterActive,
+  DEFAULT_HARD_FILTER_SHARE,
+  specificGenders,
   type WizardData,
 } from "./wizard-state";
 import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility, HybridBonus } from "../types";
@@ -56,6 +60,8 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
       genders: data.genders,
       interests: data.interests,
       platforms: data.platforms,
+      ...(ageFilterActive(data) && { requireAgeMatch: true, minAgeShare: data.minAgeShare.trim() ? Number(data.minAgeShare) : DEFAULT_HARD_FILTER_SHARE }),
+      ...(genderFilterActive(data) && { requireGenderMatch: true, minGenderShare: data.minGenderShare.trim() ? Number(data.minGenderShare) : DEFAULT_HARD_FILTER_SHARE }),
     },
     creatorEligibility: {
       minFollowers: data.minFollowers ? Number(data.minFollowers) : undefined,
@@ -190,7 +196,18 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
           }
         />
         <SummaryRow label="Age" value={joined(targeting.ageRanges) || "Any"} />
+        {targeting.requireAgeMatch && joined(targeting.ageRanges) && (
+          <SummaryRow label="Age Requirement" value={`Required: at least ${targeting.minAgeShare ?? DEFAULT_HARD_FILTER_SHARE}% aged ${joined(targeting.ageRanges)}`} />
+        )}
         <SummaryRow label="Gender" value={joined(targeting.genders?.map((value) => labelFor(GENDER_OPTIONS, value))) || "Everyone"} />
+        {targeting.requireGenderMatch && specificGenders(targeting.genders || []).length > 0 && (
+          <SummaryRow
+            label="Gender Requirement"
+            value={`Required: at least ${targeting.minGenderShare ?? DEFAULT_HARD_FILTER_SHARE}% ${specificGenders(targeting.genders || [])
+              .map((value) => labelFor(GENDER_OPTIONS, value).toLowerCase())
+              .join(" or ")}`}
+          />
+        )}
         <SummaryRow label="Interests" value={joined(targeting.interests) || "Any"} />
       </Section>
 
