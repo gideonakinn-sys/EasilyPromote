@@ -12,6 +12,9 @@ import {
   PLATFORM_OPTIONS,
   RANK_OPTIONS,
   USAGE_RIGHTS_TEXT,
+  USAGE_DURATION_OPTIONS,
+  isWorldwide,
+  usageRightsPayload,
   usesReferralBudget,
   actionNoun,
   ageFilterActive,
@@ -22,6 +25,7 @@ import {
 } from "./wizard-state";
 import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility, HybridBonus } from "../types";
 import { formatNaira } from "../../lib/referral";
+import type { CampaignUsageRights } from "../types";
 
 export interface SetupSummaryInput {
   campaignObjective: CampaignObjective | null;
@@ -35,6 +39,8 @@ export interface SetupSummaryInput {
   creatorEligibility: CreatorEligibility;
   brief: CampaignBrief;
   destinationUrl?: string | null;
+  // Custom usage-rights terms (SPEC D30); missing or standard shows the standard licence.
+  usageRights?: CampaignUsageRights | null;
 }
 
 const labelFor = (options: { value: string; label: string }[], value: string) => options.find((option) => option.value === value)?.label || value;
@@ -73,7 +79,36 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
     },
     brief: data.brief,
     destinationUrl: data.objective === "clicks" ? data.destinationUrl.trim() : undefined,
+    usageRights: usageRightsPayload(data),
   };
+}
+
+function UsageRightsLines({ usageRights }: { usageRights: CampaignUsageRights | null | undefined }) {
+  const terms = usageRights?.type === "custom" ? usageRights.terms || {} : null;
+  if (!terms) {
+    return (
+      <>
+        <SummaryRow label="Usage Rights" value="Standard licence" />
+        <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <SummaryRow label="Usage Rights" value="Custom terms" />
+      <SummaryRow label="Usage Period" value={labelFor(USAGE_DURATION_OPTIONS, terms.duration || "perpetual")} />
+      <SummaryRow
+        label="Exclusivity"
+        value={terms.exclusivity === "category" ? `Category exclusive${terms.exclusivityPeriod ? `, ${terms.exclusivityPeriod}` : ""}` : "Not exclusive"}
+      />
+      <SummaryRow label="Paid Ads" value={terms.paidAdsAllowed === false ? "Not allowed" : "Allowed"} />
+      <SummaryRow label="Where" value={isWorldwide(terms.territories) ? "Worldwide" : joined(terms.territories)} />
+      <BriefText label="Additional Terms" text={terms.additionalTerms || undefined} />
+      <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
+        Creators accept these terms before they join or apply. They can&apos;t change after launch.
+      </p>
+    </>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -180,7 +215,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
       <Section title="Destination and Access">
         <SummaryRow label="Content Destination" value={destination?.title || "Creator's page"} />
         {(setup.contentDestination === "brand_page" || setup.contentDestination === "both") && (
-          <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
+          <UsageRightsLines usageRights={setup.usageRights} />
         )}
         <SummaryRow label="Creator Access" value={access?.title || "Open Call"} />
       </Section>
