@@ -317,7 +317,7 @@ export interface WithdrawalItem {
 }
 
 // Campaign engine: brand wizard (ticket 03)
-export type CampaignObjective = "content" | "views" | "downloads" | "signups" | "engagement" | "leads" | "sales" | "other";
+export type CampaignObjective = "content" | "views" | "downloads" | "signups" | "engagement" | "leads" | "sales" | "other" | "clicks";
 export type ContentDestination = "creator_page" | "brand_page" | "both";
 export type CreatorAccess = "open_call" | "application_required";
 
@@ -382,6 +382,8 @@ export interface CampaignSetup {
   audienceTargeting: AudienceTargeting;
   creatorEligibility: CreatorEligibility;
   brief: CampaignBrief;
+  // Clicks campaigns (SPEC D29): where creators' tracked links send people.
+  destinationUrl?: string | null;
 }
 
 // What a brand pays, from the same calculator checkout charges with.
