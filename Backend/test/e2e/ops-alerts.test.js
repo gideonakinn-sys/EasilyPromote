@@ -378,6 +378,70 @@ test("an admin-resolved alert reopens and is emailed again when the problem chan
   await Withdrawal.updateOne({ _id: failed._id }, { $set: { status: "rejected" } });
 });
 
+test("money moving on a flagged campaign doesn't reopen or re-email a resolved mismatch; 24 hours later it does", async () => {
+  const Campaign = model("Campaign");
+  const OpsAlert = model("OpsAlert");
+  const { runOpsAlerts } = service();
+  const { id } = await viewsCampaign();
+  const _id = new mongoose.Types.ObjectId(id);
+  const stored = await Campaign.findById(id).lean();
+  await Campaign.collection.updateOne({ _id }, { $set: { platformFee: stored.platformFee + 1000 } });
+
+  const emailed = [];
+  const notify = async (alerts) => emailed.push(...alerts.map((a) => String(a.subjectId)));
+  const start = new Date();
+  await (await runOpsAlerts({ now: start, notify })).emailing;
+  const [alert] = await OpsAlert.find({ kind: "reconciliation_mismatch", subjectId: _id, active: true }).lean();
+  assert.ok(alert);
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
+  const resolved = await harness.api("PATCH", `/api/admin/alerts/${alert._id}/resolve`, { token: admin.token });
+  const resolvedAt = new Date(resolved.body.resolvedAt);
+
+  for (let run = 1; run <= 4; run += 1) {
+    // Brand tops up: paid in, fee and pool all move, the ₦1,000 fee discrepancy stays.
+    await model("Transaction").create({ campaignId: id, type: "topup", bucket: "views", amount: 43000, status: "escrow_deposit", reference: `ref_move_${id}_${run}` });
+    await Campaign.collection.updateOne({ _id }, { $inc: { budget: 43000, platformFee: 12900, creatorPool: 30100 } });
+    await (await runOpsAlerts({ now: new Date(resolvedAt.getTime() + run * HOUR), notify })).emailing;
+    const [current] = await OpsAlert.find({ kind: "reconciliation_mismatch", subjectId: _id, active: true }).lean();
+    assert.ok(current, `run ${run}: still flagged`);
+    assert.ok(current.resolvedAt, `run ${run}: still resolved`);
+  }
+  assert.equal(emailed.filter((s) => s === id).length, 1, "emailed only when first found");
+
+  await (await runOpsAlerts({ now: new Date(resolvedAt.getTime() + 24 * HOUR + 60 * 1000), notify })).emailing;
+  const [reopened] = await OpsAlert.find({ kind: "reconciliation_mismatch", subjectId: _id, active: true }).lean();
+  assert.equal(reopened.resolvedAt, null, "24 hours later it reopens");
+  assert.equal(emailed.filter((s) => s === id).length, 2);
+
+  const fresh = await Campaign.findById(id).lean();
+  await Campaign.collection.updateOne({ _id }, { $set: { platformFee: fresh.platformFee - 1000 } });
+  await runOpsAlerts({ now: new Date(resolvedAt.getTime() + 25 * HOUR), notify: noEmail });
+});
+
+test("stuck views posts on completed or cancelled campaigns don't alert, and an open alert resolves", async () => {
+  const Submission = model("Submission");
+  const Campaign = model("Campaign");
+  const { collectAlerts, runOpsAlerts } = service();
+  const { id } = await viewsCampaign();
+  const creator = await harness.registerCreator();
+  await Submission.create({
+    campaignId: id,
+    creatorId: creator.id,
+    creatorHandle: creator.username,
+    videoUrl: "https://tiktok.example.com/v/9",
+    status: "awaiting_post",
+    reviewedAt: new Date(Date.now() - 9 * DAY),
+  });
+  await Campaign.updateOne({ _id: id }, { $set: { status: "paused" } });
+  assert.equal(found(await collectAlerts({ now: new Date() }), "views_submission_stuck", id).length, 1, "paused still alerts");
+  await runOpsAlerts({ now: new Date(), notify: noEmail });
+  await Campaign.updateOne({ _id: id }, { $set: { status: "completed" } });
+  assert.equal(found(await collectAlerts({ now: new Date() }), "views_submission_stuck", id).length, 0);
+  await runOpsAlerts({ now: new Date(), notify: noEmail });
+  const [alert] = await alertsFor("views_submission_stuck", id);
+  assert.equal(alert.active, false, "resolved");
+});
+
 test("a failed payout older than the 30-day lookback stays open until the withdrawal is dealt with", async () => {
   const Withdrawal = model("Withdrawal");
   const Transaction = model("Transaction");

@@ -60,7 +60,7 @@ function checkEnvironment(env, { staging = false } = {}) {
   return { present, blocking, warnings };
 }
 
-const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+const { plural } = require("../src/utils/plural");
 
 // The admin dashboard and creator join read with $unionWith, which needs MongoDB 4.4.
 const MIN_SERVER_VERSION = [4, 4];

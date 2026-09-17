@@ -14,12 +14,13 @@
 //   paystack_webhook_failing  3+ Paystack webhooks that failed to process in the last hour
 //   content_deadline_stuck    content waiting on the brand more than 72 hours + 1 hour grace (auto job stuck)
 //   application_expiry_stuck  applications pending more than 7 days + 2 hours grace (expiry job stuck)
-//   views_submission_stuck    views content approved more than 7 days ago whose post link was never shared
+//   views_submission_stuck    views content on a live or paused campaign approved more than 7 days ago, post link never shared
 //   reconciliation_mismatch   a campaign whose books don't balance
 //
 // An alert only resolves when its subject is re-checked and the condition is gone. An alert an
 // admin resolved while the condition lasts reopens (and is emailed again) when the problem
-// changes (amount, status, count, a new failed attempt) or 24 hours after it was resolved.
+// changes (amount, status, a count roughly doubling, a new failed attempt, a different kind or order of
+// magnitude of reconciliation mismatch) or 24 hours after it was resolved.
 const Campaign = require("../models/Campaign");
 const CampaignApplication = require("../models/CampaignApplication");
 const JobState = require("../models/JobState");
@@ -32,6 +33,7 @@ const Withdrawal = require("../models/Withdrawal");
 const { reconcileCampaigns } = require("./campaignReconciliation");
 const { isContentCampaign } = require("../utils/campaignPay");
 const { toObjectId } = require("../utils/objectId");
+const { plural } = require("../utils/plural");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -73,13 +75,35 @@ const TITLES = {
 };
 
 const naira = (amount) => `₦${Number(amount || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
-const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 const hoursSince = (date, now) => Math.floor((now.getTime() - new Date(date).getTime()) / HOUR);
 const daysSince = (date, now) => Math.floor((now.getTime() - new Date(date).getTime()) / DAY);
 // Opens the campaign's detail on the admin Campaigns page.
 const campaignLink = (campaignId) => `/campaigns?open=${campaignId}`;
 // Changes when a count roughly doubles, so a steady trickle doesn't reopen an alert every run.
 const countBucket = (count) => `~${2 ** Math.floor(Math.log2(Math.max(count, 1)))}`;
+
+// A reconciliation mismatch's stable signature: which checks fail (their wording with amounts, ids
+// and counts taken out) and the order of magnitude of the largest discrepancy. Money moving on the
+// campaign changes the amounts in the text but not this, so it doesn't reopen a resolved alert.
+function mismatchSignature(problems) {
+  const kinds = [
+    ...new Set(
+      problems.map((p) =>
+        p
+          .replace(/₦-?[\d,]+(\.\d+)?/g, "₦#")
+          .replace(/\b[0-9a-f]{24}\b/g, "<id>")
+          .replace(/\d+(\.\d+)?/g, "#")
+      )
+    ),
+  ].sort();
+  let largest = 0;
+  for (const p of problems) {
+    const amounts = [...p.matchAll(/₦(-?[\d,]+(?:\.\d+)?)/g)].map((m) => Number(m[1].replace(/,/g, "")));
+    if (amounts.length >= 2) largest = Math.max(largest, Math.abs(amounts[0] - amounts[amounts.length - 1]));
+  }
+  const magnitude = largest > 0 ? `1e${Math.floor(Math.log10(largest))}` : "0";
+  return `${kinds.join("|")}#${magnitude}`.slice(0, 1000);
+}
 
 function alert({ kind, subjectType, subjectId, campaignId = null, message, link, signature = null }) {
   return {
@@ -283,7 +307,7 @@ async function stuckContentDeadlines(now) {
         campaignId: campaign._id,
         message: `${plural(count, "submission")} ${count === 1 ? "has" : "have"} waited on the brand for ${plural(hoursSince(oldest, now), "hour")} on "${campaign.name}" without being confirmed automatically. The 72-hour deadline job may be stuck.`,
         link: campaignLink(campaign._id),
-        signature: count,
+        signature: countBucket(count),
       })
     )
   );
@@ -305,7 +329,7 @@ async function stuckApplicationExpiries(now) {
         campaignId: group._id,
         message: `${plural(group.count, "application")} ${group.count === 1 ? "is" : "are"} still pending ${plural(daysSince(group.oldest, now), "day")} after applying on "${names.get(String(group._id)) || "a campaign"}". The 7-day expiry job may be stuck.`,
         link: campaignLink(group._id),
-        signature: group.count,
+        signature: countBucket(group.count),
       })
     )
   );
@@ -324,7 +348,8 @@ async function stuckViewsSubmissions(now) {
   const campaigns = await Campaign.find({ _id: { $in: stale.map((s) => s._id) } })
     .select("name status campaignModel campaignObjective")
     .lean();
-  const views = new Map(campaigns.filter((c) => !isContentCampaign(c)).map((c) => [String(c._id), c]));
+  // Only campaigns still running: a finished campaign's unshared posts no longer cost anyone views.
+  const views = new Map(campaigns.filter((c) => !isContentCampaign(c) && ["live", "paused"].includes(c.status)).map((c) => [String(c._id), c]));
   return everything(
     stale
       .filter((group) => views.has(String(group._id)))
@@ -337,7 +362,7 @@ async function stuckViewsSubmissions(now) {
           campaignId: campaign._id,
           message: `${plural(group.count, "submission")} on "${campaign.name}" (${campaign.status}) ${group.count === 1 ? "was" : "were"} approved ${plural(daysSince(group.oldest, now), "day")} ago and the creator never shared the live post. Their placements hold views the campaign can't deliver.`,
           link: campaignLink(campaign._id),
-          signature: group.count,
+          signature: countBucket(group.count),
         });
       })
   );
@@ -383,7 +408,7 @@ async function unbalancedCampaigns(now, full) {
           campaignId: result.campaignId,
           message: `"${result.name || "Campaign"}" (${result.status}) doesn't balance: ${result.problems.slice(0, 3).join("; ")}${result.problems.length > 3 ? ` (+${result.problems.length - 3} more)` : ""}`.slice(0, 2000),
           link: campaignLink(result.campaignId),
-          signature: result.problems.join("|").slice(0, 1000),
+          signature: mismatchSignature(result.problems),
         })
       ),
   };
