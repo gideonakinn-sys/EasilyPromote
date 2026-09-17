@@ -198,6 +198,68 @@ const campaignSchema = new mongoose.Schema(
         default: undefined,
       },
     },
+    // Hybrid pay (ticket 10): a content campaign's performance bonus beside its base (contentPay).
+    // The brand sets the metric, the pool and the per-creator cap (D4); the rate comes from the price
+    // table (views) or admin's referral.rewardPerConversion (sign-ups, downloads), never the brand
+    // (ADR 0003). The pool is paid at checkout into the "bonus" pot with the fee on top (D2). Runtime
+    // fields are only written by the atomic conditional updates in utils/hybridBonus.js.
+    hybridBonus: {
+      type: new mongoose.Schema(
+        {
+          metric: { type: String, enum: ["views", "signups", "downloads"], required: true },
+          pool: { type: Number, required: true, min: 0 },
+          capPerCreator: { type: Number, required: true, min: 0 },
+          platformFee: { type: Number, default: 0 },
+          // Views: what a creator earns per 1,000 verified views, from the price table at setup.
+          ratePerThousandViews: { type: Number, default: 0 },
+          // Pool not yet promised to a creator or refunded.
+          poolRemaining: { type: Number, default: 0 },
+          // Promised to creators (credited bonus, less voided).
+          reserved: { type: Number, default: 0 },
+          // Given back to the brand by unused-bonus refunds.
+          refundedPool: { type: Number, default: 0 },
+          // What each creator has been promised, checked against the cap.
+          creators: {
+            type: [
+              new mongoose.Schema(
+                { creatorId: { type: mongoose.Schema.Types.ObjectId, required: true }, earned: { type: Number, default: 0 } },
+                { _id: false }
+              ),
+            ],
+            default: undefined,
+          },
+          // Reservations whose ledger row may not be written yet (a crash between the two); settled
+          // by writing the row under the same reference and dropping the entry.
+          pending: {
+            type: [
+              new mongoose.Schema(
+                {
+                  ref: { type: String, required: true },
+                  creatorId: { type: mongoose.Schema.Types.ObjectId, required: true },
+                  amount: { type: Number, required: true },
+                  conversionId: { type: mongoose.Schema.Types.ObjectId, default: null },
+                  at: { type: Date, required: true },
+                },
+                { _id: false }
+              ),
+            ],
+            default: undefined,
+          },
+          // One entry per unused-bonus refund: the pool it gave back and what the brand is refunded.
+          refundClaims: {
+            type: [
+              new mongoose.Schema(
+                { pool: { type: Number, required: true }, platformFee: { type: Number, required: true }, amount: { type: Number, required: true }, at: Date },
+                { _id: false }
+              ),
+            ],
+            default: undefined,
+          },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     contentDestination: {
       type: String,
       enum: ["creator_page", "brand_page", "both"],

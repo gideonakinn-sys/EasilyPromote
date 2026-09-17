@@ -5,7 +5,8 @@
 //             + refunds (succeeded) + refunds pending + what's left in the pools
 //
 // Nothing on the right is derived from the left: the fee comes from the campaign's fee percent
-// (inside the price for views and referral budgets, on top of the creator budget for content, D2),
+// (inside the price for views and referral budgets, on top of the creator budget for content and
+// of a hybrid campaign's bonus pool, D2),
 // payouts are checked per creator against what that creator earned, and content refunds are
 // recomputed from the submissions. Every check that doesn't hold is listed. Sums are in kobo.
 //
@@ -16,6 +17,7 @@
 
 const { toKobo, fromKobo, bucketOf } = require("./money");
 const rules = require("./fixedPayRules");
+const bonusRules = require("./hybridBonusRules");
 const { viewsEarned } = require("./earnings");
 
 const COMMITTED_RELEASE = ["escrow_deposit", "released"];
@@ -220,11 +222,98 @@ function reconcileFixed({ campaign, rows, submissions, now }, problems) {
   return pot;
 }
 
+// Hybrid pay's bonus pot (ticket 10): paid in = pool + fee on top; the pool is split into what
+// creators were promised (bonus credits), what was refunded and what's left, with each creator's
+// credits matching what the campaign reserved for them and never above the cap.
+function reconcileBonus({ campaign, rows, now }, problems) {
+  const pot = emptyPot();
+  const bonus = campaign.hybridBonus || null;
+  pot.paidIn = sum(rows.filter(isDeposit));
+  if (pot.paidIn === 0 && rows.length === 0) return pot;
+  if (!bonus || !bonus.metric) {
+    problems.push("bonus: money is booked to the bonus pot of a campaign without a hybrid bonus");
+    return pot;
+  }
+
+  const pool = toKobo(bonus.pool);
+  const fee = toKobo(rules.contentPlatformFee(bonus.pool, campaign.platformFeePercent));
+  if (toKobo(bonus.platformFee) !== fee) problems.push(`bonus: the campaign records a ${naira(toKobo(bonus.platformFee))} fee but ${feePercentOf(campaign)}% of the bonus pool is ${naira(fee)}`);
+  if (pot.paidIn !== pool + fee) problems.push(`bonus: paid in ${naira(pot.paidIn)} but the bonus pool plus fee is ${naira(pool + fee)}`);
+
+  const credits = rows.filter((t) => t.type === "bonus_credit" && t.status === "credited");
+  const credited = sum(credits);
+  if (credited !== toKobo(bonus.reserved)) {
+    problems.push(`bonus: credits in the ledger total ${naira(credited)} but the campaign reserved ${naira(toKobo(bonus.reserved))}`);
+  }
+  const references = credits.map((t) => t.reference).filter(Boolean);
+  if (references.length !== new Set(references).size) problems.push("bonus: a bonus is credited more than once");
+  if ((bonus.pending || []).length > 0) {
+    problems.push(`bonus: ${bonus.pending.length} bonus reservation${bonus.pending.length === 1 ? " hasn't" : "s haven't"} been written to the ledger yet (the next views sync or conversion settles them)`);
+  }
+
+  const creditedByCreator = new Map();
+  for (const credit of credits) creditedByCreator.set(String(credit.creatorId), (creditedByCreator.get(String(credit.creatorId)) || 0) + toKobo(credit.amount));
+  const cap = toKobo(bonus.capPerCreator);
+  for (const entry of bonus.creators || []) {
+    const creator = String(entry.creatorId);
+    const ledger = creditedByCreator.get(creator) || 0;
+    if (ledger !== toKobo(entry.earned)) problems.push(`bonus: creator ${creator} has ${naira(ledger)} in bonus credits but the campaign reserved ${naira(toKobo(entry.earned))}`);
+    if (toKobo(entry.earned) > cap) problems.push(`bonus: creator ${creator} was promised ${naira(toKobo(entry.earned))}, more than the ${naira(cap)} cap`);
+  }
+  for (const creator of creditedByCreator.keys()) {
+    if (!(bonus.creators || []).some((entry) => String(entry.creatorId) === creator)) problems.push(`bonus: creator ${creator} has bonus credits the campaign never reserved`);
+  }
+
+  // Payouts per creator never exceed that creator's credits past their hold.
+  const eligibleByCreator = new Map();
+  for (const credit of credits) {
+    if (bonusRules.bonusCreditState(credit, now).state !== "available") continue;
+    eligibleByCreator.set(String(credit.creatorId), (eligibleByCreator.get(String(credit.creatorId)) || 0) + toKobo(credit.amount));
+  }
+  const { releases, released, inFlight, committed } = releasesOf(rows);
+  pot.released = released;
+  pot.inFlight = inFlight;
+  checkPerCreator("bonus", releases, eligibleByCreator, new Map(), problems, "credited in bonus past its hold");
+  pot.owed = credited - committed;
+  if (pot.owed < 0) problems.push(`bonus: paid out ${naira(committed)}, more than the ${naira(credited)} credited`);
+
+  // Refunds follow the claims: each claim's unused pool plus the fee on it. Every row counts whatever
+  // Paystack did, as for views and referral refunds (a failed one is refunded by hand).
+  const claims = bonus.refundClaims || [];
+  let claimedPool = 0;
+  let claimedFee = 0;
+  for (const claim of claims) {
+    const expected = bonusRules.unusedBonusRefund({ unusedPool: claim.pool, pool: bonus.pool, platformFee: fromKobo(fee) });
+    if (toKobo(expected.amount) !== toKobo(claim.amount)) {
+      problems.push(`bonus: a refund claim of ${naira(toKobo(claim.amount))} doesn't match ${naira(toKobo(claim.pool))} unused pool plus its fee (${naira(toKobo(expected.amount))})`);
+    }
+    claimedPool += toKobo(claim.pool);
+    claimedFee += toKobo(expected.platformFee);
+  }
+  if (claimedPool !== toKobo(bonus.refundedPool)) problems.push(`bonus: refund claims total ${naira(claimedPool)} of pool but the campaign records ${naira(toKobo(bonus.refundedPool))} refunded`);
+  const refunds = rows.filter((t) => t.type === "refund");
+  pot.refunds = sum(refunds.filter((t) => t.status === "refunded"));
+  pot.pendingRefunds = sum(refunds.filter((t) => t.status !== "refunded"));
+  if (pot.refunds + pot.pendingRefunds !== claimedPool + claimedFee) {
+    problems.push(`bonus: refund rows total ${naira(pot.refunds + pot.pendingRefunds)} but the refund claims total ${naira(claimedPool + claimedFee)} (refund the unused bonus again to send what's missing)`);
+  }
+
+  pot.left = toKobo(bonus.poolRemaining);
+  if (credited + claimedPool + pot.left !== pool) {
+    problems.push(`bonus: credited ${naira(credited)} + refunded ${naira(claimedPool)} + left ${naira(pot.left)} don't add up to the bonus pool ${naira(pool)}`);
+  }
+  // The fee kept is what wasn't refunded; the pool part of any gap shows in the check above.
+  pot.platformFee = fee - claimedFee;
+  // Whatever the refund rows and the claims disagree on stays visible in the balance.
+  pot.left += claimedPool + claimedFee - (pot.refunds + pot.pendingRefunds);
+  return pot;
+}
+
 // Returns totals in naira plus the list of problems.
 function reconcileCampaign({ campaign, transactions, submissions = [], slots = [], conversionEvents = [], now = new Date() }) {
   const problems = [];
   const rows = transactions.filter((t) => !["unmatched_payment", "transfer_fee"].includes(t.type));
-  const byPot = { views: [], referral: [], fixed: [] };
+  const byPot = { views: [], referral: [], fixed: [], bonus: [] };
   for (const row of rows) byPot[bucketOf(row)].push(row);
 
   if (campaign.campaignModel === "content" && byPot.views.some(isDeposit)) {
@@ -235,6 +324,7 @@ function reconcileCampaign({ campaign, transactions, submissions = [], slots = [
     views: reconcileViews({ campaign, rows: byPot.views, submissions, slots }, problems),
     referral: reconcileReferral({ campaign, rows: byPot.referral, conversionEvents }, problems),
     fixed: reconcileFixed({ campaign, rows: byPot.fixed, submissions, now }, problems),
+    bonus: reconcileBonus({ campaign, rows: byPot.bonus, now }, problems),
   };
 
   const total = emptyPot();
@@ -253,7 +343,7 @@ function reconcileCampaign({ campaign, transactions, submissions = [], slots = [
     failedRefunds: fromKobo(sum(transactions.filter((t) => t.type === "refund" && t.status === "refund_failed"))),
     transferFees: fromKobo(sum(transactions.filter((t) => t.type === "transfer_fee" && t.status !== "failed"))),
     unmatchedPayments: fromKobo(sum(transactions.filter((t) => t.type === "unmatched_payment"))),
-    pots: { views: toNaira(pots.views), referral: toNaira(pots.referral), fixed: toNaira(pots.fixed) },
+    pots: { views: toNaira(pots.views), referral: toNaira(pots.referral), fixed: toNaira(pots.fixed), bonus: toNaira(pots.bonus) },
     ok: problems.length === 0,
     problems,
   };

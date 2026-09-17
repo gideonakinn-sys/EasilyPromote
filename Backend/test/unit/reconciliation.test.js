@@ -210,3 +210,93 @@ test("a referral pot balances with rewards reserved, paid, owed and the unused p
   });
   assert.match(bigRefund.problems.join("\n"), /refunds ₦45000 don't match the unused pool/);
 });
+
+// Hybrid pay (ticket 10): 2 deliverables at ₦5,000 base (fee ₦3,000) and a ₦20,000 bonus pool (fee
+// ₦6,000 on top), capped at ₦8,000 a creator. u1 reached the cap long ago and was paid; u2's ₦2,500 is
+// still in its hold; the ₦9,500 left was refunded with its ₦2,850 fee once the campaign completed.
+function hybridFixture() {
+  const campaign = {
+    _id: "h1",
+    name: "Glow launch",
+    status: "completed",
+    campaignModel: "content",
+    payShape: "hybrid",
+    budget: 13000,
+    creatorPool: 10000,
+    platformFee: 3000,
+    platformFeePercent: 30,
+    contentPay: { ratePerDeliverable: 5000, deliverables: 2 },
+    fixedPay: {},
+    hybridBonus: {
+      metric: "views",
+      pool: 20000,
+      platformFee: 6000,
+      capPerCreator: 8000,
+      ratePerThousandViews: 3010,
+      poolRemaining: 0,
+      reserved: 10500,
+      refundedPool: 9500,
+      creators: [
+        { creatorId: "u1", earned: 8000 },
+        { creatorId: "u2", earned: 2500 },
+      ],
+      pending: [],
+      refundClaims: [{ pool: 9500, platformFee: 2850, amount: 12350 }],
+    },
+  };
+  const longAgo = new Date(NOW.getTime() - 10 * DAY);
+  const recently = new Date(NOW.getTime() - 2 * DAY);
+  const transactions = [
+    row({ bucket: "fixed", type: "escrow_deposit", status: "escrow_deposit", amount: 13000, reference: "ep_h1" }),
+    row({ bucket: "bonus", type: "topup", status: "escrow_deposit", amount: 26000, feeAmount: 6000, reference: "ep_h1" }),
+    row({ bucket: "bonus", type: "bonus_credit", status: "credited", amount: 5000, creatorId: "u1", reference: "bonus_views_h1_u1_500000", date: longAgo }),
+    row({ bucket: "bonus", type: "bonus_credit", status: "credited", amount: 3000, creatorId: "u1", reference: "bonus_views_h1_u1_800000", date: longAgo }),
+    row({ bucket: "bonus", type: "bonus_credit", status: "credited", amount: 2500, creatorId: "u2", reference: "bonus_conv_e1", date: recently }),
+    row({ bucket: "bonus", type: "bonus_credit", status: "voided", amount: 2500, creatorId: "u2", reference: "bonus_conv_e0", date: recently }),
+    row({ bucket: "bonus", type: "release", status: "released", amount: 8000, creatorId: "u1" }),
+    row({ bucket: "bonus", type: "refund", status: "refunded", amount: 12350, reference: "refund_bonus_h1_1" }),
+  ];
+  return { campaign, transactions, now: NOW };
+}
+
+test("a hybrid campaign balances: base in the fixed pot, bonus credited, paid, owed and the unused pool refunded with its fee", () => {
+  const result = reconcileCampaign(hybridFixture());
+  assert.deepEqual(result.problems, []);
+  assert.equal(result.paidIn, 39000);
+  assert.deepEqual(result.pots.bonus, { paidIn: 26000, released: 8000, inFlight: 0, owed: 2500, platformFee: 3150, refunds: 12350, pendingRefunds: 0, left: 0 });
+  assert.equal(result.pots.fixed.left, 10000);
+});
+
+test("hybrid: a bonus paid out during its hold, over the cap, or credited twice is reported", () => {
+  const early = hybridFixture();
+  early.transactions.push(row({ bucket: "bonus", type: "release", status: "escrow_deposit", amount: 2500, creatorId: "u2" }));
+  assert.match(reconcileCampaign(early).problems.join("\n"), /creator u2 was paid ₦2500, more than the ₦0 credited in bonus past its hold/);
+
+  const overCap = hybridFixture();
+  overCap.campaign.hybridBonus.creators[0].earned = 8500;
+  overCap.campaign.hybridBonus.reserved = 11000;
+  overCap.transactions.push(row({ bucket: "bonus", type: "bonus_credit", status: "credited", amount: 500, creatorId: "u1", reference: "bonus_views_h1_u1_850000", date: new Date(NOW.getTime() - 9 * DAY) }));
+  const overCapText = reconcileCampaign(overCap).problems.join("\n");
+  assert.match(overCapText, /creator u1 was promised ₦8500, more than the ₦8000 cap/);
+  assert.match(overCapText, /don't add up to the bonus pool/);
+
+  const twice = hybridFixture();
+  twice.transactions.push({ ...twice.transactions[4] });
+  assert.match(reconcileCampaign(twice).problems.join("\n"), /credited more than once/);
+});
+
+test("hybrid: a refund that doesn't match its claim, a missing refund row and a wrong bonus fee are reported", () => {
+  const wrongRefund = hybridFixture();
+  wrongRefund.transactions.find((t) => t.type === "refund").amount = 12351;
+  assert.match(reconcileCampaign(wrongRefund).problems.join("\n"), /refund rows total ₦12351 but the refund claims total ₦12350/);
+
+  const unsent = hybridFixture();
+  unsent.transactions = unsent.transactions.filter((t) => t.type !== "refund");
+  const unsentResult = reconcileCampaign(unsent);
+  assert.match(unsentResult.problems.join("\n"), /refund the unused bonus again/);
+  assert.equal(unsentResult.pots.bonus.left, 12350, "money not yet sent back stays in the pot");
+
+  const wrongFee = hybridFixture();
+  wrongFee.campaign.hybridBonus.platformFee = 6001;
+  assert.match(reconcileCampaign(wrongFee).problems.join("\n"), /records a ₦6001 fee but 30% of the bonus pool is ₦6000/);
+});

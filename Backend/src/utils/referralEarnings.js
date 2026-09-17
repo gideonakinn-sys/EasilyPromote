@@ -292,7 +292,7 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
   const event = await ConversionEvent.findById(eventId);
   if (!event) return { ok: false, status: 404, error: "Conversion not found" };
   if (event.voidedAt) return { ok: false, status: 409, error: "This conversion is already voided" };
-  if (event.rewardAmount > 0 && event.availableAt && event.availableAt <= now) {
+  if ((event.rewardAmount > 0 || event.bonusAmount > 0) && event.availableAt && event.availableAt <= now) {
     return { ok: false, status: 409, error: "The hold has ended and the creator can already withdraw these earnings, so it can't be voided" };
   }
 
@@ -300,7 +300,7 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
     {
       _id: event._id,
       voidedAt: null,
-      $or: [{ rewardAmount: { $not: { $gt: 0 } } }, { availableAt: { $gt: now } }],
+      $or: [{ rewardAmount: { $not: { $gt: 0 } }, bonusAmount: { $not: { $gt: 0 } } }, { availableAt: { $gt: now } }],
     },
     { $set: { voidedAt: now, voidedReason: reason, voidedBy } },
     { new: false }
@@ -326,8 +326,10 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
     updates.push(Campaign.updateOne({ _id: previous.campaignId, "referral.conversions": { $gt: 0 } }, { $inc: { "referral.conversions": -1 } }));
   }
   await Promise.all(updates);
+  // A hybrid campaign's conversion bonus goes back to its bonus pool (ticket 10).
+  const bonusReturned = previous.bonusAmount > 0 ? await require("./hybridBonus").voidConversionBonus(previous) : 0;
 
-  return { ok: true, event: previous, campaign, refundedToPool: previous.rewardAmount > 0 ? previous.rewardAmount : 0 };
+  return { ok: true, event: previous, campaign, refundedToPool: previous.rewardAmount > 0 ? previous.rewardAmount : bonusReturned };
 }
 
 // Counted conversions that earned nothing are paid, oldest first, while the referral pool lasts:

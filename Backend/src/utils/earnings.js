@@ -116,7 +116,7 @@ function viewsEarningsFrom({ slotByCampaign, viewsByCampaign, withdrawnByCampaig
 // this is the only reliable "paid" figure. Referral payouts are excluded.
 async function releasedViewsTotal(match) {
   const [group] = await Transaction.aggregate([
-    { $match: { ...match, type: "release", status: "released", bucket: { $nin: ["referral", "fixed"] } } },
+    { $match: { ...match, type: "release", status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } } },
     { $group: { _id: null, total: { $sum: "$amount" } } },
   ]);
   return group ? group.total : 0;

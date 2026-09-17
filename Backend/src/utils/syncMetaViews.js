@@ -8,6 +8,8 @@ const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
 // Campaign engine: content approval (ticket 07)
 const { isContentCampaign } = require("./campaignPay");
+// Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
+const { viewsBonusSubmissionFilter, accrueAllViewsBonuses } = require("./hybridBonus");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -160,9 +162,10 @@ async function syncMetaViews() {
   }
 
   const userIds = Object.keys(byUser);
+  const bonusPosts = await viewsBonusSubmissionFilter();
   const submissions = await Submission.find({
     creatorId: { $in: userIds },
-    status: { $in: ["posted", "verifying"] },
+    $or: [{ status: { $in: ["posted", "verifying"] } }, ...(bonusPosts ? [bonusPosts] : [])],
   });
   console.log(`[Meta Sync] connections=${connections.length} postedSubmissions=${submissions.length}`);
 
@@ -242,6 +245,7 @@ async function syncMetaViews() {
       console.error(`[Meta Sync] Failed for user ${userId}:`, error.message);
     }
   }
+  await accrueAllViewsBonuses();
 }
 
 function startMetaSync() {

@@ -52,10 +52,17 @@ const conversionEventSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Hybrid campaigns (ticket 10): the bonus this conversion earned from the bonus pool. rewardAmount
+    // stays 0 for them, so referral earnings never count it.
+    bonusAmount: {
+      type: Number,
+      default: 0,
+    },
     // Why a counted conversion earned nothing.
     unpaidReason: {
       type: String,
-      enum: ["not_counted", "rate_not_set", "budget_exhausted", null],
+      // bonus_*: a hybrid campaign's conversion (ticket 10), paid from the bonus pool, not the referral budget.
+      enum: ["not_counted", "rate_not_set", "budget_exhausted", "bonus_rate_not_set", "bonus_cap_reached", "bonus_pool_exhausted", null],
       default: null,
     },
     // Earnings are held until this date so fake or reversed conversions can be voided.

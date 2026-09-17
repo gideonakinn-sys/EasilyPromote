@@ -238,7 +238,7 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
             campaignId: campaign._id,
             type: "release",
             status: "released",
-            bucket: { $nin: ["referral", "fixed"] },
+            bucket: { $nin: ["referral", "fixed", "bonus"] },
             submissionId: { $ne: null },
           },
         },
@@ -665,7 +665,7 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
         const Transaction = require("../models/Transaction");
         const released = await Transaction.aggregate([
           // The views pool only: referral payouts must not complete a views campaign.
-          { $match: { campaignId: campaign._id, status: "released", bucket: { $nin: ["referral", "fixed"] } } },
+          { $match: { campaignId: campaign._id, status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } } },
           { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
         const totalReleased = released.length > 0 ? released[0].total : 0;

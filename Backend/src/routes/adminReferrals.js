@@ -12,6 +12,7 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { EVENT_TYPES } = require("../services/conversions");
 const { campaignEventTypes } = require("../utils/referralCodes");
+const { isConversionBonus, payUnpaidConversionBonuses } = require("../utils/hybridBonus");
 const { paging, pageMeta, isObjectId, searchRegex, parseDate, csvCell } = require("../utils/adminQuery");
 const {
   payoutStatusOf,
@@ -813,11 +814,13 @@ router.patch("/campaigns/:id/reward", rewardGuard, async (req, res, next) => {
       return res.status(400).json({ error: `Enter a reward between ₦1 and ₦${MAX_REWARD_PER_CONVERSION.toLocaleString()}` });
     }
 
-    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral rateAuthority");
+    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral rateAuthority payShape hybridBonus");
+    // A hybrid campaign's sign-up or download bonus is admin-set too, though its base is the brand's (ticket 10).
+    const bonusCampaign = isConversionBonus(campaign);
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
     // Admin sets rewards only where admin is the rate authority (ADR 0003); campaigns from
     // before the campaign engine have no rateAuthority and are referral campaigns if enabled.
-    if (campaign.rateAuthority && campaign.rateAuthority !== "admin") {
+    if (campaign.rateAuthority && campaign.rateAuthority !== "admin" && !bonusCampaign) {
       return res.status(409).json({
         error: "This campaign's creator rate isn't set by our team",
         code: "RATE_NOT_ADMIN_SET",
@@ -836,7 +839,8 @@ router.patch("/campaigns/:id/reward", rewardGuard, async (req, res, next) => {
 
     // The first reward also pays conversions recorded while there wasn't one. Later
     // changes apply to new conversions only; each keeps what it earned.
-    const backPay = previous > 0 ? { paid: 0, unpaid: 0 } : await payUnpaidConversions(campaign._id);
+    const backPay =
+      previous > 0 ? { paid: 0, unpaid: 0 } : bonusCampaign ? await payUnpaidConversionBonuses(campaign._id) : await payUnpaidConversions(campaign._id);
 
     const types = campaignEventTypes(campaign);
     const noun = types.length === 1 ? CONVERSION_NOUNS[types[0]] || "conversion" : "conversion";
@@ -848,7 +852,7 @@ router.patch("/campaigns/:id/reward", rewardGuard, async (req, res, next) => {
         campaignId: campaign._id,
         type: "referral_reward",
         title: previous > 0 ? "Creator reward updated" : "Creator reward set",
-        body: `Creators on "${campaign.name}" now earn ${reward} per ${noun} from your referral budget.`,
+        body: `Creators on "${campaign.name}" now earn ${reward} per ${noun} from your ${bonusCampaign ? "bonus pool" : "referral budget"}.`,
       },
       ...creatorIds.map((creatorId) => ({
         creatorId,

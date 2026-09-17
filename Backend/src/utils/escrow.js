@@ -24,11 +24,12 @@ function escrowBalanceFrom(transactions, bucket = "views", creatorPool = null) {
     .filter((t) => t.type === "release" && COMMITTED_RELEASE_STATUSES.includes(t.status))
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Fixed pay is only ever paid against credits: what creators are owed, never the rest of the
-  // pot (unused budget and the platform fee), whatever has been refunded from it.
-  if (bucket === "fixed") {
+  // Fixed pay and hybrid bonus are only ever paid against credits: what creators are owed, never the
+  // rest of the pot (unused budget or pool, and the platform fee), whatever has been refunded from it.
+  if (bucket === "fixed" || bucket === "bonus") {
+    const creditType = bucket === "fixed" ? "fixed_credit" : "bonus_credit";
     const credited = inBucket
-      .filter((t) => t.type === "fixed_credit" && t.status === "credited")
+      .filter((t) => t.type === creditType && t.status === "credited")
       .reduce((sum, t) => sum + t.amount, 0);
     return Math.max(roundMoney(Math.min(credited, deposited) - committed), 0);
   }

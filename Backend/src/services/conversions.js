@@ -12,6 +12,7 @@ const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
 const { reserveConversionReward, payQueuedConversions } = require("../utils/referralEarnings");
 const { campaignEventTypes } = require("../utils/referralCodes");
+const { isConversionBonus, reserveConversionBonus } = require("../utils/hybridBonus");
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 const COMPLETED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -206,7 +207,7 @@ async function evaluateCode(businessId, rawCode, now) {
   if (referralCode.status === "disabled") return { value, referralCode, campaign: null, reason: "disabled" };
 
   const campaign = await Campaign.findById(referralCode.campaignId).select(
-    "status endDate completedAt updatedAt referral businessId name"
+    "status endDate completedAt updatedAt referral businessId name payShape hybridBonus.metric"
   );
   if (!campaign || !campaignAcceptsConversions(campaign, now.getTime())) {
     return { value, referralCode, campaign, reason: "campaign_not_accepting" };
@@ -320,7 +321,9 @@ async function processConversion(request, context, source) {
   const counted = campaignEventTypes(campaign).includes(payload.event);
 
   // The event is saved first (it's the idempotency guard); only then is money
-  // reserved, so a duplicate delivery can never reserve a reward twice.
+  // reserved, so a duplicate delivery can never reserve a reward twice. A hybrid campaign's
+  // conversion earns a bonus from its bonus pool instead (ticket 10).
+  if (isConversionBonus(campaign)) return recordBonusConversion({ campaign, event, referralCode, counted, payload, key, now, source });
   const reward = await reserveConversionReward(campaign, counted, now, { eventId: event._id });
 
   const [updatedCode] = await Promise.all([
@@ -358,6 +361,35 @@ async function processConversion(request, context, source) {
   emitToUser(referralCode.creatorId, "referral-conversion", update);
   emitToUser(key.businessId, "referral-conversion", update);
 
+  return reply(200, { status: "recorded", counted });
+}
+
+// A counted conversion on a hybrid campaign: its bonus is reserved from the bonus pool, up to the
+// creator's cap, and recorded as bonusAmount (rewardAmount stays 0).
+async function recordBonusConversion({ campaign, event, referralCode, counted, payload, key, now, source }) {
+  const bonus = await reserveConversionBonus(campaign, event, counted, now);
+  const [updatedCode] = await Promise.all([
+    ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
+    counted ? Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } }) : Promise.resolve(),
+    ConversionEvent.updateOne(
+      { _id: event._id },
+      { $set: { counted, bonusAmount: bonus.bonusAmount, unpaidReason: bonus.bonusAmount > 0 ? null : bonus.unpaidReason, availableAt: bonus.availableAt } }
+    ),
+    activateIfPending(referralCode, now),
+    markConnected(key, now, { kind: "conversion", source }),
+  ]);
+  const update = {
+    campaignId: campaign._id,
+    referralCodeId: referralCode._id,
+    code: referralCode.code,
+    eventType: payload.event,
+    counted,
+    rewardAmount: 0,
+    bonusAmount: bonus.bonusAmount,
+    conversions: updatedCode ? updatedCode.conversions : referralCode.conversions,
+  };
+  emitToUser(referralCode.creatorId, "referral-conversion", update);
+  emitToUser(key.businessId, "referral-conversion", update);
   return reply(200, { status: "recorded", counted });
 }
 

@@ -36,6 +36,7 @@ const { toObjectId } = require("../utils/objectId");
 const { plural } = require("../utils/plural");
 const { sendEmail } = require("./email");
 const { retryStrandedBackPay } = require("../utils/referralEarnings");
+const { accrueAllViewsBonuses } = require("../utils/hybridBonus");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -570,7 +571,13 @@ async function runScheduledOpsAlerts({ now = new Date(), notify = null } = {}) {
     console.error("[OpsAlerts] Referral back-pay retry failed:", error.message);
     return { campaigns: 0, paid: 0, error: error.message };
   });
-  const summary = { ...(await runOpsAlerts({ now, full, notify })), backPay };
+  // Hybrid views bonuses (ticket 10) are accrued here too, so they don't wait on a social sync running,
+  // and any reservation a crash left unwritten is settled on the way.
+  const viewsBonus = await accrueAllViewsBonuses(now).catch((error) => {
+    console.error("[OpsAlerts] Views bonus accrual failed:", error.message);
+    return { campaigns: 0, amount: 0, error: error.message };
+  });
+  const summary = { ...(await runOpsAlerts({ now, full, notify })), backPay, viewsBonus };
   if (full) {
     try {
       await JobState.updateOne({ _id: JOB_NAME }, { $set: { lastFullPassAt: now } }, { upsert: true });

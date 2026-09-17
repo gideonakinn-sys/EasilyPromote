@@ -44,6 +44,12 @@ const withdrawalSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Hybrid campaigns' bonus (ticket 10), paid from the bonus pot.
+    bonusAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     status: {
       type: String,
       enum: ["pending", "processing", "rejected", "released"],
