@@ -288,7 +288,7 @@ export function PrivateDetailsSection({ profile, onUpdated, email }: PrivateDeta
   );
 }
 
-// Follower counts per social account (self-reported until read from the platforms).
+// Follower counts per social account: read from Instagram when connected, otherwise self-reported.
 interface FollowerCountsSectionProps extends ProfileSectionProps {
   connectedHandles: Record<string, string>;
 }
@@ -296,9 +296,15 @@ interface FollowerCountsSectionProps extends ProfileSectionProps {
 export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: FollowerCountsSectionProps) {
   const { toast } = useToast();
   const accounts = React.useMemo(() => {
-    const list = (profile.socialAccounts || []).map((a) => ({ platform: a.platform, handle: a.handle, followers: a.followers ?? null }));
+    const list = (profile.socialAccounts || []).map((a) => ({
+      platform: a.platform,
+      handle: a.handle,
+      followers: a.followers ?? null,
+      fromApi: a.followersSource === "api" && a.followers != null,
+      syncedAt: a.followersSyncedAt ?? null,
+    }));
     for (const [platform, handle] of Object.entries(connectedHandles)) {
-      if (!list.some((a) => a.platform === platform)) list.push({ platform, handle, followers: null });
+      if (!list.some((a) => a.platform === platform)) list.push({ platform, handle, followers: null, fromApi: false, syncedAt: null });
     }
     return list;
   }, [profile.socialAccounts, connectedHandles]);
@@ -344,6 +350,16 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
               <p className="text-sm font-medium text-stone-900">{platformLabel(account.platform)}</p>
               <p className="text-xs font-medium text-stone-500 truncate">{account.handle}</p>
             </div>
+            {account.fromApi ? (
+              <div className="text-right">
+                <p className="text-sm font-medium text-stone-900">{(account.followers ?? 0).toLocaleString()}</p>
+                <p className="text-[11px] font-medium text-emerald-700">
+                  From {platformLabel(account.platform)}
+                  {account.syncedAt ? ` · updated ${new Date(account.syncedAt).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+            ) : (
+            <>
             <input
               inputMode="numeric"
               value={drafts[account.platform] ?? ""}
@@ -359,6 +375,8 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
             >
               {savingPlatform === account.platform ? "Saving…" : "Save"}
             </button>
+            </>
+            )}
           </li>
         ))}
       </ul>

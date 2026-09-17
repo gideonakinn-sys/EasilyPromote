@@ -289,8 +289,15 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
   });
 
   const [showAllSet, setShowAllSet] = React.useState(false);
-  const [showProfile, setShowProfile] = React.useState(false);
+  // The profile is its own page (/dashboard/creator/profile), so it closes whenever the URL moves
+  // to another screen and the browser's back button works. ?section= scrolls to a part of it.
+  const showProfile = /\/dashboard\/creator\/profile\/?$/.test(pathname);
   const [profileFocus, setProfileFocus] = React.useState<ProfileSection | null>(null);
+  React.useEffect(() => {
+    if (!showProfile) return;
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (section) setProfileFocus(section as ProfileSection);
+  }, [showProfile, pathname]);
   const [campaignsFilter, setCampaignsFilter] = React.useState<string>("all");
   const [campaigns, setCampaigns] = React.useState<CampaignItem[]>([]);
   const [marketplaceCampaigns, setMarketplaceCampaigns] = React.useState<MarketplaceCampaign[]>([]);
@@ -712,12 +719,29 @@ export function CreatorDashboardProvider({ children }: { children: React.ReactNo
     }
   };
 
+  // Set when the profile was opened from another dashboard screen, so closing goes back there;
+  // a profile opened straight from its URL closes to the dashboard home instead.
+  const openedProfileInApp = React.useRef(false);
   const openProfile = (section: ProfileSection) => {
     setProfileFocus(section);
-    setShowProfile(true);
+    const url = `/dashboard/creator/profile?section=${encodeURIComponent(section)}`;
+    if (showProfile) {
+      router.replace(url);
+    } else {
+      openedProfileInApp.current = true;
+      router.push(url);
+    }
   };
 
-  const closeProfile = () => setShowProfile(false);
+  const closeProfile = () => {
+    setProfileFocus(null);
+    if (openedProfileInApp.current) {
+      openedProfileInApp.current = false;
+      router.back();
+    } else {
+      router.push("/dashboard/creator");
+    }
+  };
 
   const handleBrowseCampaigns = () => {
     setShowAllSet(false);
