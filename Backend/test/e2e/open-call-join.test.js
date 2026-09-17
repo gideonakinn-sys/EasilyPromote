@@ -117,6 +117,31 @@ test("a creator with three active placements can't join a fourth", async () => {
   assert.deepEqual(fourth.body.failures.map((f) => f.criterion), ["placementLimit"]);
 });
 
+// Found by the load test (ticket 11): joins sent at the same moment all read the creator's active
+// placements before any was taken, so a creator could end up with 6 active placements.
+test("a creator joining six campaigns at once still ends with at most three active placements", async () => {
+  const Slot = require("../../src/models/Slot");
+  const campaigns = [];
+  for (let i = 0; i < 6; i += 1) campaigns.push((await liveCampaign(contentBody())).id);
+  const creator = await harness.registerCreator();
+
+  const results = await Promise.all(campaigns.map((id) => harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token })));
+  const joined = results.filter((r) => r.status === 200);
+  const refused = results.filter((r) => r.status !== 200);
+  assert.equal(joined.length, 3, JSON.stringify(results.map((r) => [r.status, r.body.code])));
+  for (const r of refused) {
+    assert.equal(r.status, 403, JSON.stringify(r.body));
+    assert.equal(r.body.code, "NOT_ELIGIBLE");
+    assert.ok(r.body.failures.some((f) => f.criterion === "placementLimit"), JSON.stringify(r.body));
+  }
+  const active = await Slot.find({ creatorId: creator.id, status: { $in: ["claimed", "submitted", "verifying"] } }).lean();
+  assert.equal(active.length, 3);
+  // The refused joins gave their places back.
+  for (const id of campaigns) {
+    assert.equal(await Slot.countDocuments({ campaignId: id, status: "available" }), active.some((s) => String(s.campaignId) === id) ? 2 : 3);
+  }
+});
+
 test("two creators racing for the last place: exactly one gets it", async () => {
   const { id } = await liveCampaign(contentBody({ contentPay: { ratePerDeliverable: 15000, deliverables: 1 } }));
   const [first, second] = await Promise.all([harness.registerCreator(), harness.registerCreator()]);

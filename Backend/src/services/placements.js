@@ -7,7 +7,7 @@ const { loadCreatorAccounts } = require("../utils/creatorAccounts");
 const { joinEligibility } = require("./joinRules");
 const { campaignTerms, fullBrief } = require("../utils/campaignPay");
 const { emitPlacesLeft } = require("../utils/campaignUpdates");
-const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES } = require("../utils/placementStatuses");
+const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 
 // Open places in the order joins take them; the marketplace prices cards from the same order.
 const JOIN_ORDER = { createdAt: 1, _id: 1 };
@@ -242,8 +242,12 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
     // now, and give it back if the campaign stopped being live, the pool is over-promised or this
     // creator somehow holds two. The same read counts the places left for the response and the
     // live update.
+    // The same goes for the creator's placement limit: joins to different campaigns at the same
+    // moment all counted the active placements before any was taken (the load test found a creator
+    // holding 6). The creator's oldest active placements up to the limit are the ones that stand, so
+    // whichever joins check, exactly the later ones give their place back.
     const isHeld = { $in: ["$status", HELD_PLACEMENT_STATUSES] };
-    const [current, [totals]] = await Promise.all([
+    const [current, [totals], keptActive] = await Promise.all([
       Campaign.findById(campaign._id).select("status creatorPool").lean(),
       Slot.aggregate([
         { $match: { campaignId: campaign._id, status: { $in: ["available", ...HELD_PLACEMENT_STATUSES] } } },
@@ -256,6 +260,11 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
           },
         },
       ]),
+      Slot.find({ creatorId, status: { $in: ACTIVE_PLACEMENT_STATUSES } })
+        .sort({ claimedAt: 1, _id: 1 })
+        .limit(MAX_ACTIVE_PLACEMENTS)
+        .select("_id")
+        .lean(),
     ]);
     if (!current || current.status !== "live") {
       await release(claimed, original, creatorId);
@@ -268,6 +277,12 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
       return totals.mine > 1
         ? refuse(409, "ALREADY_JOINED", "You already have a place in this campaign")
         : refuse(409, "CAMPAIGN_FULL", "This campaign's creator pool just filled up. Refresh to see what's left.");
+    }
+    if (ACTIVE_PLACEMENT_STATUSES.includes(claimed.status) && !keptActive.some((s) => String(s._id) === String(claimed._id))) {
+      await release(claimed, original, creatorId);
+      announcePlacesLeft(campaign._id);
+      const message = `You have ${MAX_ACTIVE_PLACEMENTS} active placements. Finish one to join another`;
+      return refuse(403, "NOT_ELIGIBLE", message, { failures: [{ criterion: "placementLimit", message }] });
     }
 
     // A code failure must never cost the creator their placement; backfill repairs it.
