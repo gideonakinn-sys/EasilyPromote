@@ -26,6 +26,12 @@ const ENV_SPEC = [
   { name: "CLIENT_URL", level: "required", why: "CORS allow-list; without it only localhost origins are allowed" },
   { name: "OPS_ALERT_EMAIL", level: "optional", why: "Where ops alerts are emailed; alerts still show in the admin overview without it" },
   { name: "PAYSTACK_CALLBACK_URL", level: "optional", why: "Where Paystack returns brands after checkout" },
+  {
+    name: "AUTO_REFUNDS_ENABLED",
+    level: "optional",
+    expected: "true",
+    why: "Automatic refunds of unused budget are OFF: nothing is refunded to brands until finance refunds by hand or it's set to true (the first run refunds every campaign that ended in the last 90 days; see DEPLOY_CHECKLIST §11)",
+  },
 ];
 
 const isSet = (env, name) => typeof env[name] === "string" && env[name].trim() !== "";
@@ -37,8 +43,13 @@ function checkEnvironment(env, { staging = false } = {}) {
   const warnings = [];
 
   for (const entry of ENV_SPEC) {
-    if (isSet(env, entry.name)) {
+    if (isSet(env, entry.name) && (!entry.expected || env[entry.name].trim().toLowerCase() === entry.expected)) {
       present.push(entry.name);
+      continue;
+    }
+    if (isSet(env, entry.name)) {
+      // Set to something other than the value that turns it on (never printed).
+      warnings.push({ name: entry.name, message: `${entry.name} isn't "${entry.expected}" (${entry.why})` });
       continue;
     }
     if (entry.fallback && isSet(env, entry.fallback)) {

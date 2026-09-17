@@ -19,6 +19,9 @@
 // Each run also retries refund rows a crash left unsent (after their send lock), checking Paystack's own
 // refunds first. Failures are recorded on the campaign (autoRefund) and raised as the
 // auto_refund_failed ops alert; a refund Paystack refuses stays failed for finance to retry (D23).
+//
+// Off unless AUTO_REFUNDS_ENABLED=true (utils/autoRefundSwitch): the first run refunds every campaign
+// that ended in the last 90 days, so finance switches it on deliberately.
 const mongoose = require("mongoose");
 const AdminActivity = require("../models/AdminActivity");
 const Campaign = require("../models/Campaign");
@@ -33,6 +36,7 @@ const { CONVERSION_GRACE_MS } = require("../utils/hybridBonusRules");
 const { refundViewsEscrow, refundCompletedViewsEscrow } = require("../utils/escrow");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { retryBucketRefund, refundRowState, lockFilter } = require("../utils/refunds");
+const { autoRefundsEnabled } = require("../utils/autoRefundSwitch");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -217,8 +221,10 @@ async function recordOutcome(campaign, failures, now) {
 }
 
 // One run over every campaign that ended in the last 90 days. Never throws for one campaign.
+// Does nothing (skipped: true) unless AUTO_REFUNDS_ENABLED=true.
 async function runAutoRefunds({ now = new Date() } = {}) {
-  const summary = { campaigns: 0, refunds: [], failed: 0, retried: 0 };
+  const summary = { skipped: false, campaigns: 0, refunds: [], failed: 0, retried: 0 };
+  if (!autoRefundsEnabled()) return { ...summary, skipped: true };
   summary.retried = await retryUnsentRefunds(now).catch((error) => {
     console.error("[AutoRefunds] Retrying unsent refunds failed:", error.message);
     return 0;
@@ -253,6 +259,10 @@ async function runAutoRefunds({ now = new Date() } = {}) {
 }
 
 function startAutoRefunds() {
+  if (!autoRefundsEnabled()) {
+    console.log("[AutoRefunds] Off — AUTO_REFUNDS_ENABLED isn't true; nothing is refunded automatically (admin refunds and retries still work)");
+    return;
+  }
   if (!process.env.PAYSTACK_SECRET_KEY) {
     console.log("[AutoRefunds] Skipped — PAYSTACK_SECRET_KEY not set");
     return;

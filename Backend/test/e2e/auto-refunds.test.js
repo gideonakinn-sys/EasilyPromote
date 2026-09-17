@@ -11,6 +11,7 @@ let harness;
 
 before(async () => {
   harness = await startHarness();
+  process.env.AUTO_REFUNDS_ENABLED = "true";
 });
 
 after(async () => {
@@ -82,6 +83,58 @@ function sendConversion(key, code) {
   });
   return harness.rawPost("/api/webhooks/conversions", request);
 }
+
+test("the job is off unless AUTO_REFUNDS_ENABLED=true: it refunds nothing while off, admin refunds still work, and it runs once switched on", async () => {
+  const { autoRefundsEnabled } = require("../../src/utils/autoRefundSwitch");
+  assert.equal(autoRefundsEnabled({}), false);
+  assert.equal(autoRefundsEnabled({ AUTO_REFUNDS_ENABLED: "false" }), false);
+  assert.equal(autoRefundsEnabled({ AUTO_REFUNDS_ENABLED: "1" }), false);
+  assert.equal(autoRefundsEnabled({ AUTO_REFUNDS_ENABLED: " TRUE " }), true);
+
+  const brand = await harness.registerBrand();
+  const body = (name) => ({
+    name,
+    category: "Fashion",
+    campaignObjective: "content",
+    contentPay: { ratePerDeliverable: RATE, deliverables: 2 },
+    contentDestination: "brand_page",
+    creatorAccess: "open_call",
+    brief: { summary: "Style it" },
+  });
+  const auto = await pay(brand, body("Switch auto"));
+  const byHand = await pay(brand, body("Switch by hand"));
+  const admin = await harness.registerAdmin({ role: "admin" });
+  const finance = await harness.registerAdmin({ role: "finance_admin" });
+  await complete(admin, auto.id);
+  await complete(admin, byHand.id);
+
+  delete process.env.AUTO_REFUNDS_ENABLED;
+  try {
+    const off = await run();
+    assert.equal(off.skipped, true);
+    assert.deepEqual(off.refunds, []);
+    assert.equal((await refundRows(auto.id)).length, 0, "nothing refunded while off");
+    assert.equal(harness.paystack.refunds(auto.reference).length, 0);
+
+    // The admin panel says it's off, and finance can still refund by hand.
+    const stats = await harness.api("GET", "/api/admin/stats", { token: admin.token });
+    assert.equal(stats.body.autoRefundsEnabled, false);
+    const list = await harness.api("GET", "/api/admin/refunds", { token: admin.token });
+    assert.equal(list.body.autoRefundsEnabled, false);
+    // 2 × ₦10,000 + the ₦6,000 fee on them.
+    const manual = await harness.api("POST", `/api/admin/campaigns/${byHand.id}/refund-unused`, { token: finance.token, body: { expectedAmount: 26000 } });
+    assert.equal(manual.status, 200, JSON.stringify(manual.body));
+    assert.equal((await refundRows(byHand.id, "fixed")).length, 1);
+  } finally {
+    process.env.AUTO_REFUNDS_ENABLED = "true";
+  }
+
+  const on = await run();
+  assert.equal(on.skipped, false);
+  assert.deepEqual((await refundRows(auto.id, "fixed")).map((r) => r.amount), [26000]);
+  assert.equal((await refundRows(byHand.id, "fixed")).length, 1, "the hand refund isn't repeated");
+  assert.equal((await harness.api("GET", "/api/admin/refunds", { token: admin.token })).body.autoRefundsEnabled, true);
+});
 
 test("content: unused deliverables are refunded automatically with their fee; delivery-pending pay and appealable rejections wait; repeats refund nothing", async () => {
   const brand = await harness.registerBrand();

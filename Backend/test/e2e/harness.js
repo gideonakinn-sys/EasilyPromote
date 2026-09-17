@@ -27,6 +27,8 @@ const OUTSIDE_SERVICE_ENV = [
   "FACEBOOK_APP_ID",
   "FACEBOOK_APP_SECRET",
   "PAYSTACK_CALLBACK_URL",
+  // Tests that exercise the automatic refund job switch it on themselves.
+  "AUTO_REFUNDS_ENABLED",
 ];
 
 function freePort() {

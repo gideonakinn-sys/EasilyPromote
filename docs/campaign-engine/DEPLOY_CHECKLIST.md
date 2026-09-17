@@ -64,6 +64,8 @@ Existing variables the new features depend on; confirm they're set in production
 
 **M7 adds one:** `OPS_ALERT_EMAIL`, the address (or comma-separated addresses) ops alerts are emailed to. Optional: without it alerts only show in the admin **Overview**. Set it before deploying the API. See `ADMIN_RUNBOOK.md` §9a for the alert kinds and thresholds.
 
+**Ticket 11 adds one:** `AUTO_REFUNDS_ENABLED`, the on-switch for automatic refunds. Optional and off unless exactly `true`; leave it unset at deploy and switch it on as its own step (§11).
+
 `scripts/preDeployChecks.js` checks every variable this release needs (names only, never values).
 
 ---
@@ -342,7 +344,7 @@ Restoring the §3 backup undoes the migration **and everything since**: payments
 
 ## 11. Money follow-ups (ticket 11: automatic refunds, refund retries, payout appeals, brand statement)
 
-**No migration and no new environment variable.** It uses `PAYSTACK_SECRET_KEY` (already required); without it the automatic refund job is skipped (`[AutoRefunds] Skipped`).
+**No migration. One new environment variable, `AUTO_REFUNDS_ENABLED`, the automatic refund job's on-switch.** The job does nothing unless it is exactly `true` (log at boot: `[AutoRefunds] Off — AUTO_REFUNDS_ENABLED isn't true`). Leave it **unset** for the deploy; switch it on as a separate, deliberate step once finance has agreed the first run (below). While it's off, **Refund Unused Budget**, **Refund Unused Bonus** and **Retry Refund** still work, and the admin **Overview** and **Refunds** screens show **Automatic Refunds Are Off**. `scripts/preDeployChecks.js` warns (never blocks) while it's off. The job also needs `PAYSTACK_SECRET_KEY` (already required); without it the job is skipped (`[AutoRefunds] Skipped`).
 
 **Indexes and collections (built by the API at boot, §6):**
 
@@ -354,13 +356,13 @@ Restoring the §3 backup undoes the migration **and everything since**: payments
 
 The new collection can't conflict. The `submissionevents` index isn't unique; on a large collection check `db.currentOp({ "command.createIndexes": { $exists: true } })` until it's built.
 
-**A new job moves money as soon as the API boots.** `startAutoRefunds` runs at boot and then hourly, and refunds unused budget on every campaign that was completed or cancelled in the last 90 days (runbook §5 Automatic refunds), including campaigns that ended before this release:
+**A new job moves money as soon as it's switched on.** With `AUTO_REFUNDS_ENABLED=true`, `startAutoRefunds` runs at boot and then hourly, and refunds unused budget on every campaign that was completed or cancelled in the last 90 days (runbook §5 Automatic refunds), including campaigns that ended before this release:
 - content campaigns' unused deliverables (what **Refund Unused Budget** would offer today),
 - hybrid campaigns' unused bonus pool once refundable,
 - completed views campaigns' untaken places and completed sign-up campaigns' unearned referral pool, 7 days after completion (before this release these were never refunded),
 - cancel refunds that never happened.
 
-Before deploying the API, as part of §4 (read-only, against production):
+Before setting `AUTO_REFUNDS_ENABLED=true` (read-only, against production):
 1. Run `node scripts/reconcileCampaigns.js` and keep the output; a campaign that doesn't balance should be understood first, because the job refunds from the same figures.
 2. List what the first run will look at, and agree with finance that those brands should be refunded now:
    ```js
@@ -370,10 +372,12 @@ Before deploying the API, as part of §4 (read-only, against production):
      { status: "cancelled", updatedAt: { $gte: since } },
    ] }, { name: 1, status: 1, completedAt: 1, campaignModel: 1, payShape: 1 })
    ```
-   For content campaigns, the **Deliverables And Fixed Pay** panel's refundable amount is what the job will send. If some must not be refunded yet, refund decisions have to be settled before the deploy: there's no per-campaign switch.
+   For content campaigns, the **Deliverables And Fixed Pay** panel's refundable amount is what the job will send. If some must not be refunded yet, settle those refund decisions before switching it on: the switch is global, there's no per-campaign one.
 3. Paystack: the balance must cover the refunds (Paystack refunds draw on it).
 
-After the deploy:
+Switching it on: set `AUTO_REFUNDS_ENABLED=true` on the API service in Render and let it restart (the job runs at boot). To switch it off again, remove the variable (or set `false`) and restart; refund rows already sent stay sent.
+
+After switching it on:
 - Watch for `[AutoRefunds]` log lines in the first hour, then **Refunds** → **Needs Attention** and **Overview** → **Needs Attention** for `Automatic Refund Failed`.
 - Run `node scripts/reconcileCampaigns.js` again; nothing new should fail.
 - Smoke: as a brand, open **Statement** on the brand dashboard (figures add up to paid in; **Download CSV** works). As `support`, **Appeals Inbox** loads and **Grant Appeal** on a payout appeal is disabled. As `finance_admin`, **Refunds** loads.

@@ -10,6 +10,8 @@ let harness;
 
 before(async () => {
   harness = await startHarness();
+  // These tests run the automatic refund job, which is off unless switched on.
+  process.env.AUTO_REFUNDS_ENABLED = "true";
 });
 
 after(async () => {

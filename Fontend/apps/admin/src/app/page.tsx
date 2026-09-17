@@ -25,6 +25,7 @@ interface StatsData {
   totalReleased: number;
   pendingVerifications: number;
   openAppeals: number;
+  autoRefundsEnabled?: boolean;
   recentUsers: Array<{
     _id: string;
     name: string;
@@ -103,6 +104,15 @@ export default function AdminOverviewPage() {
         )}
 
         {authed && <NeedsAttention refreshKey={alertsRefreshKey} />}
+
+        {stats && stats.autoRefundsEnabled === false && (
+          <Link href="/refunds" className="block mb-6 p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800">
+            <span className="block text-sm font-semibold">Automatic Refunds Are Off</span>
+            <span className="block text-xs mt-1">
+              Unused budget on ended campaigns is only refunded by hand until AUTO_REFUNDS_ENABLED is set to true. Open Refunds →
+            </span>
+          </Link>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">

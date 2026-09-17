@@ -67,6 +67,7 @@ export default function RefundsPage() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("attention");
   const [refunds, setRefunds] = useState<RefundRow[]>([]);
+  const [autoRefundsEnabled, setAutoRefundsEnabled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [canMoveMoney, setCanMoveMoney] = useState(false);
@@ -78,8 +79,9 @@ export default function RefundsPage() {
     try {
       setLoading(true);
       setError("");
-      const data = await apiRequest<{ refunds: RefundRow[] }>(`/admin/refunds?state=${filter}&limit=200`);
+      const data = await apiRequest<{ refunds: RefundRow[]; autoRefundsEnabled?: boolean }>(`/admin/refunds?state=${filter}&limit=200`);
       setRefunds(data.refunds || []);
+      setAutoRefundsEnabled(data.autoRefundsEnabled === true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Couldn't load refunds");
     } finally {
@@ -140,6 +142,16 @@ export default function RefundsPage() {
             refund, so it&apos;s never sent twice.
           </p>
         </header>
+
+        {autoRefundsEnabled === false && (
+          <div className="mb-5 p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800">
+            <p className="text-sm font-medium">Automatic Refunds Are Off</p>
+            <p className="text-xs font-medium mt-1">
+              Unused budget isn&apos;t refunded automatically on this server (AUTO_REFUNDS_ENABLED isn&apos;t true). Refund ended campaigns by hand from
+              Campaigns; retries here still work.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 mb-5">
           {FILTERS.map((f) => (

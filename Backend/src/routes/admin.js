@@ -29,6 +29,7 @@ const { timeAgo } = require("../utils/timeAgo");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { RefundRetryError, refundRowState, retryBucketRefund } = require("../utils/refunds");
+const { autoRefundsEnabled } = require("../utils/autoRefundSwitch");
 const { hasConnectedSocial } = require("../utils/creatorVerification");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
@@ -126,6 +127,8 @@ router.get("/stats", adminGuard, async (req, res, next) => {
       pendingVerifications,
       openAppeals,
       recentUsers,
+      // The automatic refund job's on-switch (AUTO_REFUNDS_ENABLED); the panel says when it's off.
+      autoRefundsEnabled: autoRefundsEnabled(),
     });
   } catch (err) {
     next(err);
@@ -478,7 +481,7 @@ router.get("/refunds", adminGuard, async (req, res, next) => {
       })
       .filter((r) => (wanted === "attention" ? ["failed", "not_sent"].includes(r.state) : ["failed", "not_sent", "sent"].includes(wanted) ? r.state === wanted : true))
       .slice(0, limit);
-    res.json({ refunds });
+    res.json({ refunds, autoRefundsEnabled: autoRefundsEnabled() });
   } catch (err) {
     next(err);
   }

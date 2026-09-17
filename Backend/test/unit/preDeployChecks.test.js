@@ -12,6 +12,7 @@ const complete = {
   CLIENT_URL: "https://app.easilypromote.com",
   OPS_ALERT_EMAIL: "ops@easilypromote.com",
   PAYSTACK_CALLBACK_URL: "https://app.easilypromote.com/paid",
+  AUTO_REFUNDS_ENABLED: "true",
 };
 
 test("a complete production environment has no problems and never echoes a value", () => {
@@ -29,6 +30,19 @@ test("missing or blank required variables block; missing optional ones warn", ()
   const result = checkEnvironment(env);
   assert.deepEqual(result.blocking.map((p) => p.name).sort(), ["BREVO_API_KEY", "JWT_REFRESH_SECRET"]);
   assert.deepEqual(result.warnings.map((p) => p.name), ["OPS_ALERT_EMAIL"]);
+});
+
+test("automatic refunds switched off (unset or anything but true) warns clearly, never blocks", () => {
+  for (const value of [undefined, "", "false", "yes"]) {
+    const env = { ...complete, AUTO_REFUNDS_ENABLED: value };
+    if (value === undefined) delete env.AUTO_REFUNDS_ENABLED;
+    const result = checkEnvironment(env);
+    assert.deepEqual(result.blocking, []);
+    const warning = result.warnings.find((p) => p.name === "AUTO_REFUNDS_ENABLED");
+    assert.ok(warning, `warns for ${JSON.stringify(value)}`);
+    assert.match(warning.message, /Automatic refunds of unused budget are OFF/);
+  }
+  assert.deepEqual(checkEnvironment({ ...complete, AUTO_REFUNDS_ENABLED: " True " }).warnings, []);
 });
 
 test("the older TikTok key still satisfies the token encryption key", () => {

@@ -203,7 +203,9 @@ A hybrid campaign pays a base per approved deliverable (fixed pay, exactly as ab
 
 ### Automatic refunds (ticket 11)
 
-An hourly job (`services/autoRefunds.js`) refunds unused budget on campaigns that ended in the last 90 days, through the same refund rows as above, with no Paystack fees deducted. You can still refund by hand first; the job then finds nothing left. Each automatic refund notifies the brand and is logged as `campaign.unused_budget_auto_refunded` by "Automatic refunds".
+**Off unless `AUTO_REFUNDS_ENABLED=true` is set on the API.** While it's off, **Overview** and **Refunds** show **Automatic Refunds Are Off**: refund ended campaigns by hand (above) and retry failed refunds from **Refunds** as usual; unsent rows a crash left behind aren't retried automatically either, so retry **Not Sent** refunds yourself. Switching it on is a deploy step (`DEPLOY_CHECKLIST.md` §11), because its first run refunds every campaign that ended in the last 90 days.
+
+When on, an hourly job (`services/autoRefunds.js`) refunds unused budget on campaigns that ended in the last 90 days, through the same refund rows as above, with no Paystack fees deducted. You can still refund by hand first; the job then finds nothing left. Each automatic refund notifies the brand and is logged as `campaign.unused_budget_auto_refunded` by "Automatic refunds".
 
 | Pot | When | What |
 |---|---|---|
@@ -212,7 +214,7 @@ An hourly job (`services/autoRefunds.js`) refunds unused budget on campaigns tha
 | Views | Cancelled: the cancel refund, if it never happened. Completed: 7 days after completion | Completed: only what no creator holding a place can still earn (each keeps their full place reward less what they were paid). Once per campaign |
 | Referral budget | Cancelled: the cancel refund, if it never happened or a crash cut it short. Completed: 7 days after completion | The unearned pool grossed up by its fee. Once per campaign. Held while sign-ups wait for a reward (set it, §1) |
 
-Refund rows left unsent by a crash are retried from themselves after 10 minutes. A refund Paystack refuses stays **Failed** for you to retry. Anything the job couldn't refund raises **Automatic Refund Failed** (§9a) until a run goes through. The job is skipped when `PAYSTACK_SECRET_KEY` isn't set (log: `[AutoRefunds] Skipped`).
+Refund rows left unsent by a crash are retried from themselves after 10 minutes. A refund Paystack refuses stays **Failed** for you to retry. Anything the job couldn't refund raises **Automatic Refund Failed** (§9a) until a run goes through. The job is skipped when `AUTO_REFUNDS_ENABLED` isn't `true` (log: `[AutoRefunds] Off`) or `PAYSTACK_SECRET_KEY` isn't set (log: `[AutoRefunds] Skipped`).
 
 ### Reading refund states
 
