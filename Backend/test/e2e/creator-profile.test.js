@@ -231,3 +231,13 @@ test("campaign stats come from a creator's delivered submissions", async () => {
   );
   assert.ok(publicView.body.stats.updatedAt);
 });
+
+test("creators saving the same new niche at the same moment all succeed", async () => {
+  const Niche = require("../../src/models/Niche");
+  const creators = await Promise.all([1, 2, 3, 4, 5, 6].map(() => harness.registerCreator({ niches: ["Music"] })));
+  const results = await Promise.all(
+    creators.map((c) => harness.api("POST", "/api/creators/profile/niches", { token: c.token, body: { niches: ["Street Food Reviews"] } }))
+  );
+  assert.deepEqual(results.map((r) => r.status), [200, 200, 200, 200, 200, 200], JSON.stringify(results.map((r) => r.body)));
+  assert.equal(await Niche.countDocuments({ name: /^street food reviews$/i }), 1);
+});

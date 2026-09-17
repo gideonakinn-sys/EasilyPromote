@@ -126,7 +126,13 @@ router.post("/profile/niches", protect, async (req, res, next) => {
       const existingLower = new Set(existing.map((e) => e.name.toLowerCase()));
       const missing = uniqueNames.filter((n) => !existingLower.has(n.toLowerCase()));
       if (missing.length > 0) {
-        await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })));
+        // Another creator may add the same niche at the same moment; theirs is as good as ours.
+        try {
+          await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })), { ordered: false });
+        } catch (error) {
+          const writeErrors = error.writeErrors || (error.code === 11000 ? [error] : null);
+          if (!writeErrors || writeErrors.some((e) => (e.code || (e.err && e.err.code)) !== 11000)) throw error;
+        }
       }
     }
 
