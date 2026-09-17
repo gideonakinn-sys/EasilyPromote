@@ -31,6 +31,9 @@ interface BonusRefund {
   id: string;
   amount: number;
   status: "refund_pending" | "refunded" | "refund_failed";
+  state: RefundState;
+  retryable: boolean;
+  byHand: number;
   error: string | null;
   createdAt: string;
 }
@@ -55,11 +58,6 @@ interface BonusBudget {
 }
 
 const BONUS_METRIC_LABEL: Record<BonusBudget["metric"], string> = { views: "Views", signups: "Sign-ups", downloads: "Downloads" };
-const BONUS_REFUND_LABEL: Record<BonusRefund["status"], string> = {
-  refunded: "Refunded",
-  refund_pending: "Sent, Waiting For Paystack",
-  refund_failed: "Failed, Refund By Hand In Paystack",
-};
 
 interface ContentBudget {
   status: string;
@@ -93,6 +91,7 @@ type PendingAction =
   | { kind: "refund" }
   | { kind: "refundBonus" }
   | { kind: "retry"; refund: ContentRefund }
+  | { kind: "retryBonus"; refund: BonusRefund }
   | { kind: "void"; item: UndeliveredItem };
 
 interface ContentBudgetPanelProps {
@@ -174,11 +173,25 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
         });
         const data = (await res.json().catch(() => ({}))) as { refund?: BonusRefund; error?: string };
         if (data.refund) {
-          const failed = data.refund.status === "refund_failed";
+          const failed = !["sent", "refunded"].includes(data.refund.state);
           setMessage({
             text: failed
-              ? `Bonus refund failed: ${data.refund.error || "Paystack didn't accept it"}. Refund it by hand in Paystack.`
+              ? `Bonus refund didn't go through: ${data.refund.error || "Paystack didn't accept it"}. You can retry it.`
               : `${naira(data.refund.amount)} of unused bonus sent to Paystack.`,
+            failed,
+          });
+        } else setError(data.error || `Request failed (${res.status})`);
+      } else if (pending.kind === "retryBonus") {
+        const token = getToken();
+        const res = await fetch(`${API_URL}/admin/refunds/${pending.refund.id}/retry`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        const data = (await res.json().catch(() => ({}))) as { refund?: { amount: number; state: RefundState; error: string | null }; error?: string };
+        if (data.refund) {
+          const failed = !["sent", "refunded"].includes(data.refund.state);
+          setMessage({
+            text: failed ? `Bonus refund retry didn't go through: ${data.refund.error || "Paystack didn't accept it"}.` : `${naira(data.refund.amount)} of unused bonus sent to Paystack.`,
             failed,
           });
         } else setError(data.error || `Request failed (${res.status})`);
@@ -359,14 +372,26 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 ))}
               </div>
               {budget.bonus.refunds.map((refund) => (
-                <div key={refund.id} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-                  <p className="text-xs font-medium text-stone-900">
-                    {naira(refund.amount)} unused bonus · {shortDate(refund.createdAt)}
-                  </p>
-                  <p className={refund.status === "refund_failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-stone-500"}>
-                    {BONUS_REFUND_LABEL[refund.status]}
-                    {refund.error && `: ${refund.error}`}
-                  </p>
+                <div key={refund.id} className="flex items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-stone-900">
+                      {naira(refund.amount)} unused bonus · {shortDate(refund.createdAt)}
+                    </p>
+                    <p className={refund.state === "failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-stone-500"}>
+                      {REFUND_STATE_LABEL[refund.state]}
+                      {refund.error && `: ${refund.error}`}
+                    </p>
+                  </div>
+                  {refund.retryable && (
+                    <button
+                      type="button"
+                      onClick={() => setPending({ kind: "retryBonus", refund })}
+                      disabled={working || !canMoveMoney}
+                      className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
+                    >
+                      Retry Refund
+                    </button>
+                  )}
                 </div>
               ))}
               <div className="flex items-center justify-between gap-3">
@@ -443,14 +468,15 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 </h3>
                 <p className="text-xs font-medium text-stone-500 leading-relaxed">
                   @{pending.item.creatorHandle || "creator"}&apos;s approved content for &quot;{campaignName}&quot; was never delivered. Their fixed pay
-                  goes back to the campaign and becomes refundable, and they&apos;re told. This can&apos;t be undone.
+                  goes back to the campaign, and they&apos;re told. They can appeal within 7 days; after that (or once an appeal is denied) the
+                  deliverable becomes refundable.
                 </p>
               </div>
             ) : (
               <>
                 <div className="space-y-1">
                   <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
-                    {pending.kind === "retry" ? `Retry ${naira(pending.refund.amount)} Refund?` : `Refund ${naira(budget.refundable.amount)}?`}
+                    {pending.kind === "retry" || pending.kind === "retryBonus" ? `Retry ${naira(pending.refund.amount)} Refund?` : `Refund ${naira(budget.refundable.amount)}?`}
                   </h3>
                   <p className="text-xs font-medium text-stone-500 leading-relaxed">
                     Sent back to the brand&apos;s Paystack payment for &quot;{campaignName}&quot;. Money owed to creators stays in the campaign. Paystack
@@ -494,7 +520,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 disabled={working}
                 className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
               >
-                {working ? "Working..." : pending.kind === "void" ? "Void Pay" : pending.kind === "retry" ? "Retry Refund" : "Confirm Refund"}
+                {working ? "Working..." : pending.kind === "void" ? "Void Pay" : pending.kind === "retry" || pending.kind === "retryBonus" ? "Retry Refund" : "Confirm Refund"}
               </button>
             </div>
           </div>
