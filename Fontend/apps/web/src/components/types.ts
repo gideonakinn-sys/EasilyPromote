@@ -345,6 +345,11 @@ export interface AudienceTargeting {
   genders?: string[];
   interests?: string[];
   platforms?: string[];
+  // M8 (SPEC D8 amended): opt-in hard filters; unset means off and 50%.
+  requireAgeMatch?: boolean;
+  minAgeShare?: number;
+  requireGenderMatch?: boolean;
+  minGenderShare?: number;
 }
 
 export interface CreatorEligibility {
