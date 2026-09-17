@@ -77,3 +77,19 @@ test("the summary blocks on env problems, index conflicts and unbalanced campaig
   assert.ok(broken.blocking.some((b) => /slots \{campaignId, creatorId\}/.test(b)));
   assert.ok(broken.blocking.some((b) => /1 campaign doesn't balance/.test(b)));
 });
+
+test("MongoDB older than 4.4 blocks the deploy: the admin dashboard needs $unionWith", () => {
+  const { checkServerVersion } = require("../../scripts/preDeployChecks");
+  assert.equal(checkServerVersion("4.4.0"), null);
+  assert.equal(checkServerVersion("7.0.12"), null);
+  assert.equal(checkServerVersion("5.0.3-rc1"), null);
+  assert.match(checkServerVersion("4.2.24"), /4\.2\.24.*4\.4/);
+  assert.match(checkServerVersion("3.6.0"), /4\.4/);
+  assert.match(checkServerVersion(""), /version/i, "an unreadable version blocks too");
+
+  const env = checkEnvironment(complete);
+  const old = summarizeChecks({ environment: env, migration: null, conflicts: [], reconciliation: null, serverVersion: "4.2.1" });
+  assert.equal(old.exitCode, 1);
+  assert.ok(old.blocking.some((b) => /4\.2\.1/.test(b)));
+  assert.equal(summarizeChecks({ environment: env, migration: null, conflicts: [], reconciliation: null, serverVersion: "6.0.1" }).exitCode, 0);
+});

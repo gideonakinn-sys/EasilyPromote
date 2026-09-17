@@ -10,6 +10,9 @@
 // --all also prints the campaigns that balance.
 
 require("dotenv").config();
+// Before any model loads: nothing may build an index or create a collection.
+const { connectReadOnly, disableAutoBuild } = require("./readOnlyConnection");
+disableAutoBuild();
 const mongoose = require("mongoose");
 const { reconcileAllCampaigns } = require("../src/services/campaignReconciliation");
 
@@ -22,7 +25,7 @@ async function main() {
     process.exit(2);
   }
   const showAll = process.argv.includes("--all");
-  await mongoose.connect(uri);
+  await connectReadOnly(uri);
 
   let checked = 0;
   let failing = 0;

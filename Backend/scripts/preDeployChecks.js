@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Read-only checks to run against the target database and environment before deploying the
-// campaign engine (M7). It writes nothing and never prints a secret's value.
+// campaign engine (M7). It writes nothing, builds no index, creates no collection and never
+// prints a secret's value.
 //
 //   MONGODB_URI=<connection string> node scripts/preDeployChecks.js [--staging]
 //
 // 1. Environment: the variables this release needs are set (names only). A test Paystack key is
 //    blocking unless --staging.
+// 1b. MongoDB server version 4.4 or newer (blocking).
 // 2. Campaign v2 migration dry run: how many campaigns still need scripts/migrateCampaignV2.js
 //    --apply, by objective (a warning; run the migration as its own step).
 // 3. Unique index conflicts on transactions, slots and withdrawals (blocking).
@@ -60,10 +62,28 @@ function checkEnvironment(env, { staging = false } = {}) {
 
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
+// The admin dashboard and creator join read with $unionWith, which needs MongoDB 4.4.
+const MIN_SERVER_VERSION = [4, 4];
+
+// Pure. Returns a blocking message when the server is older than 4.4 (or its version can't be read), null otherwise.
+function checkServerVersion(version) {
+  const match = /^(\d+)\.(\d+)/.exec(String(version || ""));
+  if (!match) return `Couldn't read the MongoDB server version ("${version || ""}"); MongoDB ${MIN_SERVER_VERSION.join(".")} or newer is required`;
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  const [minMajor, minMinor] = MIN_SERVER_VERSION;
+  if (major > minMajor || (major === minMajor && minor >= minMinor)) return null;
+  return `MongoDB ${version} is too old: ${MIN_SERVER_VERSION.join(".")} or newer is required ($unionWith)`;
+}
+
 // Pure. Combines every check into blocking problems, warnings and an exit code.
-function summarizeChecks({ environment, migration, conflicts, reconciliation }) {
+// `serverVersion` is left out when the database checks didn't run.
+function summarizeChecks({ environment, migration, conflicts, reconciliation, serverVersion }) {
   const blocking = environment.blocking.map((p) => p.message);
   const warnings = environment.warnings.map((p) => p.message);
+  if (serverVersion !== undefined) {
+    const versionProblem = checkServerVersion(serverVersion);
+    if (versionProblem) blocking.push(versionProblem);
+  }
 
   if (migration && migration.toMigrate > 0) {
     const detail = Object.entries(migration.byObjective || {}).map(([objective, count]) => `${objective} ${count}`).join(", ");
@@ -85,6 +105,9 @@ function summarizeChecks({ environment, migration, conflicts, reconciliation }) 
 }
 
 async function runChecks({ staging }) {
+  // Before any model loads: nothing may build an index or create a collection.
+  const { connectReadOnly, disableAutoBuild } = require("./readOnlyConnection");
+  disableAutoBuild();
   const mongoose = require("mongoose");
   const { migrateCampaignsToV2 } = require("./migrateCampaignV2");
   const { findUniqueIndexConflicts } = require("./checkUniqueIndexConflicts");
@@ -102,8 +125,13 @@ async function runChecks({ staging }) {
     return summary;
   }
 
-  await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
+  await connectReadOnly(process.env.MONGODB_URI);
   try {
+    const buildInfo = await mongoose.connection.db.admin().command({ buildInfo: 1 });
+    const serverVersion = String((buildInfo && buildInfo.version) || "");
+    const versionProblem = checkServerVersion(serverVersion);
+    console.log(`\nMongoDB server\n  ${versionProblem ? "BLOCK   " : "ok      "} version ${serverVersion || "unknown"}`);
+
     // Dry run only: counts, no writes.
     const migration = await migrateCampaignsToV2({ dryRun: true });
     console.log(`\nCampaign v2 migration (dry run)\n  ${migration.toMigrate} to migrate ${JSON.stringify(migration.byObjective)}`);
@@ -123,7 +151,7 @@ async function runChecks({ staging }) {
     console.log(`\nReconciliation\n  ${checked} campaigns with money checked, ${failing.length} don't balance`);
     for (const f of failing.slice(0, 20)) console.log(`  FAIL ${f.campaignId} ${f.name || ""} (${f.status}): ${f.problems[0]}`);
 
-    return summarizeChecks({ environment, migration, conflicts, reconciliation: { checked, failing } });
+    return { ...summarizeChecks({ environment, migration, conflicts, reconciliation: { checked, failing }, serverVersion }), serverVersion };
   } finally {
     await mongoose.disconnect();
   }
@@ -149,4 +177,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { ENV_SPEC, checkEnvironment, summarizeChecks, runChecks };
+module.exports = { ENV_SPEC, checkEnvironment, checkServerVersion, summarizeChecks, runChecks };

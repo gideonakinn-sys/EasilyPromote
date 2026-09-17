@@ -307,4 +307,4 @@ async function startHarness() {
   };
 }
 
-module.exports = { startHarness };
+module.exports = { startHarness, startMongod };

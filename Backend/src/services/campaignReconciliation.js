@@ -1,5 +1,5 @@
 // Loads what utils/reconciliation.js needs for one campaign, or for every campaign. Read-only.
-const mongoose = require("mongoose");
+const { toObjectId } = require("../utils/objectId");
 const Campaign = require("../models/Campaign");
 const ConversionEvent = require("../models/ConversionEvent");
 const Slot = require("../models/Slot");
@@ -42,13 +42,13 @@ async function loadBatch(campaignIds) {
 }
 
 async function reconcileCampaignById(campaignId, now = new Date()) {
-  const [input] = await loadBatch([new mongoose.Types.ObjectId(String(campaignId))]);
+  const [input] = await loadBatch([toObjectId(campaignId)]);
   return input ? reconcileCampaign({ ...input, now }) : null;
 }
 
 // The given campaigns, a batch at a time.
 async function reconcileCampaigns(campaignIds, { batchSize = 200, now = new Date() } = {}) {
-  const ids = campaignIds.map((id) => new mongoose.Types.ObjectId(String(id)));
+  const ids = campaignIds.map(toObjectId);
   const results = [];
   for (let i = 0; i < ids.length; i += batchSize) {
     for (const input of await loadBatch(ids.slice(i, i + batchSize))) results.push(reconcileCampaign({ ...input, now }));
@@ -61,7 +61,7 @@ async function reconcileAllCampaigns({ batchSize = 200, onResult = null, now = n
   const ids = await Transaction.distinct("campaignId");
   const results = [];
   for (let i = 0; i < ids.length; i += batchSize) {
-    const batch = ids.slice(i, i + batchSize).map((id) => new mongoose.Types.ObjectId(String(id)));
+    const batch = ids.slice(i, i + batchSize).map(toObjectId);
     for (const input of await loadBatch(batch)) {
       const result = reconcileCampaign({ ...input, now });
       results.push(result);
