@@ -34,6 +34,7 @@ const {
   refundUnusedContentBudget,
   retryContentRefund,
   voidUndeliveredPay,
+  reopenClosedPlaces,
 } = require("../utils/fixedPay");
 const { reconcileCampaignById } = require("../services/campaignReconciliation");
 const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
@@ -372,7 +373,7 @@ router.post("/submissions/:id/void-undelivered", moneyGuard, async (req, res, ne
   try {
     let result;
     try {
-      result = await voidUndeliveredPay({ submissionId: req.params.id });
+      result = await voidUndeliveredPay({ submissionId: req.params.id, voidedBy: req.user._id });
     } catch (error) {
       return sendRefundError(res, error, next);
     }
@@ -535,6 +536,8 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
 
     if (status === "live") {
       await ensureCampaignSlots(campaign);
+      // Places closed by a void while it wasn't live come back.
+      await reopenClosedPlaces(campaign);
     }
 
     if (status === "cancelled") {

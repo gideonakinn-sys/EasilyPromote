@@ -32,6 +32,7 @@ const { isContentCampaign } = require("./campaignPay");
 const { toKobo, fromKobo, roundMoney } = require("./money");
 const rules = require("./fixedPayRules");
 const { ACTIVE_PLACEMENT_STATUSES } = require("./placementStatuses");
+const { emitPlacesLeft } = require("./campaignUpdates");
 
 const { FIXED_HOLD_MS, UNDELIVERED_VOID_AFTER_MS, fixedCreditState, canStillEarn, unusedBudgetRefund, refundFor } = rules;
 
@@ -162,7 +163,7 @@ const RefundError = FixedPayError;
 // days after approval, or on a cancelled campaign. Idempotent: every step is conditional, so a
 // repeat (or a retry after a crash part-way) finishes what's left. Returns { voided, amount,
 // submission, campaign } where voided is true only for the call that marked it not delivered.
-async function voidUndeliveredPay({ submissionId, now = new Date() }) {
+async function voidUndeliveredPay({ submissionId, voidedBy = null, now = new Date() }) {
   if (!mongoose.isValidObjectId(submissionId)) throw new FixedPayError(404, "NOT_FOUND", "Submission not found");
   const submission = await Submission.findById(submissionId);
   if (!submission) throw new FixedPayError(404, "NOT_FOUND", "Submission not found");
@@ -184,7 +185,7 @@ async function voidUndeliveredPay({ submissionId, now = new Date() }) {
     }
     const claimed = await Submission.findOneAndUpdate(
       { _id: submission._id, status: "awaiting_delivery" },
-      { $set: { status: "not_delivered", notDeliveredAt: now }, $unset: { awaitingBrandSince: 1 } },
+      { $set: { status: "not_delivered", notDeliveredAt: now, notDeliveredBy: voidedBy }, $unset: { awaitingBrandSince: 1 } },
       { new: true }
     );
     if (claimed) voided = true;
@@ -228,8 +229,10 @@ async function voidUndeliveredPay({ submissionId, now = new Date() }) {
 }
 
 // The creator's place stops counting toward their active placements. On a live campaign that can
-// still pay the deliverable it goes back to the campaign for another creator; otherwise it closes.
-// Only a place still active for this creator is touched, so repeats do nothing.
+// still pay the deliverable it goes back to the campaign for another creator; otherwise it closes
+// (reopened by reopenClosedPlaces if a paused campaign resumes). Either way the place loses its
+// creator: a closed place never counts as a creator anywhere, and the not-delivered submission
+// records who held it. Only a place still active for this creator is touched, so repeats do nothing.
 async function freeVoidedPlacement(submission, campaignId) {
   const current = await Campaign.findById(campaignId).select("status contentPay creatorPool fixedPay").lean();
   const filter = {
@@ -238,14 +241,30 @@ async function freeVoidedPlacement(submission, campaignId) {
     status: { $in: ACTIVE_PLACEMENT_STATUSES },
   };
   const reopen = Boolean(current && current.status === "live" && hasRoomFor(current, current.contentPay && current.contentPay.ratePerDeliverable));
-  const freed = await Slot.findOneAndUpdate(
-    filter,
-    reopen ? { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } } : { $set: { status: "closed" } }
-  );
-  if (freed && reopen) {
-    const { emitPlacesLeft } = require("./campaignUpdates");
-    await emitPlacesLeft(campaignId).catch((error) => console.error(`[FixedPay] Places-left update for ${campaignId} failed:`, error.message));
-  }
+  const freed = await Slot.findOneAndUpdate(filter, {
+    $set: { creatorId: null, status: reopen ? "available" : "closed", claimedAt: null, submissionUrl: null },
+  });
+  if (freed && reopen) await announcePlaces(campaignId);
+}
+
+// A campaign going live again (a paused campaign resumed) gets back the places closed while it
+// wasn't live, up to the deliverables it bought. Completion closes places too, but a completed
+// campaign never goes live again.
+async function reopenClosedPlaces(campaign) {
+  if (!campaign || !isContentCampaign(campaign) || campaign.status !== "live") return 0;
+  const bought = (campaign.contentPay && campaign.contentPay.deliverables) || 0;
+  const open = await Slot.countDocuments({ campaignId: campaign._id, status: { $ne: "closed" } });
+  const room = bought - open;
+  if (room <= 0) return 0;
+  const closed = await Slot.find({ campaignId: campaign._id, status: "closed", creatorId: null }).sort({ createdAt: 1, _id: 1 }).limit(room).select("_id").lean();
+  if (closed.length === 0) return 0;
+  const res = await Slot.updateMany({ _id: { $in: closed.map((s) => s._id) }, status: "closed" }, { $set: { status: "available" } });
+  if (res.modifiedCount > 0) await announcePlaces(campaign._id);
+  return res.modifiedCount;
+}
+
+async function announcePlaces(campaignId) {
+  await emitPlacesLeft(campaignId).catch((error) => console.error(`[FixedPay] Places-left update for ${campaignId} failed:`, error.message));
 }
 
 // ── Creator earnings ────────────────────────────────────────────────────────
@@ -723,6 +742,7 @@ module.exports = {
   creditFixedPay,
   ensureFixedCredit,
   voidUndeliveredPay,
+  reopenClosedPlaces,
   creatorFixedEarnings,
   fixedEarningsFrom,
   fixedPayableNow,

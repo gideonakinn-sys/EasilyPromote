@@ -8,6 +8,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { reopenClosedPlaces } = require("../utils/fixedPay");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
 const { parseReferralSettings, campaignEventTypes } = require("../utils/referralCodes");
@@ -738,6 +739,7 @@ router.patch("/:id/resume", protect, async (req, res, next) => {
     campaign.status = "live";
     await campaign.save();
     await ensureCampaignSlots(campaign);
+    await reopenClosedPlaces(campaign);
 
     emitCampaignStatus(campaign);
 
@@ -814,9 +816,11 @@ router.get("/:id", protect, async (req, res, next) => {
           status: { $in: ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"] },
         }),
         Submission.countDocuments({ campaignId: campaign._id, status: "new" }),
+        // Distinct creators holding a place; open and closed places have no creator.
         Slot.distinct("creatorId", {
           campaignId: campaign._id,
-          status: { $ne: "available" },
+          creatorId: { $ne: null },
+          status: { $nin: ["available", "closed"] },
         }).then((ids) => ids.length),
       ]);
 

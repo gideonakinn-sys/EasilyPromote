@@ -768,7 +768,32 @@ test("voided undelivered pay frees the creator's placement: reopened on a live c
   assert.equal(await activeFor(second), 0);
   const closed = await Slot.findOne({ campaignId: paused.id }).lean();
   assert.equal(closed.status, "closed");
+  assert.equal(closed.creatorId, null, "a closed place never keeps a creator");
+  const voidedSubmission = await Submission.findById(second.submissionId).lean();
+  assert.equal(String(voidedSubmission.notDeliveredBy), admin.id, "who voided is on the submission");
   assert.equal((await harness.api("GET", "/api/creators/dashboard", { token: second.token })).status, 200);
+  const brandView = await harness.api("GET", `/api/campaigns/${paused.id}`, { token: paused.brand.token });
+  assert.equal(brandView.body.creatorCount, 0, "closed places aren't creators");
+
+  // Resumed: the place voided while paused comes back for another creator.
+  const resumed = await harness.api("PATCH", `/api/campaigns/${paused.id}/resume`, { token: paused.brand.token });
+  assert.equal(resumed.status, 200, JSON.stringify(resumed.body));
+  assert.equal((await Slot.findById(closed._id).lean()).status, "available");
+  const next = await harness.registerCreator();
+  assert.equal((await harness.api("POST", `/api/campaigns/${paused.id}/join`, { token: next.token })).status, 200);
+  assert.equal((await harness.api("GET", `/api/campaigns/${paused.id}`, { token: paused.brand.token })).body.creatorCount, 1);
+
+  // Paused, voided, then completed instead: the place stays closed and the deliverable is refundable.
+  const ended = await liveContentCampaign({ destination: "brand_page", deliverables: 2 });
+  const third = await joinAndSubmit(ended.id);
+  await approve(ended.brand, third);
+  await Campaign.updateOne({ _id: ended.id }, { $set: { status: "paused" } });
+  await overdue(third.submissionId);
+  assert.equal((await voidPay(third.submissionId)).status, 200);
+  assert.equal((await harness.api("POST", `/api/admin/campaigns/${ended.id}/complete`, { token: admin.token })).status, 200);
+  assert.equal(await Slot.countDocuments({ campaignId: ended.id, status: "closed", creatorId: null }), 2);
+  assert.equal((await harness.api("GET", `/api/campaigns/${ended.id}`, { token: ended.brand.token })).body.creatorCount, 0);
+  assert.equal((await budgetOf(admin, ended.id)).refundable.deliverables, 2);
 });
 
 test("a payout re-checks fixed pay and releases only credits delivered and past their hold", async () => {

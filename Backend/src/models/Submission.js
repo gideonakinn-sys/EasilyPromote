@@ -193,6 +193,12 @@ const submissionSchema = new mongoose.Schema(
     notDeliveredAt: {
       type: Date,
     },
+    // The admin who voided it. The creator's placement is closed or reopened without a creator,
+    // so this submission is the record of who held it.
+    notDeliveredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   { timestamps: true }
 );
