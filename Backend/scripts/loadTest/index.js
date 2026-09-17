@@ -45,7 +45,8 @@ const OPTIONS = {
   mongoUri: arg("mongo-uri", null),
   out: arg("out", null),
   marketplaceRequests: Number(arg("marketplace-requests", 1000)),
-  // Comma-separated: marketplace, join, apply, approve, races (default all).
+  // Comma-separated: marketplace (whole list and sections), sections (sections only), join, apply,
+  // approve, races (default all).
   scenarios: new Set(String(arg("scenarios", "all")).split(",").map((x) => x.trim())),
   // Seed once, run many: --save-seed writes what the scenarios need; --reuse-seed (with --mongo-uri
   // pointing at the same database) skips seeding.
@@ -232,7 +233,7 @@ async function runScenarios(client, data, only) {
 
   console.log("\nThroughput:");
   if (wanted("marketplace")) {
-    // 1. Marketplace: creators browsing the full marketplace.
+    // 1a. Marketplace, the whole list at once (web clients from before paging).
     record(
       await client.run(
         "GET /api/creators/marketplace",
@@ -240,6 +241,29 @@ async function runScenarios(client, data, only) {
         { concurrency: C }
       )
     );
+  }
+
+  if (wanted("marketplace") || wanted("sections")) {
+    // 1b. Marketplace sections (M8): the first page of every section, across the four pay-shape tabs.
+    const tabs = ["all", "fixed", "performance", "hybrid"];
+    const first = record(
+      await client.run(
+        "GET /api/creators/marketplace/sections (first page)",
+        Array.from({ length: OPTIONS.marketplaceRequests }, (_, i) => {
+          const tab = tabs[i % tabs.length];
+          return { path: `/api/creators/marketplace/sections?tab=${tab}&limit=12`, token: pick(creators, i * 131).token, tab };
+        }),
+        { concurrency: C }
+      )
+    );
+    // 1c. "Show more": the next page of New, with the cursor each creator was given.
+    const next = first.results
+      .filter((r) => r.status === 200 && r.body && r.body.sections && r.body.sections.new.nextCursor)
+      .map((r) => ({
+        path: `/api/creators/marketplace/sections/new?tab=${r.spec.tab}&limit=12&cursor=${encodeURIComponent(r.body.sections.new.nextCursor)}`,
+        token: r.spec.token,
+      }));
+    if (next.length > 0) record(await client.run("GET /api/creators/marketplace/sections/new (next page)", next, { concurrency: C }));
   }
 
   if (wanted("join")) {
