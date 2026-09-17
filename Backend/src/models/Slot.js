@@ -74,6 +74,11 @@ const slotSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
     },
+    // M8 batch 7: records the version of the campaign's usage rights the creator accepted (SPEC D30).
+    usageRightsAccepted: {
+      version: { type: Number, default: null },
+      acceptedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

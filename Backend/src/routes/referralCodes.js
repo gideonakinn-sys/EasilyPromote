@@ -221,7 +221,8 @@ router.post("/:id/referral-budget/init", ...businessOnly, async (req, res, next)
       return res.status(400).json({ error: "You can add a referral budget once the campaign is live." });
     }
     const { brandAppVerified } = require("../utils/campaignPayments");
-    if (!(await brandAppVerified(req.user._id))) {
+    // M8 batch 7: clicks campaigns are tracked internally, so they skip this check.
+    if (campaign.campaignObjective !== "clicks" && !(await brandAppVerified(req.user._id))) {
       return res.status(409).json({
         error: "Connect your app before adding a referral budget. We need a code check and a test conversion from your server.",
         code: "INTEGRATION_REQUIRED",

@@ -150,7 +150,7 @@ const campaignSchema = new mongoose.Schema(
     // ── Campaign engine (ADR 0001): new fields beside the older ones below. ──
     campaignObjective: {
       type: String,
-      enum: ["content", "views", "engagement", "downloads", "signups", "leads", "sales", "other"],
+      enum: ["content", "views", "engagement", "downloads", "signups", "leads", "sales", "clicks", "other"],
     },
     campaignModel: {
       type: String,
@@ -279,6 +279,12 @@ const campaignSchema = new mongoose.Schema(
       genders: { type: [String], default: undefined },
       interests: { type: [String], default: undefined },
       platforms: { type: [String], default: undefined },
+      // M8 batch 7: opt-in hard filters (SPEC D8 amended). Defaults leave existing campaigns unaffected.
+      // Unset means off / 50%, so existing campaigns and responses don't change.
+      requireAgeMatch: Boolean,
+      minAgeShare: { type: Number, min: 0, max: 100 },
+      requireGenderMatch: Boolean,
+      minGenderShare: { type: Number, min: 0, max: 100 },
     },
     creatorEligibility: {
       minFollowers: Number,
@@ -300,6 +306,37 @@ const campaignSchema = new mongoose.Schema(
       productInfo: String,
       approvalRequirements: String,
     },
+    // M8 batch 7: clicks campaigns redirect to this URL (SPEC D29). Immutable once any creator has joined.
+    destinationUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    // M8 batch 7: custom usage-rights terms (SPEC D30). Immutable once any creator has joined or applied.
+    usageRights: {
+      type: {
+        type: String,
+        enum: ["standard", "custom"],
+        default: "standard",
+      },
+      version: { type: Number, default: 1 },
+      terms: {
+        duration: {
+          type: String,
+          enum: ["perpetual", "3_months", "6_months", "12_months", "24_months"],
+          default: "perpetual",
+        },
+        exclusivity: {
+          type: String,
+          enum: ["none", "category"],
+          default: "none",
+        },
+        exclusivityPeriod: { type: String, default: null },
+        paidAdsAllowed: { type: Boolean, default: true },
+        territories: { type: [String], default: ["worldwide"] },
+        additionalTerms: { type: String, maxlength: 1000, default: null },
+      },
+    },
     // What the brand wants: views only, or people taking an action in their app, which
     // adds referral tracking funded by a referral budget.
     objective: {
@@ -320,12 +357,12 @@ const campaignSchema = new mongoose.Schema(
       },
       eventType: {
         type: String,
-        enum: ["install", "signup", "lead", "purchase", "deposit", "custom"],
+        enum: ["install", "signup", "lead", "purchase", "deposit", "custom", "click"],
         default: "signup",
       },
       // Every conversion type that counts; eventType mirrors the first one for older readers.
       eventTypes: {
-        type: [{ type: String, enum: ["install", "signup", "lead", "purchase", "deposit", "custom"] }],
+        type: [{ type: String, enum: ["install", "signup", "lead", "purchase", "deposit", "custom", "click"] }],
         default: undefined,
       },
       codeSource: {

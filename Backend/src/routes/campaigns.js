@@ -267,6 +267,8 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     }
     // Referral campaigns pay their referral budget in the same checkout, and only once the
     // brand's app is connected: Paystack can't hold the money while they finish setup.
+    // M8 batch 7: clicks campaigns are tracked internally, so they skip this check.
+    const isClicksCampaign = campaign.campaignObjective === "clicks";
     const referralAmount =
       campaign.objective === "actions" ? Math.round((campaign.referral && campaign.referral.requestedBudget) || 0) : 0;
     if (campaign.objective === "actions") {
@@ -276,7 +278,7 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
           code: "REFERRAL_BUDGET_REQUIRED",
         });
       }
-      if (!(await brandAppVerified(req.user._id))) {
+      if (!isClicksCampaign && !(await brandAppVerified(req.user._id))) {
         return res.status(409).json({
           error: "Connect your app before paying for a referral campaign. We need a code check and a test conversion from your server.",
           code: "INTEGRATION_REQUIRED",
@@ -827,7 +829,9 @@ router.post("/:id/join", protect, authorizeRoles("creator"), async (req, res, ne
     const { joinCampaign } = require("../services/placements");
     // Views campaigns may commit to a share of the views, as the older claim did.
     const committedViews = req.body ? req.body.committedViews : undefined;
-    const result = await joinCampaign({ user: req.user, campaignId: req.params.id, committedViews });
+    // M8 batch 7: usage rights acceptance (SPEC D30).
+    const usageRightsAccepted = req.body ? req.body.usageRightsAccepted : undefined;
+    const result = await joinCampaign({ user: req.user, campaignId: req.params.id, committedViews, usageRightsAccepted });
     res.status(result.status).json(result.body);
   } catch (error) {
     next(error);

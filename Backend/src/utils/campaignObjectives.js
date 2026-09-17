@@ -13,6 +13,8 @@ const OBJECTIVES = {
   // Ticket 11: leads (the `lead` conversion event) and sales (`purchase`) are tracked like sign-ups.
   leads: { campaignModel: "performance", performanceMetric: "leads", rateAuthority: "admin", available: true },
   sales: { campaignModel: "performance", performanceMetric: "sales", rateAuthority: "admin", available: true },
+  // M8 batch 7: clicks via redirect links tracked internally (SPEC D29).
+  clicks: { campaignModel: "performance", performanceMetric: "clicks", rateAuthority: "admin", available: true },
   // Coming soon (SPEC, ticket 11): the webhook's `custom` event carries no description of the action,
   // so creators couldn't be told what they're paid for, nor admin price a reward for it.
   other: { campaignModel: "performance", performanceMetric: null, rateAuthority: "admin", available: false },
@@ -35,6 +37,7 @@ function objectiveForLegacy(campaign) {
   if (types.includes("install")) return "downloads";
   if (types.includes("lead")) return "leads";
   if (types.includes("purchase") || types.includes("deposit")) return "sales";
+  if (types.includes("click")) return "clicks";
   if (types.includes("custom")) return "other";
   return "signups";
 }
