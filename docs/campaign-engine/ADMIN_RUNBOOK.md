@@ -34,15 +34,17 @@ Roles come from `authorizeRoles` in `Backend/src/routes/admin.js` and `adminRefe
 | Set or change a sign-up reward (also a hybrid sign-up / download bonus) | `PATCH /admin/referrals/campaigns/:id/reward` | ✓ | ✓ | ✓ | ✗ |
 | **Void a conversion** (its reward goes back to the pool, D19) | `POST /admin/referrals/conversions/:id/void` | ✗ | ✓ | ✓ | ✗ |
 | Disable a code, revoke a signing key | `/admin/referrals/codes/...`, `/keys/...` | ✓ | ✓ | ✗ | ✗ |
+| See the per-view price table | **Price Table** → `GET /admin/pricing/views` | ✓ | ✓ | ✓ | ✓ |
+| **Change the per-view price table** | **Price Table** → `PUT /admin/pricing/views` | ✗ | ✓ | ✓ | ✗ |
 | Create an admin | `POST /admin/create-admin` | ✗ | ✓ | ✗ | ✗ |
 
 Every action that moves money (bold above, apart from Complete) is for `finance_admin` and `super_admin`. The panel disables or hides those buttons for other roles and says who can use them; the API answers 403 "Not authorized for this action" (`MONEY_ROLE_REQUIRED` when cancelling a paid campaign) if they're called anyway.
 
 ---
 
-## 1. Sign-up and download rewards
+## 1. Sign-up, download, lead and sale rewards
 
-Rate Authority (ADR 0003): for sign-ups and downloads the brand funds a Referral Budget and **our team** sets the Reward per Conversion. The API refuses a reward from a brand.
+Rate Authority (ADR 0003): for sign-ups, downloads, leads and sales the brand funds a Referral Budget and **our team** sets the Reward per Conversion. The API refuses a reward from a brand. Each objective counts one conversion event from the brand's server: sign-ups `signup`, downloads `install`, leads `lead`, sales `purchase` (ticket 11). Other events on the campaign are recorded but not counted or paid. Engagement and Other campaigns can't be created yet (SPEC, ticket 11).
 
 ### Set the first reward
 
@@ -65,7 +67,7 @@ Same dialog. The new amount applies to **new conversions only**; earlier convers
 | Message | Why |
 |---|---|
 | "This campaign's creator rate isn't set by our team" (`RATE_NOT_ADMIN_SET`) | The campaign's rate authority is the brand (content) or the price table (views). |
-| "Referral tracking isn't on for this campaign" | Not a sign-up / download campaign. |
+| "Referral tracking isn't on for this campaign" | Not a sign-up, download, lead or sale campaign. |
 | "This campaign is cancelled" | Rewards can't be set on cancelled campaigns. |
 
 ### Things to know
@@ -440,6 +442,27 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 - **Resolve** (admin, super admin, finance admin) marks it handled. If the problem is still there, it **reopens and is emailed again** when the problem really changes: a different amount or status on a withdrawal or refund, another failed transfer on the same withdrawal, a count of stuck items or failed webhooks roughly doubling, or for a reconciliation mismatch a different kind of mismatch or a discrepancy of a different order of magnitude (money moving on the campaign doesn't count) or **24 hours after it was resolved**, whichever comes first. The panel shows **Reopened**.
 - If the problem clears and comes back later, that's a new alert.
 - An alert is marked emailed only once the email went out. A failed send is retried on the next run (log: `[OpsAlerts] Alert email failed`).
+
+---
+
+## 9b. Per-view price table (ticket 11)
+
+**Who:** every admin role can look; `finance_admin` and `super_admin` change it. **Where:** **Price Table**.
+
+The table is what brands pay for views: each tier is a number of views and its price, and a quote between two tiers is worked out along the line between them (above the last tier, the last segment's slope continues). Tier 1 also sets a hybrid views bonus: creators get the creator's share (70% at the standard 30% fee) of tier 1's price per 1,000 views.
+
+1. **Price Table** → **Edit Prices**. Change views or prices, **Add Tier**, **Remove**, or **Use Standard Table** to go back to the defaults.
+2. Problems show under the table as you type: 2 to 20 tiers; views at least 1,000 and rising; prices above ₦0 and rising; and the price per view never higher than the tier before.
+3. Say why prices are changing (required; it goes in the activity log), then **Save Prices** and confirm in the dialog.
+4. Refusals: `INVALID_TIERS` (the message names the tier), `NOTE_REQUIRED`, `NO_CHANGE`, and `PRICE_TABLE_CHANGED` when someone else saved since you opened the screen (it reloads; make the change again).
+
+What a change does and doesn't do:
+- New views quotes, new campaigns and drafts whose views change use it at once. Other API instances pick it up within a minute.
+- **Paid campaigns never change:** a campaign keeps the budget and cost per view it was saved and paid at, and top-ups keep using the campaign's own cost per view.
+- A draft saved before the change keeps its saved price until the brand changes its views.
+- **Hybrid campaigns keep the views-bonus rate stored when they were set up**; hybrid campaigns set up afterwards get the new tier 1 rate.
+- **Industries** cost-per-view rates are separate and unchanged.
+- Each save is versioned and logged as `pricing.view_tiers_updated` with the tiers before and after (**Activity Log** → Price table). **Changes** on the screen lists the last 20. To undo, save the old tiers again (or **Use Standard Table**).
 
 ---
 

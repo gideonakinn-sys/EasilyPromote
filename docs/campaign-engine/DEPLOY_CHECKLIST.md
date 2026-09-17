@@ -385,3 +385,34 @@ After switching it on:
 **Behaviour changes to tell the team:** voided undelivered pay is no longer refundable until the creator's 7-day appeal window passes (or an appeal is denied); failed views, referral and bonus refunds are retried from **Refunds** instead of by hand in Paystack; rejected-withdrawal and voided-pay notifications now tell creators they can appeal.
 
 **Rollback:** the fields (`Campaign.autoRefund`, `Campaign.hybridBonus.returnedRefs`, `Submission.voidAppealableUntil / voidAppealOpen / voidReinstatedAt`, `Withdrawal.appealReinstatedAt`, `Transaction.bonusGiveBack`, the `reinstated` status on `fixed_void` rows) are additive, and older code ignores them. Two caveats: older code treats a `fixed_void` row as blocking a credit whatever its status (harmless: restored pay is already credited), and older code would refund voided pay that's still inside its appeal window. Refunds the job already sent can't be undone by a rollback.
+
+---
+
+## 12. Launch follow-ups (ticket 11: Trending, live match count, price table, Leads and Sales)
+
+**No migration and no new environment variable.** Deploy the API first, then web, then admin (§5). Nothing here moves money on its own.
+
+**Indexes and collections (built by the API at boot, §6):**
+
+| Collection | Keys | Options | Model |
+|---|---|---|---|
+| `slots` | `{ claimedAt: -1, campaignId: 1, creatorId: 1 }` | partial: `claimedAt` is a date | `Slot.js` |
+| `campaignapplications` | `{ appliedAt: -1, campaign: 1, creator: 1 }` | | `CampaignApplication.js` |
+| `pricetables` (new) | `_id` only | | `PriceTable.js` |
+
+None is unique, so none can conflict. On a large `slots` collection check `db.currentOp({ "command.createIndexes": { $exists: true } })` until the build is done; until then Trending still works, only slower.
+
+**Price table:** until someone saves on **Price Table**, the API uses the standard tiers from `config/pricing.js` (nothing changes for brands). The first save creates the `pricetables` document. It never reprices a paid campaign (runbook §9b).
+
+**Leads and Sales:** the conversion webhook now accepts `"event": "lead"`. A Leads campaign counts `lead`; a Sales campaign counts `purchase`. The public developer docs (`Easilypromote-website`, not part of this release) still list the older events; update them before announcing Leads. Older API versions answer 400 to `lead`, so deploy the API before telling brands.
+
+**Behaviour changes to tell the team:** brands can create Leads and Sales campaigns (connect-before-pay applies, our team sets the reward, runbook §1); the creator marketplace shows a Trending section; the wizard's audience step shows a rounded count of matching creators (never who they are; cached up to 5 minutes; 30 a minute per brand); finance and super admins can change view prices on **Price Table**.
+
+**Smoke tests after deploy:**
+- As a creator, the marketplace loads with **Trending** (once campaigns have had 2 or more creators join or apply in 3 days) between **Recommended for You** and **New**.
+- As a brand, Create Campaign: Leads and Sales can be chosen, Engagement and Other say Coming soon and why; on Audience and creators the count line updates a moment after a change.
+- As `support`, **Price Table** loads and **Edit Prices** is disabled. As `finance_admin` it opens; don't save in production unless prices really change.
+- A views quote for 100,000 views still shows ₦430,000 unless the table was changed.
+
+**Rollback:** the API code is safe to roll back while no Leads campaign exists. Older code ignores `pricetables` (it prices from `config/pricing.js` again, so a saved table stops applying), the extra indexes and the Trending fields. Older code's schema doesn't know `lead`, so once a Leads campaign or `lead` conversion exists, forward-fix instead.
+
