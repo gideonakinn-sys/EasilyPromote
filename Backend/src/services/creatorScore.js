@@ -77,16 +77,17 @@ function finishedCampaignIds(slots, submissions, conversionCampaignIds = []) {
   return finished;
 }
 
-// Completed: every finished campaign. Abandoned: a placement claimed more than 14 days ago with
-// nothing sent, or content voided as never delivered, on a campaign the creator didn't finish.
-function computeCompletion(slots, now, submissions = [], conversionCampaignIds = []) {
+// Finished and abandoned campaigns (sets of campaign id strings). Finished: see finishedCampaignIds.
+// Abandoned: a placement claimed more than 14 days ago with nothing sent, or content voided as never
+// delivered, on a campaign the creator didn't finish. Recommended for You (M8) reads the same sets.
+function completionSets(slots, now, submissions = [], conversionCampaignIds = []) {
   const finished = finishedCampaignIds(slots, submissions, conversionCampaignIds);
   const abandoned = new Set();
   for (const slot of slots) {
     if (
       slot.status === "claimed" &&
       slot.claimedAt &&
-      now - slot.claimedAt.getTime() > STALE_CLAIM_MS &&
+      now - new Date(slot.claimedAt).getTime() > STALE_CLAIM_MS &&
       !finished.has(String(slot.campaignId))
     ) {
       abandoned.add(String(slot.campaignId));
@@ -97,6 +98,12 @@ function computeCompletion(slots, now, submissions = [], conversionCampaignIds =
       abandoned.add(String(submission.campaignId));
     }
   }
+  return { finished, abandoned };
+}
+
+// Completed: every finished campaign, out of finished and abandoned ones.
+function computeCompletion(slots, now, submissions = [], conversionCampaignIds = []) {
+  const { finished, abandoned } = completionSets(slots, now, submissions, conversionCampaignIds);
   const sample = finished.size + abandoned.size;
   return { value: ratio(finished.size, sample), sample };
 }
@@ -314,6 +321,10 @@ module.exports = {
   rankForViews,
   rankAtLeast,
   computeCompletion,
+  completionSets,
+  finishedCampaignIds,
+  PAID_CONVERSION,
+  DELIVERED_STATUSES,
   computeBrandRatings,
   computeCreatorStanding,
   recalculateCreator,

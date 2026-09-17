@@ -124,4 +124,4 @@ function matchScore(profile, targeting) {
   return Math.round(parts.reduce((sum, [w, value]) => sum + w * value, 0) / weight);
 }
 
-module.exports = { evaluateEligibility };
+module.exports = { evaluateEligibility, locationShare, matchScore };
