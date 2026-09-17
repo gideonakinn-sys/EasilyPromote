@@ -253,6 +253,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
           </div>
           <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
             Reward per {unitNoun} is set by our team.
+            {data.objective === "clicks" && " Only valid clicks are paid, and each person's click counts once a day per creator link."}
           </p>
         </Field>
       )}

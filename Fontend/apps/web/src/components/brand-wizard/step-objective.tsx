@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
 import { Field, OptionCard, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
-import { OBJECTIVE_OPTIONS, type WizardData } from "./wizard-state";
+import { OBJECTIVE_OPTIONS, isDestinationUrl, type WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
@@ -32,6 +32,11 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
+  const [destinationTouched, setDestinationTouched] = React.useState(false);
+  const destinationError =
+    destinationTouched && data.destinationUrl.trim() && !isDestinationUrl(data.destinationUrl)
+      ? "The link must start with http:// or https://."
+      : "";
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,6 +140,33 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
           />
         ))}
       </fieldset>
+
+      {data.objective === "clicks" && (
+        <Field
+          label="Destination Link"
+          htmlFor="destination-url"
+          hint="Each creator gets a tracked link that sends people here. You can't change it after launch."
+        >
+          <input
+            id="destination-url"
+            type="url"
+            inputMode="url"
+            placeholder="https://yourwebsite.com/offer"
+            maxLength={2000}
+            value={data.destinationUrl}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ destinationUrl: e.target.value })}
+            onBlur={() => setDestinationTouched(true)}
+            aria-invalid={destinationError ? true : undefined}
+            aria-describedby={destinationError ? "destination-url-error" : undefined}
+            className={cn(TEXT_INPUT_CLASS, destinationError && "border-red-300")}
+          />
+          {destinationError && (
+            <p id="destination-url-error" className="text-[11px] text-red-600 font-medium font-rethink">
+              {destinationError}
+            </p>
+          )}
+        </Field>
+      )}
     </div>
   );
 }
