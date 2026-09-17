@@ -23,6 +23,7 @@ import { ContentSubmissionsReview } from "./content-submissions-review";
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
 import payoutsEmpty from "@ep/ui/assets/Payouts empty.png";
+import { CampaignStatementCard } from "./payment-statement";
 
 type TabType = "Overview" | "Submission" | "Payouts" | "Referrals";
 
@@ -970,6 +971,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         {/* ================= TAB 3: PAYOUTS ================= */}
         {activeTab === "Payouts" && (
           <div className={cn("space-y-10 pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
+            {!["draft", "pending_payment"].includes(campaign.status) && <CampaignStatementCard campaignId={campaign.id} />}
             {isContent ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[

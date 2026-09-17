@@ -20,6 +20,40 @@ interface BankOption {
 
 type WithdrawCampaign = NonNullable<WalletData["withdrawCampaigns"]>[number];
 
+// Payout appeals (D23): a rejected withdrawal or voided pay can be appealed within 7 days.
+interface AppealableItem {
+  subjectType: "withdrawal" | "fixed_void";
+  subjectId: string;
+  campaignId: string;
+  campaignName: string;
+  amount: number;
+  decisionReason: string | null;
+  decidedAt: string;
+  appealableUntil: string;
+}
+
+interface PayoutAppealItem {
+  id: string;
+  subjectType: "withdrawal" | "fixed_void";
+  campaignName: string;
+  amount: number;
+  reason: string;
+  status: "open" | "granted" | "denied";
+  resolutionNote: string | null;
+  createdAt: string;
+}
+
+const APPEAL_SUBJECT: Record<AppealableItem["subjectType"], string> = {
+  withdrawal: "Rejected withdrawal",
+  fixed_void: "Pay removed: content not delivered",
+};
+
+const APPEAL_STATUS: Record<PayoutAppealItem["status"], string> = {
+  open: "Under Review",
+  granted: "Granted",
+  denied: "Decision Stands",
+};
+
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
   processing: "Processing",
@@ -155,10 +189,55 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
     }
   }, []);
 
+  const [appealable, setAppealable] = React.useState<AppealableItem[]>([]);
+  const [appeals, setAppeals] = React.useState<PayoutAppealItem[]>([]);
+  const [appealing, setAppealing] = React.useState<AppealableItem | null>(null);
+  const [appealReason, setAppealReason] = React.useState("");
+  const [appealError, setAppealError] = React.useState("");
+  const [sendingAppeal, setSendingAppeal] = React.useState(false);
+
+  const fetchAppeals = React.useCallback(async () => {
+    try {
+      const data = await apiRequest<{ appeals: PayoutAppealItem[]; appealable: AppealableItem[] }>("/creators/payout-appeals", {
+        token: getToken() || undefined,
+      });
+      setAppeals(data.appeals || []);
+      setAppealable(data.appealable || []);
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  const handleAppeal = async () => {
+    if (!appealing) return;
+    if (appealReason.trim().length < 10) {
+      setAppealError("Say why the decision should be reviewed (at least 10 characters).");
+      return;
+    }
+    setSendingAppeal(true);
+    setAppealError("");
+    try {
+      const data = await apiRequest<{ message: string }>("/creators/payout-appeals", {
+        method: "POST",
+        token: getToken() || undefined,
+        body: JSON.stringify({ subjectType: appealing.subjectType, subjectId: appealing.subjectId, reason: appealReason.trim() }),
+      });
+      toast(data.message || "Appeal sent", "success");
+      setAppealing(null);
+      setAppealReason("");
+      fetchAppeals();
+    } catch (err) {
+      setAppealError(err instanceof Error ? err.message : "Could not send the appeal");
+    } finally {
+      setSendingAppeal(false);
+    }
+  };
+
   React.useEffect(() => {
     fetchWithdrawals();
     fetchBanks();
-  }, [fetchWithdrawals, fetchBanks]);
+    fetchAppeals();
+  }, [fetchWithdrawals, fetchBanks, fetchAppeals]);
 
   React.useEffect(() => {
     if (!confirmCampaign) return;
@@ -611,6 +690,117 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 {w.adminNotes && <p className="text-[11px] text-stone-500 mt-1 font-medium">{w.adminNotes}</p>}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {(appealable.length > 0 || appeals.length > 0) && (
+        <div className="mt-6 text-left">
+          <span className="text-[10px] font-medium text-stone-500">Payout Appeals</span>
+          <p className="font-rethink text-[11px] text-stone-400 font-medium mt-0.5">
+            If a withdrawal was rejected or pay was removed and you think that&apos;s wrong, you have 7 days to appeal.
+          </p>
+          <div className="mt-2 space-y-2">
+            {appealable.map((item) => (
+              <div key={`${item.subjectType}-${item.subjectId}`} className="bg-stone-50 border border-stone-200/50 rounded-xl p-3 space-y-1">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-rethink font-medium text-stone-800 truncate">{item.campaignName}</span>
+                  {item.amount > 0 && <span className="font-rethink font-medium text-stone-900">₦{item.amount.toLocaleString()}</span>}
+                </div>
+                <p className="font-rethink text-[11px] text-stone-500 font-medium">
+                  {APPEAL_SUBJECT[item.subjectType]}
+                  {item.decisionReason && `: ${item.decisionReason}`}
+                </p>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-[11px] text-stone-400 font-medium">Appeal by {formatHoldDate(item.appealableUntil)}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppealReason("");
+                      setAppealError("");
+                      setAppealing(item);
+                    }}
+                    className="px-4 py-1.5 bg-white border border-stone-200 rounded-full font-rethink font-semibold text-xs text-stone-900"
+                  >
+                    Appeal
+                  </button>
+                </div>
+              </div>
+            ))}
+            {appeals.map((appeal) => (
+              <div key={appeal.id} className="bg-stone-50 border border-stone-200/50 rounded-xl p-3 space-y-1">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-rethink font-medium text-stone-800 truncate">{appeal.campaignName}</span>
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium px-2 py-0.5 rounded-full border",
+                      appeal.status === "open" && "bg-amber-50 text-amber-700 border-amber-100",
+                      appeal.status === "granted" && "bg-green-50 text-green-700 border-green-100",
+                      appeal.status === "denied" && "bg-stone-100 text-stone-600 border-stone-200"
+                    )}
+                  >
+                    {APPEAL_STATUS[appeal.status]}
+                  </span>
+                </div>
+                <p className="font-rethink text-[11px] text-stone-500 font-medium">
+                  {APPEAL_SUBJECT[appeal.subjectType]}
+                  {appeal.amount > 0 && ` · ₦${appeal.amount.toLocaleString()}`} · appealed {new Date(appeal.createdAt).toLocaleDateString()}
+                </p>
+                {appeal.resolutionNote && <p className="font-rethink text-[11px] text-stone-600 font-medium">{appeal.resolutionNote}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {appealing && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-stone-950/40 p-4"
+          onClick={() => !sendingAppeal && setAppealing(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="appeal-heading"
+            className="bg-white rounded-3xl p-6 w-full max-w-sm text-left space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-1">
+              <h3 id="appeal-heading" className="font-rethink font-medium text-lg text-stone-900">
+                Appeal this decision?
+              </h3>
+              <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
+                {APPEAL_SUBJECT[appealing.subjectType]} on {appealing.campaignName}. Our team reviews it and tells you the outcome. You can appeal
+                each decision once.
+              </p>
+            </div>
+            <label className="block space-y-1">
+              <span className="font-rethink text-[11px] font-medium text-stone-500">Why should it be reviewed?</span>
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                rows={4}
+                maxLength={2000}
+                className="w-full rounded-xl border border-stone-200 px-3 py-2 font-rethink text-sm font-medium text-stone-900 outline-none focus:border-stone-400"
+              />
+            </label>
+            {appealError && <p className="font-rethink text-xs text-red-600 font-medium">{appealError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAppealing(null)}
+                disabled={sendingAppeal}
+                className="flex-1 py-3 border border-stone-200 text-stone-600 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAppeal}
+                disabled={sendingAppeal}
+                className="flex-1 py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink disabled:bg-stone-200 disabled:text-stone-400"
+              >
+                {sendingAppeal ? "Sending…" : "Send appeal"}
+              </button>
+            </div>
           </div>
         </div>
       )}

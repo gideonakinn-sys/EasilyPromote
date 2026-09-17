@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FilterIcon, ChevronDownIcon, Add01Icon, Link01Icon } from "@hugeicons/core-free-icons";
+import { FilterIcon, ChevronDownIcon, Add01Icon, Link01Icon, Invoice01Icon } from "@hugeicons/core-free-icons";
 import { CampaignCard } from "@ep/ui/components/campaign-card";
 import { conversionNounFor } from "../lib/referral";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
@@ -134,6 +134,17 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             <span className="hidden md:inline text-sm font-medium text-stone-900">Referral tracking</span>
           </button>
           )}
+
+          {/* Payment statement (ticket 11): where the brand's money went, per campaign and overall. */}
+          <button
+            onClick={() => router.push("/dashboard/brand/statement")}
+            aria-label="Payment statement"
+            className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
+          >
+            <HugeiconsIcon icon={Invoice01Icon} size={20} className="text-stone-500 md:hidden" />
+            <HugeiconsIcon icon={Invoice01Icon} size={16} className="text-stone-500 hidden md:block" />
+            <span className="hidden md:inline text-sm font-medium text-stone-900">Statement</span>
+          </button>
 
           {/* Create campaign button */}
           <button
