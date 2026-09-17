@@ -68,6 +68,10 @@ const metaConnectionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Instagram only: when the follower count was last read into the creator profile.
+    followersSyncedAt: {
+      type: Date,
+    },
     lastSyncedAt: {
       type: Date,
     },

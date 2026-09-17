@@ -53,8 +53,10 @@ const creatorProfileSchema = new mongoose.Schema(
         },
         handle: String,
         verified: { type: Boolean, default: false },
-        // Self-reported until follower counts can be read from the platform APIs.
+        // Self-reported, or read from the platform when the account is connected (Instagram).
         followers: { type: Number, min: 0 },
+        followersSource: { type: String, enum: ["self_reported", "api"] },
+        followersSyncedAt: Date,
       },
     ],
     niches: {

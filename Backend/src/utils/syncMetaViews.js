@@ -10,6 +10,7 @@ const { recordEvent } = require("../services/submissionEvents");
 const { isContentCampaign } = require("./campaignPay");
 // Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
 const { viewsBonusSubmissionFilter, accrueAllViewsBonuses } = require("./hybridBonus");
+const { refreshInstagramFollowers } = require("./socialFollowers");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -153,6 +154,8 @@ async function syncMetaViews() {
     console.log("[Meta Sync] Skipped — no Meta connections");
     return;
   }
+
+  await refreshInstagramFollowers(connections);
 
   const byUser = {};
   for (const c of connections) {

@@ -83,13 +83,18 @@ router.post("/profile/socials", protect, async (req, res, next) => {
     if (existing) {
       existing.handle = handle;
       existing.verified = false;
-      if (followers !== undefined) existing.followers = followers === null ? undefined : followers;
+      if (followers !== undefined) {
+        existing.followers = followers === null ? undefined : followers;
+        existing.followersSource = followers === null ? undefined : "self_reported";
+        existing.followersSyncedAt = undefined;
+      }
     } else {
       profile.socialAccounts.push({
         platform: platform.toLowerCase(),
         handle,
         verified: false,
         followers: followers === null ? undefined : followers,
+        followersSource: followers === null || followers === undefined ? undefined : "self_reported",
       });
     }
 
