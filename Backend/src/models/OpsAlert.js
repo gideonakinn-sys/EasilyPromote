@@ -9,6 +9,7 @@ const OPS_ALERT_KINDS = [
   "content_deadline_stuck",
   "application_expiry_stuck",
   "views_submission_stuck",
+  "auto_refund_failed",
   "reconciliation_mismatch",
 ];
 

@@ -397,6 +397,12 @@ const campaignSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Automatic unused-budget refunds (ticket 11): what went wrong on the last run, until a run succeeds.
+    // Raised as the auto_refund_failed ops alert.
+    autoRefund: {
+      type: new mongoose.Schema({ error: String, failedAt: Date }, { _id: false }),
+      default: undefined,
+    },
   },
   { timestamps: true }
 );

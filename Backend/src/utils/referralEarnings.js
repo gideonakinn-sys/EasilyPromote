@@ -15,7 +15,7 @@ const MIN_REFERRAL_TOPUP = 1000;
 const MAX_REFERRAL_TOPUP = 50000000;
 const MAX_REWARD_PER_CONVERSION = 1000000;
 
-const { roundMoney } = require("./money");
+const { roundMoney, toKobo, fromKobo } = require("./money");
 const { refundCampaignBucket } = require("./refunds");
 
 // Reasons a counted conversion earned nothing that later budget or a reward can pay.
@@ -145,36 +145,31 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
   return { credited: true, campaign: current, amount, fee, net, backPay };
 }
 
-// On cancellation: stop new rewards and refund what was never promised to creators,
-// including the platform fee on that unused part. Money creators already earned stays
-// in escrow for them to withdraw.
+// Refunds a finished campaign's unused referral budget once: the pool no creator has earned, grossed up
+// by the fee on it. Crash-safe: the pool is claimed first (poolRemaining to 0, so no reward can be
+// reserved from it after), and the refund is worked out from what the campaign's counters say was
+// claimed (pool − earned − poolRemaining), so a call after a crash between the claim and the refund row
+// still refunds exactly what was claimed. The row's fixed reference means it's written at most once.
+// Returns the amount refunded by this call.
 async function refundUnusedReferralBudget(campaignId) {
-  const alreadyRefunded = await Transaction.findOne({
-    campaignId,
-    type: "refund",
-    bucket: "referral",
-  });
+  const alreadyRefunded = await Transaction.exists({ campaignId, type: "refund", bucket: "referral" });
   if (alreadyRefunded) return 0;
 
   // Atomically claim the remaining pool so concurrent cancels or rewards cannot race it
-  const campaign = await Campaign.findOneAndUpdate(
-    { _id: campaignId, "referral.poolRemaining": { $gt: 0 } },
-    { $set: { "referral.poolRemaining": 0 } },
-    { new: false }
-  ).select("platformFeePercent referral");
+  await Campaign.updateOne({ _id: campaignId, "referral.poolRemaining": { $gt: 0 } }, { $set: { "referral.poolRemaining": 0 } });
+  const campaign = await Campaign.findById(campaignId).select("platformFeePercent referral").lean();
+  if (!campaign || !campaign.referral) return 0;
 
-  if (!campaign || !campaign.referral || !(campaign.referral.poolRemaining > 0)) return 0;
-
-  const remaining = campaign.referral.poolRemaining;
+  const claimedKobo = toKobo(campaign.referral.pool) - toKobo(campaign.referral.earned) - toKobo(campaign.referral.poolRemaining);
   const feePercent = Number.isFinite(campaign.platformFeePercent) ? campaign.platformFeePercent : 30;
-  const unused = feePercent < 100 ? roundMoney((remaining * 100) / (100 - feePercent)) : 0;
-  if (unused <= 0) return 0;
+  if (!(claimedKobo > 0) || feePercent >= 100) return 0;
+  const unused = fromKobo(Math.round((claimedKobo * 100) / (100 - feePercent)));
 
   const refund = await refundCampaignBucket({
     campaignId,
     bucket: "referral",
     amount: unused,
-    note: `Unused referral budget from cancelled campaign ${campaignId}`,
+    note: `Unused referral budget from campaign ${campaignId}`,
   });
   return refund ? unused : 0;
 }

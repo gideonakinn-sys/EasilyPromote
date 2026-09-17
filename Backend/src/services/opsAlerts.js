@@ -16,6 +16,7 @@
 //   application_expiry_stuck  applications pending more than 7 days + 2 hours grace (expiry job stuck)
 //   views_submission_stuck    views content on a live or paused campaign approved more than 7 days ago, post link never shared
 //   reconciliation_mismatch   a campaign whose books don't balance
+//   auto_refund_failed        the automatic unused-budget refund couldn't refund an ended campaign
 //
 // An alert only resolves when its subject is re-checked and the condition is gone. An alert an
 // admin resolved while the condition lasts reopens (and is emailed again) when the problem
@@ -75,6 +76,7 @@ const TITLES = {
   application_expiry_stuck: "Applications Not Expired",
   views_submission_stuck: "Views Posts Not Shared",
   reconciliation_mismatch: "Campaign Books Don't Balance",
+  auto_refund_failed: "Automatic Refund Failed",
 };
 
 const naira = (amount) => `₦${Number(amount || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
@@ -417,6 +419,25 @@ async function unbalancedCampaigns(now, full) {
   };
 }
 
+// Ended campaigns the automatic refund job (services/autoRefunds) couldn't refund. The job clears the
+// record once a run for that campaign goes through.
+async function failedAutoRefunds() {
+  const flagged = await Campaign.find({ "autoRefund.error": { $type: "string" } }).select("name status autoRefund").lean();
+  return everything(
+    flagged.map((campaign) =>
+      alert({
+        kind: "auto_refund_failed",
+        subjectType: "campaign",
+        subjectId: campaign._id,
+        campaignId: campaign._id,
+        message: `The automatic refund of unused budget on "${campaign.name}" (${campaign.status}) didn't go through: ${campaign.autoRefund.error}`.slice(0, 2000),
+        link: campaignLink(campaign._id),
+        signature: String(campaign.autoRefund.error).replace(/₦-?[\d,]+(\.\d+)?/g, "₦#").slice(0, 500),
+      })
+    )
+  );
+}
+
 const DETECTORS = {
   payout_failed: failedPayouts,
   withdrawal_stuck: stuckWithdrawals,
@@ -426,6 +447,7 @@ const DETECTORS = {
   content_deadline_stuck: stuckContentDeadlines,
   application_expiry_stuck: stuckApplicationExpiries,
   views_submission_stuck: stuckViewsSubmissions,
+  auto_refund_failed: failedAutoRefunds,
 };
 
 // { alerts, checked: { kind: "all" | Set of keys } }. Read-only.

@@ -111,4 +111,60 @@ async function refundViewsEscrow(campaignId) {
   return refund ? refundable : 0;
 }
 
-module.exports = { campaignEscrowBalance, escrowBalanceFrom, bookEscrowDeposit, refundViewsEscrow, bucketOf, bucketFilter };
+// Refunds a completed views campaign's unused views escrow once (automatic refunds, ticket 11). Views
+// earnings stay withdrawable after completion and posts keep syncing, so every creator holding a place
+// keeps the most that place can still pay them: its full reward, less what they've been paid or have in
+// flight, and never less than a views withdrawal they've requested. Only what no creator can ever earn
+// (places nobody took, rounding) goes back to the brand; the platform fee isn't refunded, as on cancel.
+async function refundCompletedViewsEscrow(campaignId) {
+  const alreadyRefunded = await Transaction.exists({ campaignId, type: "refund", bucket: bucketFilter("views") });
+  if (alreadyRefunded) return 0;
+  const Campaign = require("../models/Campaign");
+  const Slot = require("../models/Slot");
+  const Submission = require("../models/Submission");
+  const campaign = await Campaign.findById(campaignId).select("creatorPool status").lean();
+  if (!campaign || campaign.status !== "completed") return 0;
+  const id = new mongoose.Types.ObjectId(String(campaignId));
+
+  const [transactions, slots, pending] = await Promise.all([
+    Transaction.find({ campaignId: id, bucket: bucketFilter("views") }).lean(),
+    Slot.find({ campaignId: id, creatorId: { $ne: null }, kind: { $ne: "deliverable" } }).select("creatorId reward").lean(),
+    Withdrawal.aggregate([
+      { $match: { campaignId: id, kind: { $ne: "referral" }, status: "pending" } },
+      { $group: { _id: "$creatorId", total: { $sum: { $cond: [{ $eq: ["$kind", "campaign"] }, { $ifNull: ["$viewsAmount", 0] }, "$amount"] } } } },
+    ]),
+  ]);
+  const kobo = (value) => Math.round((Number(value) || 0) * 100);
+  const balanceKobo = kobo(escrowBalanceFrom(transactions, "views", campaign.creatorPool));
+
+  const releases = transactions.filter((t) => t.type === "release" && COMMITTED_RELEASE_STATUSES.includes(t.status));
+  const submissionIds = releases.filter((r) => !r.creatorId && r.submissionId).map((r) => r.submissionId);
+  const submissionCreator = new Map(
+    (submissionIds.length ? await Submission.find({ _id: { $in: submissionIds } }).select("creatorId").lean() : []).map((s) => [String(s._id), String(s.creatorId)])
+  );
+  const paidBy = new Map();
+  for (const release of releases) {
+    const creator = release.creatorId ? String(release.creatorId) : submissionCreator.get(String(release.submissionId));
+    if (creator) paidBy.set(creator, (paidBy.get(creator) || 0) + kobo(release.amount));
+  }
+  const potentialBy = new Map();
+  for (const slot of slots) potentialBy.set(String(slot.creatorId), (potentialBy.get(String(slot.creatorId)) || 0) + kobo(slot.reward));
+  const pendingBy = new Map(pending.map((p) => [String(p._id), kobo(p.total)]));
+
+  let holdbackKobo = 0;
+  for (const creator of new Set([...potentialBy.keys(), ...pendingBy.keys()])) {
+    holdbackKobo += Math.max((potentialBy.get(creator) || 0) - (paidBy.get(creator) || 0), pendingBy.get(creator) || 0, 0);
+  }
+  const refundable = Math.max(balanceKobo - holdbackKobo, 0) / 100;
+  if (refundable <= 0) return 0;
+
+  const refund = await refundCampaignBucket({
+    campaignId,
+    bucket: "views",
+    amount: refundable,
+    note: `Unused budget from completed campaign ${campaignId}`,
+  });
+  return refund ? refundable : 0;
+}
+
+module.exports = { campaignEscrowBalance, escrowBalanceFrom, bookEscrowDeposit, refundViewsEscrow, refundCompletedViewsEscrow, bucketOf, bucketFilter };
