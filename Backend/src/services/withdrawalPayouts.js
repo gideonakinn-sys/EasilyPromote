@@ -8,6 +8,7 @@ const { recordAdminActivity } = require("./adminActivity");
 const { campaignEscrowBalance } = require("../utils/escrow");
 const { settleRelease, revertRelease } = require("../utils/payouts");
 const { fixedPayableNow } = require("../utils/fixedPay");
+const { bonusPayableNow } = require("../utils/hybridBonus");
 const { roundMoney } = require("../utils/money");
 
 // Paystack transfer states that mean the money is still moving.
@@ -24,14 +25,15 @@ function estimateTransferFee(amount) {
   return 50;
 }
 
-// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views, referral and fixed
-// pay together; older withdrawals are views or referral only.
+// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views, referral, fixed pay and
+// hybrid bonus together; older withdrawals are views or referral only.
 function withdrawalParts(withdrawal) {
   if (withdrawal.kind === "campaign") {
     return [
       { bucket: "views", amount: roundMoney(withdrawal.viewsAmount) },
       { bucket: "referral", amount: roundMoney(withdrawal.referralAmount) },
       { bucket: "fixed", amount: roundMoney(withdrawal.fixedAmount) },
+      { bucket: "bonus", amount: roundMoney(withdrawal.bonusAmount) },
     ].filter((part) => part.amount > 0);
   }
   return [{ bucket: withdrawal.kind === "referral" ? "referral" : "views", amount: roundMoney(withdrawal.amount) }];
@@ -132,28 +134,34 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
 
   let parts = withdrawalParts(withdrawal);
 
-  // Fixed pay is checked again at payout: only credits whose content is delivered and whose 7-day
-  // hold is over can be released, whatever was eligible when the withdrawal was requested.
-  const fixedPart = parts.find((part) => part.bucket === "fixed");
+  // Fixed pay and hybrid bonus are checked again at payout: only fixed credits whose content is
+  // delivered and whose 7-day hold is over, and bonus credits past their hold, can be released,
+  // whatever was eligible when the withdrawal was requested.
   let capNote = null;
-  if (fixedPart) {
-    const payable = await fixedPayableNow({ creatorId: withdrawal.creatorId, campaignId: campaign._id });
-    if (fixedPart.amount > payable) {
-      const amount = roundMoney(withdrawal.amount - fixedPart.amount + payable);
-      capNote = `Fixed pay capped at payout from ₦${fixedPart.amount.toLocaleString()} to ₦${payable.toLocaleString()}: the rest isn't delivered or past its hold yet`;
-      if (!(amount > 0)) {
-        await backToPending();
-        return reply(400, { error: `Nothing in this withdrawal can be paid yet. ${capNote}.`, code: "FIXED_PAY_NOT_ELIGIBLE" });
-      }
-      await Withdrawal.updateOne(
-        { _id: withdrawal._id },
-        { $set: { fixedAmount: payable, amount, adminNotes: [withdrawal.adminNotes, capNote].filter(Boolean).join(" | ") } }
-      );
-      withdrawal.fixedAmount = payable;
-      withdrawal.amount = amount;
-      withdrawal.adminNotes = [withdrawal.adminNotes, capNote].filter(Boolean).join(" | ");
-      parts = withdrawalParts(withdrawal);
+  const rechecks = [
+    { bucket: "fixed", field: "fixedAmount", payableNow: fixedPayableNow, label: "Fixed pay", why: "the rest isn't delivered or past its hold yet", code: "FIXED_PAY_NOT_ELIGIBLE" },
+    { bucket: "bonus", field: "bonusAmount", payableNow: bonusPayableNow, label: "Bonus", why: "the rest isn't past its hold yet", code: "BONUS_NOT_ELIGIBLE" },
+  ];
+  for (const check of rechecks) {
+    const part = parts.find((p) => p.bucket === check.bucket);
+    if (!part) continue;
+    const payable = await check.payableNow({ creatorId: withdrawal.creatorId, campaignId: campaign._id });
+    if (part.amount <= payable) continue;
+    const amount = roundMoney(withdrawal.amount - part.amount + payable);
+    const note = `${check.label} capped at payout from ₦${part.amount.toLocaleString()} to ₦${payable.toLocaleString()}: ${check.why}`;
+    capNote = [capNote, note].filter(Boolean).join(" | ");
+    if (!(amount > 0)) {
+      await backToPending();
+      return reply(400, { error: `Nothing in this withdrawal can be paid yet. ${note}.`, code: check.code });
     }
+    await Withdrawal.updateOne(
+      { _id: withdrawal._id },
+      { $set: { [check.field]: payable, amount, adminNotes: [withdrawal.adminNotes, note].filter(Boolean).join(" | ") } }
+    );
+    withdrawal[check.field] = payable;
+    withdrawal.amount = amount;
+    withdrawal.adminNotes = [withdrawal.adminNotes, note].filter(Boolean).join(" | ");
+    parts = withdrawalParts(withdrawal);
   }
 
   if (parts.length === 0) {
@@ -168,7 +176,7 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
     if (part.amount > available) {
       await backToPending();
       return reply(400, {
-        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : part.bucket === "fixed" ? "fixed pay owed" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
+        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : part.bucket === "fixed" ? "fixed pay owed" : part.bucket === "bonus" ? "bonus owed" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
       });
     }
   }

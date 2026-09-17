@@ -426,6 +426,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
     const { creatorViewsEarnings, floorKobo } = require("../utils/earnings");
     const { creatorReferralEarnings } = require("../utils/referralEarnings");
     const { creatorFixedEarnings } = require("../utils/fixedPay");
+    const { creatorBonusEarnings } = require("../utils/hybridBonus");
 
     const { campaignId } = req.body || {};
     // Older clients still send a kind and amount; they withdraw only that part.
@@ -481,19 +482,23 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
     }
 
     const key = String(campaign._id);
-    const [viewsMap, referralMap, fixedMap] = await Promise.all([
+    const [viewsMap, referralMap, fixedMap, bonusMap] = await Promise.all([
       creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] }),
       creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] }),
       creatorFixedEarnings(req.user._id, { campaignIds: [campaign._id], now }),
+      creatorBonusEarnings(req.user._id, { campaignIds: [campaign._id], now }),
     ]);
     const views = viewsMap.get(key);
     const referral = referralMap.get(key);
     const fixed = fixedMap.get(key);
+    const bonus = bonusMap.get(key);
 
     let viewsAmount = viewsEligible && onlyKind !== "referral" && views ? views.availableToWithdraw : 0;
     let referralAmount = onlyKind !== "views" && referral ? referral.availableToWithdraw : 0;
     // Fixed pay past its hold goes out with the rest; older kind-only requests leave it alone.
     const fixedAmount = !onlyKind && fixed ? fixed.availableToWithdraw : 0;
+    // So does a hybrid campaign's bonus past its hold (ticket 10).
+    const bonusAmount = !onlyKind && bonus ? bonus.availableToWithdraw : 0;
     if (requestedAmount !== null) {
       const cap = onlyKind === "referral" ? referralAmount : viewsAmount;
       if (requestedAmount > cap) {
@@ -505,10 +510,11 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       else viewsAmount = floorKobo(requestedAmount);
     }
 
-    const amount = floorKobo(viewsAmount + referralAmount + fixedAmount);
+    const amount = floorKobo(viewsAmount + referralAmount + fixedAmount + bonusAmount);
     if (amount <= 0) {
       const onHold = referral ? referral.pending : 0;
-      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0) + (fixed ? fixed.withdrawn : 0);
+      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0) + (fixed ? fixed.withdrawn : 0) + (bonus ? bonus.withdrawn : 0);
+      const bonusHeld = bonus && !onlyKind ? bonus.onHold : 0;
       const fixedHeld = fixed && !onlyKind ? fixed.onHold : 0;
       const fixedAwaiting = fixed && !onlyKind ? fixed.awaitingDelivery : 0;
       let error = "You haven't earned anything on this campaign yet.";
@@ -516,6 +522,8 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
         error = `₦${fixedHeld.toLocaleString()} of your fixed pay on this campaign is on hold until ${formatPayoutDate(fixed.holdUntil)}.`;
       } else if (fixedAwaiting > 0) {
         error = `₦${fixedAwaiting.toLocaleString()} of your fixed pay on this campaign is waiting for the brand to confirm delivery.`;
+      } else if (bonusHeld > 0) {
+        error = `₦${bonusHeld.toLocaleString()} of your bonus on this campaign is on hold until ${formatPayoutDate(bonus.holdUntil)}.`;
       } else if (onHold > 0) {
         error = `₦${onHold.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`;
       } else if (withdrawn > 0) {
@@ -544,6 +552,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
         viewsAmount: floorKobo(viewsAmount),
         referralAmount: floorKobo(referralAmount),
         fixedAmount: floorKobo(fixedAmount),
+        bonusAmount: floorKobo(bonusAmount),
         status: "pending",
         requestedAt: now,
       });
@@ -561,6 +570,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       viewsAmount: withdrawal.viewsAmount,
       referralAmount: withdrawal.referralAmount,
       fixedAmount: withdrawal.fixedAmount,
+      bonusAmount: withdrawal.bonusAmount,
       status: withdrawal.status,
       payoutDate,
       message: `Withdrawal requested. It's paid on ${formatPayoutDate(payoutDate)}.`,
@@ -588,6 +598,7 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
         viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
         referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
         fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
+        bonusAmount: w.kind === "campaign" ? w.bonusAmount || 0 : 0,
         // Requests are paid on the Friday that ends the week they were made in.
         payoutDate: ["pending", "processing"].includes(w.status) ? nextPayoutDate(w.requestedAt) : null,
         status: w.status,

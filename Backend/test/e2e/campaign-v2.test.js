@@ -128,18 +128,22 @@ test("brands can't set a rate that EasilyPromote or admin owns (ADR 0003)", asyn
   }
 });
 
-test("hybrid pay and objectives that aren't ready are refused with a reason", async () => {
+test("hybrid pay is for content campaigns only, and objectives that aren't ready are refused with a reason", async () => {
   const brand = await harness.registerBrand();
-  const hybrid = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { ...contentCampaign, payShape: "hybrid" } });
-  assert.equal(hybrid.status, 400);
-  assert.match(hybrid.body.error, /Hybrid/);
+  const performanceHybrid = await harness.api("POST", "/api/campaigns", {
+    token: brand.token,
+    body: { name: "Views hybrid", category: "Tech", campaignObjective: "views", payShape: "hybrid", targetViews: 100000 },
+  });
+  assert.equal(performanceHybrid.status, 400);
+  assert.match(performanceHybrid.body.error, /Hybrid pay is for content campaigns/);
 
+  // Hybrid drafts can be saved before the bonus is set; they're unpriced until then (ticket 10).
   const unpricedHybrid = await harness.api("POST", "/api/campaigns", {
     token: brand.token,
     body: { name: "Hybrid draft", category: "Beauty", campaignObjective: "content", payShape: "hybrid" },
   });
-  assert.equal(unpricedHybrid.status, 400, JSON.stringify(unpricedHybrid.body));
-  assert.match(unpricedHybrid.body.error, /Hybrid/);
+  assert.equal(unpricedHybrid.status, 201, JSON.stringify(unpricedHybrid.body));
+  assert.equal(unpricedHybrid.body.quote, null);
 
   const sales = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Sales", category: "Tech", campaignObjective: "sales", targetViews: 100000 } });
   assert.equal(sales.status, 400);

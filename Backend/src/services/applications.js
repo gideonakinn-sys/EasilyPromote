@@ -24,7 +24,7 @@ const CLOSED_CAMPAIGN_STATUSES = ["completed", "cancelled"];
 const STATUSES = CampaignApplication.APPLICATION_STATUSES;
 // A creator may apply again after withdrawing or when an application expired unreviewed.
 const REOPENABLE = ["withdrawn", "expired"];
-const CAMPAIGN_FIELDS_FOR_PAY = "name status businessId coverImageUrl contentPay campaignModel campaignObjective objective referral creatorAccess";
+const CAMPAIGN_FIELDS_FOR_PAY = "name status businessId coverImageUrl contentPay hybridBonus payShape campaignModel campaignObjective objective referral creatorAccess";
 
 const expiresAt = (application) => new Date(new Date(application.appliedAt).getTime() + EXPIRE_AFTER_DAYS * DAY_MS);
 

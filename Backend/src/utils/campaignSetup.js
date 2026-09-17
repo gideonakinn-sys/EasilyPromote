@@ -4,13 +4,15 @@
 const { z } = require("zod");
 const { OBJECTIVES, OBJECTIVE_NAMES, usesReferralTracking, objectiveForLegacy } = require("./campaignObjectives");
 const { AGE_RANGES, CATEGORIES } = require("./creatorProfile");
-const { quoteCampaign } = require("../services/campaignBudget");
+const { quoteCampaign, bonusViewsRate, DEFAULT_PLATFORM_FEE_PERCENT } = require("../services/campaignBudget");
 const { roundMoney } = require("./referralEarnings");
 
 const PLATFORMS = ["tiktok", "instagram", "youtube", "twitter", "facebook"];
 const RANKS = ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"];
 const BADGES = ["top_creator", "high_performer", "reliable_creator", "campaign_pro"];
 const REFERRAL_EVENT_FOR = { signups: "signup", downloads: "install" };
+// Hybrid pay (ticket 10): destinations where a creator's own post can earn a views bonus.
+const VIEWS_BONUS_DESTINATIONS = ["creator_page", "both"];
 
 const shortText = (max) => z.string().trim().max(max);
 const textList = (maxItems, maxLength) => z.array(shortText(maxLength).min(1)).max(maxItems);
@@ -20,6 +22,8 @@ const setupSchema = z.object({
   payShape: z.enum(["fixed", "performance", "hybrid"]).optional(),
   // null clears a draft's pay.
   contentPay: z.object({ ratePerDeliverable: z.number(), deliverables: z.number() }).nullable().optional(),
+  // Hybrid pay (ticket 10): what the bonus pays for, its pool and the per-creator cap. null clears it.
+  hybridBonus: z.object({ metric: z.string(), pool: z.number(), capPerCreator: z.number() }).nullable().optional(),
   wizardStep: z.number().int().min(1).max(6).optional(),
   contentDestination: z.enum(["creator_page", "brand_page", "both"]).optional(),
   creatorAccess: z.enum(["open_call", "application_required"]).optional(),
@@ -83,6 +87,10 @@ function resolveCampaignSetup(body, current = null) {
   if (body.costPerView !== undefined) {
     return rateError("The price per view comes from EasilyPromote's price table and can't be set");
   }
+  const bonusInput = body && body.hybridBonus;
+  if (bonusInput && (bonusInput.ratePerThousandViews !== undefined || bonusInput.rewardPerConversion !== undefined)) {
+    return rateError("A bonus rate comes from EasilyPromote's price table or our team; brands set the pool and the cap");
+  }
   if (referralInput.rewardPerConversion !== undefined) {
     return rateError("The reward per conversion is set by the EasilyPromote team and can't be set by brands");
   }
@@ -113,25 +121,29 @@ function resolveCampaignSetup(body, current = null) {
 
   const isContent = definition.campaignModel === "content";
   const payShape = input.payShape || (current && current.campaignObjective === objective && current.payShape) || (isContent ? "fixed" : "performance");
-  // Hybrid pay ships after launch (ticket 10); refuse it even on drafts that aren't priced yet.
-  if (payShape === "hybrid") return badRequest("Hybrid pay (base plus bonus) isn't available yet");
+  // Hybrid is a content campaign's pay: a base per deliverable plus a bonus (ticket 10).
+  if (payShape === "hybrid" && !isContent) return badRequest("Hybrid pay is for content campaigns: a base per deliverable plus a bonus");
   if (payShape !== "hybrid" && (payShape === "fixed") !== isContent) {
     return badRequest(isContent ? "Content campaigns pay a fixed rate per deliverable" : "Performance campaigns pay per verified result");
   }
+  const isHybrid = payShape === "hybrid";
 
   const storedPay = current && current.contentPay && current.contentPay.ratePerDeliverable ? current.contentPay : undefined;
   const contentPay = isContent ? (input.contentPay === null ? undefined : input.contentPay || storedPay) : undefined;
+  const storedBonus = current && current.hybridBonus && current.hybridBonus.metric ? current.hybridBonus : undefined;
+  const hybridBonus = isHybrid ? (input.hybridBonus === null ? undefined : input.hybridBonus || storedBonus) : undefined;
   const targetViews = body.targetViews !== undefined ? body.targetViews : current ? current.targetViews : undefined;
   const referralBudget =
     referralInput.requestedBudget !== undefined ? referralInput.requestedBudget : current && current.referral ? current.referral.requestedBudget : 0;
 
   // A content draft can be saved before the brand sets its pay; it's unpriced until then
   // and checkout refuses it.
-  const unpriced = isContent && !contentPay;
+  const unpriced = isContent && (!contentPay || (isHybrid && !hybridBonus));
   const priced = unpriced ? { quote: null } : quoteCampaign({
     objective,
     payShape,
     contentPay: contentPay && { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables },
+    hybridBonus: hybridBonus && { metric: hybridBonus.metric, pool: hybridBonus.pool, capPerCreator: hybridBonus.capPerCreator },
     targetViews,
     referralBudget: usesReferralTracking(objective) ? referralBudget : 0,
     platformFeePercent: current && Number.isFinite(current.platformFeePercent) ? current.platformFeePercent : undefined,
@@ -151,6 +163,10 @@ function resolveCampaignSetup(body, current = null) {
     contentDestination: input.contentDestination || (current && current.contentDestination) || "creator_page",
     creatorAccess: input.creatorAccess || (current && current.creatorAccess) || "open_call",
   };
+  // A views bonus is earned on the creator's own post, so content only delivered to the brand can't earn one.
+  if (hybridBonus && hybridBonus.metric === "views" && !VIEWS_BONUS_DESTINATIONS.includes(details.contentDestination)) {
+    return badRequest("A views bonus needs creators to post on their own page. Choose creator page or both, or a sign-up or download bonus");
+  }
   if (input.audienceTargeting !== undefined) details.audienceTargeting = input.audienceTargeting;
   if (input.creatorEligibility !== undefined) details.creatorEligibility = input.creatorEligibility;
   if (input.brief !== undefined) details.brief = input.brief;
@@ -159,16 +175,37 @@ function resolveCampaignSetup(body, current = null) {
   // budget is booked separately at payment), with the fee inside it.
   const money = {};
   if (unpriced) {
+    // A hybrid draft with its base set but not its bonus keeps the base.
+    if (contentPay) money.contentPay = { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables };
     money.budget = 0;
     money.creatorPool = 0;
     money.platformFee = 0;
     money.costPerView = 0;
   } else if (isContent) {
     money.contentPay = { ratePerDeliverable: contentPay.ratePerDeliverable, deliverables: contentPay.deliverables };
-    money.budget = quote.total;
-    money.creatorPool = quote.creatorBudget;
-    money.platformFee = quote.platformFee;
     money.costPerView = 0;
+    money.creatorPool = quote.creatorBudget;
+    if (isHybrid) {
+      // The base is the fixed pot, exactly as a fixed-pay campaign (budget, creatorPool, platformFee);
+      // the bonus pool and its fee are booked to their own pot. The checkout charges both.
+      const baseFee = roundMoney(quote.platformFee - quote.bonusFee);
+      money.budget = roundMoney(quote.creatorBudget + baseFee);
+      money.platformFee = baseFee;
+      const feePercent = current && Number.isFinite(current.platformFeePercent) ? current.platformFeePercent : DEFAULT_PLATFORM_FEE_PERCENT;
+      money.hybridBonus = {
+        metric: hybridBonus.metric,
+        pool: quote.bonusPool,
+        capPerCreator: hybridBonus.capPerCreator,
+        platformFee: quote.bonusFee,
+        ratePerThousandViews: hybridBonus.metric === "views" ? bonusViewsRate(feePercent) : 0,
+        poolRemaining: quote.bonusPool,
+        reserved: 0,
+        refundedPool: 0,
+      };
+    } else {
+      money.budget = quote.total;
+      money.platformFee = quote.platformFee;
+    }
   } else {
     const referralPart = usesReferralTracking(objective) ? roundMoney(Number(referralBudget) || 0) : 0;
     money.budget = roundMoney(quote.total - referralPart);
@@ -184,6 +221,10 @@ function resolveCampaignSetup(body, current = null) {
     updates: { ...classification, ...details, ...money },
     quote,
     legacyObjective: usesReferralTracking(objective) ? "actions" : "views",
+    // Sign-up and download bonuses are verified through referral codes, like referral campaigns, but
+    // paid from the bonus pool: tracking is on with no referral budget.
+    bonusReferralEventTypes: hybridBonus && REFERRAL_EVENT_FOR[hybridBonus.metric] ? [REFERRAL_EVENT_FOR[hybridBonus.metric]] : null,
+    isHybrid,
     // Only a newly chosen objective sets conversion types; older clients keep the ones they sent or stored.
     unpriced,
     referralEventTypes:
@@ -223,6 +264,9 @@ function editSetupUpdates(body, campaign) {
   const moneyChanged =
     modelChanged ||
     body.contentPay !== undefined ||
+    body.hybridBonus !== undefined ||
+    // A views bonus depends on where content goes.
+    (setup.isHybrid && body.contentDestination !== undefined) ||
     body.payShape !== undefined ||
     (!isContent && body.targetViews !== undefined);
 
@@ -241,11 +285,27 @@ function editSetupUpdates(body, campaign) {
   }
   if (moneyChanged) {
     Object.assign(updates, setup.money);
-    if (isContent) updates.$unset = { targetViews: 1, ...(setup.unpriced && { contentPay: 1 }) };
-    else if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
+    const clearBonus = Boolean(campaign.hybridBonus) && !setup.money.hybridBonus;
+    if (isContent) updates.$unset = { targetViews: 1, ...(setup.unpriced && !setup.money.contentPay && { contentPay: 1 }), ...(clearBonus && { hybridBonus: 1 }) };
+    else {
+      if (clearBonus) updates.$unset = { hybridBonus: 1 };
+      if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
+    }
+  }
+  // Referral tracking follows a sign-up or download bonus, and goes off when a hybrid campaign stops having one.
+  const wasBonusTracking = Boolean(campaign.hybridBonus && REFERRAL_EVENT_FOR[campaign.hybridBonus.metric]);
+  if (setup.bonusReferralEventTypes) {
+    updates["referral.enabled"] = true;
+    updates["referral.requestedBudget"] = 0;
+    updates["referral.eventTypes"] = setup.bonusReferralEventTypes;
+    updates["referral.eventType"] = setup.bonusReferralEventTypes[0];
+  } else if (moneyChanged && wasBonusTracking && setup.legacyObjective !== "actions") {
+    updates["referral.enabled"] = false;
   }
 
-  const priceChanged = moneyChanged && setup.money.budget !== campaign.budget;
+  // A hybrid campaign's checkout also charges its bonus pool and fee, so a new pool is a new price too.
+  const bonusTotal = (bonus) => (bonus && bonus.metric ? roundMoney(bonus.pool + (bonus.platformFee || 0)) : 0);
+  const priceChanged = moneyChanged && (setup.money.budget !== campaign.budget || bonusTotal(setup.money.hybridBonus) !== bonusTotal(campaign.hybridBonus));
   return { updates, priceChanged, isContent };
 }
 
@@ -259,6 +319,16 @@ function campaignSetupView(campaign) {
     rateAuthority: plain.rateAuthority || null,
     performanceMetric: plain.performanceMetric || null,
     contentPay: plain.contentPay && plain.contentPay.ratePerDeliverable ? plain.contentPay : null,
+    hybridBonus:
+      plain.hybridBonus && plain.hybridBonus.metric
+        ? {
+            metric: plain.hybridBonus.metric,
+            pool: plain.hybridBonus.pool,
+            capPerCreator: plain.hybridBonus.capPerCreator,
+            platformFee: plain.hybridBonus.platformFee || 0,
+            ratePerThousandViews: plain.hybridBonus.ratePerThousandViews || 0,
+          }
+        : null,
     contentDestination: plain.contentDestination || null,
     creatorAccess: plain.creatorAccess || null,
     audienceTargeting: plain.audienceTargeting || {},

@@ -7,8 +7,8 @@
 // Enabled at launch (D14): objective content | views | signups | downloads × access open_call |
 // application_required, and for content also destination creator_page | brand_page | both.
 // Not in the matrix: destination on performance objectives (they have no deliverable, so it's always
-// creator_page), Hybrid pay and the "Coming soon" objectives (engagement, leads, sales, other) —
-// creating those is refused.
+// creator_page), Hybrid pay (after launch; covered by hybrid-pay.test.js) and the "Coming soon"
+// objectives (engagement, leads, sales, other), which are refused.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { startHarness } = require("./harness");

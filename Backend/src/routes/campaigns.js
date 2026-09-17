@@ -15,7 +15,7 @@ const { parseReferralSettings, campaignEventTypes } = require("../utils/referral
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { refundViewsEscrow } = require("../utils/escrow");
 const { recordUnmatchedPayment } = require("../utils/refunds");
-const { expectedPaymentAmount, bookCampaignPayment, brandAppVerified } = require("../utils/campaignPayments");
+const { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified } = require("../utils/campaignPayments");
 const { MIN_REFERRAL_TOPUP } = require("../utils/referralEarnings");
 
 function sendSetupError(res, setup) {
@@ -148,6 +148,10 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       referralValues.eventTypes = setup.referralEventTypes;
       referralValues.eventType = setup.referralEventTypes[0];
     }
+    // A sign-up or download bonus is tracked with referral codes; the bonus pool pays it, not a referral budget.
+    if (setup.bonusReferralEventTypes) {
+      Object.assign(referralValues, { enabled: true, requestedBudget: 0, codeSource: "easilypromote", eventTypes: setup.bonusReferralEventTypes, eventType: setup.bonusReferralEventTypes[0] });
+    }
     if (campaignObjective === "views") referralValues.requestedBudget = 0;
     const isContent = setup.updates.campaignModel === "content";
 
@@ -221,8 +225,19 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
       return res.status(400).json({ error: "Campaign cannot be paid" });
     }
     const isContent = campaign.campaignModel === "content";
+    if (campaign.payShape === "hybrid" && !(campaign.hybridBonus && campaign.hybridBonus.metric)) {
+      return res.status(400).json({ error: "Set the bonus pool and the per-creator cap before paying.", code: "HYBRID_BONUS_REQUIRED" });
+    }
     if (isContent && !(campaign.contentPay && campaign.contentPay.ratePerDeliverable)) {
       return res.status(400).json({ error: "Set what creators earn per deliverable before paying.", code: "CONTENT_PAY_REQUIRED" });
+    }
+    // Hybrid pay (ticket 10): the bonus pool is paid in the same checkout. A sign-up or download bonus
+    // is verified by the brand's server, so its app must be connected first, as for referral campaigns.
+    if (campaign.payShape === "hybrid" && campaign.hybridBonus.metric !== "views" && !(await brandAppVerified(req.user._id))) {
+      return res.status(409).json({
+        error: "Connect your app before paying for a sign-up or download bonus. We need a code check and a test conversion from your server.",
+        code: "INTEGRATION_REQUIRED",
+      });
     }
     // Referral campaigns pay their referral budget in the same checkout, and only once the
     // brand's app is connected: Paystack can't hold the money while they finish setup.
@@ -245,7 +260,7 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     // A draft is charged the calculator's total as it stands, so one priced under an older
     // price table pays what the wizard quotes today. An open checkout keeps its price: a
     // payment still arriving from an earlier checkout tab must match it.
-    let total = campaign.budget + referralAmount;
+    let total = campaign.budget + referralAmount + bonusCheckoutAmount(campaign);
     if (campaign.status === "draft") {
       const setup = resolveCampaignSetup({}, campaign);
       if (setup.error) return sendSetupError(res, setup);
@@ -273,6 +288,7 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         campaignAmount: campaign.budget,
         ...(!isContent && { viewsAmount: campaign.budget }),
         referralAmount,
+        ...(campaign.payShape === "hybrid" && { bonusAmount: bonusCheckoutAmount(campaign) }),
       },
       callback_url,
     });

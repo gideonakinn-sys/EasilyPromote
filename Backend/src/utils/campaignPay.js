@@ -28,12 +28,16 @@ const roundNaira = (value) => Math.round(value * 100) / 100;
 
 // { amount, unit } where amount is null while admin hasn't set a sign-up reward yet.
 // `slot` is the placement the creator would take (views campaigns price from it).
+// Hybrid campaigns (ticket 10) add `bonus`: what it pays for, the rate per unit (null while admin
+// hasn't set a sign-up or download reward) and the most one creator can earn.
 function payPerUnit(campaign, slot) {
-  const { objective, campaignModel } = campaignTerms(campaign);
+  const { objective, campaignModel, payShape } = campaignTerms(campaign);
 
   if (campaignModel === "content") {
     const rate = (campaign.contentPay && campaign.contentPay.ratePerDeliverable) || (slot && slot.reward) || null;
-    return { amount: rate, unit: "approved deliverable" };
+    const pay = { amount: rate, unit: "approved deliverable" };
+    if (payShape === "hybrid" && campaign.hybridBonus && campaign.hybridBonus.metric) pay.bonus = bonusTerms(campaign);
+    return pay;
   }
 
   if (usesReferralTracking(objective)) {
@@ -45,6 +49,21 @@ function payPerUnit(campaign, slot) {
   const reward = slot ? slot.reward : 0;
   const views = slot ? slot.viewTarget : 0;
   return { amount: reward > 0 && views > 0 ? roundNaira((reward / views) * 1000) : null, unit: "1,000 views" };
+}
+
+const BONUS_UNITS = { views: "1,000 views", signups: "sign-up", downloads: "download" };
+
+function bonusTerms(campaign) {
+  const bonus = campaign.hybridBonus;
+  const rate = bonus.metric === "views" ? bonus.ratePerThousandViews : campaign.referral && campaign.referral.rewardPerConversion;
+  return {
+    metric: bonus.metric,
+    amount: rate > 0 ? rate : null,
+    unit: BONUS_UNITS[bonus.metric],
+    capPerCreator: bonus.capPerCreator,
+    // Whether the pool still has bonus to give.
+    available: (bonus.poolRemaining || 0) > 0,
+  };
 }
 
 // Shown before joining.

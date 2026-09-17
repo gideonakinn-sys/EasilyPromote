@@ -41,6 +41,8 @@ const {
   reopenClosedPlaces,
 } = require("../utils/fixedPay");
 const { reconcileCampaignById } = require("../services/campaignReconciliation");
+// Hybrid pay (ticket 10)
+const { BonusError, bonusBudgetSummary, refundUnusedBonusPool } = require("../utils/hybridBonus");
 const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
 const { campaignHasPayments } = require("../utils/campaignPayments");
 
@@ -259,6 +261,21 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         progressPercent: campaign.targetViews > 0 ? Math.min(Math.round(((campaign.viewsDelivered || 0) / campaign.targetViews) * 100), 100) : 0,
         slotCount: campaign.slotCount || 5,
         campaignModel: campaign.campaignModel || "performance",
+        payShape: campaign.payShape || null,
+        // Hybrid campaigns: the base is the fixed pay above (creatorPool, platformFee); the bonus is its own pot.
+        hybridBonus:
+          campaign.hybridBonus && campaign.hybridBonus.metric
+            ? {
+                metric: campaign.hybridBonus.metric,
+                pool: campaign.hybridBonus.pool,
+                platformFee: campaign.hybridBonus.platformFee || 0,
+                capPerCreator: campaign.hybridBonus.capPerCreator,
+                ratePerThousandViews: campaign.hybridBonus.ratePerThousandViews || 0,
+                poolRemaining: campaign.hybridBonus.poolRemaining || 0,
+                reserved: campaign.hybridBonus.reserved || 0,
+                refundedPool: campaign.hybridBonus.refundedPool || 0,
+              }
+            : null,
         hasPayments,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
@@ -288,8 +305,9 @@ router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) =
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
     const loaded = await contentBudgetSummary(req.params.id);
     if (!loaded) return res.status(404).json({ error: "Content campaign not found" });
-    const reconciliation = await reconcileCampaignById(req.params.id);
-    res.json({ ...loaded.summary, reconciliation });
+    // A hybrid campaign's figures above are its base; its bonus pool is summarised beside them.
+    const [bonus, reconciliation] = await Promise.all([bonusBudgetSummary(req.params.id), reconcileCampaignById(req.params.id)]);
+    res.json({ ...loaded.summary, payShape: loaded.campaign.payShape || "fixed", bonus: bonus ? bonus.summary : null, reconciliation });
   } catch (err) {
     next(err);
   }
@@ -352,6 +370,50 @@ router.post("/campaigns/:id/refund-unused", moneyGuard, async (req, res, next) =
       return sendRefundError(res, error, next);
     }
     await answerRefund(req, res, { refund: result.refund, campaignId: result.campaign._id, action: "campaign.unused_budget_refunded", note });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Hybrid pay (ticket 10): admin refunds a finished hybrid campaign's unused bonus pool plus the fee on
+// it. Like the base refund, the body carries the amount the admin confirmed.
+router.post("/campaigns/:id/refund-unused-bonus", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
+    const expected = req.body && req.body.expectedAmount;
+    if (!(Number(expected) > 0)) {
+      return res.status(400).json({ error: "Confirm the amount to refund", code: "AMOUNT_REQUIRED" });
+    }
+    const note = String((req.body && req.body.note) || "").trim() || null;
+    let result;
+    try {
+      result = await refundUnusedBonusPool({ campaignId: req.params.id, expectedAmount: Number(expected), note });
+    } catch (error) {
+      if (error instanceof BonusError) return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+      return next(error);
+    }
+    const { refund, summary } = result;
+    const campaign = await Campaign.findById(req.params.id).select("name businessId");
+    await recordAdminActivity(req, {
+      action: "campaign.unused_bonus_refunded",
+      targetType: "campaign",
+      targetId: campaign._id,
+      targetLabel: campaign.name,
+      businessId: campaign.businessId,
+      note,
+      metadata: { refundId: refund.id, amount: refund.amount, status: refund.status, error: refund.error },
+    });
+    const wentThrough = refund.status !== "refund_failed";
+    if (wentThrough) {
+      await Notification.create({
+        businessId: campaign.businessId,
+        campaignId: campaign._id,
+        type: "campaign_refund",
+        title: "Unused bonus refunded",
+        body: `₦${refund.amount.toLocaleString()} of unused bonus pool on "${campaign.name}" is being refunded to your payment method.`,
+      });
+    }
+    res.status(wentThrough ? 200 : 502).json({ success: wentThrough, refund, bonus: summary });
   } catch (err) {
     next(err);
   }
@@ -1069,7 +1131,7 @@ router.get("/campaigns/:id/activity", adminGuard, async (req, res, next) => {
             campaignId: campaign._id,
             type: "release",
             status: "released",
-            bucket: { $nin: ["referral", "fixed"] },
+            bucket: { $nin: ["referral", "fixed", "bonus"] },
             submissionId: { $ne: null },
           },
         },
@@ -1482,10 +1544,12 @@ router.get("/withdrawals", adminGuard, async (req, res, next) => {
         viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
         referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
         fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
+        bonusAmount: w.kind === "campaign" ? w.bonusAmount || 0 : 0,
         // Each part is paid from its own pot, so show the balances that will fund it.
         escrowBalance: w.campaignId ? await campaignEscrowBalance(w.campaignId, w.kind === "referral" ? "referral" : "views") : 0,
         referralEscrowBalance: w.campaignId && w.kind === "campaign" ? await campaignEscrowBalance(w.campaignId, "referral") : null,
         fixedEscrowBalance: w.campaignId && w.kind === "campaign" && (w.fixedAmount || 0) > 0 ? await campaignEscrowBalance(w.campaignId, "fixed") : null,
+        bonusEscrowBalance: w.campaignId && w.kind === "campaign" && (w.bonusAmount || 0) > 0 ? await campaignEscrowBalance(w.campaignId, "bonus") : null,
         requestedAt: w.requestedAt,
         reviewedAt: w.reviewedAt,
         releasedAt: w.releasedAt,
@@ -1545,6 +1609,7 @@ async function buildPayoutRun(now) {
         viewsEscrow: campaign ? await campaignEscrowBalance(campaign._id, "views") : 0,
         referralEscrow: campaign ? await campaignEscrowBalance(campaign._id, "referral") : 0,
         fixedEscrow: campaign ? await campaignEscrowBalance(campaign._id, "fixed") : 0,
+        bonusEscrow: campaign ? await campaignEscrowBalance(campaign._id, "bonus") : 0,
         lines: [],
       });
     }
@@ -1556,6 +1621,7 @@ async function buildPayoutRun(now) {
       viewsAmount: parts.filter((p) => p.bucket === "views").reduce((sum, p) => sum + p.amount, 0),
       referralAmount: parts.filter((p) => p.bucket === "referral").reduce((sum, p) => sum + p.amount, 0),
       fixedAmount: parts.filter((p) => p.bucket === "fixed").reduce((sum, p) => sum + p.amount, 0),
+      bonusAmount: parts.filter((p) => p.bucket === "bonus").reduce((sum, p) => sum + p.amount, 0),
       amount: w.amount,
       estimatedFee: estimateTransferFee(w.amount),
       requestedAt: w.requestedAt,

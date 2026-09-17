@@ -11,6 +11,7 @@ const { creatorConversionGroups, referralEarningsFrom } = require("../utils/refe
 const { campaignEventTypes } = require("../utils/referralCodes");
 const { latestSlotPerCampaign, viewsEarningsFrom, floorKobo, COMMITTED_WITHDRAWAL_STATUSES } = require("../utils/earnings");
 const { fixedEarningsFrom, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
+const { bonusEarningsFrom, BONUS_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/hybridBonus");
 const { roundMoney } = require("../utils/money");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
@@ -37,10 +38,10 @@ const { contentLabelFor } = require("./submissionEvents");
 // Fields each section reads from a campaign. Sections see exactly these, as they did when each
 // loaded its own campaigns, so a response never gains or loses a field.
 const MY_CAMPAIGN_FIELDS =
-  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective contentDestination";
+  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay hybridBonus creatorAccess objective contentDestination";
 const RELEASED_CAMPAIGN_FIELDS =
-  "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay contentDestination";
-const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral";
+  "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay hybridBonus contentDestination";
+const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral payShape";
 const VIEWS_EARNINGS_CAMPAIGN_FIELDS = "name status businessId";
 
 // A lean document reduced to _id and `fields` (those it has), like a mongoose select.
@@ -111,7 +112,7 @@ async function loadCreatorData(user, ctx, sections) {
     need("myCampaigns", "wallet") ? Submission.find({ creatorId }).sort({ createdAt: -1 }).lean() : [],
     need("myCampaigns", "wallet")
       ? Withdrawal.find({ creatorId, status: { $ne: "rejected" } })
-          .select("campaignId kind amount viewsAmount referralAmount fixedAmount status requestedAt")
+          .select("campaignId kind amount viewsAmount referralAmount fixedAmount bonusAmount status requestedAt")
           .sort({ _id: 1 })
           .lean()
       : [],
@@ -142,13 +143,14 @@ async function loadCreatorData(user, ctx, sections) {
           // Each branch is served by its own index. Older views releases carry only a submission.
           $or: [
             { creatorId, type: "fixed_credit", status: "credited" },
-            { creatorId, type: "release", status: "released", bucket: { $nin: ["referral", "fixed"] } },
+            { creatorId, type: "bonus_credit", status: "credited" },
+            { creatorId, type: "release", status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } },
             ...(submissionIds.length > 0
-              ? [{ submissionId: { $in: submissionIds }, type: "release", status: "released", bucket: { $nin: ["referral", "fixed"] } }]
+              ? [{ submissionId: { $in: submissionIds }, type: "release", status: "released", bucket: { $nin: ["referral", "fixed", "bonus"] } }]
               : []),
           ],
         })
-          .select("type campaignId submissionId amount")
+          .select("type campaignId submissionId amount date")
           .lean()
       : [],
     need("myCampaigns") && submissions.length > 0 ? listEventsForSubmissions(submissionIds) : [],
@@ -202,6 +204,7 @@ function committedWithdrawals(withdrawals) {
   const views = new Map();
   const referral = new Map();
   const fixed = [];
+  const bonus = [];
   const add = (map, key, amount) => map.set(key, (map.get(key) || 0) + amount);
   for (const w of withdrawals.filter((row) => COMMITTED_WITHDRAWAL_STATUSES.includes(row.status))) {
     const key = String(w.campaignId);
@@ -209,8 +212,9 @@ function committedWithdrawals(withdrawals) {
     if (w.kind === "referral") add(referral, key, w.amount);
     else if (w.kind === "campaign" && w.referralAmount > 0) add(referral, key, w.referralAmount);
     if (w.kind === "campaign" && w.fixedAmount > 0) fixed.push({ campaignId: w.campaignId, withdrawn: w.fixedAmount });
+    if (w.kind === "campaign" && w.bonusAmount > 0) bonus.push({ campaignId: w.campaignId, withdrawn: w.bonusAmount });
   }
-  return { views, referral, fixed };
+  return { views, referral, fixed, bonus };
 }
 
 function referralEarningsOf(data) {
@@ -439,8 +443,13 @@ function buildCreatorReferral(campaign, code, earnings) {
     status: code ? code.status : "awaiting_code",
     conversions: code ? code.conversions : 0,
     rewardPerConversion: campaign.referral.rewardPerConversion || 0,
-    // Whether new conversions are currently being paid (the brand has budget left).
-    paying: (campaign.referral.rewardPerConversion || 0) > 0 && (campaign.referral.poolRemaining || 0) >= (campaign.referral.rewardPerConversion || 0),
+    // Whether new conversions are currently being paid (the brand has budget left). A hybrid
+    // campaign's conversions are paid from its bonus pool (ticket 10).
+    paying:
+      (campaign.referral.rewardPerConversion || 0) > 0 &&
+      (campaign.payShape === "hybrid" && campaign.hybridBonus
+        ? (campaign.hybridBonus.poolRemaining || 0) > 0
+        : (campaign.referral.poolRemaining || 0) >= (campaign.referral.rewardPerConversion || 0)),
     earnings: {
       earned: totals.earned,
       pending: totals.pending,
@@ -644,6 +653,8 @@ async function buildWallet(user, ctx, data = null) {
     withdrawals: withdrawn.fixed,
     now,
   });
+  // Hybrid campaigns' bonus (ticket 10): held 7 days per credit, then withdrawable.
+  const bonusEarnings = bonusEarningsFrom({ credits: data.ledger.filter((t) => t.type === "bonus_credit"), withdrawals: withdrawn.bonus, now });
 
   // Paid views payouts come from the ledger. Older releases carry only a submission;
   // newer ones also record the creator.
@@ -721,12 +732,15 @@ async function buildWallet(user, ctx, data = null) {
     const fixedAvailable = fixedTotals && FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES.includes(campaign.status) ? fixedTotals.availableToWithdraw : 0;
     const fixedOnHold = fixedTotals ? fixedTotals.onHold : 0;
     const fixedAwaitingDelivery = fixedTotals ? fixedTotals.awaitingDelivery : 0;
-    const total = floorKobo(viewsAvailable + referralAvailable + fixedAvailable);
+    const bonusTotals = bonusEarnings.get(key);
+    const bonusAvailable = bonusTotals && BONUS_WITHDRAWABLE_CAMPAIGN_STATUSES.includes(campaign.status) ? bonusTotals.availableToWithdraw : 0;
+    const bonusOnHold = bonusTotals ? bonusTotals.onHold : 0;
+    const total = floorKobo(viewsAvailable + referralAvailable + fixedAvailable + bonusAvailable);
 
     const forCampaign = recentWithdrawals.filter((w) => String(w.campaignId) === key);
     const inFlight = forCampaign.find((w) => ["pending", "processing"].includes(w.status));
     const thisWeek = forCampaign.find((w) => new Date(w.requestedAt) >= weekStart);
-    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0 && fixedOnHold <= 0 && fixedAwaitingDelivery <= 0) continue;
+    if (total <= 0 && !inFlight && !thisWeek && referralOnHold <= 0 && fixedOnHold <= 0 && fixedAwaitingDelivery <= 0 && bonusOnHold <= 0) continue;
 
     // Money not withdrawable yet, and why: one line per unlock date, each with its own amount.
     const onHold = [];
@@ -739,11 +753,16 @@ async function buildWallet(user, ctx, data = null) {
     for (const unlock of (referralTotals && referralTotals.unlocks) || []) {
       onHold.push({ pot: "referral", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
     }
+    for (const unlock of (bonusTotals && bonusTotals.unlocks) || []) {
+      onHold.push({ pot: "bonus", amount: unlock.amount, reason: "7-day hold", until: unlock.date });
+    }
 
     withdrawCampaigns.push({
       id: campaign._id,
       title: campaign.name,
       status: campaign.status,
+      // A hybrid campaign's fixed pay is its base; its bonus is its own pot (ticket 10).
+      payShape: campaign.payShape || null,
       viewsAvailable,
       referralAvailable,
       referralOnHold,
@@ -751,14 +770,17 @@ async function buildWallet(user, ctx, data = null) {
       fixedOnHold,
       fixedAwaitingDelivery,
       fixedHoldUntil: fixedTotals ? fixedTotals.holdUntil : null,
+      bonusAvailable,
+      bonusOnHold,
       // What the campaign has earned per pot, withdrawn or not.
       earnings: {
         fixed: fixedTotals ? fixedTotals.earned : 0,
         performance: views ? views.earned : 0,
         referral: referralTotals ? referralTotals.earned : 0,
+        bonus: bonusTotals ? bonusTotals.earned : 0,
       },
       onHold,
-      onHoldTotal: roundMoney(fixedAwaitingDelivery + fixedOnHold + referralOnHold),
+      onHoldTotal: roundMoney(fixedAwaitingDelivery + fixedOnHold + referralOnHold + bonusOnHold),
       payoutDate: inFlight ? nextPayoutDate(inFlight.requestedAt) : nextPayoutDate(now),
       total,
       // available | below_minimum | nothing_yet | requested | withdrawn_this_week
@@ -825,6 +847,23 @@ async function buildWallet(user, ctx, data = null) {
   });
   const sumFixed = (field) => roundMoney(fixedByCampaign.reduce((sum, c) => sum + c[field], 0));
 
+  // Hybrid campaigns' bonus, beside their base (the fixed pay above).
+  const bonusByCampaign = [...bonusEarnings.values()].map((entry) => {
+    const campaign = campaignById.get(String(entry.campaignId));
+    return {
+      id: entry.campaignId,
+      title: campaign ? campaign.name : "Campaign",
+      status: campaign ? campaign.status : null,
+      earned: entry.earned,
+      onHold: entry.onHold,
+      holdUntil: entry.holdUntil,
+      unlocks: entry.unlocks,
+      withdrawn: entry.withdrawn,
+      availableToWithdraw: entry.availableToWithdraw,
+    };
+  });
+  const sumBonus = (field) => roundMoney(bonusByCampaign.reduce((sum, c) => sum + c[field], 0));
+
   return {
     balance: withdrawableBalance,
     withdrawableBalance,
@@ -856,6 +895,14 @@ async function buildWallet(user, ctx, data = null) {
       withdrawn: sumFixed("withdrawn"),
       holdDays: 7,
       byCampaign: fixedByCampaign,
+    },
+    bonus: {
+      earned: sumBonus("earned"),
+      onHold: sumBonus("onHold"),
+      availableToWithdraw: sumBonus("availableToWithdraw"),
+      withdrawn: sumBonus("withdrawn"),
+      holdDays: 7,
+      byCampaign: bonusByCampaign,
     },
     recentTransactions: data.recentTransactions.map((t) => ({
       id: t._id,
