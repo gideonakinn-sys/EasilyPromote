@@ -212,7 +212,7 @@ async function stuckRefunds(now) {
       const parts = r.refundParts || [];
       const unsent = parts.some((p) => p.status === "pending" && !p.sentAt && !p.paystackRefundId);
       const state = r.status === "refund_failed" ? "failed" : unsent ? "not sent to Paystack" : "waiting for Paystack";
-      const pot = r.bucket === "referral" ? "referral" : r.bucket === "fixed" ? "fixed pay" : "views";
+      const pot = r.bucket === "referral" ? "referral" : r.bucket === "fixed" ? "fixed pay" : r.bucket === "bonus" ? "bonus pool" : "views";
       return alert({
         kind: "refund_stuck",
         subjectType: "transaction",

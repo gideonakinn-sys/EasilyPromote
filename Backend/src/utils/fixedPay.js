@@ -27,13 +27,12 @@ const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Withdrawal = require("../models/Withdrawal");
-const paystack = require("../services/paystack");
 const { isContentCampaign } = require("./campaignPay");
 const { toKobo, fromKobo, roundMoney } = require("./money");
 const rules = require("./fixedPayRules");
 const { ACTIVE_PLACEMENT_STATUSES } = require("./placementStatuses");
 const { emitPlacesLeft } = require("./campaignUpdates");
-const { buildRefundParts } = require("./refunds");
+const { buildRefundParts, sendUnsentParts, lockFilter } = require("./refunds");
 
 const { FIXED_HOLD_MS, UNDELIVERED_VOID_AFTER_MS, fixedCreditState, canStillEarn, unusedBudgetRefund, refundFor } = rules;
 
@@ -534,65 +533,13 @@ async function applyFixedRefundOutcome(row) {
   return row;
 }
 
-const LOOKUP_FAILED = "Couldn't check Paystack, try again";
-
-// Sends every part of a fixed refund row that hasn't gone to Paystack yet. The caller holds the
-// row's send lock. Before sending, Paystack's refunds for the payment are checked: a crash after
-// Paystack accepted a refund but before it was saved here leaves a refund we don't know about, so a
-// matching one (same amount, created since this row, not already recorded on another row) is
-// adopted instead of sent again. If that check fails nothing is sent and the part stays retryable.
+// Sends every part of a fixed refund row that hasn't gone to Paystack yet (checking Paystack's own
+// refunds first, utils/refunds). The caller holds the row's send lock.
 async function sendFixedRefund(row, note) {
-  const rowCreatedAt = new Date(row.createdAt || row.date);
-  for (const part of row.refundParts) {
-    if (part.status !== "pending" || part.sentAt || part.paystackRefundId || !part.chargeReference) continue;
-
-    let existing;
-    try {
-      existing = await paystack.listRefunds({ transaction: part.chargeReference });
-    } catch (error) {
-      part.error = LOOKUP_FAILED;
-      console.error(`[FixedPay] Couldn't list Paystack refunds for ${part.chargeReference}:`, error.message);
-      continue;
-    }
-    const recorded = new Set(
-      (await Transaction.distinct("refundParts.paystackRefundId", { type: "refund", "refundParts.chargeReference": part.chargeReference })).filter(Boolean).map(String)
-    );
-    const match = (existing || []).find(
-      (refund) =>
-        toKobo(refund.amount) === toKobo(part.amount) &&
-        refund.status !== "failed" &&
-        !recorded.has(String(refund.id)) &&
-        (!refund.createdAt || new Date(refund.createdAt) >= new Date(rowCreatedAt.getTime() - 1000))
-    );
-    if (match) {
-      part.sentAt = new Date();
-      part.paystackRefundId = String(match.id);
-      part.error = null;
-      if (match.status === "processed") part.status = "processed";
-      console.warn(`[FixedPay] Adopted Paystack refund ${match.id} for ${part.chargeReference} instead of sending it again`);
-      continue;
-    }
-
-    let result;
-    try {
-      result = await paystack.createRefund({ transaction: part.chargeReference, amount: part.amount, merchant_note: note });
-    } catch (error) {
-      part.status = "failed";
-      part.error = error.message;
-      console.error(`[FixedPay] Paystack refund failed for ${part.chargeReference}:`, error.message);
-      continue;
-    }
-    // Test seam: a crash after Paystack accepted the refund, before it's saved here.
-    if (refundHooks.afterPaystackAccepted) await refundHooks.afterPaystackAccepted(row);
-    part.sentAt = new Date();
-    part.error = null;
-    part.paystackRefundId = result && result.id != null ? String(result.id) : null;
-    if (result && result.status === "processed") part.status = "processed";
-  }
+  await sendUnsentParts(row, note, { afterPaystackAccepted: refundHooks.afterPaystackAccepted });
   return applyFixedRefundOutcome(row);
 }
 
-const lockFilter = (now) => ({ $or: [{ refundSendingUntil: null }, { refundSendingUntil: { $lt: now } }] });
 
 // Refunds a finished content campaign's unused deliverables to the brand's Paystack payment.
 // Crash-safe order: (1) the refund row is written as refund_pending under a unique reference per
@@ -696,6 +643,8 @@ async function retryContentRefund({ campaignId, refundId, note = null, now = new
           refundSendingUntil: lockUntil,
           "refundParts.$[f].status": "pending",
           "refundParts.$[f].error": null,
+          "refundParts.$[f].sentAt": null,
+          "refundParts.$[f].paystackRefundId": null,
         },
       },
       { new: true, arrayFilters: [{ "f.status": "failed", "f.chargeReference": { $ne: null } }] }
@@ -705,7 +654,7 @@ async function retryContentRefund({ campaignId, refundId, note = null, now = new
     if (!unsent) throw new FixedPayError(409, "NOT_RETRYABLE", "This refund has already been sent to Paystack");
     claimed = await Transaction.findOneAndUpdate(
       { _id: row._id, status: "refund_pending", ...lockFilter(now) },
-      { $set: { refundSendingUntil: lockUntil, "refundParts.$[f].status": "pending", "refundParts.$[f].error": null } },
+      { $set: { refundSendingUntil: lockUntil, "refundParts.$[f].status": "pending", "refundParts.$[f].error": null, "refundParts.$[f].sentAt": null, "refundParts.$[f].paystackRefundId": null } },
       { new: true, arrayFilters: [{ "f.status": "failed", "f.chargeReference": { $ne: null } }] }
     );
   } else {

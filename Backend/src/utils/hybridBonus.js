@@ -30,7 +30,7 @@ const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const Withdrawal = require("../models/Withdrawal");
 const { toKobo, fromKobo, roundMoney } = require("./money");
-const { buildRefundParts, sendRefundParts, refundStatusFromParts, describeFailures } = require("./refunds");
+const { buildRefundParts, sendRefundParts, refundStatusFromParts, describeFailures, refundRowState, SEND_LOCK_MS } = require("./refunds");
 const rules = require("./hybridBonusRules");
 
 const { BONUS_HOLD_MS, bonusCreditState, viewsBonusDueKobo, unusedBonusRefund, bonusRefundableFrom } = rules;
@@ -448,12 +448,16 @@ async function bonusPayableNow({ creatorId, campaignId, now = new Date() }) {
 // ── Unused bonus pool refund ────────────────────────────────────────────────
 
 function refundRowView(row) {
+  const { state, retryable, byHand, error } = refundRowState(row);
   return {
     id: row._id,
     amount: row.amount,
     status: row.status,
+    state,
+    retryable,
+    byHand,
     reference: row.reference,
-    error: row.adminNotes || null,
+    error: error || row.adminNotes || null,
     createdAt: row.date || row.createdAt,
   };
 }
@@ -522,6 +526,7 @@ async function sendClaimedRefunds(campaign, note) {
         reference,
         refundParts: parts,
         adminNotes: describeFailures(parts),
+        refundSendingUntil: new Date(Date.now() + SEND_LOCK_MS),
         date: new Date(),
       });
     } catch (error) {

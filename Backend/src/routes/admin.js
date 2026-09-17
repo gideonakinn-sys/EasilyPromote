@@ -28,6 +28,7 @@ const { recordEvent, listEventsForCampaign, labelFor } = require("../services/su
 const { timeAgo } = require("../utils/timeAgo");
 const { recordAdminActivity } = require("../services/adminActivity");
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
+const { RefundRetryError, refundRowState, retryBucketRefund } = require("../utils/refunds");
 const { hasConnectedSocial } = require("../utils/creatorVerification");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
@@ -436,6 +437,92 @@ router.post("/campaigns/:id/refunds/:refundId/retry", moneyGuard, async (req, re
       return sendRefundError(res, error, next);
     }
     await answerRefund(req, res, { refund: result.refund, campaignId: req.params.id, action: "campaign.unused_budget_refund_retried", note: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Refunds (D23) ────────────────────────────────────────────────────────────
+const REFUND_POTS = { views: "Views", referral: "Referral budget", fixed: "Content budget", bonus: "Bonus pool" };
+
+// Every refund row, newest first, with how it stands and whether it can be retried.
+// ?state=failed|not_sent|sent|refunded|attention (failed or not sent) narrows the list.
+router.get("/refunds", adminGuard, async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const wanted = String(req.query.state || "all");
+    const filter = { type: "refund" };
+    if (["failed", "not_sent", "attention"].includes(wanted)) filter.status = { $in: ["refund_pending", "refund_failed"] };
+    else if (wanted === "sent") filter.status = "refund_pending";
+    else if (wanted === "refunded") filter.status = "refunded";
+    if (["views", "referral", "fixed", "bonus"].includes(req.query.pot)) filter.bucket = req.query.pot;
+    const rows = await Transaction.find(filter).sort({ date: -1, createdAt: -1 }).limit(wanted === "all" || wanted === "refunded" ? limit : 1000).populate("campaignId", "name status businessId").lean();
+    const now = new Date();
+    const refunds = rows
+      .map((row) => {
+        const view = refundRowState(row, now);
+        return {
+          id: row._id,
+          campaignId: row.campaignId ? row.campaignId._id : null,
+          campaignName: row.campaignId ? row.campaignId.name : "Campaign",
+          campaignStatus: row.campaignId ? row.campaignId.status : null,
+          pot: row.bucket || "views",
+          potLabel: REFUND_POTS[row.bucket] || REFUND_POTS.views,
+          amount: row.amount,
+          status: row.status,
+          ...view,
+          parts: (row.refundParts || []).map((p) => ({ chargeReference: p.chargeReference, amount: p.amount, status: p.status, sent: Boolean(p.sentAt || p.paystackRefundId), error: p.error })),
+          note: row.adminNotes || null,
+          createdAt: row.date || row.createdAt,
+        };
+      })
+      .filter((r) => (wanted === "attention" ? ["failed", "not_sent"].includes(r.state) : ["failed", "not_sent", "sent"].includes(wanted) ? r.state === wanted : true))
+      .slice(0, limit);
+    res.json({ refunds });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Retries any failed or unsent refund from its own row: a content budget refund through its reserved
+// path, a views, referral or bonus refund through retryBucketRefund. Never refunds twice.
+router.post("/refunds/:refundId/retry", moneyGuard, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.refundId)) return res.status(404).json({ error: "Refund not found" });
+    const row = await Transaction.findOne({ _id: req.params.refundId, type: "refund" }).select("campaignId bucket").lean();
+    if (!row) return res.status(404).json({ error: "Refund not found" });
+    if (row.bucket === "fixed") {
+      let result;
+      try {
+        result = await retryContentRefund({ campaignId: row.campaignId, refundId: row._id });
+      } catch (error) {
+        return sendRefundError(res, error, next);
+      }
+      return answerRefund(req, res, { refund: result.refund, campaignId: row.campaignId, action: "campaign.unused_budget_refund_retried", note: null });
+    }
+
+    let retried;
+    try {
+      retried = await retryBucketRefund({ refundId: row._id });
+    } catch (error) {
+      if (error instanceof RefundRetryError) return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+      return next(error);
+    }
+    const view = refundRowState(retried);
+    const campaign = await Campaign.findById(retried.campaignId).select("name businessId").lean();
+    await recordAdminActivity(req, {
+      action: "refund.retried",
+      targetType: "campaign",
+      targetId: retried.campaignId,
+      targetLabel: campaign ? campaign.name : null,
+      businessId: campaign ? campaign.businessId : null,
+      metadata: { refundId: retried._id, pot: retried.bucket, amount: retried.amount, state: view.state, error: view.error },
+    });
+    const wentThrough = ["sent", "refunded"].includes(view.state);
+    res.status(wentThrough ? 200 : 502).json({
+      success: wentThrough,
+      refund: { id: retried._id, pot: retried.bucket, amount: retried.amount, status: retried.status, ...view },
+    });
   } catch (err) {
     next(err);
   }
