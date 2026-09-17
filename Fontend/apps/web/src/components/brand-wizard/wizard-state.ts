@@ -433,6 +433,28 @@ export function pricingPayload(data: WizardData): Record<string, unknown> {
   };
 }
 
+// Audience targeting and creator eligibility, as saved and as the live match count reads them.
+export function targetingPayload(data: WizardData): { audienceTargeting: Record<string, unknown>; creatorEligibility: Record<string, unknown> } {
+  return {
+    audienceTargeting: {
+      locations: data.locations,
+      minLocationShare: optionalWhole(data.minLocationShare),
+      ageRanges: data.ageRanges,
+      genders: data.genders,
+      interests: data.interests,
+      platforms: data.platforms,
+    },
+    creatorEligibility: {
+      minFollowers: optionalWhole(data.minFollowers),
+      minEngagementRate: optionalNumber(data.minEngagementRate),
+      categories: data.categories,
+      verifiedOnly: data.verifiedOnly,
+      minRank: data.minRank || undefined,
+      requiredBadges: data.requiredBadges,
+    },
+  };
+}
+
 interface CampaignPayloadOptions {
   // The objective the saved campaign already has. It's only sent when the brand changes it,
   // because choosing an objective resets what an older draft counts as a conversion.
@@ -452,22 +474,7 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     wizardStep,
     contentDestination: data.contentDestination,
     creatorAccess: data.creatorAccess,
-    audienceTargeting: {
-      locations: data.locations,
-      minLocationShare: optionalWhole(data.minLocationShare),
-      ageRanges: data.ageRanges,
-      genders: data.genders,
-      interests: data.interests,
-      platforms: data.platforms,
-    },
-    creatorEligibility: {
-      minFollowers: optionalWhole(data.minFollowers),
-      minEngagementRate: optionalNumber(data.minEngagementRate),
-      categories: data.categories,
-      verifiedOnly: data.verifiedOnly,
-      minRank: data.minRank || undefined,
-      requiredBadges: data.requiredBadges,
-    },
+    ...targetingPayload(data),
     brief: {
       summary: brief.summary.trim() || undefined,
       dos: brief.dos,

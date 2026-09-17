@@ -53,6 +53,21 @@ export function quoteCampaign(setup: Record<string, unknown>, token?: string) {
   });
 }
 
+// Ticket 11: the wizard's live "about N creators match" count. Rounded by the API; never lists creators.
+export interface MatchCount {
+  count: number;
+  fewerThan: boolean;
+  label: string;
+}
+
+export function countMatchingCreators(targeting: Record<string, unknown>, token?: string) {
+  return apiRequest<MatchCount>("/campaigns/match-count", {
+    method: "POST",
+    token,
+    body: JSON.stringify(targeting),
+  });
+}
+
 // Campaign engine: creator marketplace (tickets 01/04/05)
 // Thrown by apiRequest. Keeps the response body (e.g. the eligibility failures a join
 // returns), so screens can show every reason, not just the first.

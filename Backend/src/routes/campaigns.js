@@ -53,7 +53,9 @@ function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
   return nextObjective === "actions" && requestedBudget !== undefined && Math.round(Number(requestedBudget)) !== currentBudget;
 }
 const { releasedViewsTotal } = require("../utils/earnings");
-const { resolveCampaignSetup, editSetupUpdates, campaignSetupView } = require("../utils/campaignSetup");
+const { resolveCampaignSetup, editSetupUpdates, campaignSetupView, matchCountSchema } = require("../utils/campaignSetup");
+const { matchCount } = require("../services/creatorMatchCount");
+const { createRateLimiter } = require("../utils/rateLimit");
 
 const router = express.Router();
 
@@ -207,6 +209,22 @@ router.post("/quote", protect, authorizeRoles("business"), async (req, res, next
     const setup = resolveCampaignSetup(body, current);
     if (setup.error) return sendSetupError(res, setup);
     res.json({ quote: setup.quote });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// The wizard's live "about N creators match" count (ticket 11): a rounded count of creators who could
+// join with this audience targeting and creator eligibility. Brands only, rate-limited per brand.
+const allowMatchCount = createRateLimiter({ windowMs: 60 * 1000, max: 30 });
+router.post("/match-count", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    if (!allowMatchCount(String(req.user._id))) {
+      return res.status(429).json({ error: "Too many match counts. Try again in a minute.", code: "RATE_LIMITED" });
+    }
+    const parsed = matchCountSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0].message });
+    res.json(await matchCount(parsed.data));
   } catch (error) {
     next(error);
   }

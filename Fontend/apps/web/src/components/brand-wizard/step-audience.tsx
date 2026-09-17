@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
+import { countMatchingCreators, getToken, type MatchCount } from "../../lib/api";
 import { ChipGroup, Field, ListInput, StepHeading, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import {
   AGE_RANGE_OPTIONS,
@@ -10,6 +11,7 @@ import {
   GENDER_OPTIONS,
   PLATFORM_OPTIONS,
   RANK_OPTIONS,
+  targetingPayload,
   type WizardData,
 } from "./wizard-state";
 
@@ -19,6 +21,51 @@ interface StepAudienceProps {
 }
 
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
+
+// Ticket 11: how many creators could join with these settings, updated a moment after the brand
+// stops changing them. Age, gender and interests only rank creators, so they don't change it.
+function LiveMatchCount({ data }: { data: WizardData }) {
+  const key = JSON.stringify(targetingPayload(data));
+  const [result, setResult] = React.useState<MatchCount | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const timer = window.setTimeout(() => {
+      countMatchingCreators(JSON.parse(key) as Record<string, unknown>, getToken() || undefined)
+        .then((res) => {
+          if (cancelled) return;
+          setResult(res);
+          setFailed(false);
+        })
+        .catch(() => {
+          if (!cancelled) setFailed(true);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 600);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [key]);
+
+  const text = failed ? "We couldn't count matching creators right now." : result ? `${result.label}.` : "Counting matching creators…";
+  return (
+    <div
+      className="sticky top-0 z-10 bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+      aria-live="polite"
+    >
+      <p className={cn("text-sm font-medium font-rethink", result && result.count === 0 && !failed ? "text-amber-800" : "text-stone-900")}>
+        {text}
+      </p>
+      {loading && <span className="text-[11px] font-medium text-stone-400 font-rethink shrink-0">Updating</span>}
+    </div>
+  );
+}
 
 export function StepAudience({ data, update }: StepAudienceProps) {
   // "Everyone" and a specific gender don't go together.
@@ -30,6 +77,8 @@ export function StepAudience({ data, update }: StepAudienceProps) {
 
   return (
     <div className="space-y-10">
+      <LiveMatchCount data={data} />
+
       <div className="space-y-6">
         <StepHeading
           title="Who do you want to reach?"

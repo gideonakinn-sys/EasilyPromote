@@ -17,6 +17,30 @@ const VIEWS_BONUS_DESTINATIONS = ["creator_page", "both"];
 const shortText = (max) => z.string().trim().max(max);
 const textList = (maxItems, maxLength) => z.array(shortText(maxLength).min(1)).max(maxItems);
 
+const audienceTargetingSchema = z.object({
+  locations: textList(10, 60).optional(),
+  minLocationShare: z.number().int().min(0).max(100).optional(),
+  ageRanges: z.array(z.enum(AGE_RANGES)).optional(),
+  genders: z.array(z.enum(["all", "female", "male", "other"])).optional(),
+  interests: textList(20, 40).optional(),
+  platforms: z.array(z.enum(PLATFORMS)).optional(),
+});
+
+const creatorEligibilitySchema = z.object({
+  minFollowers: z.number().int().min(0).optional(),
+  minEngagementRate: z.number().min(0).max(100).optional(),
+  categories: z.array(z.enum(CATEGORIES)).optional(),
+  verifiedOnly: z.boolean().optional(),
+  minRank: z.enum(RANKS).optional(),
+  requiredBadges: z.array(z.enum(BADGES)).optional(),
+});
+
+// The wizard's live "about N creators match" count reads just these two (ticket 11).
+const matchCountSchema = z.object({
+  audienceTargeting: audienceTargetingSchema.optional(),
+  creatorEligibility: creatorEligibilitySchema.optional(),
+});
+
 const setupSchema = z.object({
   campaignObjective: z.enum(OBJECTIVE_NAMES).optional(),
   payShape: z.enum(["fixed", "performance", "hybrid"]).optional(),
@@ -27,26 +51,8 @@ const setupSchema = z.object({
   wizardStep: z.number().int().min(1).max(6).optional(),
   contentDestination: z.enum(["creator_page", "brand_page", "both"]).optional(),
   creatorAccess: z.enum(["open_call", "application_required"]).optional(),
-  audienceTargeting: z
-    .object({
-      locations: textList(10, 60).optional(),
-      minLocationShare: z.number().int().min(0).max(100).optional(),
-      ageRanges: z.array(z.enum(AGE_RANGES)).optional(),
-      genders: z.array(z.enum(["all", "female", "male", "other"])).optional(),
-      interests: textList(20, 40).optional(),
-      platforms: z.array(z.enum(PLATFORMS)).optional(),
-    })
-    .optional(),
-  creatorEligibility: z
-    .object({
-      minFollowers: z.number().int().min(0).optional(),
-      minEngagementRate: z.number().min(0).max(100).optional(),
-      categories: z.array(z.enum(CATEGORIES)).optional(),
-      verifiedOnly: z.boolean().optional(),
-      minRank: z.enum(RANKS).optional(),
-      requiredBadges: z.array(z.enum(BADGES)).optional(),
-    })
-    .optional(),
+  audienceTargeting: audienceTargetingSchema.optional(),
+  creatorEligibility: creatorEligibilitySchema.optional(),
   brief: z
     .object({
       summary: shortText(2000).optional(),
@@ -337,4 +343,4 @@ function campaignSetupView(campaign) {
   };
 }
 
-module.exports = { resolveCampaignSetup, editSetupUpdates, legacyObjectiveUpdates, campaignSetupView };
+module.exports = { resolveCampaignSetup, editSetupUpdates, legacyObjectiveUpdates, campaignSetupView, matchCountSchema };
