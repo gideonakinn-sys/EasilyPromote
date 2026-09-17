@@ -33,6 +33,8 @@ interface ActiveDashboardProps {
   onCreateCampaign: () => void;
   userName: string;
   onLogout?: () => void;
+  /** Render inside the SaaS shell — no welcome header, no create/referral actions. */
+  compact?: boolean;
 }
 
 const FILTER_OPTIONS = ["All Campaigns", "Draft", "Under Review", "Live", "Delivered"] as const;
@@ -50,7 +52,7 @@ function mapStatus(s: string): "review_needed" | "live" | "draft" | "paused" | "
   }
 }
 
-export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogout }: ActiveDashboardProps) {
+export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogout, compact = false }: ActiveDashboardProps) {
   const router = useRouter();
   useReveal();
 
@@ -75,10 +77,10 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
   });
 
   return (
-    <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 z-10">
+    <main className={cn("flex-1 max-w-7xl w-full mx-auto px-6 py-10 z-10", compact && "max-w-none px-0 py-0")}>
       {/* Header row: Welcome + filter + create campaign */}
-      <div data-reveal className="relative z-40 grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
+      <div data-reveal className={cn("relative z-40 grid grid-cols-[1fr_auto] items-center gap-4", compact ? "mb-6" : "mb-8 md:mb-16")}>
+        <h2 className={cn("font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter", compact && "hidden")}>
           Welcome, {userName.split(" ")[0]}
         </h2>
 
@@ -119,7 +121,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           <button
             onClick={() => router.push("/dashboard/brand/settings/referral")}
             aria-label="Referral tracking"
-            className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
+            className={cn("flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5", compact && "hidden")}
           >
             <HugeiconsIcon icon={Link01Icon} size={20} className="text-stone-500 md:hidden" />
             <HugeiconsIcon icon={Link01Icon} size={16} className="text-stone-500 hidden md:block" />
@@ -129,7 +131,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           {/* Create campaign button */}
           <button
             onClick={onCreateCampaign}
-            className="flex items-center justify-center p-3 md:px-6 md:py-3 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100"
+            className={cn("flex items-center justify-center p-3 md:px-6 md:py-3 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100", compact && "hidden")}
           >
             <HugeiconsIcon icon={Add01Icon} size={20} className="md:hidden" />
             <span className="hidden md:inline">Create Campaign</span>
