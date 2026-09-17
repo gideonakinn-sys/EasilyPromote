@@ -7,6 +7,22 @@ import { apiRequest, getToken } from "../lib/api";
 export interface ConnectedAccount {
   platform: string;
   username: string | null;
+  // SPEC D32: the platform stopped accepting the connection; views don't sync until the creator reconnects.
+  needsReconnect?: boolean;
+  needsReconnectAt?: string | null;
+  needsReconnectReason?: string | null;
+}
+
+// "Instagram needs reconnecting since 3 Sep 2026" for each flagged connection.
+export function reconnectNotices(accounts: ConnectedAccount[]): string[] {
+  return accounts
+    .filter((a) => a.needsReconnect)
+    .map((a) => {
+      const since = a.needsReconnectAt
+        ? ` since ${new Date(a.needsReconnectAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
+        : "";
+      return `${PLATFORM_LABELS[a.platform] || a.platform} needs reconnecting${since}`;
+    });
 }
 
 interface CreatorVerificationDialogProps {
@@ -99,6 +115,11 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
                 ))}
               </ul>
             )}
+            {reconnectNotices(connectedAccounts).map((notice) => (
+              <p key={notice} className="mt-2 text-xs font-medium text-amber-700">
+                {notice}. Ask the creator to reconnect it so their views keep syncing.
+              </p>
+            ))}
           </div>
 
           <p className="text-xs text-stone-500 font-medium leading-relaxed">
