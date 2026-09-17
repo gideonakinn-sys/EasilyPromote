@@ -24,7 +24,8 @@ interface CampaignItem {
   costPerView: number;
   creatorPool: number;
   platformFee: number;
-  targetViews: number;
+  // None on a referrals-only campaign (SPEC D31).
+  targetViews?: number | null;
   viewsDelivered: number;
   progressPercent: number;
   coverImageUrl?: string;
@@ -487,7 +488,7 @@ export default function AdminCampaignsPage() {
                         <div className="w-36">
                           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700 mb-1">
                             <span>{c.viewsDelivered.toLocaleString()}</span>
-                            <span className="text-stone-400">/ {(c.targetViews ?? 0).toLocaleString()}</span>
+                            <span className="text-stone-400">{c.targetViews ? `/ ${c.targetViews.toLocaleString()}` : "no views target"}</span>
                           </div>
                           <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
                             <div
@@ -616,7 +617,7 @@ export default function AdminCampaignsPage() {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">Platform Metrics</h4>
                     <span className="text-[11px] text-stone-400">
-                      Total {selectedCampaign.viewsDelivered.toLocaleString()} / {(selectedCampaign.targetViews ?? 0).toLocaleString()} views
+                      Total {selectedCampaign.viewsDelivered.toLocaleString()} {selectedCampaign.targetViews ? `/ ${selectedCampaign.targetViews.toLocaleString()} views` : "views · no views target"}
                     </span>
                   </div>
 

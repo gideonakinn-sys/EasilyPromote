@@ -503,14 +503,18 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   }
 
   const currentStatus = campaign.status;
-  const formattedBudget = `₦${campaign.budget.toLocaleString()}`;
+  // A referrals-only campaign's (SPEC D31) budget is its referral budget; it buys no views.
+  const referralsOnly = campaign.campaignModel !== "content" && !((campaign.targetViews || 0) > 0) && Boolean(campaign.referral?.enabled);
+  const formattedBudget = `₦${(referralsOnly ? campaign.referral?.requestedBudget || 0 : campaign.budget).toLocaleString()}`;
   const formattedTarget = `${(campaign.targetViews || 0).toLocaleString()} views`;
   const isContent = campaign.campaignModel === "content";
+  // Referrals only (SPEC D31): a performance campaign with no views target buys no views.
+  const hasViews = !isContent && (campaign.targetViews || 0) > 0;
   const isClicks = isClicksObjective(campaign.campaignObjective);
   const showsUsageRights =
     campaign.usageRights?.type === "custom" ||
-    campaign.contentDestination === "brand_page" ||
-    campaign.contentDestination === "both";
+    // Where content goes is only a Content campaign's question (SPEC D31).
+    (isContent && (campaign.contentDestination === "brand_page" || campaign.contentDestination === "both"));
 
   const totalEscrowed = campaign.budget;
   // platformFeePercent is stored as a whole percentage (30 means 30%).
@@ -653,7 +657,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink">
                   Delete campaign
                 </button>
-              ) : isContent ? null : (
+              ) : !hasViews ? null : (
                 <button
                   onClick={() => setShowIncreaseViews(!showIncreaseViews)}
                   className="w-full py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
@@ -684,7 +688,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Campaign Details Key-Value List */}
             <div className="space-y-4 pt-2">
-              {!isContent && (
+              {hasViews && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                   <span className="text-stone-500">Target Views</span>
                   <span className="text-stone-800">{formattedTarget}</span>
@@ -854,7 +858,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             <div className="border border-dashed border-stone-200 rounded-2xl p-4 space-y-4">
               {/* Campaign Progress (views campaigns) */}
-              {!isContent && (<>
+              {hasViews && (<>
               <div className="space-y-2">
                 <span className="text-xs font-medium text-stone-500 block">Campaign progress</span>
                 <div className="flex items-center gap-3">
@@ -1028,7 +1032,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   </p>
                 )}
               </div>
-            ) : (
+            ) : !hasViews ? null : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>

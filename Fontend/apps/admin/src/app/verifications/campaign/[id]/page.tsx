@@ -47,7 +47,8 @@ interface ActivityCampaign {
   name: string;
   status: string;
   brandName?: string | null;
-  targetViews: number;
+  // None on a referrals-only campaign (SPEC D31).
+  targetViews?: number | null;
   viewsDelivered: number;
   creatorPool: number;
   createdAt: string;
@@ -150,10 +151,10 @@ export default function CampaignVerificationDetailPage() {
             <StatCard label="Status" value={campaign.status} mono />
             <StatCard
               label="Views delivered"
-              value={`${campaign.viewsDelivered.toLocaleString()} / ${campaign.targetViews.toLocaleString()}`}
-              sub={`${progress.toFixed(1)}% of target`}
+              value={campaign.targetViews ? `${campaign.viewsDelivered.toLocaleString()} / ${campaign.targetViews.toLocaleString()}` : "No views target"}
+              sub={campaign.targetViews ? `${progress.toFixed(1)}% of target` : undefined}
             />
-            <StatCard label="Creator pool" value={campaign.creatorPool.toLocaleString()} />
+            <StatCard label="Creator pool" value={(campaign.creatorPool || 0).toLocaleString()} />
           </div>
         )}
 

@@ -104,6 +104,8 @@ export function CampaignDetailsDrawer({
   const { toast } = useToast();
 
   const displayCampaign = campaign;
+  // Referrals-only placements (SPEC D31) have no view target and no views pay: creators earn per result.
+  const noViewTarget = displayCampaign.kind !== "deliverable" && !(displayCampaign.viewTarget || displayCampaign.targetViews);
 
   // Live conversions arrive over the socket between dashboard refreshes.
   const [liveReferral, setLiveReferral] = useState<Pick<CampaignReferral, "conversions" | "status"> | null>(null);
@@ -534,7 +536,7 @@ export function CampaignDetailsDrawer({
           {uploadOpen && !isMobile && displayCampaign.status === "live_tracking" && renderInlineUploadPanel()}
 
           {/* Views stats */}
-          {displayCampaign.kind !== "deliverable" && (displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
+          {displayCampaign.kind !== "deliverable" && !noViewTarget && (displayCampaign.status === "live_tracking" || displayCampaign.status === "delivered") && (
             <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
               <div className="space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block tracking-[-0.01em]">Total views</span>
@@ -870,6 +872,7 @@ export function CampaignDetailsDrawer({
                 </div>
               )}
 
+              {!noViewTarget && (<>
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">{displayCampaign.kind === "deliverable" ? "Deliverable" : "Target"}</span>
                 <span className="text-stone-800">
@@ -888,6 +891,7 @@ export function CampaignDetailsDrawer({
                 <span className="text-stone-500">Reward</span>
                 <span className="text-stone-800">₦{displayCampaign.reward.toLocaleString()}</span>
               </div>
+              </>)}
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">Platform</span>
                 <span className="text-stone-800">{displayPlatforms.join(", ")}</span>
