@@ -166,7 +166,7 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
           ? Math.min(Math.round(((c.viewsDelivered || 0) / c.targetViews) * 100), 100)
           : 0,
         coverImageUrl: c.coverImageUrl,
-        contentBrief: c.contentBrief,
+        contentBrief: c.contentBrief || (c.brief && c.brief.summary) || null,
         platforms: c.platforms,
         contentStyle: c.contentStyle,
         niches: c.niches,
@@ -205,7 +205,7 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         id: campaign._id,
         name: campaign.name,
         category: campaign.category,
-        contentBrief: campaign.contentBrief,
+        contentBrief: campaign.contentBrief || (campaign.brief && campaign.brief.summary) || null,
         keyMessageCta: campaign.keyMessageCta,
         whatToAvoid: campaign.whatToAvoid,
         coverImageUrl: campaign.coverImageUrl,

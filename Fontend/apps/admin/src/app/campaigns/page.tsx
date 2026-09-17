@@ -71,6 +71,12 @@ interface IndustryItem {
   enabled: boolean;
 }
 
+// Share of what the brand paid. Content campaigns add the fee on top (D2), so their split
+// isn't the 70/30 of views campaigns.
+function sharePercent(part: number, total: number) {
+  return total > 0 ? `${Math.round((part / total) * 100)}%` : "—";
+}
+
 export default function AdminCampaignsPage() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
@@ -493,11 +499,11 @@ export default function AdminCampaignsPage() {
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.budget)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Creator Pool (70%)</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Creator Pool ({sharePercent(selectedCampaign.creatorPool, selectedCampaign.budget)})</span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.creatorPool)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Platform Fee (30%)</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Platform Fee ({sharePercent(selectedCampaign.platformFee, selectedCampaign.budget)})</span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.platformFee)}</span>
                   </div>
                 </div>

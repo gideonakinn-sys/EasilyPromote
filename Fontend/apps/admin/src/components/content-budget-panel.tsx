@@ -133,7 +133,8 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
           body,
         });
         const data = (await res.json().catch(() => ({}))) as Partial<RefundResponse> & { error?: string };
-        if (data.refund) setMessage({ text: outcomeMessage(data.refund), failed: data.refund.state === "failed" });
+        // Only a refund Paystack took is good news; not sent and failed both need a retry.
+        if (data.refund) setMessage({ text: outcomeMessage(data.refund), failed: !["sent", "refunded"].includes(data.refund.state) });
         else setError(data.error || `Request failed (${res.status})`);
       }
     } catch (err: unknown) {
@@ -149,10 +150,11 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
     ? [
         { label: "Bought", value: budget.deliverables },
         { label: "Completed", value: budget.completed },
-        { label: "Owed", value: budget.owed },
+        { label: "Awaiting Delivery", value: budget.owed },
         { label: "In Progress", value: budget.inProgress },
         { label: "Unused", value: budget.unused },
-        { label: "Refunded", value: budget.refunded },
+        // Held for refunds not yet confirmed as well as ones Paystack completed; the list below has each state.
+        { label: "Refund Reserved", value: budget.refunded },
       ]
     : [];
 
