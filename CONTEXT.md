@@ -105,8 +105,12 @@ A creator's standing from rank 1 to elite, earned from verified results; some pl
 _Avoid_: Level, tier
 
 **Badge**:
-An earned mark on a creator's profile: Top Creator, High Performer, Reliable Creator, Campaign Pro.
+An earned mark on a creator's profile: Top Creator, High Performer, Reliable Creator, Campaign Pro. Earned automatically from the creator's record with minimum samples; admins can grant or revoke one.
 _Avoid_: Award, achievement
+
+**Brand Rating**:
+A brand's 1–5 rating of a creator's work on one of its campaigns, given once the creator's placement is complete. Others only see the average (from 3 ratings) and count.
+_Avoid_: Review (on its own), feedback, score
 
 ### Money
 

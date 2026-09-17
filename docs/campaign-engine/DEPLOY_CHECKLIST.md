@@ -435,3 +435,36 @@ None is unique, so none can conflict. On a large `slots` collection check `db.cu
 - Log in, reload the web app after the deploy: still logged in.
 
 **Rollback:** safe. Nothing new is stored. Rolling back brings back the slower marketplace and the placement-limit race.
+
+---
+
+## 14. Brand ratings and automated badges (M8, SPEC D24 / D25)
+
+**No manual migration, no new environment variable, nothing on S3 or Cloudinary.** Deploy the API first, then web, then admin (§5).
+
+**Indexes and collections (built by the API at boot, §6):**
+
+| Collection | Keys | Options | Model |
+|---|---|---|---|
+| `creatorratings` (new) | `{ campaignId: 1, creatorId: 1 }` | **unique** | `CreatorRating.js` |
+| `creatorratings` | `{ creatorId: 1, hiddenAt: 1, createdAt: -1 }` | | `CreatorRating.js` |
+| `creatorratings` | `{ createdAt: -1 }` | | `CreatorRating.js` |
+
+A new collection, so the unique index can't conflict. Confirm with `db.creatorratings.getIndexes()` after the API has started.
+
+**What happens on its own at the first API start (the rank recalculation job runs at boot):**
+- Every creator's standing is recalculated with the new completion rule (finished views, content and referral work now count), so **completion rates and creator scores change** for many creators, most upwards. Ranks don't change (they come from verified views).
+- **Badges are evaluated for the first time.** Any badge a creator already holds is kept as a grant marked "kept from before automatic badges" (nothing is wiped, no notification). Creators who meet a badge's gain bar earn it and get a "You earned the … badge" notification. With several API instances each runs the job; badge writes are guarded, so a badge is announced once.
+- It walks every creator profile, as the rank job already did, with a few extra queries per creator.
+
+**After deploy:**
+- Watch for `[Rank] Recalculated … badgesGained=… badgesLost=… errors=0` in the API log.
+- Ask admin to work through the "badges set before automatic badges" banner on **Users & Creators** (runbook §2a). Until reviewed, those creators keep their badges.
+
+**Behaviour changes to tell the team:** brands see a **Rate Your Creators** card on a campaign once creators' work is complete; creators see their rating count / average and automatic badges on their profile; applicant rows and review show current badges and rating; campaigns requiring a badge now admit creators who earned it automatically; admins can hide ratings and override badges.
+
+**Smoke tests after deploy:**
+- As a brand with a completed content deliverable, the campaign page shows **Rate Your Creators**. Don't rate real creators for testing.
+- As admin, **Users & Creators** → **Badges & Ratings** on a creator loads the checks; **Activity** has a **Ratings** filter.
+
+**Rollback:** safe for money (nothing here moves money). Older code ignores `creatorratings` and the new profile fields (`badgesAuto`, `badgeOverrides`, `badgeEvaluation`, `badgesEvaluatedAt`, `badgesRevision`, `brandRating`), keeps the `badges` array as last written (automatic badges stay until changed by hand) and computes completion the old way at its next daily run.

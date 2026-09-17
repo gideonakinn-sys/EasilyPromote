@@ -319,7 +319,7 @@ For beta, Fixed payouts use the existing withdrawal pipeline: approved/delivered
 ### M8 — Post-launch intelligence · Jan – Feb 2027
 
 - [ ] Audience demographics pulled from TikTok / Instagram APIs where scopes allow; "Verified audience" label replaces "Self-reported"
-- [ ] Automated badges: Top Creator, High Performer, Reliable Creator, Campaign Pro from creator score, completion rate and brand ratings (add a post-campaign brand rating)
+- [x] Automated badges: Top Creator, High Performer, Reliable Creator, Campaign Pro from creator score, completion rate and brand ratings (add a post-campaign brand rating) — built: brand ratings (SPEC D24), badge rules with minimum samples and hysteresis, admin overrides, pre-existing badges kept for review (D25)
 - [ ] Recommended v2 using past campaign results; Trending weighted by fill speed
 - [ ] New performance metrics: Clicks, Leads, Sales, Engagement (clicks via tracked links; leads / sales via the existing webhook contract)
 - [ ] Age / gender / interests as hard filters once data is trustworthy

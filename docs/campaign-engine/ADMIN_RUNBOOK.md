@@ -22,6 +22,8 @@ Roles come from `authorizeRoles` in `Backend/src/routes/admin.js` and `adminRefe
 | Delete a draft, pending-payment or cancelled campaign with no records (§5) | `DELETE /admin/campaigns/:id` | ✓ | ✓ | ✓ | ✓ |
 | Review submissions, decide content appeals | `PATCH /admin/submissions/:id/review`, `/appeal` | ✓ | ✓ | ✓ | ✓ |
 | Verify or unverify a creator | `PATCH /admin/creators/:id/verification` | ✓ | ✓ | ✓ | ✓ |
+| Grant, revoke or return a badge to automatic (note required) | **Users & Creators** → **Badges & Ratings** → `PUT /admin/creators/:id/badges/:badge` | ✓ | ✓ | ✓ | ✓ |
+| Hide or unhide a brand rating (reason required to hide) | **Badges & Ratings** → Ratings → `PATCH /admin/ratings/:id/visibility` | ✓ | ✓ | ✓ | ✓ |
 | Resolve an ops alert | `PATCH /admin/alerts/:id/resolve` | ✓ | ✓ | ✓ | ✗ |
 | **Approve or reject withdrawals, run the weekly payout** | `POST /admin/withdrawals/:id/review`, `/admin/payout-run/approve` | ✗ | ✓ | ✓ | ✗ |
 | **Check stuck payouts against Paystack** | `POST /admin/payouts/reconcile` | ✗ | ✓ | ✓ | ✗ |
@@ -95,6 +97,36 @@ A Verified Creator has at least one connected social account and an identity che
 API equivalent: `PATCH $API/admin/creators/<userId>/verification` with `{"verified": true}` or `{"verified": false}` (user id, not profile id).
 
 The badge is removed automatically when the creator disconnects their last social account. Each change is logged as `creator.verified` / `creator.unverified`.
+
+---
+
+## 2a. Badges and brand ratings (M8, SPEC D24 / D25)
+
+**Who:** any admin role. Every change needs a note and is logged (**Activity** → **Users** for badges, **Ratings** for ratings).
+
+### Brand ratings
+
+A brand rates a creator 1–5 (optional comment and tags) from its campaign page once the creator's placement is complete: content completed, or, on a performance campaign, the campaign completed and the creator delivered verified views or a paid conversion. Once per creator per campaign; the brand can change it for 7 days. Creators and brands only see the count and, from 3 ratings, the average. Admins see everything.
+
+**Hide an abusive rating:** **Users & Creators** → the creator's **Badges & Ratings** → **Ratings** → **Hide** → give a reason → **Hide Rating**. It stops counting towards the average, the score and badges straight away, the brand can no longer change it (they see it was hidden), and nothing is deleted. **Unhide** puts it back. Hide for abuse, personal attacks, private information or a rating that isn't about the work; not because the creator disagrees with a fair low rating.
+
+API: `GET $API/admin/ratings?creatorId=<userId>&hidden=true|false`, `PATCH $API/admin/ratings/<ratingId>/visibility` with `{"hidden": true, "reason": "…"}`.
+
+### Why a creator has or lacks a badge
+
+**Badges & Ratings** → **Badges** shows, per badge: **Held / Not Held**, where it comes from (earned automatically, granted or revoked by an admin, or kept from before automatic badges), the minimum sample and each check with the creator's value and the threshold. A creator holding a badge is checked against the lower **To Keep It** bar; one who doesn't against **To Earn It**. Thresholds are in SPEC D25. Values are from the last check (daily, at API start, when their content completes or a rating changes); **Recalculate Now** checks again.
+
+### Overriding a badge
+
+- **Grant**: the creator holds it whatever the rules say (they're notified if it's new to them).
+- **Revoke**: they don't hold it whatever the rules say; campaigns requiring it refuse them.
+- **Automatic**: remove the override; the rules decide from now on.
+
+Overrides survive every recalculation until changed. API: `PUT $API/admin/creators/<userId>/badges/<badge>` with `{"mode": "grant" | "revoke" | "auto", "note": "…"}`.
+
+### Reviewing badges kept from before automatic badges
+
+Badges set by hand before automatic badges shipped weren't removed: on the first check after deploy each became a grant marked **kept from before automatic badges**. **Users & Creators** shows a banner listing those creators (`GET $API/admin/badges/review`). For each kept badge, read the checks and choose **Grant** (keep it as your decision) or **Automatic** (the rules decide; the creator loses it now if they don't meet the bar). The banner clears once none are left.
 
 ---
 
@@ -380,7 +412,7 @@ All jobs run inside the API process (`Backend/src/server.js`), start at boot and
 | Automatic refunds (`startAutoRefunds`) | 1 hour | §5 Automatic refunds. Logs: `[AutoRefunds] … refunds, … retried, … campaigns with problems`. |
 | Cancelled cleanup | 1 hour | Deletes campaigns cancelled for 24 hours that have no records (§5). |
 | TikTok / Meta view sync | 15 min | Views on posts; completes views campaigns that reach their target. |
-| Rank recalculation | 24 hours | Creator ranks. |
+| Rank recalculation | 24 hours | Creator ranks, score, completion and badges (M8). Also at API start. Logs: `[Rank] Recalculated … badgesGained=… badgesLost=…` and `[Badges] <userId> gained=… lost=…`. |
 
 ### Is content auto-approval stuck?
 
