@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const { toObjectId } = require("./objectId");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
 const Withdrawal = require("../models/Withdrawal");
@@ -8,10 +8,6 @@ const Transaction = require("../models/Transaction");
 const WITHDRAWABLE_CAMPAIGN_STATUSES = ["live", "paused", "completed"];
 // Requested or paid withdrawals are spent entitlement; rejected ones never left.
 const COMMITTED_WITHDRAWAL_STATUSES = ["pending", "processing", "released"];
-
-function toObjectId(value) {
-  return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
-}
 
 // Never round money up: rounding down by a kobo can't overpay a creator.
 function floorKobo(value) {

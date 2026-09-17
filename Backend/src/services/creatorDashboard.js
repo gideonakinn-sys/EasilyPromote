@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const { toObjectId } = require("../utils/objectId");
 const { loadCreatorAccounts } = require("../utils/creatorAccounts");
 const { ownAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
 const Campaign = require("../models/Campaign");
@@ -42,8 +42,6 @@ const RELEASED_CAMPAIGN_FIELDS =
   "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay contentDestination";
 const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral";
 const VIEWS_EARNINGS_CAMPAIGN_FIELDS = "name status businessId";
-
-const toObjectId = (value) => (value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value)));
 
 // A lean document reduced to _id and `fields` (those it has), like a mongoose select.
 function project(doc, fields) {

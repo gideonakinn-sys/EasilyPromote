@@ -21,6 +21,7 @@
 // - Deliverables credited + deliverables held by refunds never exceed deliverables bought, and
 //   credited + refunded creator budget never exceeds the creator pool.
 const mongoose = require("mongoose");
+const { toObjectId } = require("./objectId");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
@@ -43,10 +44,6 @@ const SEND_LOCK_MS = 5 * 60 * 1000;
 
 // Test seam: runs after a refund row is written and reserved, before anything is sent to Paystack.
 const refundHooks = { beforeSend: null, afterPaystackAccepted: null };
-
-function toObjectId(value) {
-  return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
-}
 
 const creditReference = (submissionId) => `fixed_${submissionId}`;
 const voidReference = (submissionId) => `fixed_void_${submissionId}`;

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const { toObjectId } = require("./objectId");
 const Campaign = require("../models/Campaign");
 const ConversionEvent = require("../models/ConversionEvent");
 const ReferralCode = require("../models/ReferralCode");
@@ -15,10 +15,6 @@ const MAX_REFERRAL_TOPUP = 50000000;
 const MAX_REWARD_PER_CONVERSION = 1000000;
 
 const { roundMoney } = require("./money");
-
-function toObjectId(value) {
-  return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
-}
 
 // Reserves the campaign's per-conversion reward for one counted conversion. The pool
 // is decremented with a conditional update, so two conversions racing for the last of

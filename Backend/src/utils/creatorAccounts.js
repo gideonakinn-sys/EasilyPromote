@@ -1,12 +1,10 @@
 // A creator's profile and connected social accounts in one query: the profile, then TikTok and Meta
 // connections through $unionWith. Encrypted tokens are left out, as the models' `select: false`
 // leaves them out of a find. Used by joining and by the creator dashboard, which both need all three.
-const mongoose = require("mongoose");
+const { toObjectId } = require("./objectId");
 const CreatorProfile = require("../models/CreatorProfile");
 const TikTokConnection = require("../models/TikTokConnection");
 const MetaConnection = require("../models/MetaConnection");
-
-const toObjectId = (value) => (value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value)));
 
 // Returns { profile, tiktok, metaConnections } as lean documents (null / [] when missing).
 async function loadCreatorAccounts(userId) {
