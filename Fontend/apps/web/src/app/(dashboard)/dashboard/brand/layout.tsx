@@ -1,9 +1,5 @@
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Brand Dashboard · EasilyPromote",
-};
+import { BrandShell } from "../../../../components/brand/brand-shell";
 
 export default function BrandDashboardLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <BrandShell>{children}</BrandShell>;
 }

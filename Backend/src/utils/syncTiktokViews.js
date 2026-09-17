@@ -5,6 +5,7 @@ const TikTokConnection = require("../models/TikTokConnection");
 const tiktok = require("../services/tiktok");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+const { recordViewDelta } = require("../services/viewSnapshots");
 // Campaign engine: content approval (ticket 07)
 const { isContentCampaign } = require("./campaignPay");
 // Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
@@ -183,6 +184,11 @@ async function syncTiktokViews() {
                 delta: submission.viewsDelivered - previousViews,
                 videoId,
               },
+            });
+            await recordViewDelta({
+              campaignId: submission.campaignId,
+              submissionId: submission._id,
+              delta: submission.viewsDelivered - previousViews,
             });
           }
           await updateCampaignFromSubmission(submission);

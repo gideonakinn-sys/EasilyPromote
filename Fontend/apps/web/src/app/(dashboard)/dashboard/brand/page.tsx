@@ -2,137 +2,61 @@
 
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { NavBar } from "@ep/ui/components/nav-bar";
-import { EmptyState } from "../../../../components/empty-state";
-import { ActiveDashboard, type BrandCampaign } from "../../../../components/active-dashboard";
-import { DraftAlertBanner } from "../../../../components/draft-alert-banner";
+import { cn } from "@ep/ui/lib/utils";
 import { Skeleton } from "../../../../components/ui/skeleton";
-import { apiRequest, getUser, clearAuth, isAuthenticated, getToken, saveAuth } from "../../../../lib/api";
-import { readCache, writeCache } from "../../../../lib/cache";
-import { uploadFile } from "@ep/ui/lib/upload";
+import { DraftAlertBanner } from "../../../../components/draft-alert-banner";
+import { BrandStatsCards } from "../../../../components/brand/brand-stats-cards";
+import { DeliveryChart } from "../../../../components/brand/delivery-chart";
+import { TopCampaigns } from "../../../../components/brand/top-campaigns";
+import { MonthPicker } from "../../../../components/brand/month-picker";
+import { apiRequest, getUser, isAuthenticated, getToken } from "../../../../lib/api";
 import { useSocket } from "../../../../lib/socket";
+import { useStaggerReveal } from "../../../../hooks/use-stagger-reveal";
+import { currentMonth } from "../../../../lib/brand";
+import type { BrandMonthlyStats } from "../../../../lib/brand";
 
-interface CampaignsPayload {
-  campaigns: BrandCampaign[];
-  draftCount: number;
-}
-
-const CAMPAIGNS_CACHE = "brand-campaigns";
-
-function BrandDashboardContent() {
+function OverviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [dashboardState, setDashboardState] = useState<"empty" | "active">("empty");
-  const [showAlert, setShowAlert] = useState(true);
-  const [userName, setUserName] = useState("User");
-  const [userEmail, setUserEmail] = useState("");
-  const [userAvatarUrl, setUserAvatarUrl] = useState("");
-  const [campaigns, setCampaigns] = useState<BrandCampaign[]>([]);
-  const [draftCount, setDraftCount] = useState(0);
+  const [month, setMonth] = useState<string>(currentMonth());
+  const [stats, setStats] = useState<BrandMonthlyStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState("");
+  const [showAlert, setShowAlert] = useState(true);
+  const [revealKey, setRevealKey] = useState(0);
 
-  const applyCampaigns = useCallback((data: CampaignsPayload) => {
-    const list = data.campaigns || [];
-    setDraftCount(data.draftCount || 0);
-    setCampaigns(list);
-    setDashboardState(list.length > 0 ? "active" : "empty");
-  }, []);
+  const revealRef = useStaggerReveal<HTMLDivElement>(revealKey);
 
-  const fetchCampaigns = useCallback(async () => {
-    setFetchError("");
+  const doFetch = useCallback(async (m: string, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setRefreshing(true);
     try {
-      const data = await apiRequest<CampaignsPayload>("/campaigns", {
-        method: "GET",
+      const data = await apiRequest<BrandMonthlyStats>(`/businesses/me/stats?month=${m}`, {
         token: getToken() || undefined,
       });
-
-      const list = data.campaigns || [];
-      const pending = list.filter(c => c.status === "pending_payment");
-      let final = data;
-
-      if (pending.length > 0) {
-        await Promise.allSettled(
-          pending.map(c =>
-            apiRequest(`/campaigns/${c.id}/payment-status`, { token: getToken() || undefined })
-          )
-        );
-
-        const refreshed = await apiRequest<CampaignsPayload>("/campaigns", {
-          method: "GET",
-          token: getToken() || undefined,
-        });
-        final = { campaigns: refreshed.campaigns || list, draftCount: refreshed.draftCount || 0 };
-      }
-      applyCampaigns(final);
-      writeCache(CAMPAIGNS_CACHE, final);
+      setStats(data);
+      setFetchError("");
+      setRevealKey((k) => k + 1);
     } catch (err: unknown) {
-      console.error("Could not load campaigns:", err);
-      setFetchError(err instanceof Error ? err.message : "Could not load campaigns");
+      setFetchError(err instanceof Error ? err.message : "Could not load stats");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [applyCampaigns]);
+  }, []);
 
-  useSocket(
-    (data) => {
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === data.campaignId ? { ...c, status: data.status } : c
-        )
-      );
-    },
-    (data) => {
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === data.campaignId
-            ? {
-                ...c,
-                status: data.status,
-                viewsDelivered: data.viewsDelivered ?? c.viewsDelivered,
-              }
-            : c
-        )
-      );
-    }
-  );
-
+  // Auth / email verification / payment redirect (mount + query changes only).
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/login");
       return;
     }
 
-    const user = getUser();
-    if (user?.role === "creator") {
-      router.push("/dashboard/creator");
-      return;
-    }
-    if (user?.role !== "business") {
-      clearAuth();
-      router.push("/login");
-      return;
-    }
-
     const reference = searchParams.get("reference") || searchParams.get("trxref");
-    const payment = searchParams.get("payment");
-    if (reference || payment === "success") {
+    if (reference || searchParams.get("payment") === "success") {
       router.replace("/dashboard/brand");
       return;
-    }
-
-    const u = getUser();
-    if (u?.name) setUserName(u.name);
-    if (u?.email) setUserEmail(u.email);
-    if (u?.avatar || u?.avatarUrl) setUserAvatarUrl((u.avatar || u.avatarUrl) ?? "");
-
-    // Paint the last snapshot at once; the verification check and the fresh
-    // list run together instead of one after the other.
-    const cached = readCache<CampaignsPayload>(CAMPAIGNS_CACHE);
-    if (cached) {
-      applyCampaigns(cached);
-      setLoading(false);
     }
 
     apiRequest<{ emailVerified: boolean }>("/auth/me", { token: getToken() || undefined })
@@ -147,133 +71,111 @@ function BrandDashboardContent() {
           localStorage.setItem("user", JSON.stringify(freshUser));
         }
       })
-      .catch(() => {
-        router.push("/login");
-      });
-    fetchCampaigns();
-  }, [searchParams, router, fetchCampaigns, applyCampaigns]);
+      .catch(() => router.push("/login"));
+  }, [searchParams, router]);
 
+  // Data for the selected month.
   useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && isAuthenticated()) {
-        fetchCampaigns();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [fetchCampaigns]);
+    if (!isAuthenticated()) return;
+    doFetch(month);
+  }, [month, doFetch]);
 
-  const handleCreateCampaign = useCallback(() => {
+  // Refresh silently whenever a campaign changes status or a payment lands.
+  useSocket(() => doFetch(month, { silent: true }), () => doFetch(month, { silent: true }));
+
+  const handleMonthChange = (m: string) => {
+    setMonth(m);
+  };
+
+  const handleCreateCampaign = () => {
     localStorage.removeItem("ep-draft-autosave");
     router.push("/dashboard/brand/create-campaign");
-  }, [router]);
+  };
 
-  const handleLogout = useCallback(() => {
-    clearAuth();
-    router.push("/login");
-  }, [router]);
-
-  const handleAvatarUpload = useCallback(async (file: File) => {
-    const token = getToken();
-    if (!token) return;
-    try {
-      const url = await uploadFile(file, "image", { token });
-      try {
-        await apiRequest("/auth/me", {
-          method: "PATCH",
-          token,
-          body: JSON.stringify({ avatar: url }),
-        });
-        const currentUser = getUser();
-        if (currentUser && token) saveAuth(token, { ...currentUser, avatar: url });
-      } catch (err) {
-        console.error("Failed to save avatar:", err);
-      }
-      setUserAvatarUrl(url);
-    } catch (err) {
-      console.error("Avatar upload failed:", err);
-    }
-  }, []);
+  const isEmpty = stats ? stats.summary.totalCampaigns === 0 : false;
 
   return (
-    <div className="h-dvh bg-stone-50 text-stone-900 flex flex-col font-rethink">
-      <NavBar
-        roleLabel="Brand"
-        userName={userName}
-        userEmail={userEmail}
-        userAvatarUrl={userAvatarUrl}
-        onLogout={handleLogout}
-        onAvatarChange={handleAvatarUpload}
-        helpHref="/help/brands"
-      />
-
-      {showAlert && draftCount > 0 && (
-        <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 z-50">
-          <DraftAlertBanner draftCount={draftCount} onClose={() => setShowAlert(false)} />
+    <div ref={revealRef} className="space-y-6">
+      {showAlert && stats && stats.summary.drafts > 0 && (
+        <div className="fixed bottom-6 right-4 md:right-6 z-50">
+          <DraftAlertBanner draftCount={stats.summary.drafts} onClose={() => setShowAlert(false)} />
         </div>
       )}
 
-      {loading ? (
-          <main className="flex-1 p-6 md:p-10">
-            <div className="max-w-7xl mx-auto space-y-6">
-              <Skeleton className="h-8 w-48" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-3 w-full" />
-                    <div className="flex gap-2">
-                      <Skeleton className="h-5 w-16 rounded-full" />
-                      <Skeleton className="h-5 w-16 rounded-full" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </main>
-        ) : fetchError ? (
-          <main className="flex-1 flex flex-col items-center justify-center max-w-7xl w-full mx-auto px-6 py-12">
-            <div className="text-center max-w-sm bg-white border border-stone-200 rounded-2xl p-8 space-y-4">
-              <div className="w-12 h-12 mx-auto rounded-full bg-red-50 flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-              </div>
-              <h2 className="font-rethink font-medium text-lg text-stone-900">Something went wrong</h2>
-              <p className="font-rethink text-xs text-stone-500 font-medium">{fetchError}</p>
-              <button
-                onClick={() => fetchCampaigns()}
-                className="px-6 py-2.5 bg-stone-900 text-white text-sm font-medium font-rethink rounded-full"
-              >
-                Try again
-              </button>
-            </div>
-          </main>
-        ) : dashboardState === "empty" ? (
-          <EmptyState onCreateCampaign={handleCreateCampaign} userName={userName} />
-        ) : (
-          <ActiveDashboard
-            campaigns={campaigns}
-            onCreateCampaign={handleCreateCampaign}
-            userName={userName}
-            onLogout={handleLogout}
-          />
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">
+          Overview
+        </h1>
+        <MonthPicker
+          months={stats?.availableMonths ?? []}
+          value={month}
+          onChange={handleMonthChange}
+          refreshing={refreshing}
+        />
+      </div>
+
+      {loading && !stats ? (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl" />
+            ))}
+          </div>
+          <Skeleton className="h-64 rounded-2xl" />
+        </div>
+      ) : fetchError ? (
+        <div className="rounded-2xl border border-stone-100 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-stone-900">Couldn&apos;t load your dashboard</p>
+          <p className="mt-1 text-xs font-medium text-stone-500">Please try again in a moment.</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              doFetch(month);
+            }}
+            className="mt-4 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-medium text-white"
+          >
+            Try again
+          </button>
+        </div>
+      ) : isEmpty ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-16 text-center">
+          <p className="text-sm font-semibold text-stone-900">No campaigns yet</p>
+          <p className="mt-1 max-w-sm text-xs font-medium text-stone-500">
+            Create your first campaign and your views and performance will show up here.
+          </p>
+          <button
+            onClick={handleCreateCampaign}
+            className="mt-5 rounded-full bg-[#FEB604] px-6 py-2.5 text-sm font-semibold text-[#1C1917] border border-stone-100"
+          >
+            Create campaign
+          </button>
+        </div>
+      ) : (
+        stats && (
+          <div
+            aria-live="polite"
+            className={cn("space-y-6 transition-opacity duration-200", refreshing && "opacity-60")}
+          >
+            <BrandStatsCards stats={stats} />
+            <DeliveryChart key={month} series={stats.dailySeries} />
+            <TopCampaigns campaigns={stats.topCampaigns} />
+          </div>
         )
-      }
+      )}
     </div>
   );
 }
 
-export default function BrandDashboard() {
+export default function BrandOverview() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
-      <BrandDashboardContent />
+    <Suspense
+      fallback={
+        <div className="py-20 text-center">
+          <Skeleton className="h-6 w-40" />
+        </div>
+      }
+    >
+      <OverviewContent />
     </Suspense>
   );
 }

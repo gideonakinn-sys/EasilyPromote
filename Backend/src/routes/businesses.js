@@ -1,6 +1,7 @@
 const express = require("express");
 const BusinessProfile = require("../models/BusinessProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const { buildStats, listTransactions } = require("../services/businessDashboard");
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ router.get("/me", protect, async (req, res, next) => {
       userId: profile.userId._id,
       companyName: profile.companyName,
       industry: profile.industry,
+      phone: profile.phone,
       logo: profile.logo,
       cac: profile.cac,
       verificationStatus: profile.verificationStatus,
@@ -27,6 +29,22 @@ router.get("/me", protect, async (req, res, next) => {
       contactEmail: profile.userId.email,
       avatar: profile.userId.avatar,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/me/stats", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    res.json(await buildStats(req.user._id, { month: req.query.month }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/me/transactions", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    res.json(await listTransactions(req.user._id));
   } catch (error) {
     next(error);
   }

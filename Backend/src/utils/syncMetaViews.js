@@ -6,6 +6,7 @@ const meta = require("../services/meta");
 const { decrypt } = require("../utils/crypto");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+const { recordViewDelta } = require("../services/viewSnapshots");
 // Campaign engine: content approval (ticket 07)
 const { isContentCampaign } = require("./campaignPay");
 // Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
@@ -233,6 +234,11 @@ async function syncMetaViews() {
                 views: submission.viewsDelivered,
                 delta: submission.viewsDelivered - previousViews,
               },
+            });
+            await recordViewDelta({
+              campaignId: submission.campaignId,
+              submissionId: submission._id,
+              delta: submission.viewsDelivered - previousViews,
             });
           }
         }
