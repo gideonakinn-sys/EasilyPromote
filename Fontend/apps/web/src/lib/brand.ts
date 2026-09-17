@@ -179,3 +179,18 @@ export function monthLabel(month: string): string {
   const date = new Date(year, (index || 1) - 1, 1);
   return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+// After Paystack sends the brand back, a campaign stays "pending_payment" until the API confirms the
+// payment (the API asks Paystack and books it). Ask for every pending campaign; returns true if any
+// went live so the caller can reload. Runs on the overview and campaigns pages, like the old dashboard.
+export async function confirmPendingPayments(): Promise<boolean> {
+  const { apiRequest, getToken } = await import("./api");
+  const token = getToken() || undefined;
+  if (!token) return false;
+  const data = await apiRequest<{ campaigns?: Array<{ id: string; status: string }> }>("/campaigns", { method: "GET", token });
+  const pending = (data.campaigns || []).filter((c) => c.status === "pending_payment");
+  if (pending.length === 0) return false;
+  const results = await Promise.allSettled(
+    pending.map((c) => apiRequest<{ status: string; isPaid: boolean }>(`/campaigns/${c.id}/payment-status`, { token }))
+  );
+  return results.some((r) => r.status === "fulfilled" && r.value.isPaid);
+}
