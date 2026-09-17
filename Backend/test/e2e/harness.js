@@ -179,8 +179,10 @@ function stubPaystack() {
   };
 }
 
-async function startHarness() {
-  const mongod = await startMongod();
+// `mongod` (from startMongod) reuses a database the caller started and stops itself; the load test
+// seeds through the harness and then points its own API process at the same database.
+async function startHarness({ mongod: external = null } = {}) {
+  const mongod = external || (await startMongod());
   const mongoose = require("mongoose");
   let server;
   let paystack;
@@ -207,7 +209,7 @@ async function startHarness() {
   } catch (error) {
     if (server) await new Promise((resolve) => server.close(resolve));
     await mongoose.disconnect();
-    await mongod.stop();
+    if (!external) await mongod.stop();
     throw error;
   }
 
@@ -304,7 +306,7 @@ async function startHarness() {
     async stop() {
       await new Promise((resolve) => server.close(resolve));
       await mongoose.disconnect();
-      await mongod.stop();
+      if (!external) await mongod.stop();
     },
   };
 }
