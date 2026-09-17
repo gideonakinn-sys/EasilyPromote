@@ -83,6 +83,7 @@ app.use("/api/businesses", businessRoutes);
 app.use("/api/creators", creatorRoutes);
 app.use("/api/campaigns", referralCodeRoutes);
 app.use("/api/campaigns", applicationRoutes); // Campaign engine: applications (ticket 06)
+app.use("/api/campaigns", require("./routes/ratings")); // Brand ratings (M8)
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -93,6 +94,7 @@ app.use("/api/admin/referrals", adminReferralRoutes);
 app.use("/api/admin/activity", adminActivityRoutes);
 app.use("/api/admin/alerts", adminAlertRoutes);
 app.use("/api/admin/pricing", require("./routes/adminPricing")); // Price Table (ticket 11)
+app.use("/api/admin", require("./routes/adminBadges")); // Ratings and badges (M8)
 app.use("/api/admin", adminRoutes);
 app.use("/api/platforms", platformRoutes);
 app.use("/api/niches", nicheRoutes);

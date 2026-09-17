@@ -170,6 +170,15 @@ async function afterCompleted(completed, campaign, now) {
   } catch (error) {
     console.error("[Content] Fixed pay repair failed for submission", String(completed._id), error.message);
   }
+  // A finished placement moves the creator's completion, score and badges (M8) straight away
+  // rather than at the nightly recalculation. Never blocks completion.
+  try {
+    const { recalculateCreator } = require("./creatorScore");
+    const profile = await CreatorProfile.findOne({ userId: completed.creatorId });
+    if (profile) await recalculateCreator(profile);
+  } catch (error) {
+    console.error("[Content] Standing recalculation failed for creator", String(completed.creatorId), error.message);
+  }
   await notify({
     campaign,
     submission: completed,

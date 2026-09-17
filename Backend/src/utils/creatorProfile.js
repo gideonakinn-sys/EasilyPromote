@@ -103,6 +103,15 @@ function ownAudience(audience) {
   return view ? { ...view, proofUrl: audience.proofUrl || null } : null;
 }
 
+// Brand ratings (M8, D24) as the creator and brands see them: the count of visible ratings, and
+// their average (to one decimal) only from 3 ratings, so no single brand's rating can be singled out.
+const PUBLIC_AVERAGE_MIN = 3;
+function publicRating(summary) {
+  const count = (summary && summary.count) || 0;
+  const average = summary && typeof summary.average === "number" ? summary.average : null;
+  return { average: count >= PUBLIC_AVERAGE_MIN && average !== null ? Math.round(average * 10) / 10 : null, count };
+}
+
 function brandSafeProfile(profile, user) {
   if (!profile) return null;
   return {
@@ -129,6 +138,7 @@ function brandSafeProfile(profile, user) {
     audience: publicAudience(profile.audience),
     verified: Boolean(profile.verifiedAt),
     badges: profile.badges || [],
+    rating: publicRating(profile.brandRating),
     stats: publicStats(profile),
     rank: profile.rank,
     creatorScore: profile.creatorScore,
@@ -148,4 +158,6 @@ module.exports = {
   publicPortfolio,
   publicStats,
   brandSafeProfile,
+  publicRating,
+  PUBLIC_AVERAGE_MIN,
 };

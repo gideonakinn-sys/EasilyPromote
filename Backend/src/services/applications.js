@@ -7,12 +7,14 @@ const CampaignApplication = require("../models/CampaignApplication");
 const Notification = require("../models/Notification");
 const Slot = require("../models/Slot");
 const User = require("../models/User");
+const CreatorProfile = require("../models/CreatorProfile");
 const { emitToUser } = require("../config/socket");
 const { sendEmail } = require("./email");
 const { refuse, loadJoinContext, checkJoiner, reservePlacementFor } = require("./placements");
 const { buildApplicantSnapshot, orderSnapshot } = require("./applicantSnapshot");
 const { campaignTerms, payPerUnit } = require("../utils/campaignPay");
 const { HELD_PLACEMENT_STATUSES } = require("../utils/placementStatuses");
+const { publicRating } = require("../utils/creatorProfile");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EXPIRE_AFTER_DAYS = 7;
@@ -218,8 +220,16 @@ async function loadForBrand({ user, campaignId, applicationId, pendingOnly = fal
   return { campaign, application };
 }
 
-function brandRow(application) {
+// Badges and brand rating are the creator's current ones, not frozen in the snapshot: they're
+// earned and lost over time and the brand is deciding now (M8, D24/D25). Map of creatorId → standing.
+async function currentStanding(creatorIds) {
+  const profiles = await CreatorProfile.find({ userId: { $in: creatorIds } }).select("userId badges brandRating").lean();
+  return new Map(profiles.map((p) => [String(p.userId), { badges: p.badges || [], rating: publicRating(p.brandRating) }]));
+}
+
+function brandRow(application, standing = new Map()) {
   const s = application.applicantSnapshot || {};
+  const live = standing.get(String(application.creator)) || { badges: s.badges || [], rating: s.rating || { average: null, count: 0 } };
   return {
     id: application._id,
     status: application.status,
@@ -238,6 +248,8 @@ function brandRow(application) {
       location: s.location || null,
       topPlatform: (s.platforms && s.platforms[0]) || null,
       categories: s.categories || [],
+      badges: live.badges,
+      rating: live.rating,
     },
   };
 }
@@ -258,18 +270,24 @@ async function listApplications({ user, campaignId, status, sort = "match" }) {
     counts[g._id] = g.n;
     counts.all += g.n;
   }
-  return { status: 200, body: { counts, applications: applications.map(brandRow) } };
+  const standing = await currentStanding(applications.map((a) => a.creator));
+  return { status: 200, body: { counts, applications: applications.map((a) => brandRow(a, standing)) } };
 }
 
 async function getApplication({ user, campaignId, applicationId }) {
   const { campaign, application, refusal } = await loadForBrand({ user, campaignId, applicationId });
   if (refusal) return refusal;
+  const standing = await currentStanding([application.creator]);
+  const row = brandRow(application, standing);
+  const sections = orderSnapshot(campaign, application.applicantSnapshot).sections.map((section) =>
+    section.key === "badges" ? { ...section, data: { ...section.data, badges: row.creator.badges, rating: row.creator.rating } } : section
+  );
   return {
     status: 200,
     body: {
-      ...brandRow(application),
+      ...row,
       applicant: application.applicantSnapshot,
-      sections: orderSnapshot(campaign, application.applicantSnapshot).sections,
+      sections,
     },
   };
 }

@@ -1063,6 +1063,11 @@ router.get("/users", adminGuard, async (req, res, next) => {
                 niches: cp.niches,
                 verifiedAt: cp.verifiedAt || null,
                 connectedAccounts: connectedMap[u._id.toString()] || [],
+                // M8: badges shown, brand rating (admins see the average from 1 rating) and whether
+                // badges kept from before automatic badges still need a review.
+                badges: cp.badges || [],
+                brandRating: { average: cp.brandRating ? cp.brandRating.average : null, count: (cp.brandRating && cp.brandRating.count) || 0 },
+                badgesNeedReview: (cp.badgeOverrides || []).some((o) => o.source === "migration"),
               }
             : null,
         };

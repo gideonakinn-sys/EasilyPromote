@@ -112,9 +112,53 @@ const creatorProfileSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    // The badges the creator shows and eligibility's requiredBadges reads: the automatic ones
+    // (badgesAuto) plus admin grants, less admin revocations (services/creatorBadges.js, M8).
     badges: {
       type: [{ type: String, enum: ["top_creator", "high_performer", "reliable_creator", "campaign_pro"] }],
       default: [],
+    },
+    // What the badge rules gave the creator at the last evaluation, with hysteresis (badgeRules.js).
+    badgesAuto: {
+      type: [{ type: String, enum: ["top_creator", "high_performer", "reliable_creator", "campaign_pro"] }],
+      default: undefined,
+    },
+    // At most one per badge. source "migration": a badge held before automatic badges, kept as a
+    // grant until an admin reviews it.
+    badgeOverrides: {
+      type: [
+        {
+          _id: false,
+          badge: { type: String, enum: ["top_creator", "high_performer", "reliable_creator", "campaign_pro"], required: true },
+          mode: { type: String, enum: ["grant", "revoke"], required: true },
+          source: { type: String, enum: ["admin", "migration"], default: "admin" },
+          note: { type: String, maxlength: 500 },
+          setBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          setAt: Date,
+        },
+      ],
+      default: undefined,
+    },
+    // Per badge: the checks behind the last evaluation and the metrics they read, so admins can see
+    // why a creator has or lacks a badge.
+    badgeEvaluation: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
+    badgesEvaluatedAt: {
+      type: Date,
+    },
+    // Bumped on every badge write, so a recalculation and an admin override at the same moment
+    // can't overwrite each other (or notify twice).
+    badgesRevision: {
+      type: Number,
+    },
+    // Visible (not hidden) brand ratings (M8, D24). Brands and the creator see the average only
+    // from 3 ratings (utils/creatorProfile.js publicRating); admins always see it.
+    brandRating: {
+      average: { type: Number, default: null },
+      count: { type: Number, default: 0 },
+      updatedAt: Date,
     },
     rank: {
       type: String,

@@ -1,6 +1,6 @@
 const { toObjectId } = require("../utils/objectId");
 const { loadCreatorAccounts } = require("../utils/creatorAccounts");
-const { ownAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
+const { ownAudience, publicPortfolio, publicRating, publicStats } = require("../utils/creatorProfile");
 const Campaign = require("../models/Campaign");
 const CampaignApplication = require("../models/CampaignApplication");
 const Slot = require("../models/Slot");
@@ -366,6 +366,7 @@ function buildProfile(user, ctx) {
     portfolio: publicPortfolio(profile.portfolio),
     verified: Boolean(profile.verifiedAt),
     badges: profile.badges || [],
+    rating: publicRating(profile.brandRating),
     stats: publicStats(profile),
     audience: ownAudience(profile.audience),
     socialAccounts: profile.socialAccounts || [],

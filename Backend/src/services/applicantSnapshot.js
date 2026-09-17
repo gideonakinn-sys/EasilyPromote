@@ -42,6 +42,7 @@ function buildApplicantSnapshot(profile, user) {
       category: p.category,
     })),
     badges: safe.badges,
+    rating: safe.rating,
     completionRate: safe.completionRate || 0,
     rank: safe.rank || null,
   };
@@ -88,7 +89,11 @@ function orderSnapshot(campaign, snapshot) {
     },
     performance: { ...((snapshot && snapshot.stats) || {}) },
     portfolio: { categories: targetCategories, items },
-    badges: { badges: (snapshot && snapshot.badges) || [], completionRate: (snapshot && snapshot.completionRate) || 0 },
+    badges: {
+      badges: (snapshot && snapshot.badges) || [],
+      rating: (snapshot && snapshot.rating) || { average: null, count: 0 },
+      completionRate: (snapshot && snapshot.completionRate) || 0,
+    },
   };
 
   const first = [
