@@ -30,6 +30,7 @@ export interface SetupSummaryInput {
   audienceTargeting: AudienceTargeting;
   creatorEligibility: CreatorEligibility;
   brief: CampaignBrief;
+  destinationUrl?: string | null;
 }
 
 const labelFor = (options: { value: string; label: string }[], value: string) => options.find((option) => option.value === value)?.label || value;
@@ -65,6 +66,7 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
       requiredBadges: data.requiredBadges,
     },
     brief: data.brief,
+    destinationUrl: data.objective === "clicks" ? data.destinationUrl.trim() : undefined,
   };
 }
 
@@ -128,6 +130,20 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
     <div className="space-y-6">
       <Section title="Objective and Pay">
         <SummaryRow label="Objective" value={objective?.title || "Not set"} />
+        {setup.campaignObjective === "clicks" && (
+          <SummaryRow
+            label="Destination Link"
+            value={
+              setup.destinationUrl ? (
+                <a href={setup.destinationUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 break-all">
+                  {setup.destinationUrl}
+                </a>
+              ) : (
+                "Not set"
+              )
+            }
+          />
+        )}
         {setup.contentPay ? (
           <>
             <SummaryRow label={setup.hybridBonus ? "Base Pay Per Deliverable" : "Creator Pay Per Deliverable"} value={formatNaira(setup.contentPay.ratePerDeliverable)} />

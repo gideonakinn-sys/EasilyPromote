@@ -27,6 +27,12 @@ export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body:
   { value: "signups", title: "Sign-ups", body: "Pay for people who sign up, tracked with a code for each creator.", available: true },
   { value: "leads", title: "Leads", body: "Pay for people who show interest, like filling in a form, tracked with a code for each creator.", available: true },
   { value: "sales", title: "Sales", body: "Pay for purchases made with a creator's code, reported by your app or website.", available: true },
+  {
+    value: "clicks",
+    title: "Clicks",
+    body: "Paid per valid click on a creator's tracked link to your website. Our team sets the reward per click.",
+    available: true,
+  },
   // Coming soon (SPEC, ticket 11): why is said on the card.
   {
     value: "engagement",
@@ -133,7 +139,7 @@ export const BONUS_METRIC_OPTIONS: { value: BonusMetric; title: string; body: st
   { value: "downloads", title: "Downloads", body: "Creators earn per app install with their code. Our team sets the reward." },
 ];
 const DEFAULT_VIEWS = 1000000;
-const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads", "leads", "sales"];
+const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads", "leads", "sales", "clicks"];
 
 // What one tracked result of a referral objective is called: "sign-up", "downloads", "lead", "purchases".
 const ACTION_NOUNS: Partial<Record<CampaignObjective | BonusMetric, [string, string]>> = {
@@ -141,6 +147,7 @@ const ACTION_NOUNS: Partial<Record<CampaignObjective | BonusMetric, [string, str
   downloads: ["download", "downloads"],
   leads: ["lead", "leads"],
   sales: ["purchase", "purchases"],
+  clicks: ["click", "clicks"],
 };
 
 export function actionNoun(objective: CampaignObjective | BonusMetric | null | undefined, plural = false): string {
@@ -198,6 +205,8 @@ export interface WizardData {
   scriptFileName: string;
   // Niches from the older wizard that aren't creator categories; kept on save.
   otherNiches: string[];
+  // Clicks (SPEC D29): the http/https page creators' tracked links send people to.
+  destinationUrl: string;
 }
 
 export const EMPTY_BRIEF: WizardBrief = {
@@ -244,6 +253,7 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   scriptUrl: "",
   scriptFileName: "",
   otherNiches: [],
+  destinationUrl: "",
 };
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
@@ -255,8 +265,9 @@ export function isHybrid(data: WizardData): boolean {
 }
 
 // Whether the brand's app has to be connected before paying: referral objectives, and hybrid
-// campaigns whose bonus pays for sign-ups or downloads.
+// campaigns whose bonus pays for sign-ups or downloads. Clicks are tracked by us (SPEC D29), so they don't need it.
 export function tracksConversions(data: WizardData): boolean {
+  if (data.objective === "clicks") return false;
   return usesReferralBudget(data.objective) || (isHybrid(data) && data.bonusMetric !== "views");
 }
 
@@ -278,6 +289,12 @@ const isUrl = (value: string) => {
   }
 };
 
+// Mirrors the API: a full web address starting with http:// or https://, up to 2,000 characters.
+export function isDestinationUrl(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length <= 2000 && /^https?:\/\//i.test(trimmed) && isUrl(trimmed);
+}
+
 export function referralBudgetValue(data: WizardData): number {
   return Math.round(Number(data.referralBudget) || 0);
 }
@@ -289,6 +306,10 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (!data.name.trim()) problems.push("Give your campaign a name.");
     if (!data.coverImageUrl) problems.push("Upload a cover image.");
     if (!isObjectiveAvailable(data.objective)) problems.push("Choose an objective that's available now.");
+    if (data.objective === "clicks") {
+      if (!data.destinationUrl.trim()) problems.push("Add the destination link people go to when they click.");
+      else if (!isDestinationUrl(data.destinationUrl)) problems.push("The destination link must start with http:// or https://.");
+    }
   }
   if (step === 3) {
     if (data.platforms.length === 0) problems.push("Choose at least one platform.");
@@ -418,6 +439,7 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     scriptUrl: saved.scriptUrl || "",
     scriptFileName: saved.scriptFileName || "",
     otherNiches: list(saved.niches).filter((niche) => !CREATOR_CATEGORIES.includes(niche)),
+    destinationUrl: saved.destinationUrl || "",
   };
 }
 
@@ -519,5 +541,7 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     niches: [...data.otherNiches, ...data.categories],
     scriptUrl: data.scriptUrl || undefined,
     scriptFileName: data.scriptFileName || undefined,
+    // Clicks only; a link that isn't valid yet isn't sent, so the rest of the draft still saves.
+    ...(data.objective === "clicks" && isDestinationUrl(data.destinationUrl) && { destinationUrl: data.destinationUrl.trim() }),
   };
 }
