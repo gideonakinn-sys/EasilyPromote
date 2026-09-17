@@ -45,7 +45,7 @@ async function run() {
     const date = startOfUtcDay(new Date(day));
     await ViewSnapshot.updateOne(
       { campaignId, date },
-      { $inc: { views: entry.views }, $setOnInsert: { businessId: entry.businessId } },
+      { $set: { views: entry.views }, $setOnInsert: { businessId: entry.businessId } },
       { upsert: true }
     );
     written += 1;
