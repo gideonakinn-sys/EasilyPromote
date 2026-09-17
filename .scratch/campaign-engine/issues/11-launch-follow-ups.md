@@ -12,7 +12,7 @@
 
 - [x] Trending section on the marketplace: most joins and applications in the last 72 hours (after 04)
 - [x] Wizard shows a live "about N creators match" count while setting targeting and eligibility (after 03)
-- [ ] Brand-page delivery accepts the original video file (resumable upload, up to 500 MB) as well as a link (after 07)
+- [x] ~~Brand-page delivery accepts the original video file (resumable upload, up to 500 MB) as well as a link (after 07)~~ Dropped 17 Sep: storage is Cloudinary (100 MB max); delivery stays a download link
 - [x] Unused budget is refunded automatically at campaign end (after 09). Paystack fees are **not** deducted (D5 amended); see SPEC D5 (automatic)
 - [x] Brand payment statement: deliverables paid, performance paid, fee, refund (after 09), per campaign and overall, with CSV
 - [x] Admin screen for the per-view price table (existing per-industry rates keep working)
