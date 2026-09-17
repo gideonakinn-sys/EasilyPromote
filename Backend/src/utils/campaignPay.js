@@ -10,6 +10,7 @@ const CONVERSION_UNITS = {
   purchase: "purchase",
   deposit: "deposit",
   custom: "action",
+  click: "click",
 };
 
 // Campaigns from before the campaign engine read as views, performance, Open Call.

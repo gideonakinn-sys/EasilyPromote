@@ -18,7 +18,7 @@ const Transaction = require("../models/Transaction");
 const meta = require("./meta");
 const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
-const { payPerUnit, fullBrief } = require("../utils/campaignPay");
+const { payPerUnit, fullBrief, campaignTerms } = require("../utils/campaignPay");
 const { recentInterest } = require("./trending");
 const { loadCreatorHistory } = require("./creatorHistory");
 const {
@@ -31,6 +31,7 @@ const {
   cardOf,
   sectionsOf,
   SECTION_ORDER: sectionsOrder,
+  creatorTermsOf,
 } = require("./marketplace");
 const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
@@ -48,7 +49,7 @@ const { contentLabelFor } = require("./submissionEvents");
 // Fields each section reads from a campaign. Sections see exactly these, as they did when each
 // loaded its own campaigns, so a response never gains or loses a field.
 const MY_CAMPAIGN_FIELDS =
-  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay hybridBonus creatorAccess objective contentDestination";
+  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay hybridBonus creatorAccess objective contentDestination destinationUrl usageRights";
 const RELEASED_CAMPAIGN_FIELDS =
   "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay hybridBonus contentDestination";
 const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral payShape";
@@ -554,6 +555,8 @@ async function buildMyCampaigns(ctx, data = null) {
           referralBySlot.get(slot._id.toString()),
           referralEarnings.get(campaign._id.toString())
         ),
+        // M8 batch 7 (SPEC D29, D30): objective, clicks destination domain and usage terms.
+        ...creatorTermsOf(campaign, campaignTerms(campaign)),
         // Campaign engine: content approval (ticket 07)
         ...contentApprovalFields(campaign, submission, submission ? eventsBySubmission[submission._id.toString()] || [] : []),
       };

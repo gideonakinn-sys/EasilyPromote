@@ -45,7 +45,7 @@ async function liveClicksCampaign() {
   const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
   assert.equal(joined.status, 200, JSON.stringify(joined.body));
   assert.ok(joined.body.referralCode);
-  return { id, code: `${id}/${joined.body.referralCode}` };
+  return { id, code: `${id}/${joined.body.referralCode}`, creator, referralCode: joined.body.referralCode };
 }
 
 function click(code, headers = {}) {
@@ -99,4 +99,22 @@ test("unknown codes 404, and a destination must be http or https", async () => {
     body: { name: "Bad link", category: "Tech", campaignObjective: "clicks", destinationUrl: "javascript:alert(1)", targetViews: 100000, referral: { requestedBudget: 50000 } },
   });
   assert.equal(bad.status, 400, JSON.stringify(bad.body));
+});
+
+test("creators see a clicks campaign as a reward per click with its destination domain", async () => {
+  const { id, creator, referralCode } = await liveClicksCampaign();
+  const other = await harness.registerCreator();
+  const market = await harness.api("GET", "/api/creators/dashboard", { token: other.token });
+  assert.equal(market.status, 200);
+  const card = market.body.marketplace.campaigns.find((c) => String(c.id) === id);
+  assert.ok(card, "the campaign is listed");
+  assert.deepEqual(card.pay, { amount: REWARD, unit: "click" });
+  assert.equal(card.campaignObjective, "clicks");
+  assert.equal(card.destinationDomain, "brand.example");
+
+  const mine = await harness.api("GET", "/api/creators/dashboard", { token: creator.token });
+  const row = mine.body.campaigns.campaigns.find((c) => String(c.id) === id);
+  assert.equal(row.campaignObjective, "clicks");
+  assert.equal(row.destinationDomain, "brand.example");
+  assert.equal(row.referral.code, referralCode);
 });
