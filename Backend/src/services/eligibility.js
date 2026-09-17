@@ -96,6 +96,36 @@ function evaluateEligibility(profile, campaign) {
     const names = missingBadges.map((b) => BADGE_NAMES[b] || b);
     fail("requiredBadges", `Needs the ${names.join(" and ")} badge${names.length > 1 ? "s" : ""}`);
   }
+  // M8 batch 7: opt-in hard filters for age and gender (SPEC D8 amended).
+  // When the brand opts in, age and gender become hard requirements instead of ranking-only.
+  const targetAgeRanges = targeting.ageRanges || [];
+  if (targeting.requireAgeMatch && targetAgeRanges.length) {
+    const minShare = targeting.minAgeShare || 50;
+    const hasAgeData = Boolean(profile.audience && profile.audience.ages && profile.audience.ages.length);
+    if (!hasAgeData) {
+      fail("audienceAge", `Add your audience age breakdown to join campaigns targeting ${listWithOr(targetAgeRanges)}`);
+    } else {
+      const share = shareIn(profile.audience.ages, "range", targetAgeRanges);
+      if (share < minShare) {
+        fail("audienceAge", `Needs at least ${minShare}% of your audience aged ${listWithOr(targetAgeRanges)} (you have ${share}%)`);
+      }
+    }
+  }
+
+  const targetGenders = (targeting.genders || []).filter((g) => g !== "all");
+  if (targeting.requireGenderMatch && targetGenders.length) {
+    const minShare = targeting.minGenderShare || 50;
+    const hasGenderData = Boolean(profile.audience && profile.audience.genders);
+    if (!hasGenderData) {
+      fail("audienceGender", `Add your audience gender breakdown to join campaigns targeting ${listWithOr(targetGenders)}`);
+    } else {
+      const split = profile.audience.genders || {};
+      const share = targetGenders.reduce((sum, g) => sum + (split[g] || 0), 0);
+      if (share < minShare) {
+        fail("audienceGender", `Needs at least ${minShare}% of your audience ${listWithOr(targetGenders)} (you have ${share}%)`);
+      }
+    }
+  }
 
   return { eligible: failures.length === 0, failures, matchScore: matchScore(profile, targeting) };
 }

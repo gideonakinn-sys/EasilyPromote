@@ -70,7 +70,7 @@ async function release(claimed, original, creatorId) {
 
 // Returns { status, body }. `campaignId` or `slotId` picks the campaign; `slotId` also picks
 // the placement (older clients).
-async function joinCampaign({ user, campaignId, slotId, committedViews }) {
+async function joinCampaign({ user, campaignId, slotId, committedViews, usageRightsAccepted }) {
   const creatorId = user._id;
   let requested = null;
   if (slotId) {
@@ -101,7 +101,15 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
     return refuse(409, "CONTENT_REJECTED", "Your content for this campaign was rejected. You can appeal the decision instead of joining again");
   }
 
-  return takePlacement({ creatorId, campaign, requested, committedViews });
+  // M8 batch 7: validate usage rights acceptance (SPEC D30).
+  const rightsSet = campaign.usageRights && campaign.usageRights.type === "custom";
+  if (rightsSet) {
+    if (!usageRightsAccepted || usageRightsAccepted.version !== campaign.usageRights.version) {
+      return refuse(400, "USAGE_TERMS_NOT_ACCEPTED", "Accept the campaign's usage rights terms before joining");
+    }
+  }
+
+  return takePlacement({ creatorId, campaign, requested, committedViews, usageRightsAccepted: rightsSet ? usageRightsAccepted : null });
 }
 
 // Campaign engine: applications (ticket 06)
@@ -178,7 +186,7 @@ async function reservePlacementFor({ creatorId, campaignId }) {
   return result;
 }
 
-async function takePlacement({ creatorId, campaign, requested = null, committedViews, pickedByBrand = false }) {
+async function takePlacement({ creatorId, campaign, requested = null, committedViews, pickedByBrand = false, usageRightsAccepted = null }) {
   const context = await loadJoinContext({ creatorId, campaign, requested });
   if (context.heldSlot) return refuse(409, "ALREADY_JOINED", "You already have a place in this campaign");
   const { available } = context;
@@ -214,7 +222,7 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
     try {
       claimed = await Slot.findOneAndUpdate(
         { _id: slot._id, status: "available" },
-        { $set: { creatorId, status: "claimed", claimedAt: new Date(), ...terms.set } },
+        { $set: { creatorId, status: "claimed", claimedAt: new Date(), ...terms.set, ...(usageRightsAccepted ? { usageRightsAccepted: { version: usageRightsAccepted.version, acceptedAt: new Date() } } : {}) } },
         { new: true }
       );
     } catch (error) {

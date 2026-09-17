@@ -22,6 +22,11 @@ const campaignApplicationSchema = new mongoose.Schema(
     // Set when the brand was reminded about this pending application (day 3, once).
     remindedAt: { type: Date, default: null },
     closedAt: { type: Date, default: null },
+    // M8 batch 7: records the version of the campaign's usage rights the creator accepted (SPEC D30).
+    usageRightsAccepted: {
+      version: { type: Number, default: null },
+      acceptedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

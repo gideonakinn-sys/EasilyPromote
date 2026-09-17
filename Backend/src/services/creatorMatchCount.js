@@ -18,7 +18,7 @@ const { joinEligibility } = require("./joinRules");
 const POOL_TTL_MS = 5 * 60 * 1000;
 // Below this, the exact number isn't shown.
 const SMALL_COUNT = 10;
-const PROFILE_FIELDS = "userId socialAccounts niches categories audience.locations verifiedAt stats.engagementRate rank badges";
+const PROFILE_FIELDS = "userId socialAccounts niches categories audience.locations audience.ages audience.genders verifiedAt stats.engagementRate rank badges";
 
 let cached = null; // { loadedAt, creators, loading }
 

@@ -86,6 +86,16 @@ function orderSnapshot(campaign, snapshot) {
       topAge: largest(audience.ages) ? { range: largest(audience.ages).range, percentage: largest(audience.ages).percentage } : null,
       genders: audience.genders || null,
       source: audience.source || null,
+      // M8 batch 7: age/gender hard filter context (SPEC D8 amended).
+      targetedAgeRanges: targeting.ageRanges || [],
+      targetedAgeShare: (audience.ages || [])
+        .filter((e) => (targeting.ageRanges || []).some((t) => sameName(e.range, t)))
+        .reduce((sum, e) => sum + (e.percentage || 0), 0),
+      requireAgeMatch: Boolean(targeting.requireAgeMatch),
+      targetedGenders: (targeting.genders || []).filter((g) => g !== "all"),
+      targetedGenderShare: ((targeting.genders || []).filter((g) => g !== "all"))
+        .reduce((sum, g) => sum + ((audience.genders || {})[g] || 0), 0),
+      requireGenderMatch: Boolean(targeting.requireGenderMatch),
     },
     performance: { ...((snapshot && snapshot.stats) || {}) },
     portfolio: { categories: targetCategories, items },

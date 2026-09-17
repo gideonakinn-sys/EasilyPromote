@@ -94,7 +94,7 @@ const ALREADY_APPLIED_MESSAGES = {
   rejected: "The brand has already reviewed your application for this campaign",
 };
 
-async function applyToCampaign({ user, campaignId, pitch = "" }) {
+async function applyToCampaign({ user, campaignId, pitch = "", usageRightsAccepted }) {
   const creatorId = user._id;
   const campaign = await Campaign.findById(campaignId).lean();
   if (!campaign || campaign.status !== "live") return refuse(404, "CAMPAIGN_NOT_LIVE", "Campaign not found or not live");
@@ -119,6 +119,14 @@ async function applyToCampaign({ user, campaignId, pitch = "" }) {
     return refuse(403, "NOT_ELIGIBLE", check.failures[0].message, { failures: check.failures });
   }
 
+  // M8 batch 7: validate usage rights acceptance (SPEC D30).
+  const rightsSet = campaign.usageRights && campaign.usageRights.type === "custom";
+  if (rightsSet) {
+    if (!usageRightsAccepted || usageRightsAccepted.version !== campaign.usageRights.version) {
+      return refuse(400, "USAGE_TERMS_NOT_ACCEPTED", "Accept the campaign's usage rights terms before applying");
+    }
+  }
+
   const fields = {
     status: "pending",
     pitch: pitch || "",
@@ -130,6 +138,7 @@ async function applyToCampaign({ user, campaignId, pitch = "" }) {
     rejectionReason: "",
     remindedAt: null,
     closedAt: null,
+    ...(rightsSet ? { usageRightsAccepted: { version: usageRightsAccepted.version, acceptedAt: new Date() } } : {}),
   };
 
   let application;

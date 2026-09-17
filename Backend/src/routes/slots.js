@@ -30,8 +30,8 @@ router.get("/my", protect, async (req, res, next) => {
 // Older clients claim by campaignId or slotId; it is the same join as POST /api/campaigns/:id/join.
 router.post("/claim", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const { slotId, campaignId, committedViews } = req.body;
-    const result = await joinCampaign({ user: req.user, slotId, campaignId, committedViews });
+    const { slotId, campaignId, committedViews, usageRightsAccepted } = req.body;
+    const result = await joinCampaign({ user: req.user, slotId, campaignId, committedViews, usageRightsAccepted });
     res.status(result.status).json(result.body);
   } catch (error) {
     next(error);

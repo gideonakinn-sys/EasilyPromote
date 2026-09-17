@@ -10,8 +10,8 @@ const { roundMoney } = require("./referralEarnings");
 const PLATFORMS = ["tiktok", "instagram", "youtube", "twitter", "facebook"];
 const RANKS = ["rank1", "rank2", "rank3", "rank4", "rank5", "elite"];
 const BADGES = ["top_creator", "high_performer", "reliable_creator", "campaign_pro"];
-// The conversion event each referral objective counts (ticket 11 adds leads and sales).
-const REFERRAL_EVENT_FOR = { signups: "signup", downloads: "install", leads: "lead", sales: "purchase" };
+// The conversion event each referral objective counts (ticket 11 adds leads and sales; M8 batch 7 adds clicks).
+const REFERRAL_EVENT_FOR = { signups: "signup", downloads: "install", leads: "lead", sales: "purchase", clicks: "click" };
 // Hybrid pay (ticket 10): destinations where a creator's own post can earn a views bonus.
 const VIEWS_BONUS_DESTINATIONS = ["creator_page", "both"];
 
@@ -25,6 +25,11 @@ const audienceTargetingSchema = z.object({
   genders: z.array(z.enum(["all", "female", "male", "other"])).optional(),
   interests: textList(20, 40).optional(),
   platforms: z.array(z.enum(PLATFORMS)).optional(),
+  // M8 batch 7: opt-in hard filters (SPEC D8 amended).
+  requireAgeMatch: z.boolean().optional(),
+  minAgeShare: z.number().int().min(0).max(100).optional(),
+  requireGenderMatch: z.boolean().optional(),
+  minGenderShare: z.number().int().min(0).max(100).optional(),
 });
 
 const creatorEligibilitySchema = z.object({
@@ -76,6 +81,24 @@ const setupSchema = z.object({
       keyMessages: textList(10, 300).optional(),
       productInfo: shortText(1000).optional(),
       approvalRequirements: shortText(500).optional(),
+    })
+    .optional(),
+  // M8 batch 7: clicks campaigns redirect to this URL (SPEC D29).
+  destinationUrl: z.string().url().max(2000).optional().nullable(),
+  // M8 batch 7: custom usage-rights terms (SPEC D30).
+  usageRights: z
+    .object({
+      type: z.enum(["standard", "custom"]).optional(),
+      terms: z
+        .object({
+          duration: z.enum(["perpetual", "3_months", "6_months", "12_months", "24_months"]).optional(),
+          exclusivity: z.enum(["none", "category"]).optional(),
+          exclusivityPeriod: z.string().max(100).nullable().optional(),
+          paidAdsAllowed: z.boolean().optional(),
+          territories: z.array(z.string().max(100)).max(50).optional(),
+          additionalTerms: z.string().max(1000).nullable().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });
@@ -177,6 +200,28 @@ function resolveCampaignSetup(body, current = null) {
   if (input.audienceTargeting !== undefined) details.audienceTargeting = input.audienceTargeting;
   if (input.creatorEligibility !== undefined) details.creatorEligibility = input.creatorEligibility;
   if (input.brief !== undefined) details.brief = input.brief;
+  // M8 batch 7: clicks campaigns require a destination URL.
+  if (input.destinationUrl !== undefined) {
+    details.destinationUrl = input.destinationUrl;
+  } else if (current && current.destinationUrl) {
+    details.destinationUrl = current.destinationUrl;
+  }
+  if (objective === "clicks" && !details.destinationUrl) {
+    // Only enforce when the wizard explicitly chose clicks (not on a draft save with no objective yet).
+    if (objectiveChosen) return badRequest("Add a destination URL for people who click the link");
+  }
+  // M8 batch 7: custom usage-rights terms.
+  if (input.usageRights !== undefined) {
+    const prev = current && current.usageRights;
+    const merged = {
+      type: (input.usageRights && input.usageRights.type) || (prev && prev.type) || "standard",
+      version: (prev && prev.version) || 1,
+      terms: { ...((prev && prev.terms) || {}), ...((input.usageRights && input.usageRights.terms) || {}) },
+    };
+    details.usageRights = merged;
+  } else if (current && current.usageRights && current.usageRights.type) {
+    details.usageRights = current.usageRights;
+  }
 
   // Content: the quote as-is. Performance: `budget` stays the views price (the referral
   // budget is booked separately at payment), with the fee inside it.
@@ -341,6 +386,8 @@ function campaignSetupView(campaign) {
     audienceTargeting: plain.audienceTargeting || {},
     creatorEligibility: plain.creatorEligibility || {},
     brief: plain.brief || {},
+    destinationUrl: plain.destinationUrl || null,
+    usageRights: plain.usageRights && plain.usageRights.type ? plain.usageRights : null,
   };
 }
 

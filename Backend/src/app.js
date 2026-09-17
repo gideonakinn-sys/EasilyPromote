@@ -28,6 +28,8 @@ const referralRoutes = require("./routes/referral");
 const referralCodeRoutes = require("./routes/referralCodes");
 // Campaign engine: applications (ticket 06)
 const applicationRoutes = require("./routes/applications");
+// M8 batch 7: clicks via tracked links (SPEC D29).
+const redirectRoutes = require("./routes/redirect");
 
 const app = express();
 
@@ -70,6 +72,8 @@ app.use((req, res, next) => {
 app.use(morgan("dev"));
 
 app.use("/api/webhooks", webhookRoutes);
+// M8 batch 7: public redirect for clicks campaigns (outside /api, no auth).
+app.use("/r", redirectRoutes);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));

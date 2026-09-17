@@ -13,6 +13,8 @@ const invalid = (res, parsed) =>
 
 const applySchema = z.object({
   pitch: z.string().trim().max(MAX_PITCH_LENGTH, `Keep your pitch under ${MAX_PITCH_LENGTH} characters`).optional(),
+  // M8 batch 7: usage rights acceptance (SPEC D30).
+  usageRightsAccepted: z.object({ version: z.number() }).optional(),
 });
 const rejectSchema = z.object({
   reason: z.string().trim().max(500, "Keep the reason under 500 characters").optional(),
@@ -22,7 +24,7 @@ router.post("/:id/apply", protect, authorizeRoles("creator"), async (req, res, n
   try {
     const parsed = applySchema.safeParse(req.body || {});
     if (!parsed.success) return invalid(res, parsed);
-    send(res, await applications.applyToCampaign({ user: req.user, campaignId: req.params.id, pitch: parsed.data.pitch }));
+    send(res, await applications.applyToCampaign({ user: req.user, campaignId: req.params.id, pitch: parsed.data.pitch, usageRightsAccepted: parsed.data.usageRightsAccepted }));
   } catch (error) {
     next(error);
   }
