@@ -113,6 +113,8 @@ function resolveCampaignSetup(body, current = null) {
 
   const isContent = definition.campaignModel === "content";
   const payShape = input.payShape || (current && current.campaignObjective === objective && current.payShape) || (isContent ? "fixed" : "performance");
+  // Hybrid pay ships after launch (ticket 10); refuse it even on drafts that aren't priced yet.
+  if (payShape === "hybrid") return badRequest("Hybrid pay (base plus bonus) isn't available yet");
   if (payShape !== "hybrid" && (payShape === "fixed") !== isContent) {
     return badRequest(isContent ? "Content campaigns pay a fixed rate per deliverable" : "Performance campaigns pay per verified result");
   }

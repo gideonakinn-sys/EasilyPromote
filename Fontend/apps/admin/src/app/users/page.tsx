@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
 import { CreatorVerificationDialog, type ConnectedAccount } from "../../components/creator-verification-dialog";
+import { DeleteUserDialog } from "../../components/delete-user-dialog";
 
 interface UserItem {
   id: string;
@@ -38,6 +39,12 @@ export default function AdminUsersPage() {
   const [rankInput, setRankInput] = useState<string>("rank1");
   const [scoreInput, setScoreInput] = useState<number>(50);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserItem | null>(null);
+  // Only super admins can delete accounts (the API refuses everyone else).
+  const [canDeleteUsers, setCanDeleteUsers] = useState(false);
+  useEffect(() => {
+    setCanDeleteUsers(getUser()?.role === "super_admin");
+  }, []);
   const [verifyingUser, setVerifyingUser] = useState<UserItem | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -82,21 +89,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  const deleteUser = async (user: UserItem) => {
-    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, placements, transactions, and notifications. This cannot be undone.`)) return;
-    try {
-      setActionLoading(true);
-      await apiRequest(`/admin/users/${user.id}`, {
-        method: "DELETE",
-        token: getToken() || undefined,
-      });
-      fetchUsers();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleSaveRank = async () => {
     if (!selectedUser) return;
@@ -284,9 +276,9 @@ export default function AdminUsersPage() {
                         >
                           {u.isActive ? "Deactivate" : "Activate"}
                         </button>
-                        {u.role !== "admin" && u.role !== "super_admin" && (
+                        {canDeleteUsers && u.role !== "admin" && u.role !== "super_admin" && (
                           <button
-                            onClick={() => deleteUser(u)}
+                            onClick={() => setDeletingUser(u)}
                             disabled={actionLoading}
                             className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
                           >
@@ -371,6 +363,19 @@ export default function AdminUsersPage() {
                 current.map((u) => (u.id === id && u.creatorProfile ? { ...u, creatorProfile: { ...u.creatorProfile, verifiedAt } } : u))
               );
               setVerifyingUser(null);
+            }}
+          />
+        )}
+
+        {deletingUser && (
+          <DeleteUserDialog
+            userId={deletingUser.id}
+            userName={deletingUser.name}
+            role={deletingUser.role}
+            onClose={() => setDeletingUser(null)}
+            onDeleted={() => {
+              setDeletingUser(null);
+              fetchUsers();
             }}
           />
         )}

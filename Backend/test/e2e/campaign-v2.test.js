@@ -134,6 +134,13 @@ test("hybrid pay and objectives that aren't ready are refused with a reason", as
   assert.equal(hybrid.status, 400);
   assert.match(hybrid.body.error, /Hybrid/);
 
+  const unpricedHybrid = await harness.api("POST", "/api/campaigns", {
+    token: brand.token,
+    body: { name: "Hybrid draft", category: "Beauty", campaignObjective: "content", payShape: "hybrid" },
+  });
+  assert.equal(unpricedHybrid.status, 400, JSON.stringify(unpricedHybrid.body));
+  assert.match(unpricedHybrid.body.error, /Hybrid/);
+
   const sales = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Sales", category: "Tech", campaignObjective: "sales", targetViews: 100000 } });
   assert.equal(sales.status, 400);
   assert.match(sales.body.error, /available yet/);

@@ -927,7 +927,9 @@ router.patch("/users/:id/status", adminGuard, async (req, res, next) => {
 });
 
 // ─── DELETE /api/admin/users/:id (cascade delete account) ────────────────────
-router.delete("/users/:id", adminGuard, async (req, res, next) => {
+// Same deletion a user gets when they delete themselves: payment, campaign and content
+// records are kept (anonymised) so refunds, owed pay and the books survive. Super admins only.
+router.delete("/users/:id", [protect, authorizeRoles("super_admin")], async (req, res, next) => {
   try {
     const targetId = req.params.id;
 
@@ -942,32 +944,22 @@ router.delete("/users/:id", adminGuard, async (req, res, next) => {
       return res.status(400).json({ error: "Super admin accounts cannot be deleted" });
     }
 
-    const userId = user._id;
-
-    if (user.role === "business") {
-      const campaignIds = await Campaign.find({ businessId: userId }).distinct("_id");
-      if (campaignIds.length > 0) {
-        await Promise.all([
-          Slot.deleteMany({ campaignId: { $in: campaignIds } }),
-          Submission.deleteMany({ campaignId: { $in: campaignIds } }),
-          Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
-          Notification.deleteMany({ campaignId: { $in: campaignIds } }),
-        ]);
-      }
-      await Campaign.deleteMany({ businessId: userId });
-      await BusinessProfile.deleteMany({ userId });
-    } else if (user.role === "creator") {
-      const campaignIds = await Submission.find({ creatorId: userId }).distinct("campaignId");
-      await Promise.all([
-        Slot.deleteMany({ creatorId: userId }),
-        Submission.deleteMany({ creatorId: userId }),
-        Transaction.deleteMany({ campaignId: { $in: campaignIds } }),
-        CreatorProfile.deleteMany({ userId }),
-      ]);
+    const { deleteAccount } = require("../services/accountDeletion");
+    const result = await deleteAccount(user);
+    if (!result.deleted) {
+      return res.status(409).json({
+        error: result.blockers[0] || "This account can't be deleted yet",
+        blockers: result.blockers,
+        code: "ACCOUNT_DELETION_BLOCKED",
+      });
     }
 
-    await Notification.deleteMany({ $or: [{ businessId: userId }, { creatorId: userId }] });
-    await User.findByIdAndDelete(userId);
+    await recordAdminActivity(req, {
+      action: "user.deleted",
+      targetType: "user",
+      targetId: user._id,
+      targetLabel: user.email,
+    });
 
     res.json({ success: true });
   } catch (err) {
