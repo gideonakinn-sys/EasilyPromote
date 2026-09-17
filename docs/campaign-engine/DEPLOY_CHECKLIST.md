@@ -1,6 +1,6 @@
 # Campaign Engine — Production Deploy Checklist
 
-Ordered steps for shipping the stacked campaign-engine branches (M0–M6) and M7 to production. Written against the branches as they stand on `m7/launch-docs`; re-check the commit ids before starting.
+Ordered steps for shipping the stacked campaign-engine branches (M0–M6) and M7 to production. Written against the branches as they stand on `m7/launch-fixes`; re-check the commit ids before starting.
 
 Assumptions to confirm first: production runs `main` (`e8f5a87`); the API runs on Render behind Cloudflare with `node src/server.js`; the web app deploys from `Fontend/apps/web`; the admin panel from `Fontend/apps/admin`. The stale `Fontend/apps/brand` and `Fontend/apps/creator` apps aren't part of this release.
 
@@ -24,6 +24,9 @@ The code branches form one straight line; each contains the one before it:
 | 8 | `m6/fixed-pay-payouts` | `4e3ec7e` | Fixed pay pot, withdrawals, refunds, voids, reconciliation script |
 | 9 | `m7/hardening` (part A) | branches from `4e3ec7e` | Tests, alerts, speed |
 | 10 | `m7/launch-docs` (part B) | branches from `4e3ec7e` | Help pages, this checklist, admin runbook |
+| 11 | `m7/launch-fixes` | stacked on the M7 branches (`bb09c27`) | Read-only check scripts, alert fixes and new alerts, Complete Campaign, verification screen, money roles, void frees placements, top-up back-pay |
+
+`m7/launch-fixes` already contains `m7/hardening`, `m7/keep-cancelled-money` and `m7/launch-docs`; merging it brings all of M7.
 
 Two docs-only branches come straight off `main` and touch no code: `m0/domain-glossary` (`CONTEXT.md`, `docs/adr/`) and `m0/correct-tickets` (`docs/campaign-engine/` spec, roadmap and tickets, `.scratch/`).
 
@@ -32,7 +35,7 @@ Two docs-only branches come straight off `main` and touch no code: `m0/domain-gl
 1. Check `main` hasn't moved: `git fetch && git log --oneline -1 origin/main` should still be `e8f5a87`. If it moved, rebase the stack onto it first and expect conflicts wherever the new `main` commits touch the same files.
 2. Merge `m0/domain-glossary`, then `m0/correct-tickets`. They touch different files; no conflicts expected.
 3. Merge `m6/fixed-pay-payouts` (brings in 1–8 at once). Against an unmoved `main` it's a fast-forward, so no conflicts.
-4. Merge `m7/hardening`, then `m7/launch-docs`. Both start from `4e3ec7e`, so conflicts only happen in files both changed. Part B changes `Fontend/packages/ui/src/components/nav-bar.tsx`, `Fontend/apps/web/src/components/creator-header.tsx` and `Fontend/apps/web/src/app/(dashboard)/dashboard/brand/page.tsx` (small Help links), and adds `Fontend/apps/web/src/app/help/`, `Fontend/apps/web/src/components/help-article.tsx` and the two docs in `docs/campaign-engine/`. Expect a conflict only if part A's speed work edited those three files; keep both changes.
+4. Merge `m7/launch-fixes` (it contains `m7/hardening`, `m7/keep-cancelled-money` and `m7/launch-docs`, already combined). If merging the M7 branches one at a time instead: merge `m7/hardening`, then `m7/launch-docs`. Both start from `4e3ec7e`, so conflicts only happen in files both changed. Part B changes `Fontend/packages/ui/src/components/nav-bar.tsx`, `Fontend/apps/web/src/components/creator-header.tsx` and `Fontend/apps/web/src/app/(dashboard)/dashboard/brand/page.tsx` (small Help links), and adds `Fontend/apps/web/src/app/help/`, `Fontend/apps/web/src/components/help-article.tsx` and the two docs in `docs/campaign-engine/`. Expect a conflict only if part A's speed work edited those three files; keep both changes.
 5. On the merged result:
    ```bash
    cd Backend && npm ci && npm test                  # unit + end-to-end (needs a local mongod; never production)
@@ -59,7 +62,9 @@ Existing variables the new features depend on; confirm they're set in production
 
 `MONGOD_PATH` is read by the test harness only; never set it in production.
 
-**If part A is merged:** it may add `OPS_ALERT_EMAIL` (where operational alerts go). If `git grep OPS_ALERT_EMAIL Backend/src` finds it, set it before deploying the API.
+**M7 adds one:** `OPS_ALERT_EMAIL`, the address (or comma-separated addresses) ops alerts are emailed to. Optional: without it alerts only show in the admin **Overview**. Set it before deploying the API. See `ADMIN_RUNBOOK.md` §9a for the alert kinds and thresholds.
+
+`scripts/preDeployChecks.js` checks every variable this release needs (names only, never values).
 
 ---
 
@@ -77,6 +82,10 @@ Existing variables the new features depend on; confirm they're set in production
 ## 4. Read-only checks (before deploying)
 
 Run from a checkout of the merged release, in `Backend/` after `npm ci`, with `MONGODB_URI` pointing at production (a restored copy of the backup is even better for the migration dry run). The scripts load `dotenv`, but a variable already set in the environment wins; don't rely on a local `.env`.
+
+**All check scripts are read-only.** `preDeployChecks.js`, `checkUniqueIndexConflicts.js`, `reconcileCampaigns.js` and `migrateCampaignV2.js` connect through `scripts/readOnlyConnection.js` with Mongoose's `autoIndex` and `autoCreate` off, so they never build an index or create a collection (a test runs them against a throwaway database and checks nothing was added). The migration with `--apply` writes only the Campaign v2 fields on existing campaigns; indexes are built by the API when it starts (§6).
+
+**MongoDB 4.4 or newer is required** (the creator dashboard and join read with `$unionWith`). `preDeployChecks.js` reads the server version and blocks below 4.4.
 
 ### 4.1 Unique index conflicts
 
@@ -133,9 +142,16 @@ node scripts/reconcileCampaigns.js > reconcile-before.txt; echo "exit $?"
 
 See `ADMIN_RUNBOOK.md` §8 for what each problem means.
 
-### 4.4 Part A checks, if present
+### 4.4 All-in-one pre-deploy checks
 
-If `Backend/scripts/preDeployChecks.js` exists after merging `m7/hardening`, run it the same way and follow its own pass / fail output.
+```bash
+node scripts/preDeployChecks.js              # production
+node scripts/preDeployChecks.js --staging    # a staging stack with Paystack test keys
+```
+
+It checks, in order: the environment variables (required ones block; `OPS_ALERT_EMAIL` and `PAYSTACK_CALLBACK_URL` only warn; a key that isn't `sk_live_` blocks unless `--staging`; `JWT_REFRESH_SECRET` equal to `JWT_SECRET` blocks), the MongoDB server version (below 4.4 blocks), the Campaign v2 migration dry run (a warning: apply it as its own step, §7), unique index conflicts (block) and reconciliation of every campaign with money (a campaign that doesn't balance blocks). `--apply` is refused.
+
+**Good:** `No blocking problems.` and exit code 0. Exit 1 lists the blocking problems; exit 2 means the checks couldn't run (for example, no connection).
 
 ### 4.5 Paystack settings
 
@@ -185,6 +201,11 @@ New indexes in this release (from the models):
 | `campaignapplications` | `{ campaign: 1, creator: 1 }` | **unique** | `CampaignApplication.js` |
 | `campaignapplications` | `{ campaign: 1, status: 1, matchScore: -1 }` | | `CampaignApplication.js` |
 | `campaignapplications` | `{ status: 1, appliedAt: 1 }` | | `CampaignApplication.js` |
+| `opsalerts` | `{ key: 1 }` | **unique**, partial: `active` is true | `OpsAlert.js` |
+| `opsalerts` | `{ resolvedAt: 1, firstSeenAt: -1 }`, `{ active: 1, kind: 1 }` | | `OpsAlert.js` |
+| `paystackwebhookfailures` | `{ createdAt: 1 }` | TTL 30 days | `PaystackWebhookFailure.js` |
+
+`jobstates` (the ops alerts job's last full reconciliation pass) is also new and has only its `_id` index. New collections can't have conflicts.
 
 Also confirm these unique indexes from `main` exist, since the budget-first rollout may not have built them in production yet: `transactions` `{ reference: 1, type: 1 }` (partial), `withdrawals` `one_pending_withdrawal` and `one_processing_withdrawal`.
 
@@ -266,11 +287,11 @@ The test creator needs a connected TikTok or Instagram / Facebook account and ch
 
 ### Admin
 
-14. **Refund screen:** end the first campaign (API: `PATCH /api/admin/campaigns/<id>/status` with `{"status":"completed"}`). **Deliverables And Fixed Pay** shows Unused 1 and ₦130 refundable. Signed in as `support` or `admin`, **Refund Unused Budget** is refused. As `finance_admin` or `super_admin`, refund it: the state shows **Sent, Waiting For Paystack** or **Refunded**; the brand gets "Unused budget refunded"; **Activity Log** shows `campaign.unused_budget_refunded`; after Paystack's webhook the state is **Refunded**.
+14. **Complete and refund:** as `admin`, open the first campaign in **Campaigns** → **Complete Campaign** → confirm. It leaves the creator marketplace and joining it is refused; the brand gets "Campaign completed"; **Activity Log** shows `campaign.completed`. As `support`, the button isn't shown. **Deliverables And Fixed Pay** shows Unused 1 and ₦130 refundable. Signed in as `support` or `admin`, **Refund Unused Budget** is disabled (the API refuses it with 403). As `finance_admin` or `super_admin`, refund it: the state shows **Sent, Waiting For Paystack** or **Refunded**; the brand gets "Unused budget refunded"; **Activity Log** shows `campaign.unused_budget_refunded`; after Paystack's webhook the state is **Refunded**.
 15. **Weekly Payout Run** and **Withdrawal Requests** load and show the Paystack balance.
 16. **Reconciliation:** `node scripts/reconcileCampaigns.js --all` shows both test campaigns as `OK`, and no campaign fails that wasn't in the baseline.
 
-Leave the test campaigns **completed**, not cancelled (cancelled campaigns are deleted after 24 hours; see the runbook).
+Leave the test campaigns **completed**. (A cancelled campaign with payments, placements, content, applications or conversions is kept, not deleted; see the runbook §5.)
 
 ---
 
