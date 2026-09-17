@@ -337,3 +337,47 @@ In that state, fix forward on the new API. If the API must come down, put it in 
 ### Restoring the backup
 
 Restoring the §3 backup undoes the migration **and everything since**: payments confirmed by Paystack webhooks, withdrawals, conversions and refunds would be lost from our ledger while the money has really moved. Only restore if nothing with real money happened after the backup; otherwise reconcile by hand against Paystack before and after.
+
+---
+
+## 11. Money follow-ups (ticket 11: automatic refunds, refund retries, payout appeals, brand statement)
+
+**No migration and no new environment variable.** It uses `PAYSTACK_SECRET_KEY` (already required); without it the automatic refund job is skipped (`[AutoRefunds] Skipped`).
+
+**Indexes and collections (built by the API at boot, §6):**
+
+| Collection | Keys | Options | Model |
+|---|---|---|---|
+| `payoutappeals` (new) | `{ subjectType: 1, subjectId: 1 }` | **unique** | `PayoutAppeal.js` |
+| `payoutappeals` | `{ status: 1, createdAt: -1 }`, `{ creatorId: 1, createdAt: -1 }` | | `PayoutAppeal.js` |
+| `submissionevents` | `{ type: 1, createdAt: -1 }` | | `SubmissionEvent.js` |
+
+The new collection can't conflict. The `submissionevents` index isn't unique; on a large collection check `db.currentOp({ "command.createIndexes": { $exists: true } })` until it's built.
+
+**A new job moves money as soon as the API boots.** `startAutoRefunds` runs at boot and then hourly, and refunds unused budget on every campaign that was completed or cancelled in the last 90 days (runbook §5 Automatic refunds), including campaigns that ended before this release:
+- content campaigns' unused deliverables (what **Refund Unused Budget** would offer today),
+- hybrid campaigns' unused bonus pool once refundable,
+- completed views campaigns' untaken places and completed sign-up campaigns' unearned referral pool, 7 days after completion (before this release these were never refunded),
+- cancel refunds that never happened.
+
+Before deploying the API, as part of §4 (read-only, against production):
+1. Run `node scripts/reconcileCampaigns.js` and keep the output; a campaign that doesn't balance should be understood first, because the job refunds from the same figures.
+2. List what the first run will look at, and agree with finance that those brands should be refunded now:
+   ```js
+   const since = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+   db.campaigns.find({ $or: [
+     { status: "completed", completedAt: { $gte: since } },
+     { status: "cancelled", updatedAt: { $gte: since } },
+   ] }, { name: 1, status: 1, completedAt: 1, campaignModel: 1, payShape: 1 })
+   ```
+   For content campaigns, the **Deliverables And Fixed Pay** panel's refundable amount is what the job will send. If some must not be refunded yet, refund decisions have to be settled before the deploy: there's no per-campaign switch.
+3. Paystack: the balance must cover the refunds (Paystack refunds draw on it).
+
+After the deploy:
+- Watch for `[AutoRefunds]` log lines in the first hour, then **Refunds** → **Needs Attention** and **Overview** → **Needs Attention** for `Automatic Refund Failed`.
+- Run `node scripts/reconcileCampaigns.js` again; nothing new should fail.
+- Smoke: as a brand, open **Statement** on the brand dashboard (figures add up to paid in; **Download CSV** works). As `support`, **Appeals Inbox** loads and **Grant Appeal** on a payout appeal is disabled. As `finance_admin`, **Refunds** loads.
+
+**Behaviour changes to tell the team:** voided undelivered pay is no longer refundable until the creator's 7-day appeal window passes (or an appeal is denied); failed views, referral and bonus refunds are retried from **Refunds** instead of by hand in Paystack; rejected-withdrawal and voided-pay notifications now tell creators they can appeal.
+
+**Rollback:** the fields (`Campaign.autoRefund`, `Campaign.hybridBonus.returnedRefs`, `Submission.voidAppealableUntil / voidAppealOpen / voidReinstatedAt`, `Withdrawal.appealReinstatedAt`, `Transaction.bonusGiveBack`, the `reinstated` status on `fixed_void` rows) are additive, and older code ignores them. Two caveats: older code treats a `fixed_void` row as blocking a credit whatever its status (harmless: restored pay is already credited), and older code would refund voided pay that's still inside its appeal window. Refunds the job already sent can't be undone by a rollback.

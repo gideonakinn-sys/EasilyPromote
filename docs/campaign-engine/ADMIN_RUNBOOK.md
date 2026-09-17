@@ -26,6 +26,9 @@ Roles come from `authorizeRoles` in `Backend/src/routes/admin.js` and `adminRefe
 | **Approve or reject withdrawals, run the weekly payout** | `POST /admin/withdrawals/:id/review`, `/admin/payout-run/approve` | ✗ | ✓ | ✓ | ✗ |
 | **Check stuck payouts against Paystack** | `POST /admin/payouts/reconcile` | ✗ | ✓ | ✓ | ✗ |
 | **Refund unused content budget, retry a refund** | `POST /admin/campaigns/:id/refund-unused`, `/refunds/:refundId/retry` | ✗ | ✓ | ✓ | ✗ |
+| **Retry any failed refund** (content, views, referral, bonus) | **Refunds** → `POST /admin/refunds/:refundId/retry` | ✗ | ✓ | ✓ | ✗ |
+| Deny a payout appeal (note required) | **Appeals Inbox** → `POST /admin/payout-appeals/:id/resolve` | ✓ | ✓ | ✓ | ✓ |
+| **Grant a payout appeal** | **Appeals Inbox** → same route with `grant` | ✗ | ✓ | ✓ | ✗ |
 | **Refund a hybrid campaign's unused bonus pool** | `POST /admin/campaigns/:id/refund-unused-bonus` | ✗ | ✓ | ✓ | ✗ |
 | **Void undelivered fixed pay** | `POST /admin/submissions/:id/void-undelivered` | ✗ | ✓ | ✓ | ✗ |
 | Set or change a sign-up reward (also a hybrid sign-up / download bonus) | `PATCH /admin/referrals/campaigns/:id/reward` | ✓ | ✓ | ✓ | ✗ |
@@ -99,11 +102,11 @@ A brand's rejection of content (content campaigns only) can be appealed by the c
 
 ### How you hear about it
 
-The brand gets a notification. Admins get a live `submission-appealed` push if signed in, and the **Overview** counts appealed submissions. There's no admin inbox.
+The brand gets a notification. Admins get a live `submission-appealed` push if signed in, the **Overview** counts appealed submissions, and the appeal shows in **Appeals Inbox** (§3a).
 
 ### Decide an appeal
 
-1. **Verifications** → **Appeals** tab.
+1. **Appeals Inbox** → **Content** (or **Verifications** → **Appeals** tab).
 2. Watch the content. Read the brand's rejection reason and the creator's appeal. The campaign's brief is on the campaign in **Campaigns**.
 3. Decide:
    - **Uphold the rejection:** a note is required. The content stays rejected, the appeal window closes, and the decision is final.
@@ -114,7 +117,22 @@ The brand gets a notification. Admins get a live `submission-appealed` push if s
 
 The same **Verifications** screen also lets an admin approve or reject content that's waiting for review, through the same guarded path the brand uses.
 
-> **Note for the lead — payout appeals don't exist.** There's no appeal on a withdrawal or on voided pay. A rejected withdrawal only carries the admin's note; the creator can request again (a rejected request doesn't use up their weekly withdrawal). Disputes about pay are handled outside the product.
+Every decision is logged (`submission.appeal_approved` / `submission.appeal_rejected`).
+
+## 3a. Payout appeals and the Appeals Inbox (D23)
+
+A creator can appeal, once and within **7 days**, a **rejected withdrawal** or **fixed pay voided as not delivered** (§4), from their wallet. Voided conversions (§1) aren't appealable in the product.
+
+**Appeals Inbox** lists content appeals (§3) and payout appeals together. Filter by **Content / Payouts**, **Open / Resolved / Any Status**, search by creator, campaign or reason, or open one campaign's appeals with `/appeals?campaign=<id>`. Choose a row to read the decision, the creator's reason and (content) the video.
+
+- **Deny Appeal** (any admin role): a note is required. The decision stands, can't be appealed again, and the creator is told with your note (`payout_appeal.denied`).
+- **Grant Appeal** (`finance_admin`, `super_admin`): moves money.
+  - **Rejected withdrawal:** goes back in the payout queue with its original request date, so it's due in the next **Weekly Payout Run**, where escrow and holds are checked again. Refused with `WITHDRAWAL_IN_FLIGHT` when the creator already has a withdrawal queued for that campaign, or `NO_LONGER_AVAILABLE` when their earnings no longer cover it (they requested again, or earnings were voided). Deny it then; they can request what's available.
+  - **Voided pay:** the content goes back to **awaiting delivery** (a new 14-day delivery window), the creator takes their place back and the pay is credited again. Refused with `PLACEMENT_TAKEN` or `NO_BUDGET_FOR_APPEAL` (the deliverable was refunded or paid to someone else).
+  - A refused grant leaves the appeal open. The creator is told of a grant (`payout_appeal.granted`).
+- A grant claims the appeal first ("Being Granted"). If the API died part-way, grant it again after 5 minutes: every step is repeat-safe and never pays twice.
+
+While a voided-pay appeal is open or can still be filed, its deliverable isn't refundable, by hand or automatically.
 
 ---
 
@@ -127,7 +145,7 @@ For content going to the brand's page (brand page or both): if approved content 
 1. **Campaigns** → open the content campaign → **Deliverables And Fixed Pay** → **Approved, Not Delivered**.
 2. Each row shows the creator, approval date, and either "can be voided from <date>" or an enabled **Void Undelivered Pay** button. It's enabled **14 days after approval**, or straight away if the campaign is cancelled.
 3. Press it and confirm in the modal. This can't be undone.
-4. Effect: the submission becomes `not_delivered`; if pay was credited, a `fixed_void` ledger row reverses it and the amount goes back to the campaign; the creator is notified; the action is logged (`submission.fixed_pay_voided`). The deliverable now counts as unused for refunds.
+4. Effect: the submission becomes `not_delivered`; if pay was credited, a `fixed_void` ledger row reverses it and the amount goes back to the campaign; the creator is notified and can appeal within 7 days (§3a); the action is logged (`submission.fixed_pay_voided`). The deliverable counts as unused for refunds once the appeal window has passed or an appeal was denied.
 5. The creator's placement is freed and no longer counts toward their 3 active placements: on a **live** campaign that can still pay the deliverable it goes back to the campaign for another creator; otherwise (paused, completed, cancelled) it's **closed**. Either way the place loses its creator; the not-delivered submission records the creator and who voided it (`notDeliveredBy`). Closed places never count as creators (the brand's creator count counts distinct creators holding a place), whether closed by a void or by Complete Campaign. If a paused campaign is resumed (by the brand or an admin), places closed while it was paused reopen, up to the deliverables bought; if it's completed or cancelled instead, they stay closed and the deliverable is refundable. The creator who didn't deliver can't join that campaign again (`CONTENT_NOT_DELIVERED`).
 
 Refusals: `NOT_AWAITING_DELIVERY` (the creator already delivered or it isn't approved), `NOT_VOIDABLE_YET` (under 14 days on a campaign that isn't cancelled), `NO_BRAND_DELIVERY` (creator-page campaign). Voiding twice is harmless.
@@ -161,7 +179,7 @@ The status route (`PATCH /admin/campaigns/:id/status` with `completed`) takes th
 
 **Who:** `finance_admin`, `super_admin`. **When:** the campaign is `completed` or `cancelled`.
 
-What's refundable (`utils/fixedPayRules.js`): deliverables bought that are **not** credited, **not** still able to earn (in review, changes requested, awaiting delivery / post, under appeal, or rejected inside its 7-day appeal window) and **not** already held by a pending or succeeded refund. Each is refunded at the brand's rate plus the platform fee charged on it, pro rata, rounded down to the kobo. **Paystack fees aren't deducted.**
+What's refundable (`utils/fixedPayRules.js`): deliverables bought that are **not** credited, **not** still able to earn (in review, changes requested, awaiting delivery / post, under appeal, rejected inside its 7-day appeal window, or voided pay whose payout appeal is open or can still be filed) and **not** already held by a pending or succeeded refund. Each is refunded at the brand's rate plus the platform fee charged on it, pro rata, rounded down to the kobo. **Paystack fees aren't deducted.**
 
 Example: ₦15,000 × 10 deliverables = ₦150,000 creator budget + ₦45,000 fee = ₦195,000 paid. 6 completed, 4 unused → refund 4 × ₦15,000 + 4/10 of ₦45,000 = **₦78,000**.
 
@@ -180,8 +198,21 @@ A hybrid campaign pays a base per approved deliverable (fixed pay, exactly as ab
 
 - **Unused base:** **Refund Unused Budget**, as for any content campaign.
 - **Unused bonus:** **Refund Unused Bonus** (finance / super admin). Allowed once the campaign is cancelled, or completed for a views bonus, or **7 days after completion** for a sign-up / download bonus (conversions still count in that window; refused with `CAMPAIGN_NOT_FINISHED` and the date). The modal shows Unused Pool, Platform Fee On It (pro rata, rounded down) and the Refund. Confirming claims the pool at once, so no more bonus can be earned from it; bonus already credited stays owed. Refusals: `REFUND_CHANGED` (a bonus was credited or voided since you loaded it; reload), `NOTHING_TO_REFUND`.
-- A bonus refund works like views / referral refunds: **no retry**. A refused part shows **Failed, Refund By Hand In Paystack**; refund it in the Paystack dashboard. If the API crashed after claiming the pool but before writing the refund, pressing the button again sends that claim (reconciliation shows "refund the unused bonus again" until then).
-- Sign-up / download bonuses use the brand's referral codes and your reward (§1). Setting the first reward pays earlier sign-ups from the bonus pool, oldest first, up to each creator's cap. Voiding a conversion in its hold gives its bonus back to the pool.
+- A refused bonus refund shows **Failed** with **Retry Refund** beside it (also in **Refunds**). If the API crashed after claiming the pool but before writing the refund, pressing the button again (or the automatic refund job) sends that claim (reconciliation shows "refund the unused bonus again" until then).
+- Sign-up / download bonuses use the brand's referral codes and your reward (§1). Setting the first reward pays earlier sign-ups from the bonus pool, oldest first, up to each creator's cap. Voiding a conversion in its hold gives its bonus back to the pool; if the API dies part-way, the 15-minute ops job finishes it (once).
+
+### Automatic refunds (ticket 11)
+
+An hourly job (`services/autoRefunds.js`) refunds unused budget on campaigns that ended in the last 90 days, through the same refund rows as above, with no Paystack fees deducted. You can still refund by hand first; the job then finds nothing left. Each automatic refund notifies the brand and is logged as `campaign.unused_budget_auto_refunded` by "Automatic refunds".
+
+| Pot | When | What |
+|---|---|---|
+| Content base | As soon as the campaign is completed or cancelled, and again whenever more becomes unused | Unused deliverables × rate + the fee on them (as the button above) |
+| Hybrid bonus pool | When **Refund Unused Bonus** would allow it, and no content on the campaign is under appeal or can still be appealed | Unused pool + its fee |
+| Views | Cancelled: the cancel refund, if it never happened. Completed: 7 days after completion | Completed: only what no creator holding a place can still earn (each keeps their full place reward less what they were paid). Once per campaign |
+| Referral budget | Cancelled: the cancel refund, if it never happened or a crash cut it short. Completed: 7 days after completion | The unearned pool grossed up by its fee. Once per campaign. Held while sign-ups wait for a reward (set it, §1) |
+
+Refund rows left unsent by a crash are retried from themselves after 10 minutes. A refund Paystack refuses stays **Failed** for you to retry. Anything the job couldn't refund raises **Automatic Refund Failed** (§9a) until a run goes through. The job is skipped when `PAYSTACK_SECRET_KEY` isn't set (log: `[AutoRefunds] Skipped`).
 
 ### Reading refund states
 
@@ -213,11 +244,13 @@ When a views or referral campaign is **cancelled** (by the brand through the API
 - **Views:** the unused part of the creator pool is refunded: the pool less payouts sent or in flight and less views withdrawals creators have requested. The platform fee isn't refunded.
 - **Referral budget:** the pool no creator has earned is refunded, grossed up by the fee on it. Earned rewards stay for creators to withdraw.
 
-Each happens once per campaign (a fixed reference). There's **no retry**: a failed part leaves the row `refund_failed` with an admin note "Refund manually in Paystack: ₦… against <reference> (…)". Refund it by hand in the Paystack dashboard.
+Each happens once per campaign (a fixed reference). A failed part leaves the row `refund_failed` with a note "Refund failed: ₦… against <reference> (…)"; retry it from **Refunds** (finance / super admin). A retry reuses the row, so the books don't change.
 
-> **Notes for the lead:**
-> - Completing a views or referral campaign refunds nothing, and there's no route to refund its leftover escrow.
-> - The admin note on a failed views / referral refund isn't shown anywhere in the panel (**Payouts & Escrow** lists type and status only); read it from the database.
+Completing a views or referral campaign refunds nothing at once; the automatic refund job refunds what's unused 7 days later (above).
+
+### Refunds screen
+
+**Refunds** lists every refund with its budget (content, views, referral, bonus), amount, state and error. **Needs Attention** shows failed and unsent ones. **Retry Refund** (finance / super admin) resends only what never reached Paystack, after checking Paystack's own refunds, so it can't refund twice; two retries at once get one send and `REFUND_IN_PROGRESS`. A part with no Paystack payment can't be retried (`REFUND_BY_HAND`).
 
 ### Cancelled campaigns are only deleted when nothing depends on them
 
@@ -339,7 +372,8 @@ All jobs run inside the API process (`Backend/src/server.js`), start at boot and
 | Content deadlines (`startContentAutoApprove`) | 15 min | On content campaigns, anything waiting on the brand for 72 hours: approves content in review (not on cancelled campaigns), confirms receipts, confirms live posts. Up to 500 per run, oldest first. |
 | Application deadlines (`startApplicationDeadlines`) | 1 hour | Expires pending applications after 7 days or when the campaign is completed / cancelled; reminds each brand once about applications waiting 3+ days; puts approvals that never got a place back to pending (10 minutes to 2 days after approval). |
 | Payout reconcile | 30 min | §6. |
-| Ops alerts (`startOpsAlerts`) | 15 min | §9a. |
+| Ops alerts (`startOpsAlerts`) | 15 min | §9a. Also retries stranded referral back-pay, accrues views bonuses and returns voided bonuses a crash left unreturned. |
+| Automatic refunds (`startAutoRefunds`) | 1 hour | §5 Automatic refunds. Logs: `[AutoRefunds] … refunds, … retried, … campaigns with problems`. |
 | Cancelled cleanup | 1 hour | Deletes campaigns cancelled for 24 hours that have no records (§5). |
 | TikTok / Meta view sync | 15 min | Views on posts; completes views campaigns that reach their target. |
 | Rank recalculation | 24 hours | Creator ranks. |
@@ -387,7 +421,8 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 |---|---|---|---|
 | `payout_failed` | Payout Transfer Failed | A withdrawal is back in the queue (pending) and every release row of its latest transfer failed. Failures from the last 30 days are found; one already alerted keeps being checked however old. | Withdrawals |
 | `withdrawal_stuck` | Withdrawal Stuck In Processing | A withdrawal has been processing for more than 24 hours. | Withdrawals |
-| `refund_stuck` | Refund Not Completed | A views, referral or fixed refund is pending, failed or unsent more than 1 hour after it was created. | The campaign |
+| `refund_stuck` | Refund Not Completed | A views, referral, fixed or bonus refund is pending, failed or unsent more than 1 hour after it was created. | The campaign |
+| `auto_refund_failed` | Automatic Refund Failed | The automatic refund job couldn't refund an ended campaign (Paystack refused, an earlier refund needs a retry, sign-ups wait for a reward). Resolves when a run for that campaign goes through. | The campaign |
 | `webhook_failing` | Conversion Webhooks Failing | 5+ rejected conversion webhooks for one brand in the last hour. | Referrals |
 | `paystack_webhook_failing` | Paystack Webhooks Failing | 3+ Paystack webhooks failed to process in the last hour. Each processing failure (the handler threw; not a bad signature) is recorded in `paystackwebhookfailures` (kept 30 days) with the event, reference and error. Paystack retries them; check the API logs. | Payouts & Escrow |
 | `content_deadline_stuck` | Content Deadline Not Processed | Content has waited on the brand for more than 73 hours (the 72-hour job plus an hour). | The campaign |
@@ -413,11 +448,10 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 | Check stuck payouts now | API: `POST /api/admin/payouts/reconcile` (§6) |
 | Run reconciliation for all campaigns | `node scripts/reconcileCampaigns.js` (§8) |
 | Refund, apply or close an unmatched payment | Paystack dashboard; record it elsewhere (§7) |
-| Retry a failed views / referral refund | Paystack dashboard (§5) |
+| Mark a refund part with no payment reference as refunded | Paystack dashboard (§5) |
 | Mark a Sent content refund as refunded, or refund a part with no payment reference | Paystack dashboard; can't be recorded in the panel (§5) |
-| Retry a failed hybrid bonus refund | Paystack dashboard (§5) |
 | See whether jobs are running | API logs and the database queries in §9 |
-| Appeal a payout | Not a feature (§3) |
+| Appeal a voided conversion | Not a feature; disputes go through support (§3a) |
 
 ---
 
@@ -425,17 +459,17 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 
 The code wins in this runbook; these need a decision or a fix. Resolved on `m7/launch-fixes` and removed from this list: cancelled campaigns being deleted with their records (§5), no way to end a content campaign from the panel (§4a), no verification screen (§2; there's still no creator request flow, see item 3), money actions open to `support` and `finance_admin` unable to set rewards (§0), voided pay keeping the placement active (§4), and budget-exhausted conversions never paid after a top-up (§1).
 
-1. **D5 says refunds are "minus Paystack fees"; the code doesn't deduct them** (content, views and referral alike). The comment in `fixedPayRules.js` says D5 is being amended.
+1. ~~D5 says refunds are "minus Paystack fees"~~: D5 amended, no fees deducted (ticket 11's wording still says "minus"). Originally: **the code doesn't deduct them** (content, views and referral alike). The comment in `fixedPayRules.js` says D5 is being amended.
 2. **D8 says interests rank creators; they don't.** The Match Score uses audience location, age and gender only. Interests are stored and ignored.
 3. **Verification (D13) has no creator request flow or ID upload**; the identity check happens outside the product.
 4. **What `support` should be able to do** needs a decision: it can still change campaign status (except complete and cancelling a paid campaign), delete record-free campaigns, decide content appeals and verify creators, but not resolve alerts or move money.
-5. **Payout appeals don't exist** (§3).
+5. ~~Payout appeals don't exist~~: built (§3a). Voided conversions still can't be appealed.
 6. **Referral codes in content captions:** `markContentPosted` checks the caption for the creator's referral code when referral tracking is on, but content campaigns never have referral tracking, so the check doesn't run today.
-7. **Views and referral refunds can't be retried**, and their failure note isn't shown in the panel (§5). A failed content refund part with no payment reference can't be retried either.
-8. **Leftover escrow on a completed views campaign has no refund path** (only cancellation refunds), and that includes a views campaign ended with Complete Campaign.
+7. ~~Views and referral refunds can't be retried~~: retried from **Refunds** (§5), which shows the error. A refund part with no payment reference still can't be retried.
+8. ~~Leftover escrow on a completed views campaign has no refund path~~: the automatic refund job refunds untaken places 7 days after completion (§5). Money held for a placed creator who under-delivered stays in escrow.
 9. **The glossary's "Hold" (7 days) doesn't apply to views earnings**: views earnings are withdrawable as soon as they're earned while the campaign is live, paused or completed. Fixed pay and referral rewards have the 7-day hold.
 10. **Views posts that stop syncing aren't alerted**: submissions have no per-post view sync time, so `views_submission_stuck` only covers approved content whose post link was never shared (§9a).
 11. **D10 was extended in code:** besides content review, brand-page receipts and live-post checks are confirmed automatically after 72 hours.
 12. **`docs/referral-tracking-plan.md` Phase 6 says the brand sets the reward per conversion**; ADR 0003 and the code have our team set it.
 13. **Roadmap M6 lists a "stuck-payment queue" in admin**; there isn't one beyond the **Withdrawal Requests** processing filter and the reconcile job.
-14. The older **Verifications** screen still uses `alert()` for errors, against the in-app modals rule.
+14. The older **Verifications** screen still uses `alert()` for errors, against the in-app modals rule (so do parts of **Campaigns**, **Users & Creators** and **Referrals**). **Appeals Inbox** decides content appeals without it.
