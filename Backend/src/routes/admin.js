@@ -250,6 +250,9 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         status: campaign.status,
         statusNote: campaign.statusNote,
         viewsDelivered: campaign.viewsDelivered || 0,
+        progressPercent: campaign.targetViews > 0 ? Math.min(Math.round(((campaign.viewsDelivered || 0) / campaign.targetViews) * 100), 100) : 0,
+        slotCount: campaign.slotCount || 5,
+        campaignModel: campaign.campaignModel || "performance",
         createdAt: campaign.createdAt,
         brand: campaign.businessId
           ? { id: campaign.businessId._id, name: campaign.businessId.name, email: campaign.businessId.email }
@@ -796,6 +799,20 @@ router.get("/users", adminGuard, async (req, res, next) => {
     ]);
 
     const userIds = users.map((u) => u._id);
+    const creatorIds = users.filter((u) => u.role === "creator").map((u) => u._id);
+    const TikTokConnection = require("../models/TikTokConnection");
+    const MetaConnection = require("../models/MetaConnection");
+    const [tiktokConnections, metaConnections] = creatorIds.length
+      ? await Promise.all([
+          TikTokConnection.find({ userId: { $in: creatorIds } }).select("userId username").lean(),
+          MetaConnection.find({ userId: { $in: creatorIds } }).select("userId provider username").lean(),
+        ])
+      : [[], []];
+    // Connected social accounts per creator: what verification (D13) requires.
+    const connectedMap = {};
+    for (const c of tiktokConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: "tiktok", username: c.username || null });
+    for (const c of metaConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: c.provider || "meta", username: c.username || null });
+
     const [campaignCounts, submissionCounts, creatorProfiles] = await Promise.all([
       Campaign.aggregate([
         { $match: { businessId: { $in: userIds } } },
@@ -841,6 +858,8 @@ router.get("/users", adminGuard, async (req, res, next) => {
                 lifetimeEarnings: cp.lifetimeEarnings,
                 socialAccounts: cp.socialAccounts,
                 niches: cp.niches,
+                verifiedAt: cp.verifiedAt || null,
+                connectedAccounts: connectedMap[u._id.toString()] || [],
               }
             : null,
         };

@@ -64,6 +64,11 @@ test("Complete Campaign ends a live content campaign: places close, joins and ap
   assert.equal((await harness.api("PATCH", `/api/admin/campaigns/${id}/status`, { token: support.token, body: { status: "completed" } })).status, 403, "support can't complete through the status route either");
 
   const admin = await harness.registerAdmin({ role: "admin" });
+  // An alert link opens the campaign from its id alone, so the detail carries what the modal needs.
+  const detail = await harness.api("GET", `/api/admin/campaigns/${id}`, { token: admin.token });
+  assert.equal(detail.body.campaign.campaignModel, "content");
+  assert.equal(typeof detail.body.campaign.progressPercent, "number");
+
   const completed = await harness.api("POST", `/api/admin/campaigns/${id}/complete`, { token: admin.token, body: { note: "Brand asked to wrap up" } });
   assert.equal(completed.status, 200, JSON.stringify(completed.body));
   assert.equal(completed.body.status, "completed");
@@ -162,6 +167,31 @@ test("paying and reviewing withdrawals, the payout run, the payout check and can
     }
     assert.equal((await model("Campaign").findById(campaignId).lean()).status, "cancelled");
   }
+});
+
+test("the admin user list shows each creator's connected accounts and verification, for the Verify Creator action", async () => {
+  const connected = await harness.registerCreator();
+  const unconnected = await harness.registerCreator({ connected: false });
+  const admin = await harness.registerAdmin({ role: "support" });
+  const listed = async (creator) => {
+    const res = await harness.api("GET", `/api/admin/users?role=creator&q=${encodeURIComponent(creator.email)}`, { token: admin.token });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    return res.body.users.find((u) => String(u.id) === String(creator.id));
+  };
+
+  let row = await listed(connected);
+  assert.deepEqual(row.creatorProfile.connectedAccounts, [{ platform: "tiktok", username: connected.username }]);
+  assert.equal(row.creatorProfile.verifiedAt, null);
+  const verified = await harness.api("PATCH", `/api/admin/creators/${connected.id}/verification`, { token: admin.token, body: { verified: true } });
+  assert.equal(verified.status, 200, JSON.stringify(verified.body));
+  row = await listed(connected);
+  assert.ok(row.creatorProfile.verifiedAt);
+
+  row = await listed(unconnected);
+  assert.deepEqual(row.creatorProfile.connectedAccounts, []);
+  const refused = await harness.api("PATCH", `/api/admin/creators/${unconnected.id}/verification`, { token: admin.token, body: { verified: true } });
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.code, "SOCIAL_ACCOUNT_REQUIRED");
 });
 
 test("finance admins set and change sign-up rewards; support can't", async () => {

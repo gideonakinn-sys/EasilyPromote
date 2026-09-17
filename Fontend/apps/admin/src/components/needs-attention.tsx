@@ -15,6 +15,7 @@ export interface OpsAlert {
   lastSeenAt: string;
   active: boolean;
   resolvedAt: string | null;
+  reopenedAt: string | null;
 }
 
 interface AlertsResponse {
@@ -33,10 +34,11 @@ const LINK_LABELS: Record<string, string> = {
   "/withdrawals": "Open Withdrawals",
   "/payout-run": "Open Payout Run",
   "/referrals": "Open Referrals",
+  "/payouts": "Open Payouts",
 };
 
 function linkLabel(link: string) {
-  if (link.startsWith("/verifications/campaign/")) return "Open Campaign";
+  if (link.startsWith("/campaigns?open=") || link.startsWith("/verifications/campaign/")) return "Open Campaign";
   return LINK_LABELS[link] || "Open";
 }
 
@@ -56,6 +58,8 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
   const [resolving, setResolving] = React.useState(false);
   const [resolveError, setResolveError] = React.useState("");
   const [canResolve, setCanResolve] = React.useState(false);
+  // Every open alert, even past the ones listed.
+  const [openCount, setOpenCount] = React.useState(0);
 
   const load = React.useCallback(async () => {
     try {
@@ -63,6 +67,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
       setError("");
       const data = await apiRequest<AlertsResponse>("/admin/alerts", { token: getToken() || undefined });
       setAlerts(data.alerts);
+      setOpenCount(data.open);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Couldn't load alerts");
     } finally {
@@ -94,6 +99,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
       setResolveError("");
       await apiRequest<OpsAlert>(`/admin/alerts/${confirming.id}/resolve`, { method: "PATCH", token: getToken() || undefined });
       setAlerts((current) => current.filter((a) => a.id !== confirming.id));
+      setOpenCount((count) => Math.max(count - 1, 0));
       setConfirming(null);
     } catch (err: unknown) {
       setResolveError(err instanceof Error ? err.message : "Couldn't resolve this alert");
@@ -118,10 +124,10 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
           <span
             className={cn(
               "px-2.5 py-1 text-xs font-medium rounded-full",
-              alerts.length > 0 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+              openCount > 0 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
             )}
           >
-            {alerts.length > 0 ? `${alerts.length} Open` : "All Clear"}
+            {openCount > 0 ? `${openCount} Open` : "All Clear"}
           </span>
         )}
       </div>
@@ -147,6 +153,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-stone-900">{alert.title}</span>
                   <span className="text-[11px] text-stone-500 font-medium">First seen {timeSince(alert.firstSeenAt)}</span>
+                  {alert.reopenedAt && <span className="text-[11px] text-red-700 font-medium">Reopened {timeSince(alert.reopenedAt)}</span>}
                   {!alert.active && <span className="text-[11px] text-green-700 font-medium">Condition cleared</span>}
                 </div>
                 <p className="text-xs text-stone-600 font-medium mt-1 break-words">{alert.message}</p>
@@ -193,7 +200,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
               </h3>
               <p className="text-xs text-stone-500 font-medium leading-relaxed">{confirming.message}</p>
               <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                It stays resolved while the problem lasts. If the problem clears and comes back, you&apos;ll get a new alert.
+                If the problem is still there, the alert reopens when it changes or 24 hours from now. If it clears and comes back, you&apos;ll get a new alert.
               </p>
               {resolveError && <p className="text-xs text-red-600 font-medium">{resolveError}</p>}
             </div>

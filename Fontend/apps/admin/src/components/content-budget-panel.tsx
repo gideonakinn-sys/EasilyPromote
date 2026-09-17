@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { API_URL, apiRequest, getToken } from "../lib/api";
+import { API_URL, apiRequest, getToken, getUser } from "../lib/api";
+import { MONEY_ROLES } from "../lib/roles";
 
 // Fixed pay and unused budget for one content campaign (ticket 09).
 type RefundState = "refunded" | "sent" | "not_sent" | "failed";
@@ -87,6 +88,12 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
   const [pending, setPending] = React.useState<PendingAction | null>(null);
   const [working, setWorking] = React.useState(false);
   const [message, setMessage] = React.useState<{ text: string; failed: boolean } | null>(null);
+  // Refunds, retries and voids move money: finance admins and super admins only.
+  const [canMoveMoney, setCanMoveMoney] = React.useState(false);
+
+  React.useEffect(() => {
+    setCanMoveMoney(MONEY_ROLES.includes(getUser()?.role || ""));
+  }, []);
 
   const load = React.useCallback(async () => {
     try {
@@ -213,7 +220,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                     <button
                       type="button"
                       onClick={() => setPending({ kind: "retry", refund })}
-                      disabled={working}
+                      disabled={working || !canMoveMoney}
                       className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                     >
                       Retry Refund
@@ -237,7 +244,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                   <button
                     type="button"
                     onClick={() => setPending({ kind: "void", item })}
-                    disabled={!item.voidable || working}
+                    disabled={!item.voidable || working || !canMoveMoney}
                     className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                   >
                     Void Undelivered Pay
@@ -260,12 +267,15 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
             <button
               type="button"
               onClick={() => setPending({ kind: "refund" })}
-              disabled={!budget.refundAllowed || openRefund || budget.refundable.amount <= 0 || working}
+              disabled={!budget.refundAllowed || openRefund || budget.refundable.amount <= 0 || working || !canMoveMoney}
               className="shrink-0 px-4 py-2 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
             >
               Refund Unused Budget
             </button>
           </div>
+          {!canMoveMoney && (
+            <p className="text-[11px] font-medium text-stone-400">Only finance admins and super admins can refund, retry refunds or void pay.</p>
+          )}
         </>
       )}
 

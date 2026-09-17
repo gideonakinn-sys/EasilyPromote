@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
 import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { CreatorVerificationDialog, type ConnectedAccount } from "../../components/creator-verification-dialog";
 
 interface UserItem {
   id: string;
@@ -22,6 +23,8 @@ interface UserItem {
     lifetimeEarnings: number;
     socialAccounts?: Array<{ platform: string; handle: string; verified: boolean }>;
     niches?: string[];
+    verifiedAt?: string | null;
+    connectedAccounts?: ConnectedAccount[];
   } | null;
 }
 
@@ -35,6 +38,7 @@ export default function AdminUsersPage() {
   const [rankInput, setRankInput] = useState<string>("rank1");
   const [scoreInput, setScoreInput] = useState<number>(50);
   const [actionLoading, setActionLoading] = useState(false);
+  const [verifyingUser, setVerifyingUser] = useState<UserItem | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -220,6 +224,13 @@ export default function AdminUsersPage() {
                             {u.creatorProfile?.rank || "rank1"}
                           </span>
                           <span className="text-[11px] text-stone-400 block">Score: {u.creatorProfile?.creatorScore || 0}/100</span>
+                          {u.creatorProfile?.verifiedAt ? (
+                            <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-medium text-blue-700">Verified</span>
+                          ) : (
+                            <span className="mt-1 block text-[10px] font-medium text-stone-400">
+                              {(u.creatorProfile?.connectedAccounts || []).length > 0 ? "Not Verified" : "No Connected Account"}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-stone-400">N/A</span>
@@ -252,6 +263,14 @@ export default function AdminUsersPage() {
                             className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-semibold transition-all"
                           >
                             Edit Rank
+                          </button>
+                        )}
+                        {u.role === "creator" && u.creatorProfile && (
+                          <button
+                            onClick={() => setVerifyingUser(u)}
+                            className="px-3 py-1.5 bg-white border border-stone-200 text-stone-800 rounded-full text-xs font-semibold"
+                          >
+                            {u.creatorProfile.verifiedAt ? "Remove Verification" : "Verify Creator"}
                           </button>
                         )}
                         <button
@@ -337,6 +356,23 @@ export default function AdminUsersPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {verifyingUser && verifyingUser.creatorProfile && (
+          <CreatorVerificationDialog
+            creatorId={verifyingUser.id}
+            creatorName={verifyingUser.name}
+            verifiedAt={verifyingUser.creatorProfile.verifiedAt || null}
+            connectedAccounts={verifyingUser.creatorProfile.connectedAccounts || []}
+            onClose={() => setVerifyingUser(null)}
+            onChanged={(verifiedAt) => {
+              const id = verifyingUser.id;
+              setUsers((current) =>
+                current.map((u) => (u.id === id && u.creatorProfile ? { ...u, creatorProfile: { ...u.creatorProfile, verifiedAt } } : u))
+              );
+              setVerifyingUser(null);
+            }}
+          />
         )}
       </main>
     </div>

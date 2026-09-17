@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
 import { apiDownload, apiRequest, getUser, isAuthenticated } from "../../lib/api";
+import { REWARD_ROLES } from "../../lib/roles";
 
 type Tab = "overview" | "brands" | "campaigns" | "conversions";
 type Tone = "green" | "amber" | "red" | "blue" | "stone";
@@ -1318,6 +1319,8 @@ export default function AdminReferralsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [canAct, setCanAct] = useState(false);
+  // Finance admins can set rewards but not disable codes, revoke keys or void conversions.
+  const [canSetReward, setCanSetReward] = useState(false);
   const [openBrandId, setOpenBrandId] = useState<string | null>(null);
   const [openCampaign, setOpenCampaign] = useState<{ id: string; name: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -1331,6 +1334,7 @@ export default function AdminReferralsPage() {
       return;
     }
     setCanAct(ACTION_ROLES.includes(getUser()?.role || ""));
+    setCanSetReward(REWARD_ROLES.includes(getUser()?.role || ""));
   }, [router]);
 
   return (
@@ -1342,7 +1346,8 @@ export default function AdminReferralsPage() {
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Referrals</h1>
           <p className="text-sm text-stone-500 mt-1">
             Referral codes, conversions and brand integrations across the platform.
-            {!canAct && " You have view-only access; admins and super admins can disable codes or revoke keys."}
+            {!canAct && canSetReward && " You can set rewards; admins and super admins can disable codes, revoke keys or void conversions."}
+            {!canAct && !canSetReward && " You have view-only access; admins, super admins and finance admins can set rewards."}
           </p>
         </header>
 
@@ -1376,7 +1381,7 @@ export default function AdminReferralsPage() {
         {tab === "campaigns" && (
           <CampaignsTab
             onOpenCampaign={setOpenCampaign}
-            canAct={canAct}
+            canAct={canSetReward}
             onSetReward={setRewardCampaign}
             refreshKey={campaignsRefreshKey}
             initialNeedsReward={showNeedsReward}

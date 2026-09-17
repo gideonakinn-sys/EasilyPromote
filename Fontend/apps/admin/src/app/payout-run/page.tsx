@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { MONEY_ROLES } from "../../lib/roles";
 
 interface RunLine {
   id: string;
@@ -68,6 +69,12 @@ export default function PayoutRunPage() {
   const [rejectNote, setRejectNote] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [rejectError, setRejectError] = useState("");
+  // Paying or rejecting is for finance admins and super admins; everyone else can look.
+  const [canPay, setCanPay] = useState(false);
+
+  useEffect(() => {
+    setCanPay(MONEY_ROLES.includes(getUser()?.role || ""));
+  }, []);
 
   const load = useCallback(async () => {
     setError("");
@@ -252,13 +259,16 @@ export default function PayoutRunPage() {
             <span className="text-sm text-stone-600">
               {selected.size} selected · <span className="font-semibold text-stone-900">{naira(selectedTotal)}</span> · est. fees {naira(selectedFees)}
             </span>
-            <button
-              onClick={() => setConfirmIds([...selected])}
-              disabled={selected.size === 0}
-              className="px-5 py-2.5 rounded-full text-xs font-semibold bg-green-600 text-white disabled:bg-stone-200 disabled:text-stone-400"
-            >
-              Pay selected
-            </button>
+            <div className="flex items-center gap-3">
+              {!canPay && <span className="text-[11px] text-stone-500">Only finance admins and super admins can pay or reject</span>}
+              <button
+                onClick={() => setConfirmIds([...selected])}
+                disabled={selected.size === 0 || !canPay}
+                className="px-5 py-2.5 rounded-full text-xs font-semibold bg-green-600 text-white disabled:bg-stone-200 disabled:text-stone-400"
+              >
+                Pay selected
+              </button>
+            </div>
           </div>
         )}
 
@@ -345,7 +355,8 @@ export default function PayoutRunPage() {
                                   setRejectNote("");
                                   setRejectError("");
                                 }}
-                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-red-200 text-red-600"
+                                disabled={!canPay}
+                                className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-red-200 text-red-600 disabled:opacity-40"
                               >
                                 Reject
                               </button>

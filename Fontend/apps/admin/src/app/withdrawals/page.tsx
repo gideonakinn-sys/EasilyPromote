@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { MONEY_ROLES } from "../../lib/roles";
 
 interface WithdrawalItem {
   id: string;
@@ -44,6 +45,12 @@ export default function AdminWithdrawalsPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
+  // Approving or rejecting a withdrawal is for finance admins and super admins.
+  const [canReview, setCanReview] = useState(false);
+
+  useEffect(() => {
+    setCanReview(MONEY_ROLES.includes(getUser()?.role || ""));
+  }, []);
 
   const fetchWithdrawals = useCallback(async () => {
     try {
@@ -209,7 +216,9 @@ export default function AdminWithdrawalsPage() {
                     </td>
 
                     <td className="px-6 py-4">
-                      {w.status === "pending" ? (
+                      {w.status === "pending" && !canReview ? (
+                        <span className="text-[11px] text-stone-400">Finance admins review withdrawals</span>
+                      ) : w.status === "pending" ? (
                         <div className="space-y-2">
                           <input
                             value={note[w.id] || ""}
