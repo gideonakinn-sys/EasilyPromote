@@ -7,6 +7,7 @@ import { cn } from "@ep/ui/lib/utils";
 import type { ApplicationCounts, ApplicationRow } from "./types";
 import { ApplicationStatusBadge } from "./application-status-badge";
 import { ApplicantSnapshotPanel, compactNumber, locationLabel } from "./applicant-snapshot-panel";
+import { BADGE_LABELS, RatingSummary } from "./creator-rating-summary";
 import { applicationsApi } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
 import { useApplicationUpdates } from "../lib/socket";
@@ -154,6 +155,16 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {((row.creator.rating?.count ?? 0) > 0 || (row.creator.badges || []).length > 0) && (
+                <p className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <RatingSummary rating={row.creator.rating} className="text-[11px]" />
+                  {(row.creator.badges || []).map((b) => (
+                    <span key={b} className="px-1.5 py-0.5 rounded-full bg-[#FEF3C7] text-[#92400E] text-[9px] font-medium">
+                      {BADGE_LABELS[b] || b}
+                    </span>
+                  ))}
+                </p>
+              )}
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
               <span className="text-xs font-medium text-stone-900">{row.matchScore}% match</span>

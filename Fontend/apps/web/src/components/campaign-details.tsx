@@ -16,6 +16,7 @@ import { CampaignReferrals } from "./campaign-referrals";
 import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
 import { CampaignApplicants } from "./campaign-applicants"; // Campaign engine: applications (ticket 06)
+import { CreatorRatings } from "./creator-ratings"; // Brand ratings (M8)
 import type { CampaignSetup } from "./types";
 // Campaign engine: content approval (ticket 07)
 import { ContentSubmissionsReview } from "./content-submissions-review";
@@ -809,6 +810,9 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {campaign.creatorAccess === "application_required" && campaign.status !== "draft" && campaign.status !== "pending_payment" && (
               <CampaignApplicants campaignId={campaign.id} />
             )}
+
+            {/* Brand ratings (M8): shows once a creator's work on the campaign is complete */}
+            {!["draft", "pending_payment", "under_review"].includes(campaign.status) && <CreatorRatings campaignId={campaign.id} />}
 
             {campaign.campaignObjective && (
               <CampaignSetupSummary

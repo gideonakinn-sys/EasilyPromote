@@ -15,6 +15,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
 import type { AudienceAge, AudienceLocation, CreatorProfile, PortfolioItem } from "./types";
+import { BADGE_LABELS, RatingSummary } from "./creator-rating-summary";
 import { apiRequest, getToken, getUser } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
 
@@ -28,12 +29,6 @@ const PORTFOLIO_PLATFORMS = ["tiktok", "instagram", "youtube", "twitter", "faceb
 const MAX_LOCATIONS = 5;
 const MAX_PORTFOLIO = 12;
 
-const BADGE_LABELS: Record<string, string> = {
-  top_creator: "Top Creator",
-  high_performer: "High Performer",
-  reliable_creator: "Reliable Creator",
-  campaign_pro: "Campaign Pro",
-};
 
 const inputClass =
   "w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink";
@@ -102,9 +97,14 @@ export function ProfileStandingSection({ profile }: ProfileStandingSectionProps)
           Not verified yet. Connect a social account and our team will check it&apos;s you.
         </p>
       )}
+      <div className="mb-3">
+        <RatingSummary rating={profile.rating} showEmpty />
+      </div>
       <div className="flex flex-wrap gap-2 mb-5">
         {(profile.badges || []).length === 0 ? (
-          <span className="text-xs font-medium text-stone-400">No badges yet. You earn them from finished campaigns.</span>
+          <span className="text-xs font-medium text-stone-400">
+            No badges yet. You earn them from finished campaigns, verified results and brand ratings.
+          </span>
         ) : (
           (profile.badges || []).map((badge) => (
             <span key={badge} className="px-3 py-1 rounded-full bg-white border border-stone-200 text-xs font-medium text-stone-700">

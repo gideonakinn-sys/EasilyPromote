@@ -7,6 +7,7 @@ import { cn } from "@ep/ui/lib/utils";
 import type { ApplicantLocation, ApplicantSection, ApplicationDetail } from "./types";
 import { ApplicationStatusBadge } from "./application-status-badge";
 import { BADGE_OPTIONS } from "./brand-wizard/wizard-state";
+import { RatingSummary } from "./creator-rating-summary";
 import { applicationsApi } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
 import { useApplicationUpdates } from "../lib/socket";
@@ -182,6 +183,7 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
               <span className="text-xs font-medium text-stone-400">No badges yet</span>
             )}
           </div>
+          <RatingSummary rating={section.data.rating} showEmpty />
           <Stat label="Completion Rate" value={`${section.data.completionRate}%`} />
         </div>
       );

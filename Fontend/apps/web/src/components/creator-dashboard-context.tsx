@@ -133,6 +133,7 @@ function mapProfile(data: Record<string, unknown>): CreatorProfile {
     portfolio: (data.portfolio as CreatorProfile["portfolio"]) || [],
     verified: Boolean(data.verified),
     badges: (data.badges as string[]) || [],
+    rating: data.rating as CreatorProfile["rating"],
     stats: data.stats as CreatorProfile["stats"],
   };
 }

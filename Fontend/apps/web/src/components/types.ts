@@ -515,7 +515,14 @@ export interface CreatorProfile {
   portfolio?: PortfolioItem[];
   verified?: boolean;
   badges?: string[];
+  rating?: CreatorRatingSummary;
   stats?: CreatorStats;
+}
+
+// Brand ratings (M8): the count of visible ratings, and their average only from 3 ratings.
+export interface CreatorRatingSummary {
+  average: number | null;
+  count: number;
 }
 
 // POST /campaigns/:id/join
@@ -584,6 +591,9 @@ export interface ApplicationRow {
     location: ApplicantLocation | null;
     topPlatform: ApplicantPlatform | null;
     categories: string[];
+    // The creator's current badges and brand rating (not frozen at apply time).
+    badges?: string[];
+    rating?: CreatorRatingSummary;
   };
 }
 
@@ -621,7 +631,7 @@ export type ApplicantSection =
       data: { avgViews: number; engagementRate: number | null; pastCampaigns: number; totalCampaignViews: number };
     }
   | { key: "portfolio"; emphasis: boolean; data: { categories: string[]; items: ApplicantPortfolioItem[] } }
-  | { key: "badges"; emphasis: boolean; data: { badges: string[]; completionRate: number } };
+  | { key: "badges"; emphasis: boolean; data: { badges: string[]; rating?: CreatorRatingSummary; completionRate: number } };
 
 export interface ApplicationDetail extends ApplicationRow {
   applicant: {
@@ -712,4 +722,35 @@ export interface ContentReviewData {
     licence: string;
     brief: CreatorBrief;
   };
+}
+
+// Brand ratings (M8): GET /campaigns/:id/ratings and PUT /campaigns/:id/ratings/:creatorId.
+export type RatingTag = "on_brief" | "on_time" | "communication" | "content_quality" | "would_work_again";
+
+export interface CampaignRating {
+  id: string;
+  score: number;
+  comment: string;
+  tags: RatingTag[];
+  createdAt: string;
+  updatedAt: string;
+  editableUntil: string;
+  editable: boolean;
+  hidden: boolean;
+}
+
+export interface RateableCreator {
+  creatorId: string;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  completedAt: string | null;
+  rating: CampaignRating | null;
+}
+
+export interface CampaignRatingList {
+  creators: RateableCreator[];
+  toRate: number;
+  tags: Array<{ value: RatingTag; label: string }>;
+  editWindowDays: number;
 }

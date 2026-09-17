@@ -1,4 +1,13 @@
-import type { ApplicationDetail, ApplicationList, ApplicationRow, ApprovedApplication, MyApplication } from "../components/types";
+import type {
+  ApplicationDetail,
+  ApplicationList,
+  ApplicationRow,
+  ApprovedApplication,
+  CampaignRating,
+  CampaignRatingList,
+  MyApplication,
+  RatingTag,
+} from "../components/types";
 import { clearAuth, getToken } from "./auth";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -166,4 +175,18 @@ export const contentApprovalApi = {
     contentAction(submissionId, "mark-posted", { posts, caption }),
   confirmPost: (submissionId: string) => contentAction(submissionId, "confirm-post"),
   disputePost: (submissionId: string, notes: string) => contentAction(submissionId, "dispute-post", { notes }),
+};
+
+// Brand ratings (M8): rate the creators who completed their work on the brand's campaign.
+export const ratingsApi = {
+  list(campaignId: string) {
+    return apiRequest<CampaignRatingList>(`/campaigns/${campaignId}/ratings`, { token: getToken() || undefined });
+  },
+  rate(campaignId: string, creatorId: string, rating: { score: number; comment: string; tags: RatingTag[] }) {
+    return apiRequest<{ rating: CampaignRating }>(`/campaigns/${campaignId}/ratings/${creatorId}`, {
+      method: "PUT",
+      token: getToken() || undefined,
+      body: JSON.stringify(rating),
+    });
+  },
 };
