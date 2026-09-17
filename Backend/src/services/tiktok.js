@@ -17,6 +17,20 @@ function hasTikTokError(json) {
   return Boolean(code) && code !== "ok" && code !== 0;
 }
 
+// Error codes that mean the connection is dead: only the creator connecting again fixes it.
+const DEAD_TOKEN_CODES = new Set(["invalid_grant", "access_token_invalid", "refresh_token_invalid", "token_expired", "invalid_token"]);
+
+function tiktokError(message, code) {
+  const error = new Error(message);
+  error.tiktokCode = code || null;
+  if (code && DEAD_TOKEN_CODES.has(String(code))) error.deadToken = true;
+  return error;
+}
+
+function isDeadTokenError(err) {
+  return Boolean(err && err.deadToken);
+}
+
 function getConfig() {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
   const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
@@ -75,9 +89,11 @@ async function postForm(url, fields) {
     body,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || (json.error && json.error.code !== 0 && json.error.message)) {
+  // The OAuth endpoints answer errors as { error: "invalid_grant", error_description }, sometimes with a 200.
+  const oauthError = typeof json.error === "string" && json.error ? json.error : null;
+  if (!res.ok || oauthError || (json.error && json.error.code !== 0 && json.error.message)) {
     console.error("[TikTok API] FAILED", res.status, JSON.stringify(json));
-    throw new Error(json.error?.message || json.message || `TikTok API error ${res.status}`);
+    throw tiktokError(json.error_description || json.error?.message || json.message || oauthError || `TikTok API error ${res.status}`, oauthError || json.error?.code);
   }
   console.log(
     "[TikTok API] OK",
@@ -137,7 +153,7 @@ async function getUserInfo(accessToken, fields) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] user/info FAILED", res.status, JSON.stringify(json));
-    throw new Error(json.error?.message || `TikTok API error ${res.status}`);
+    throw tiktokError(json.error?.message || `TikTok API error ${res.status}`, json.error?.code);
   }
   console.log("[TikTok API] user/info OK", res.status, "user=", json.data?.user ? "yes" : "no");
   return json.data.user || {};
@@ -158,7 +174,7 @@ async function listVideos(accessToken, { cursor = 0, maxCount = 20 } = {}) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] video/list FAILED", res.status, JSON.stringify(json));
-    throw new Error(json.error?.message || `TikTok API error ${res.status}`);
+    throw tiktokError(json.error?.message || `TikTok API error ${res.status}`, json.error?.code);
   }
   console.log("[TikTok API] video/list OK", res.status, "videos=", json.data?.videos?.length || 0);
   return json.data;
@@ -187,7 +203,7 @@ async function queryVideos(accessToken, videoIds, fields) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || hasTikTokError(json)) {
     console.error("[TikTok API] video/query FAILED", res.status, JSON.stringify(json));
-    throw new Error(json.error?.message || `TikTok API error ${res.status}`);
+    throw tiktokError(json.error?.message || `TikTok API error ${res.status}`, json.error?.code);
   }
   const videos = json.data?.videos || [];
   console.log(
@@ -238,7 +254,10 @@ async function getValidAccessToken(userId) {
   }
 
   if (!refreshToken) {
-    throw new Error("TikTok refresh token is missing");
+    throw tiktokError("TikTok refresh token is missing", "invalid_grant");
+  }
+  if (connection.refreshExpiresAt && connection.refreshExpiresAt.getTime() <= Date.now()) {
+    throw tiktokError("TikTok refresh token expired", "invalid_grant");
   }
 
   console.log("[TikTok] Access token expired — refreshing | refreshExpiresInMs=",
@@ -264,4 +283,5 @@ module.exports = {
   getConnection,
   getValidAccessToken,
   saveTokens,
+  isDeadTokenError,
 };

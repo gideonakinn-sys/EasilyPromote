@@ -18,6 +18,7 @@
 // Views / performance campaigns never come through here.
 const Submission = require("../models/Submission");
 const Slot = require("../models/Slot");
+const { postAlreadyUsed, postKeyFor, POST_ALREADY_USED_MESSAGE } = require("./postIdentity");
 const Campaign = require("../models/Campaign");
 const Notification = require("../models/Notification");
 const ReferralCode = require("../models/ReferralCode");
@@ -640,11 +641,16 @@ async function markContentPosted({ submission, campaign, user, posts, caption })
     }
   }
 
+  // D34: one post, one submission.
+  if (await postAlreadyUsed(submission._id, links.map((link) => link.postUrl))) {
+    fail(409, "POST_ALREADY_USED", POST_ALREADY_USED_MESSAGE);
+  }
+
   const postedPlatforms = (submission.postedPlatforms || []).map((p) => (p.toObject ? p.toObject() : p));
   for (const link of links) {
     const entry = postedPlatforms.find((p) => p.platform === link.platform);
-    if (entry) entry.postUrl = link.postUrl;
-    else postedPlatforms.push({ platform: link.platform, postUrl: link.postUrl, views: 0, likes: 0, comments: 0 });
+    if (entry) Object.assign(entry, { postUrl: link.postUrl, postKey: postKeyFor(link.postUrl) });
+    else postedPlatforms.push({ platform: link.platform, postUrl: link.postUrl, postKey: postKeyFor(link.postUrl), views: 0, likes: 0, comments: 0 });
   }
 
   const now = new Date();

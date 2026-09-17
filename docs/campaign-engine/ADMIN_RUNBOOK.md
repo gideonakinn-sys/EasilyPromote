@@ -98,6 +98,12 @@ API equivalent: `PATCH $API/admin/creators/<userId>/verification` with `{"verifi
 
 The badge is removed automatically when the creator disconnects their last social account. Each change is logged as `creator.verified` / `creator.unverified`.
 
+### Social Connections page
+
+**Social Connections** (sidebar, under Users & Creators; any admin role) lists every connected TikTok, Instagram and Facebook account, one row per account: creator (with a check mark when verified), platform, handle, followers (**From Instagram** etc. when read from the platform, otherwise self-reported), connected date, last synced, and **Healthy** or **Needs Reconnecting since <date>** with the platform's reason (SPEC D32). Cards at the top count connected creators, accounts per platform and accounts needing reconnecting (click one to filter). Filter by platform and status, or search by creator name, email or handle. **Open In Users** goes to Users & Creators; search the creator's email there. It is read-only: only the creator can reconnect. No tokens are ever shown.
+
+API equivalent: `GET $API/admin/social-connections?platform=all|tiktok|instagram|facebook&status=all|healthy|needs_reconnect&q=<text>&page=1&limit=20` (limit max 100), newest connection first, with `totals`.
+
 ---
 
 ## 2a. Badges and brand ratings (M8, SPEC D24 / D25)
@@ -467,6 +473,7 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 | `application_expiry_stuck` | Applications Not Expired | Applications pending more than 7 days and 2 hours. | The campaign |
 | `views_submission_stuck` | Views Posts Not Shared | Views content on a live or paused campaign approved more than 7 days ago whose creator never shared the live post (`awaiting_post`). Once the campaign is completed or cancelled the alert resolves. | The campaign |
 | `reconciliation_mismatch` | Campaign Books Don't Balance | A campaign's books don't balance (§8). Checked on every run for campaigns with money movement in the last 48 hours and for every campaign already flagged (whatever its age or status), and once a day for every live, paused or recently finished campaign with money. The daily pass is recorded in the database (`jobstates`), so restarting the API doesn't repeat it. | The campaign |
+| `social_reconnect_needed` | Creator Must Reconnect Social Account | A creator's Instagram, Facebook or TikTok connection was refused by the platform (password changed, access removed, token expired; SPEC D32) and they have a post on that platform on a live or paused campaign, so its views have stopped syncing. One alert per creator per platform. **Ask the creator to reconnect** (they also see a banner with **Reconnect** on their dashboard and a notification); **Users & Creators** shows "Instagram needs reconnecting since <date>". Resolves when they reconnect or nothing live is left. | Users & Creators |
 
 "The campaign" links open **Campaigns** with that campaign's detail (`/campaigns?open=<id>`).
 

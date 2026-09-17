@@ -79,14 +79,16 @@ const campaignSchema = new mongoose.Schema(
     endDate: {
       type: Date,
     },
-    // Content campaigns pay per deliverable, so only performance campaigns need views.
+    // Content campaigns pay per deliverable, so only performance campaigns need views. A referral
+    // objective with no views target is referrals only (SPEC D31) and buys no views.
     targetViews: {
       type: Number,
       required: [
         function () {
           // Update validators run against the query, not the document; edits keep what's stored.
           if (typeof this.getUpdate === "function") return false;
-          return this.campaignModel !== "content";
+          if (this.campaignModel === "content") return false;
+          return !require("../utils/campaignObjectives").usesReferralTracking(this.campaignObjective);
         },
         "Target views is required",
       ],
@@ -456,7 +458,7 @@ campaignSchema.pre("save", function (next) {
   if (this.isModified("status") && this.status === "completed" && !this.completedAt) {
     this.completedAt = new Date();
   }
-  if (this.campaignModel !== "content" && this.isModified("targetViews") && !this._skipPriceRecalculation) {
+  if (this.campaignModel !== "content" && this.isModified("targetViews") && this.targetViews > 0 && !this._skipPriceRecalculation) {
     const { getPriceForViews } = require("../config/pricing");
     this.budget = getPriceForViews(this.targetViews);
     this.costPerView = Math.round((this.budget / this.targetViews) * 1000) / 1000;

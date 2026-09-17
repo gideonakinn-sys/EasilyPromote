@@ -2,7 +2,7 @@
 // eligibility, brief), enforces who may set which rate (ADR 0003) and prices it, returning
 // the fields to store beside the older campaign fields (ADR 0001).
 const { z } = require("zod");
-const { OBJECTIVES, OBJECTIVE_NAMES, usesReferralTracking, objectiveForLegacy } = require("./campaignObjectives");
+const { OBJECTIVES, OBJECTIVE_NAMES, usesReferralTracking, objectiveForLegacy, isReferralsOnly } = require("./campaignObjectives");
 const { AGE_RANGES, CATEGORIES } = require("./creatorProfile");
 const { quoteCampaign, bonusViewsRate, DEFAULT_PLATFORM_FEE_PERCENT } = require("../services/campaignBudget");
 const { roundMoney } = require("./referralEarnings");
@@ -170,6 +170,8 @@ function resolveCampaignSetup(body, current = null) {
   const storedBonus = current && current.hybridBonus && current.hybridBonus.metric ? current.hybridBonus : undefined;
   const hybridBonus = isHybrid ? (input.hybridBonus === null ? undefined : input.hybridBonus || storedBonus) : undefined;
   const targetViews = body.targetViews !== undefined ? body.targetViews : current ? current.targetViews : undefined;
+  // Referrals only (SPEC D31): a referral objective with no views target (null or 0 clears a draft's).
+  const referralsOnly = isReferralsOnly({ campaignModel: definition.campaignModel, campaignObjective: objective, targetViews });
   const referralBudget =
     referralInput.requestedBudget !== undefined ? referralInput.requestedBudget : current && current.referral ? current.referral.requestedBudget : 0;
 
@@ -196,8 +198,10 @@ function resolveCampaignSetup(body, current = null) {
     performanceMetric: definition.performanceMetric,
   };
 
+  // Where content goes (and the usage rights that come with the brand's page) is only a Content campaign's
+  // question (SPEC D31): every other objective posts on the creator's own page.
   const details = {
-    contentDestination: input.contentDestination || (current && current.contentDestination) || "creator_page",
+    contentDestination: isContent ? input.contentDestination || (current && current.contentDestination) || "creator_page" : "creator_page",
     creatorAccess: input.creatorAccess || (current && current.creatorAccess) || "open_call",
   };
   // A views bonus is earned on the creator's own post, so content only delivered to the brand can't earn one.
@@ -217,8 +221,14 @@ function resolveCampaignSetup(body, current = null) {
     // Only enforce when the wizard explicitly chose clicks (not on a draft save with no objective yet).
     if (objectiveChosen) return badRequest("Add a destination URL for people who click the link");
   }
-  // M8 batch 7: custom usage-rights terms.
-  if (input.usageRights !== undefined) {
+  // M8 batch 7: custom usage-rights terms. A Content draft changed to another objective goes back to the
+  // standard licence (SPEC D31): the wizard only asks about rights for Content, so terms set there would
+  // otherwise stay behind for creators to accept.
+  const leavingContent = !isContent && current && current.campaignModel === "content";
+  if (leavingContent && input.usageRights === undefined) {
+    const prev = current.usageRights;
+    if (prev && prev.type === "custom") details.usageRights = { type: "standard", version: prev.version || 1, terms: {} };
+  } else if (input.usageRights !== undefined) {
     const prev = current && current.usageRights;
     const merged = {
       type: (input.usageRights && input.usageRights.type) || (prev && prev.type) || "standard",
@@ -265,6 +275,12 @@ function resolveCampaignSetup(body, current = null) {
       money.budget = quote.total;
       money.platformFee = quote.platformFee;
     }
+  } else if (referralsOnly) {
+    // No views bought: the referral budget is booked to its own pot at payment, so the views money is all 0.
+    money.budget = 0;
+    money.creatorPool = 0;
+    money.platformFee = 0;
+    money.costPerView = 0;
   } else {
     const referralPart = usesReferralTracking(objective) ? roundMoney(Number(referralBudget) || 0) : 0;
     money.budget = roundMoney(quote.total - referralPart);
@@ -284,6 +300,7 @@ function resolveCampaignSetup(body, current = null) {
     // paid from the bonus pool: tracking is on with no referral budget.
     bonusReferralEventTypes: hybridBonus && REFERRAL_EVENT_FOR[hybridBonus.metric] ? [REFERRAL_EVENT_FOR[hybridBonus.metric]] : null,
     isHybrid,
+    referralsOnly,
     // Only a newly chosen objective sets conversion types; older clients keep the ones they sent or stored.
     unpriced,
     referralEventTypes:
@@ -340,7 +357,9 @@ function editSetupUpdates(body, campaign) {
     }
   }
   for (const [key, value] of Object.entries(setup.details)) {
-    if (body[key] !== undefined || !campaign[key]) updates[key] = value;
+    // A campaign that isn't Content always posts on the creator's page with standard rights (SPEC D31).
+    const nonContentReset = !isContent && ((key === "contentDestination" && campaign[key] !== value) || (key === "usageRights" && modelChanged));
+    if (body[key] !== undefined || !campaign[key] || nonContentReset) updates[key] = value;
   }
   if (moneyChanged) {
     Object.assign(updates, setup.money);
@@ -348,7 +367,9 @@ function editSetupUpdates(body, campaign) {
     if (isContent) updates.$unset = { targetViews: 1, ...(setup.unpriced && !setup.money.contentPay && { contentPay: 1 }), ...(clearBonus && { hybridBonus: 1 }) };
     else {
       if (clearBonus) updates.$unset = { hybridBonus: 1 };
-      if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
+      // Referrals only (D31) keeps no views target; a Hybrid draft moving to it clears the stored one.
+      if (setup.referralsOnly) updates.$unset = { ...updates.$unset, targetViews: 1 };
+      else if (body.targetViews !== undefined) updates.targetViews = body.targetViews;
     }
   }
   // Referral tracking follows a sign-up or download bonus, and goes off when a hybrid campaign stops having one.

@@ -70,14 +70,16 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   const camp = campaign;
   const badge = STATUS_BADGES[camp.status];
   // Deliverable placements pay a fixed rate, so there's no views progress to show.
-  const hasProgress = camp.kind !== "deliverable" && (camp.status === "live_tracking" || camp.status === "delivered");
+  // Referrals-only placements (SPEC D31) have no view target either: creators earn per result.
+  const noViewTarget = camp.kind !== "deliverable" && !(camp.viewTarget || camp.targetViews);
+  const hasProgress = camp.kind !== "deliverable" && !noViewTarget && (camp.status === "live_tracking" || camp.status === "delivered");
 
   const targetViews = camp.maxViews ?? camp.viewTarget;
   const targetLabel = camp.kind === "deliverable"
     ? "1 approved deliverable"
-    : targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : "";
+    : targetViews ? `campaign target: ${targetViews.toLocaleString()} views` : noViewTarget ? "Paid per result" : "";
 
-  const rewardLabel = `₦${camp.reward.toLocaleString()}`;
+  const rewardLabel = noViewTarget ? "" : `₦${camp.reward.toLocaleString()}`;
 
   return (
     <div

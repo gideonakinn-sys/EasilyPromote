@@ -132,7 +132,7 @@ async function deliverContent({ brand, id, creator, destination }) {
   if (destination !== "brand_page") {
     await expectOk(
       patch(`/api/submissions/${submissionId}/mark-posted`, creator.token, {
-        posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }],
+        posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }],
         caption: "#LaunchDay",
       })
     );

@@ -12,7 +12,7 @@ import { MonthPicker } from "../../../../components/brand/month-picker";
 import { apiRequest, getUser, isAuthenticated, getToken } from "../../../../lib/api";
 import { useSocket } from "../../../../lib/socket";
 import { useStaggerReveal } from "../../../../hooks/use-stagger-reveal";
-import { currentMonth } from "../../../../lib/brand";
+import { confirmPendingPayments, currentMonth } from "../../../../lib/brand";
 import type { BrandMonthlyStats } from "../../../../lib/brand";
 
 function OverviewContent() {
@@ -79,6 +79,19 @@ function OverviewContent() {
     if (!isAuthenticated()) return;
     doFetch(month);
   }, [month, doFetch]);
+
+  // Confirm payments for campaigns still waiting after Paystack checkout, then refresh the stats.
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    if (searchParams.get("reference") || searchParams.get("trxref") || searchParams.get("payment") === "success") return;
+    confirmPendingPayments()
+      .then((wentLive) => {
+        if (wentLive) doFetch(month, { silent: true });
+      })
+      .catch(() => {});
+    // Once per visit (and after the payment redirect clears its query).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Refresh silently whenever a campaign changes status or a payment lands.
   useSocket(() => doFetch(month, { silent: true }), () => doFetch(month, { silent: true }));

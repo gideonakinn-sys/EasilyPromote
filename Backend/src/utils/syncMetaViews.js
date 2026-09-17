@@ -12,6 +12,8 @@ const { isContentCampaign } = require("./campaignPay");
 // Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
 const { viewsBonusSubmissionFilter, accrueAllViewsBonuses } = require("./hybridBonus");
 const { refreshInstagramFollowers } = require("./socialFollowers");
+const { handleMetaError } = require("../services/socialReconnect");
+const { postPredatesCampaign } = require("../services/postIdentity");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -63,7 +65,7 @@ async function updateCampaignFromSubmission(submission) {
   ]);
   campaign.viewsDelivered = totalViews.length > 0 ? totalViews[0].total : 0;
 
-  if (campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
+  if (campaign.targetViews > 0 && campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
     campaign.status = "completed";
     await Notification.create({
       businessId: campaign.businessId,
@@ -93,6 +95,8 @@ async function buildInstagramMediaMap(userId) {
     }
     return { accessToken, map };
   } catch (err) {
+    // A dead token flags the connection (D32) and stops the retries; anything else is logged and retried.
+    if (await handleMetaError(userId, "instagram", err)) return null;
     console.error("[Meta Sync] IG media list failed for user", userId, err.message);
     return null;
   }
@@ -104,7 +108,8 @@ async function getInstagramMetrics(ig, url) {
     console.warn("[Meta Sync] Could not parse an Instagram shortcode from", url);
     return null;
   }
-  if (!ig?.map.has(code)) {
+  if (!ig) return null;
+  if (!ig.map.has(code)) {
     console.warn(
       `[Meta Sync] Post ${code} is not in the connected account's recent media (${ig?.map.size ?? 0} items).`,
       "Either it belongs to another account, or it has fallen outside the media window."
@@ -121,6 +126,7 @@ async function getInstagramMetrics(ig, url) {
     return null;
   }
   return {
+    publishedAt: media.timestamp ? new Date(media.timestamp) : null,
     views: insights.views || insights.reach || 0,
     likes: insights.likes ?? media.like_count ?? 0,
     comments: insights.comments ?? media.comments_count ?? 0,
@@ -150,7 +156,8 @@ async function getFacebookMetrics(fbConnection, url) {
 // ---------------------------------------------------------------------------
 
 async function syncMetaViews() {
-  const connections = await MetaConnection.find().select("+accessTokenEnc +pages.accessTokenEnc");
+  // Connections waiting for the creator to reconnect (D32) are skipped: retrying a dead token only spams the logs.
+  const connections = await MetaConnection.find({ needsReconnect: { $ne: true } }).select("+accessTokenEnc +pages.accessTokenEnc");
   if (connections.length === 0) {
     console.log("[Meta Sync] Skipped — no Meta connections");
     return;
@@ -205,6 +212,11 @@ async function syncMetaViews() {
             metrics = await getFacebookMetrics(providers.facebook, url);
           }
 
+          // D35: a post published before the content was approved doesn't count; its views stay as they were.
+          if (metrics && (await postPredatesCampaign(submission, entry, metrics.publishedAt, "Meta sync"))) {
+            metrics = null;
+          }
+
           if (metrics) {
             entry.views = metrics.views || 0;
             entry.likes = metrics.likes || 0;
@@ -246,8 +258,8 @@ async function syncMetaViews() {
 
       const now = new Date();
       for (const c of Object.values(providers)) {
-        c.lastSyncedAt = now;
-        await c.save();
+        // updateOne, not save(): a connection flagged during this run must keep its flag.
+        await MetaConnection.updateOne({ _id: c._id }, { $set: { lastSyncedAt: now } });
       }
       console.log(`[Meta Sync] Synced ${userSubmissions.length} submission(s) for user ${userId}`);
     } catch (error) {

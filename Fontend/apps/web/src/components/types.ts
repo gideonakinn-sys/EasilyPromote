@@ -11,7 +11,14 @@ export interface SocialAccount {
   verified: boolean;
 }
 
-export interface TikTokStatus {
+// SPEC D32: the provider refused the token for good; the creator has to connect again.
+export interface ReconnectStatus {
+  needsReconnect?: boolean;
+  needsReconnectAt?: string | null;
+  needsReconnectReason?: string | null;
+}
+
+export interface TikTokStatus extends ReconnectStatus {
   connected: boolean;
   username?: string;
   displayName?: string;
@@ -20,7 +27,7 @@ export interface TikTokStatus {
 
 export type MetaProvider = "instagram" | "facebook";
 
-export interface MetaProviderStatus {
+export interface MetaProviderStatus extends ReconnectStatus {
   configured?: boolean;
   connected: boolean;
   username?: string;

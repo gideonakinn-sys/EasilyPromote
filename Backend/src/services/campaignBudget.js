@@ -24,7 +24,8 @@ function bonusViewsRate(platformFeePercent = DEFAULT_PLATFORM_FEE_PERCENT) {
 // - hybrid (content only): the base as content, plus the bonus pool with the fee on top of it too
 //   (D2 amended for hybrid); the quote adds bonusPool and bonusFee, and platformFee is both fees
 // - views: price-table price with the fee inside it, as today
-// - referral objectives: views price plus the referral budget, the fee inside each, as today
+// - referral objectives: views price plus the referral budget, the fee inside each, as today; with no
+//   views target (referrals only, D31) just the referral budget
 function quoteCampaign({
   objective,
   payShape,
@@ -73,13 +74,20 @@ function quoteCampaign({
   }
   if (payShape === "hybrid") return { error: "Hybrid pay is for content campaigns: a base per deliverable plus a bonus" };
 
+  const referral = usesReferralTracking(objective) ? roundMoney(Number(referralBudget) || 0) : 0;
+  const referralFee = roundMoney(referral * feeRate);
+  // Referrals only (SPEC D31): a referral objective with no views target buys no views, just the
+  // referral budget with the fee inside it. Views campaigns always need views.
+  const noViews = targetViews === undefined || targetViews === null || Number(targetViews) === 0;
+  // A draft can be saved before its budget is set, as a Hybrid one can; checkout refuses less than the minimum.
+  if (usesReferralTracking(objective) && noViews) {
+    return { quote: { creatorBudget: 0, performanceBudget: roundMoney(referral - referralFee), platformFee: referralFee, total: referral } };
+  }
+
   const views = Number(targetViews);
   if (!Number.isFinite(views) || views <= 0) return { error: "Set how many views the campaign should reach" };
   const viewsPrice = getPriceForViews(views);
   const viewsFee = roundMoney(viewsPrice * feeRate);
-
-  const referral = usesReferralTracking(objective) ? roundMoney(Number(referralBudget) || 0) : 0;
-  const referralFee = roundMoney(referral * feeRate);
 
   return {
     quote: {

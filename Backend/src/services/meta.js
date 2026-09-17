@@ -89,7 +89,12 @@ async function graphRequest(url, { method = "GET", body, headers } = {}) {
   if (!res.ok || json.error) {
     const msg = json.error?.message || json.error_message || `Meta API error ${res.status}`;
     console.error("[Meta API] FAILED", method, url.split("?")[0].replace("https://", ""), res.status, JSON.stringify(json.error || json));
-    throw new Error(msg);
+    const error = new Error(msg);
+    // Kept so callers can tell a dead token (OAuthException 190 / 102) from a passing failure.
+    error.metaCode = json.error?.code;
+    error.metaSubcode = json.error?.error_subcode;
+    error.httpStatus = res.status;
+    throw error;
   }
   return json;
 }
@@ -325,6 +330,12 @@ function applyToken(connection, token, expiresInSeconds) {
   }
 }
 
+// OAuthException 190 (any subcode: expired, password changed, app removed, session invalidated) or
+// 102 (session key invalid): only the creator logging in again fixes it.
+function isDeadTokenError(err) {
+  return Boolean(err) && (err.metaCode === 190 || err.metaCode === 102);
+}
+
 async function getValidAccessToken(userId, provider) {
   const connection = await getConnection(userId, provider);
   if (!connection) {
@@ -349,6 +360,8 @@ async function getValidAccessToken(userId, provider) {
       return refreshed.access_token;
     } catch (err) {
       console.error("[Meta] IG token refresh failed:", err.message);
+      // A refresh Meta refuses because the token is dead means the old token is dead too.
+      if (isDeadTokenError(err)) throw err;
     }
   }
 
@@ -380,4 +393,5 @@ module.exports = {
   getConnection,
   applyToken,
   getValidAccessToken,
+  isDeadTokenError,
 };

@@ -23,6 +23,7 @@ async function setPlatformFollowers(userId, platform, followers, now = new Date(
 async function refreshInstagramFollowers(connections, now = new Date()) {
   for (const connection of connections) {
     if (connection.provider !== "instagram") continue;
+    if (connection.needsReconnect) continue; // D32: waits for the creator to reconnect
     if (connection.followersSyncedAt && now - connection.followersSyncedAt < REFRESH_EVERY_MS) continue;
     try {
       const token = await meta.getValidAccessToken(connection.userId, "instagram");
@@ -30,6 +31,7 @@ async function refreshInstagramFollowers(connections, now = new Date()) {
       await setPlatformFollowers(connection.userId, "instagram", profile.followers_count, now);
       await MetaConnection.updateOne({ _id: connection._id }, { $set: { followersSyncedAt: now } });
     } catch (error) {
+      if (await require("../services/socialReconnect").handleMetaError(connection.userId, "instagram", error)) continue;
       console.warn(`[Meta Sync] Followers not refreshed for user ${connection.userId}:`, error.message);
     }
   }

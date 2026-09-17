@@ -16,6 +16,8 @@ import {
   isWorldwide,
   usageRightsPayload,
   usesReferralBudget,
+  hasViewsTarget,
+  asksContentDestination,
   actionNoun,
   ageFilterActive,
   genderFilterActive,
@@ -55,9 +57,9 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
       isContent && data.payShape === "hybrid"
         ? { metric: data.bonusMetric, pool: Number(data.bonusPool) || 0, capPerCreator: Number(data.bonusCap) || 0 }
         : null,
-    targetViews: isContent ? undefined : data.views,
+    targetViews: hasViewsTarget(data) ? data.views : undefined,
     referralBudget: usesReferralBudget(data.objective) ? Number(data.referralBudget) || 0 : undefined,
-    contentDestination: data.contentDestination,
+    contentDestination: asksContentDestination(data) ? data.contentDestination : null,
     creatorAccess: data.creatorAccess,
     audienceTargeting: {
       locations: data.locations,
@@ -79,7 +81,7 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
     },
     brief: data.brief,
     destinationUrl: data.objective === "clicks" ? data.destinationUrl.trim() : undefined,
-    usageRights: usageRightsPayload(data),
+    usageRights: asksContentDestination(data) ? usageRightsPayload(data) : null,
   };
 }
 
@@ -166,10 +168,15 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
   const brief = setup.brief || {};
   const referral = setup.campaignObjective ? usesReferralBudget(setup.campaignObjective) : false;
   const unitNoun = actionNoun(setup.campaignObjective);
+  // Destination and usage rights are only a Content campaign's (SPEC D31).
+  const isContent = setup.campaignObjective === "content";
+  // Referral objectives are Hybrid with a views target and referrals only without one (SPEC D31).
+  const campaignType = isContent ? "Content" : !referral ? "Views" : (setup.targetViews || 0) > 0 ? "Hybrid" : "Referrals";
 
   return (
     <div className="space-y-6">
       <Section title="Objective and Pay">
+        {setup.campaignObjective && <SummaryRow label="Campaign Type" value={campaignType} />}
         <SummaryRow label="Objective" value={objective?.title || "Not set"} />
         {setup.campaignObjective === "clicks" && (
           <SummaryRow
@@ -212,9 +219,9 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         )}
       </Section>
 
-      <Section title="Destination and Access">
-        <SummaryRow label="Content Destination" value={destination?.title || "Creator's page"} />
-        {(setup.contentDestination === "brand_page" || setup.contentDestination === "both") && (
+      <Section title={isContent ? "Destination and Access" : "Access"}>
+        {isContent && <SummaryRow label="Content Destination" value={destination?.title || "Creator's page"} />}
+        {isContent && (setup.contentDestination === "brand_page" || setup.contentDestination === "both") && (
           <UsageRightsLines usageRights={setup.usageRights} />
         )}
         <SummaryRow label="Creator Access" value={access?.title || "Open Call"} />

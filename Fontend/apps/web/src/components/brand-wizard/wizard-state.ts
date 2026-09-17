@@ -22,8 +22,8 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
 ];
 
 // The four campaign types brands pick from. Views and Referrals can be picked together, which is
-// Hybrid: a views target plus a referral budget (the API's sign-ups objective). Referral campaigns
-// always include a views target, because creators' places come from it.
+// Hybrid: a views target plus a referral budget (the API's sign-ups objective). Referrals alone is
+// referrals only (SPEC D31): a referral budget and no views target.
 export type ObjectiveCategory = "views" | "content" | "referrals" | "hybrid";
 
 export const OBJECTIVE_CATEGORIES: { value: ObjectiveCategory; title: string; body: string }[] = [
@@ -32,32 +32,39 @@ export const OBJECTIVE_CATEGORIES: { value: ObjectiveCategory; title: string; bo
   {
     value: "referrals",
     title: "Referrals",
-    body: "Pay for sign-ups tracked with a code for each creator. Includes a views target so creators get places.",
+    body: "Pay only for sign-ups tracked with a code for each creator. No views target.",
   },
   { value: "hybrid", title: "Hybrid", body: "Views and referrals together: pay for the views creators deliver and for every sign-up." },
 ];
 
-export function selectedObjectiveCategories(objective: CampaignObjective | null | undefined): ObjectiveCategory[] {
+type ObjectiveChoice = Pick<WizardData, "objective" | "includeViews">;
+
+export function selectedObjectiveCategories({ objective, includeViews }: ObjectiveChoice): ObjectiveCategory[] {
   if (!objective) return [];
   if (objective === "content") return ["content"];
   if (objective === "views") return ["views"];
-  if (REFERRAL_OBJECTIVE_VALUES.includes(objective)) return ["views", "referrals", "hybrid"];
+  if (REFERRAL_OBJECTIVE_VALUES.includes(objective)) return includeViews ? ["views", "referrals", "hybrid"] : ["referrals"];
   return [];
 }
 
-// Multi-select: Content stands alone; Views and Referrals combine into Hybrid.
-export function objectiveAfterToggle(current: CampaignObjective | null | undefined, category: ObjectiveCategory): CampaignObjective {
-  const referral = !!current && REFERRAL_OBJECTIVE_VALUES.includes(current);
+// Multi-select: Content stands alone and clears the others. Views and Referrals combine into Hybrid;
+// Referrals alone is referrals only. Unticking one half of Hybrid leaves the other.
+export function objectiveAfterToggle({ objective, includeViews }: ObjectiveChoice, category: ObjectiveCategory): ObjectiveChoice {
+  const referral = REFERRAL_OBJECTIVE_VALUES.includes(objective);
+  const referralObjective = referral ? objective : "signups";
   switch (category) {
     case "content":
-      return "content";
+      return { objective: "content", includeViews: true };
     case "views":
-      // Views stays included while referrals are picked.
-      return referral ? (current as CampaignObjective) : "views";
+      if (!referral) return { objective: "views", includeViews: true };
+      // Hybrid loses its views (referrals only), or referrals only gains them (Hybrid).
+      return { objective, includeViews: !includeViews };
     case "referrals":
-      return referral ? "views" : "signups";
+      if (!referral) return { objective: "signups", includeViews: objective === "views" };
+      // Unticking Referrals from Hybrid leaves Views; referrals only stays picked.
+      return includeViews ? { objective: "views", includeViews: true } : { objective, includeViews: false };
     case "hybrid":
-      return referral ? (current as CampaignObjective) : "signups";
+      return { objective: referralObjective, includeViews: true };
   }
 }
 
@@ -216,6 +223,9 @@ export interface WizardData {
   category: string;
   coverImageUrl: string;
   objective: CampaignObjective;
+  // Referral objectives only: whether a views target comes with the referral budget (Hybrid) or not
+  // (referrals only, SPEC D31). Ignored for Views and Content.
+  includeViews: boolean;
   contentDestination: ContentDestination;
   creatorAccess: CreatorAccess;
   locations: string[];
@@ -295,6 +305,7 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   category: "Music",
   coverImageUrl: "",
   objective: "content",
+  includeViews: true,
   contentDestination: "creator_page",
   creatorAccess: "open_call",
   locations: [],
@@ -338,6 +349,17 @@ export const INITIAL_WIZARD_DATA: WizardData = {
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
   return REFERRAL_OBJECTIVES.includes(objective);
+}
+
+// Whether the campaign buys views: Views, and Hybrid (a referral objective with views).
+export function hasViewsTarget(data: Pick<WizardData, "objective" | "includeViews">): boolean {
+  if (data.objective === "content") return false;
+  return !usesReferralBudget(data.objective) || data.includeViews;
+}
+
+// Only Content campaigns ask where the content goes and, for the brand's page, usage rights (SPEC D31).
+export function asksContentDestination(data: Pick<WizardData, "objective">): boolean {
+  return data.objective === "content";
 }
 
 export function isHybrid(data: WizardData): boolean {
@@ -421,7 +443,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
         }
       }
     } else {
-      if (!(data.views >= MIN_VIEWS)) problems.push(`Choose at least ${MIN_VIEWS.toLocaleString()} views.`);
+      if (hasViewsTarget(data) && !(data.views >= MIN_VIEWS)) problems.push(`Choose at least ${MIN_VIEWS.toLocaleString()} views.`);
       if (usesReferralBudget(data.objective) && referralBudgetValue(data) < MIN_REFERRAL_BUDGET) {
         problems.push(`Add a referral budget of at least ₦${MIN_REFERRAL_BUDGET.toLocaleString()}.`);
       }
@@ -432,7 +454,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.brief.soundUrl.trim() && !isUrl(data.brief.soundUrl.trim())) problems.push("The sound link must be a full web address.");
     if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference videos must be full web addresses.");
   }
-  if (step === 2) problems.push(...usageRightsProblems(data));
+  if (step === 2 && asksContentDestination(data)) problems.push(...usageRightsProblems(data));
   return problems;
 }
 
@@ -478,6 +500,8 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     coverImageUrl: saved.coverImageUrl || "",
     // The API derives every campaign's objective, including older drafts', so it's never re-derived here.
     objective: saved.campaignObjective || INITIAL_WIZARD_DATA.objective,
+    // A saved referral campaign with no views target is referrals only (SPEC D31).
+    includeViews: saved.campaignObjective && usesReferralBudget(saved.campaignObjective) ? (saved.targetViews || 0) > 0 : true,
     contentDestination: saved.contentDestination || "creator_page",
     creatorAccess: saved.creatorAccess || "open_call",
     locations: list(targeting.locations),
@@ -561,7 +585,8 @@ export function pricingPayload(data: WizardData): Record<string, unknown> {
   }
   return {
     campaignObjective: data.objective,
-    targetViews: data.views,
+    // Referrals only (SPEC D31) buys no views; null clears a saved draft's views target.
+    targetViews: hasViewsTarget(data) ? data.views : null,
     ...(usesReferralBudget(data.objective) && {
       // The API takes ₦1,000 or more; anything less is saved as not set yet.
       referral: { requestedBudget: referralBudgetValue(data) >= MIN_REFERRAL_BUDGET ? referralBudgetValue(data) : 0 },
@@ -611,7 +636,8 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     ...(campaignObjective !== savedObjective && { campaignObjective }),
     ...pricing,
     wizardStep,
-    contentDestination: data.contentDestination,
+    // Content only (SPEC D31): other campaigns post on the creator's page, which the API sets.
+    ...(asksContentDestination(data) && { contentDestination: data.contentDestination }),
     creatorAccess: data.creatorAccess,
     ...targetingPayload(data),
     brief: {
@@ -636,7 +662,7 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     scriptFileName: data.scriptFileName || undefined,
     // Clicks only; a link that isn't valid yet isn't sent, so the rest of the draft still saves.
     ...(data.objective === "clicks" && isDestinationUrl(data.destinationUrl) && { destinationUrl: data.destinationUrl.trim() }),
-    usageRights: usageRightsPayload(data),
+    ...(asksContentDestination(data) && { usageRights: usageRightsPayload(data) }),
   };
 }
 

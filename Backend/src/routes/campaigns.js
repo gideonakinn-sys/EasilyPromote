@@ -15,7 +15,8 @@ const { parseReferralSettings, campaignEventTypes } = require("../utils/referral
 const { refundUnusedReferralBudget } = require("../utils/referralEarnings");
 const { refundViewsEscrow } = require("../utils/escrow");
 const { recordUnmatchedPayment } = require("../utils/refunds");
-const { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified } = require("../utils/campaignPayments");
+const { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified, campaignPaymentBooked } = require("../utils/campaignPayments");
+const { isReferralsOnly } = require("../utils/campaignObjectives");
 const { MIN_REFERRAL_TOPUP } = require("../utils/referralEarnings");
 
 function sendSetupError(res, setup) {
@@ -24,6 +25,14 @@ function sendSetupError(res, setup) {
 
 // Top-ups buy more views, which content campaigns don't have. Returns true when it refused.
 function refuseContentTopup(res, campaign) {
+  if (isReferralsOnly(campaign)) {
+    // Referrals only (SPEC D31): no views to buy; more referral budget is a referral top-up.
+    res.status(409).json({
+      error: "This campaign pays only for results, so it has no views to top up. Add referral budget instead.",
+      code: "TOPUP_NOT_FOR_REFERRALS_ONLY",
+    });
+    return true;
+  }
   if (campaign.campaignModel !== "content") return false;
   res.status(409).json({
     error: "Top-ups buy more views, so they aren't available for content campaigns.",
@@ -46,7 +55,8 @@ function referralProgress(campaign) {
 }
 
 function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
-  if (targetViews !== undefined && Number(targetViews) !== campaign.targetViews) return true;
+  // No views target (null or 0, referrals only, SPEC D31) matches a campaign that stores none.
+  if (targetViews !== undefined && (Number(targetViews) || 0) !== (campaign.targetViews || 0)) return true;
   const nextObjective = objective !== undefined ? objective : campaign.objective;
   if (nextObjective !== campaign.objective) return true;
   const currentBudget = (campaign.referral && campaign.referral.requestedBudget) || 0;
@@ -170,7 +180,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       coverImageUrl: coverImageUrl || null,
       name,
       category,
-      targetViews: isContent ? undefined : targetViews,
+      targetViews: isContent || setup.referralsOnly ? undefined : targetViews,
       ...setup.updates,
       contentBrief: contentBrief || null,
       keyMessageCta: keyMessageCta || null,
@@ -347,12 +357,7 @@ router.get("/:id/payment-status", protect, async (req, res, next) => {
     }
 
     if (campaign.status === "pending_payment") {
-      const transaction = await Transaction.findOne({
-        campaignId: campaign._id,
-        type: "escrow_deposit",
-      });
-
-      if (transaction) {
+      if (await campaignPaymentBooked(campaign)) {
         const updated = await Campaign.findOneAndUpdate(
           { _id: campaign._id, status: "pending_payment" },
           { $set: { status: "live" } },

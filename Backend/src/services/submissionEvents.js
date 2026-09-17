@@ -21,6 +21,7 @@ const EVENT_LABELS = {
   fixed_pay_due: "Fixed pay due",
   completed: "Completed",
   fixed_pay_voided: "Fixed pay voided: not delivered",
+  post_predates_campaign: "Post made before approval: views not counted",
 };
 
 // Content campaigns reject for good (appealable); views campaigns treat a rejection as a

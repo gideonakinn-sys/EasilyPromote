@@ -10,6 +10,7 @@ import {
   MIN_VIEWS,
   PAY_SHAPE_OPTIONS,
   usesReferralBudget,
+  hasViewsTarget,
   actionNoun,
   type WizardData,
 } from "./wizard-state";
@@ -33,8 +34,10 @@ interface QuoteSummaryProps {
 export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
   // Hybrid quotes carry the bonus pool in place of a performance budget.
   const hybrid = quote?.bonusPool !== undefined;
+  // A referrals-only quote (SPEC D31) buys no views, so it has no creator budget to show.
+  const referralsOnly = !hybrid && quote?.creatorBudget === 0 && (quote?.performanceBudget || 0) > 0;
   const rows: { label: string; value: number | undefined }[] = [
-    { label: hybrid ? "Base Budget" : "Creator Budget", value: quote?.creatorBudget },
+    ...(referralsOnly ? [] : [{ label: hybrid ? "Base Budget" : "Creator Budget", value: quote?.creatorBudget }]),
     hybrid ? { label: "Bonus Pool", value: quote?.bonusPool } : { label: "Performance Budget", value: quote?.performanceBudget },
     { label: "Platform Fee", value: quote?.platformFee },
   ];
@@ -136,6 +139,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
   const referral = usesReferralBudget(data.objective);
   const unitNoun = actionNoun(data.objective);
   const hybrid = isContent && data.payShape === "hybrid";
+  const views = hasViewsTarget(data);
 
   return (
     <div className="space-y-8">
@@ -146,6 +150,8 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             ? "You set a base for each deliverable you approve and fund a bonus pool. Our fee is added on top of both, so creators get exactly your base and bonus."
             : isContent
             ? "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate."
+            : referral && !views
+              ? `You fund a referral budget and creators are paid only for each verified ${unitNoun}, at a reward our team sets. There's no views target.`
             : referral
               ? `You fund a budget and our team sets what creators earn per ${unitNoun}.`
               : "You choose how many views you want. The price comes from our price table."
@@ -236,10 +242,10 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
         </>
       )}
 
-      {!isContent && <ViewsPicker views={data.views} onChange={(views) => update({ views })} />}
+      {views && <ViewsPicker views={data.views} onChange={(views) => update({ views })} />}
 
       {referral && (
-        <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. Paid together with your views.`}>
+        <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. ${views ? "Paid together with your views." : "This is what you pay; what isn't earned is refunded when the campaign ends."}`}>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
             <input

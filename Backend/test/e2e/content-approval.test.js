@@ -245,7 +245,7 @@ test("confirming a live post or a receipt twice at once completes once", async (
   await approve(brand, submissionId);
   await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, {
     token: creator.token,
-    body: { posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }], caption: "#SummerDrop #ad" },
+    body: { posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }], caption: "#SummerDrop #ad" },
   });
   const confirms = await Promise.all([1, 2, 3].map(() => harness.api("PATCH", `/api/submissions/${submissionId}/confirm-post`, { token: brand.token })));
   assert.equal(confirms.filter((r) => r.status === 200).length, 1);
@@ -344,7 +344,7 @@ test("brief hashtags can't contain spaces; referral content needs the creator's 
   const creator = await joinedCreator(id);
   const submissionId = (await submit(creator, id)).body.id;
   await approve(brand, submissionId);
-  const posts = [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }];
+  const posts = [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }];
 
   const noCode = await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, { token: creator.token, body: { posts, caption: "#SummerDrop #ad" } });
   assert.equal(noCode.status, 409);
@@ -409,7 +409,7 @@ test("with no brand response for 72 hours, a delivery's receipt and a live post 
   await approve(creatorPage.brand, postedId);
   await harness.api("PATCH", `/api/submissions/${postedId}/mark-posted`, {
     token: poster.token,
-    body: { posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }], caption: "#SummerDrop #ad" },
+    body: { posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }], caption: "#SummerDrop #ad" },
   });
 
   await autoApproveStaleSubmissions(new Date(Date.now() + 71 * HOUR));
@@ -496,7 +496,7 @@ test("brand page: approved → creator shares a download link and accepts usage 
 
   const posting = await harness.api("PATCH", `/api/submissions/${submissionId}/mark-posted`, {
     token: creator.token,
-    body: { posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }], caption: "#SummerDrop #ad" },
+    body: { posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }], caption: "#SummerDrop #ad" },
   });
   assert.equal(posting.status, 400);
 

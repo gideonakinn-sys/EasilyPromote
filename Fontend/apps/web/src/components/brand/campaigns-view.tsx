@@ -9,6 +9,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { Skeleton } from "../ui/skeleton";
 import { StatusChip } from "./status-chip";
 import { apiRequest, getToken } from "../../lib/api";
+import { confirmPendingPayments } from "../../lib/brand";
 import { useBrandGuard } from "../../hooks/use-brand-guard";
 import { objectiveLabel } from "../../lib/brand";
 import type { BrandCampaign } from "../active-dashboard";
@@ -56,10 +57,10 @@ export function CampaignsView() {
       router.replace("/login");
       return;
     }
-    apiRequest<{ campaigns: CampaignRow[]; draftCount: number }>("/campaigns", {
-      method: "GET",
-      token,
-    })
+    // Pending payments are confirmed first so a campaign paid moments ago shows as live.
+    confirmPendingPayments()
+      .catch(() => false)
+      .then(() => apiRequest<{ campaigns: CampaignRow[]; draftCount: number }>("/campaigns", { method: "GET", token }))
       .then((data) => setCampaigns(data.campaigns || []))
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not load campaigns"))
       .finally(() => setLoading(false));

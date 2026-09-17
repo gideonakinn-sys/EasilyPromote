@@ -13,6 +13,7 @@ const { recordViewDelta } = require("../services/viewSnapshots");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
 const { fullBrief } = require("../utils/campaignPay");
+const { postAlreadyUsed, postKeyFor, POST_ALREADY_USED_MESSAGE } = require("../services/postIdentity");
 
 const router = express.Router();
 
@@ -485,17 +486,26 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       ? posts
       : [{ platform, postUrl: url }];
 
+    // D34: one post, one submission.
+    if (await postAlreadyUsed(submission._id, newPosts.filter((p) => p && normalizePlatform(p.platform) && p.postUrl).map((p) => p.postUrl))) {
+      return res.status(409).json({ error: POST_ALREADY_USED_MESSAGE, code: "POST_ALREADY_USED" });
+    }
+
     const postedPlatforms = submission.postedPlatforms || [];
     for (const post of newPosts) {
       const normalized = normalizePlatform(post.platform);
       if (!normalized) continue;
       const entry = postedPlatforms.find((e) => e.platform === normalized);
       if (entry) {
-        if (post.postUrl !== undefined) entry.postUrl = post.postUrl;
+        if (post.postUrl !== undefined) {
+          entry.postUrl = post.postUrl;
+          entry.postKey = postKeyFor(post.postUrl);
+        }
       } else {
         postedPlatforms.push({
           platform: normalized,
           postUrl: post.postUrl || "",
+          postKey: postKeyFor(post.postUrl),
           views: 0,
           likes: 0,
           comments: 0,
@@ -665,7 +675,7 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
       let shouldComplete = false;
       let completionReason = "";
 
-      if (campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
+      if (campaign.targetViews > 0 && campaign.viewsDelivered >= campaign.targetViews && campaign.status === "live") {
         shouldComplete = true;
         completionReason = "Campaign hit its target — that's a wrap.";
       }
@@ -678,7 +688,8 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
           { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
         const totalReleased = released.length > 0 ? released[0].total : 0;
-        if (totalReleased >= campaign.creatorPool) {
+        // A referrals-only campaign (SPEC D31) has no views pool, so views never complete it.
+        if (campaign.creatorPool > 0 && totalReleased >= campaign.creatorPool) {
           shouldComplete = true;
           completionReason = "Campaign escrow has been fully released — that's a wrap.";
         }

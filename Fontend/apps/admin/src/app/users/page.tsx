@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
 import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
-import { CreatorVerificationDialog, type ConnectedAccount } from "../../components/creator-verification-dialog";
+import { CreatorVerificationDialog, reconnectNotices, type ConnectedAccount } from "../../components/creator-verification-dialog";
 import { DeleteUserDialog } from "../../components/delete-user-dialog";
 import { CreatorBadgesDialog } from "../../components/creator-badges-dialog";
 
@@ -287,6 +287,11 @@ export default function AdminUsersPage() {
                               {(u.creatorProfile?.connectedAccounts || []).length > 0 ? "Not Verified" : "No Connected Account"}
                             </span>
                           )}
+                          {reconnectNotices(u.creatorProfile?.connectedAccounts || []).map((notice) => (
+                            <span key={notice} className="mt-1 block text-[10px] font-medium text-amber-700">
+                              {notice}
+                            </span>
+                          ))}
                         </div>
                       ) : (
                         <span className="text-stone-400">N/A</span>

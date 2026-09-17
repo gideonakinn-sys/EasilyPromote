@@ -4,6 +4,7 @@ const { bookEscrowDeposit } = require("./escrow");
 const { creditReferralTopup, roundMoney } = require("./referralEarnings");
 const { isContentCampaign } = require("./campaignPay");
 const { isHybridCampaign } = require("./hybridBonus");
+const { isReferralsOnly } = require("./campaignObjectives");
 
 // What the campaign's checkout charged: views price plus the referral budget. Campaigns
 // paid before referral budgets joined checkout were charged the views price only.
@@ -17,12 +18,15 @@ function expectedPaymentAmount(campaign) {
 // booked the views deposit. A content campaign's payment (creator budget plus fee) is its
 // fixed pot, paid out per completed deliverable. A hybrid campaign's payment also carries the bonus
 // pool and its fee, booked to the bonus pot as a top-up row under the same reference (ticket 10).
+// A referrals-only campaign (SPEC D31) buys no views, so its payment is only the referral budget and no
+// zero views deposit is booked; it returns whether this call credited the referral budget.
 async function bookCampaignPayment(campaign, reference) {
   const extraAmount = Math.max(roundMoney(expectedPaymentAmount(campaign) - campaign.budget), 0);
   if (isHybridCampaign(campaign)) {
     await bookBonusPool(campaign, reference);
   } else if (extraAmount > 0) {
-    await creditReferralTopup({ campaignId: campaign._id, reference, amount: extraAmount, fromCampaignPayment: true });
+    const referral = await creditReferralTopup({ campaignId: campaign._id, reference, amount: extraAmount, fromCampaignPayment: true });
+    if (isReferralsOnly(campaign) && !(campaign.budget > 0)) return referral.credited === true;
   }
   return bookEscrowDeposit({
     campaignId: campaign._id,
@@ -38,6 +42,14 @@ async function bookCampaignPayment(campaign, reference) {
 async function brandAppVerified(businessId) {
   const profile = await BusinessProfile.findOne({ userId: businessId }).select("referralVerification").lean();
   return Boolean(profile && profile.referralVerification && profile.referralVerification.verifiedAt);
+}
+
+// Whether a campaign's checkout payment is booked: its escrow deposit, or for a referrals-only campaign
+// (D31, no views deposit) the referral budget its checkout paid.
+async function campaignPaymentBooked(campaign) {
+  if (await Transaction.exists({ campaignId: campaign._id, type: "escrow_deposit", status: "escrow_deposit" })) return true;
+  if (!isReferralsOnly(campaign)) return false;
+  return Boolean(await Transaction.exists({ campaignId: campaign._id, type: "topup", bucket: "referral", status: "escrow_deposit" }));
 }
 
 // Whether the brand has paid anything into this campaign (its checkout or a top-up). Cancelling a
@@ -73,4 +85,4 @@ function bonusCheckoutAmount(campaign) {
   return isHybridCampaign(campaign) ? roundMoney(campaign.hybridBonus.pool + (campaign.hybridBonus.platformFee || 0)) : 0;
 }
 
-module.exports = { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified, campaignHasPayments };
+module.exports = { expectedPaymentAmount, bookCampaignPayment, bonusCheckoutAmount, brandAppVerified, campaignHasPayments, campaignPaymentBooked };

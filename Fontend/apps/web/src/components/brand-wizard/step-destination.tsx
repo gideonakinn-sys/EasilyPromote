@@ -11,6 +11,7 @@ import {
   USAGE_EXCLUSIVITY_OPTIONS,
   USAGE_RIGHTS_TEXT,
   USAGE_RIGHTS_TYPE_OPTIONS,
+  asksContentDestination,
   grantsUsageRights,
   type WizardData,
 } from "./wizard-state";
@@ -138,10 +139,13 @@ function CustomTermsForm({ data, update }: StepDestinationProps) {
 }
 
 export function StepDestination({ data, update }: StepDestinationProps) {
-  const showUsageRights = grantsUsageRights(data.contentDestination);
+  // Only Content campaigns ask where the content goes and about usage rights (SPEC D31).
+  const asksDestination = asksContentDestination(data);
+  const showUsageRights = asksDestination && grantsUsageRights(data.contentDestination);
 
   return (
     <div className="space-y-10">
+      {asksDestination && (
       <div className="space-y-4">
         <StepHeading title="Where should the content go?" body="Choose where approved content ends up." />
         <div className="space-y-3" role="radiogroup" aria-label="Content destination">
@@ -156,6 +160,7 @@ export function StepDestination({ data, update }: StepDestinationProps) {
           ))}
         </div>
       </div>
+      )}
 
       {showUsageRights && (
         <div className="space-y-4">

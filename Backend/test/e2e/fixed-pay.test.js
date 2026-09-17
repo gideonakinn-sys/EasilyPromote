@@ -86,7 +86,7 @@ async function deliver(creator) {
 
 async function post(creator) {
   const res = await patch(`/api/submissions/${creator.submissionId}/mark-posted`, creator.token, {
-    posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }],
+    posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }],
     caption: "#SummerDrop",
   });
   assert.equal(res.status, 200, JSON.stringify(res.body));

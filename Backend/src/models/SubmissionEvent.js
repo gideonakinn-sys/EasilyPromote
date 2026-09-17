@@ -21,6 +21,8 @@ const EVENT_TYPES = [
   "fixed_pay_due",
   "completed",
   "fixed_pay_voided",
+  // D35: the live post was published before the content was approved; its views aren't counted.
+  "post_predates_campaign",
 ];
 
 const submissionEventSchema = new mongoose.Schema(

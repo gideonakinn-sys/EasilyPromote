@@ -41,6 +41,19 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
     applyProfileUpdate,
   } = useCreatorDashboard();
 
+  // SPEC D32: connections the platform stopped accepting. Views stop syncing until the creator reconnects.
+  const reconnects: Array<{ key: string; label: string; onReconnect: () => void }> = [
+    ...(metaStatus?.instagram?.connected && metaStatus.instagram.needsReconnect
+      ? [{ key: "instagram", label: "Instagram", onReconnect: () => handleConnectMeta("instagram") }]
+      : []),
+    ...(metaStatus?.facebook?.connected && metaStatus.facebook.needsReconnect
+      ? [{ key: "facebook", label: "Facebook", onReconnect: () => handleConnectMeta("facebook") }]
+      : []),
+    ...(tiktokStatus?.connected && tiktokStatus.needsReconnect
+      ? [{ key: "tiktok", label: "TikTok", onReconnect: handleConnectTikTok }]
+      : []),
+  ];
+
   return (
     <div className="min-h-dvh bg-stone-50 text-[#1C1917] flex flex-col font-rethink">
       <CreatorHeader
@@ -52,6 +65,27 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 md:py-10 flex flex-col items-center">
+        {!loading && reconnects.length > 0 && (
+          <div className="w-full space-y-2 mb-6">
+            {reconnects.map((r) => (
+              <div
+                key={r.key}
+                role="alert"
+                className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3"
+              >
+                <p className="flex-1 text-sm font-medium text-amber-900 tracking-[-0.01em]">
+                  Your {r.label} connection expired. Reconnect it so your views keep counting and you keep earning.
+                </p>
+                <button
+                  onClick={r.onReconnect}
+                  className="self-start sm:self-auto px-4 py-2 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+                >
+                  Reconnect
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {loading ? (
           <div className="w-full max-w-7xl mx-auto space-y-4">
             <Skeleton className="h-8 w-48" />

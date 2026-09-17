@@ -65,7 +65,7 @@ async function withdrawableFixedPay(brand, campaignId) {
   const creator = await joinAndSubmit(campaignId);
   assert.equal((await patch(`/api/submissions/${creator.submissionId}/approve`, brand.token)).status, 200);
   const posted = await patch(`/api/submissions/${creator.submissionId}/mark-posted`, creator.token, {
-    posts: [{ platform: "tiktok", postUrl: "https://www.tiktok.com/@c/video/1" }],
+    posts: [{ platform: "tiktok", postUrl: `https://www.tiktok.com/@c/video/${Date.now()}${Math.floor(Math.random() * 1e6)}` }],
     caption: "#Appeal",
   });
   assert.equal(posted.status, 200, JSON.stringify(posted.body));

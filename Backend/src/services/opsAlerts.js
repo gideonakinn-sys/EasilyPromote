@@ -17,6 +17,8 @@
 //   views_submission_stuck    views content on a live or paused campaign approved more than 7 days ago, post link never shared
 //   reconciliation_mismatch   a campaign whose books don't balance
 //   auto_refund_failed        the automatic unused-budget refund couldn't refund an ended campaign
+//   social_reconnect_needed   a creator's Instagram / Facebook / TikTok connection needs reconnecting while they
+//                             have a post on a live or paused campaign on that platform (views aren't syncing)
 //
 // An alert only resolves when its subject is re-checked and the condition is gone. An alert an
 // admin resolved while the condition lasts reopens (and is emailed again) when the problem
@@ -25,6 +27,8 @@
 const Campaign = require("../models/Campaign");
 const CampaignApplication = require("../models/CampaignApplication");
 const JobState = require("../models/JobState");
+const MetaConnection = require("../models/MetaConnection");
+const TikTokConnection = require("../models/TikTokConnection");
 const OpsAlert = require("../models/OpsAlert");
 const PaystackWebhookFailure = require("../models/PaystackWebhookFailure");
 const Submission = require("../models/Submission");
@@ -37,7 +41,7 @@ const { toObjectId } = require("../utils/objectId");
 const { plural } = require("../utils/plural");
 const { sendEmail } = require("./email");
 const { retryStrandedBackPay } = require("../utils/referralEarnings");
-const { accrueAllViewsBonuses, repairVoidedBonuses } = require("../utils/hybridBonus");
+const { accrueAllViewsBonuses, repairVoidedBonuses, viewsBonusSubmissionFilter } = require("../utils/hybridBonus");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -77,6 +81,7 @@ const TITLES = {
   views_submission_stuck: "Views Posts Not Shared",
   reconciliation_mismatch: "Campaign Books Don't Balance",
   auto_refund_failed: "Automatic Refund Failed",
+  social_reconnect_needed: "Creator Must Reconnect Social Account",
 };
 
 const naira = (amount) => `₦${Number(amount || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
@@ -438,6 +443,62 @@ async function failedAutoRefunds() {
   );
 }
 
+// D33: creators whose connection needs reconnecting (D32) while a post of theirs on that platform is live:
+// posted or verifying, or a verified views-bonus post. One alert per connection (creator + provider);
+// it resolves when they reconnect or nothing live is left.
+const PROVIDER_LABELS = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
+const POST_MATCHERS = {
+  instagram: (s) => (s.postedPlatforms || []).some((p) => p.platform === "instagram" || /instagram\.com/i.test(String(p.postUrl || ""))),
+  facebook: (s) => (s.postedPlatforms || []).some((p) => p.platform === "facebook" || /facebook\.com|fb\.watch/i.test(String(p.postUrl || ""))),
+  tiktok: (s) => Boolean(s.tiktokVideoId) || (s.postedPlatforms || []).some((p) => p.platform === "tiktok" || /tiktok\.com/i.test(String(p.postUrl || ""))),
+};
+
+async function socialReconnectNeeded() {
+  const [metaFlagged, tiktokFlagged] = await Promise.all([
+    MetaConnection.find({ needsReconnect: true }).select("userId provider username needsReconnectAt needsReconnectReason").lean(),
+    TikTokConnection.find({ needsReconnect: true }).select("userId username needsReconnectAt needsReconnectReason").lean(),
+  ]);
+  const flagged = [...metaFlagged, ...tiktokFlagged.map((c) => ({ ...c, provider: "tiktok" }))];
+  if (flagged.length === 0) return everything([]);
+  const bonusPosts = await viewsBonusSubmissionFilter();
+  const submissions = await Submission.find({
+    creatorId: { $in: [...new Set(flagged.map((c) => String(c.userId)))].map(toObjectId) },
+    $or: [{ status: { $in: ["posted", "verifying"] } }, ...(bonusPosts ? [bonusPosts] : [])],
+  })
+    .select("creatorId campaignId creatorHandle postedPlatforms tiktokVideoId")
+    .lean();
+  if (submissions.length === 0) return everything([]);
+  const running = new Map(
+    (await Campaign.find({ _id: { $in: [...new Set(submissions.map((s) => String(s.campaignId)))] }, status: { $in: ["live", "paused"] } })
+      .select("name")
+      .lean()).map((c) => [String(c._id), c])
+  );
+  const alerts = [];
+  for (const connection of flagged) {
+    const live = submissions.filter(
+      (s) => String(s.creatorId) === String(connection.userId) && running.has(String(s.campaignId)) && POST_MATCHERS[connection.provider](s)
+    );
+    if (live.length === 0) continue;
+    const label = PROVIDER_LABELS[connection.provider];
+    const campaignIds = [...new Set(live.map((s) => String(s.campaignId)))];
+    const names = campaignIds.slice(0, 3).map((id) => `"${running.get(id).name}"`).join(", ");
+    const who = connection.username ? `@${String(connection.username).replace(/^@/, "")}` : live[0].creatorHandle || "A creator";
+    const since = connection.needsReconnectAt ? new Date(connection.needsReconnectAt).toISOString().slice(0, 10) : "recently";
+    alerts.push(
+      alert({
+        kind: "social_reconnect_needed",
+        subjectType: "connection",
+        subjectId: connection._id,
+        campaignId: campaignIds.length === 1 ? campaignIds[0] : null,
+        message: `${who}'s ${label} connection needs reconnecting since ${since}${connection.needsReconnectReason ? ` (${connection.needsReconnectReason})` : ""}. ${plural(live.length, "live post")} on ${names}${campaignIds.length > 3 ? ` and ${campaignIds.length - 3} more` : ""} ${live.length === 1 ? "isn't" : "aren't"} syncing views. Ask the creator to reconnect ${label}.`.slice(0, 2000),
+        link: "/users",
+        signature: countBucket(live.length),
+      })
+    );
+  }
+  return everything(alerts);
+}
+
 const DETECTORS = {
   payout_failed: failedPayouts,
   withdrawal_stuck: stuckWithdrawals,
@@ -448,6 +509,7 @@ const DETECTORS = {
   application_expiry_stuck: stuckApplicationExpiries,
   views_submission_stuck: stuckViewsSubmissions,
   auto_refund_failed: failedAutoRefunds,
+  social_reconnect_needed: socialReconnectNeeded,
 };
 
 // { alerts, checked: { kind: "all" | Set of keys } }. Read-only.
