@@ -5,7 +5,7 @@ import Image from "next/image";
 import { StepHeading } from "./wizard-fields";
 import { QuoteSummary } from "./step-pay";
 import { CampaignSetupSummary, setupFromWizard } from "./campaign-setup-summary";
-import { usesReferralBudget, type WizardData } from "./wizard-state";
+import { isHybrid, tracksConversions, type WizardData } from "./wizard-state";
 import type { CampaignQuote } from "../types";
 import { ConnectAppChecklist, useReferralConnection } from "../connect-app-checklist";
 
@@ -20,8 +20,10 @@ interface StepLaunchProps {
 }
 
 export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }: StepLaunchProps) {
-  const referral = usesReferralBudget(data.objective);
+  const referral = tracksConversions(data);
   const isContent = data.objective === "content";
+  const hybrid = isHybrid(data);
+  const trackedNoun = (hybrid ? data.bonusMetric : data.objective) === "downloads" ? "downloads" : "sign-ups";
 
   return (
     <div className="space-y-8">
@@ -44,7 +46,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
       {referral &&
         (connection.verified ? (
           <p className="bg-[#CBF5E5] text-[#176448] rounded-[18px] px-4 py-3 text-xs font-medium font-rethink leading-relaxed">
-            Your app is connected. Paying puts the campaign live and starts tracking {data.objective === "downloads" ? "downloads" : "sign-ups"}.
+            Your app is connected. Paying puts the campaign live and starts tracking {trackedNoun}.
           </p>
         ) : (
           <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">
@@ -76,7 +78,9 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
           <Image src={launchCampaign} alt="" width={56} height={56} className="object-contain" />
         </div>
         <p className="font-rethink text-xs text-stone-600 leading-normal">
-          {isContent
+          {hybrid
+            ? "Creators are paid your base for each deliverable you approve, and a bonus from your pool as their results are verified. Unused base and bonus are refunded when the campaign ends."
+            : isContent
             ? "Creators are paid your rate for each deliverable you approve. Unused budget is refunded when the campaign ends, minus payment fees."
             : "You pay up front. Creators are paid from your budget as their results are verified, and unused budget is refunded when the campaign ends, minus payment fees."}
         </p>

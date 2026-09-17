@@ -203,10 +203,14 @@ export interface WalletData {
     fixedOnHold?: number;
     fixedAwaitingDelivery?: number;
     fixedHoldUntil?: string | null;
+    // Hybrid pay (ticket 10): the fixed pot is the base, and the bonus is its own pot.
+    payShape?: PayShape | null;
+    bonusAvailable?: number;
+    bonusOnHold?: number;
     // What the campaign has earned per pot, withdrawn or not.
-    earnings?: { fixed: number; performance: number; referral: number };
+    earnings?: { fixed: number; performance: number; referral: number; bonus?: number };
     // Money not withdrawable yet, and why.
-    onHold?: Array<{ pot: "fixed" | "referral"; amount: number; reason: string; until: string | null }>;
+    onHold?: Array<{ pot: "fixed" | "referral" | "bonus"; amount: number; reason: string; until: string | null }>;
     onHoldTotal?: number;
     payoutDate?: string;
     total: number;
@@ -231,6 +235,25 @@ export interface WalletData {
       onHold: number;
       holdUntil: string | null;
       // Each unlock date with the amount that unlocks then, soonest first.
+      unlocks?: Array<{ date: string; amount: number }>;
+      withdrawn: number;
+      availableToWithdraw: number;
+    }>;
+  };
+  // Hybrid campaigns' bonus (ticket 10), held 7 days per credit.
+  bonus?: {
+    earned: number;
+    onHold: number;
+    availableToWithdraw: number;
+    withdrawn: number;
+    holdDays: number;
+    byCampaign: Array<{
+      id: string;
+      title: string;
+      status: string | null;
+      earned: number;
+      onHold: number;
+      holdUntil: string | null;
       unlocks?: Array<{ date: string; amount: number }>;
       withdrawn: number;
       availableToWithdraw: number;
@@ -283,6 +306,7 @@ export interface WithdrawalItem {
   viewsAmount?: number;
   referralAmount?: number;
   fixedAmount?: number;
+  bonusAmount?: number;
   // The Friday a pending or processing withdrawal is paid.
   payoutDate?: string | null;
   status: "pending" | "processing" | "rejected" | "released";
@@ -300,6 +324,18 @@ export type CreatorAccess = "open_call" | "application_required";
 export interface ContentPay {
   ratePerDeliverable: number;
   deliverables: number;
+}
+
+// Hybrid pay (ticket 10): what the bonus pays for. The brand sets the pool and the per-creator cap;
+// the rate comes from the price table (views) or our team (sign-ups, downloads).
+export type BonusMetric = "views" | "signups" | "downloads";
+
+export interface HybridBonus {
+  metric: BonusMetric;
+  pool: number;
+  capPerCreator: number;
+  platformFee?: number;
+  ratePerThousandViews?: number;
 }
 
 export interface AudienceTargeting {
@@ -340,6 +376,7 @@ export interface CampaignSetup {
   payShape: "fixed" | "performance" | "hybrid" | null;
   rateAuthority: "brand" | "admin" | "platform" | null;
   contentPay: ContentPay | null;
+  hybridBonus?: HybridBonus | null;
   contentDestination: ContentDestination | null;
   creatorAccess: CreatorAccess | null;
   audienceTargeting: AudienceTargeting;
@@ -351,6 +388,9 @@ export interface CampaignSetup {
 export interface CampaignQuote {
   creatorBudget: number;
   performanceBudget: number;
+  // Hybrid campaigns: the bonus pool and the fee on it (included in platformFee).
+  bonusPool?: number;
+  bonusFee?: number;
   platformFee: number;
   total: number;
 }
@@ -363,9 +403,17 @@ export type ProfileSection = ProfileFocusSection | "audience" | "portfolio";
 export type PayShape = "fixed" | "performance" | "hybrid";
 
 // What one unit of work earns. amount is null while EasilyPromote is still setting a sign-up reward.
+// Hybrid campaigns add the bonus on top of the base (ticket 10).
 export interface PayPerUnit {
   amount: number | null;
   unit: string;
+  bonus?: {
+    metric: BonusMetric;
+    amount: number | null;
+    unit: string;
+    capPerCreator: number;
+    available: boolean;
+  };
 }
 
 export interface CreatorBrief {

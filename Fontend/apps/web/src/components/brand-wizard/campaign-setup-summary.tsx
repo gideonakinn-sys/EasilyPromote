@@ -5,6 +5,7 @@ import { SummaryRow } from "./wizard-fields";
 import {
   ACCESS_OPTIONS,
   BADGE_OPTIONS,
+  BONUS_METRIC_OPTIONS,
   DESTINATION_OPTIONS,
   GENDER_OPTIONS,
   OBJECTIVE_OPTIONS,
@@ -14,12 +15,13 @@ import {
   usesReferralBudget,
   type WizardData,
 } from "./wizard-state";
-import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility } from "../types";
+import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility, HybridBonus } from "../types";
 import { formatNaira } from "../../lib/referral";
 
 export interface SetupSummaryInput {
   campaignObjective: CampaignObjective | null;
   contentPay: ContentPay | null;
+  hybridBonus?: HybridBonus | null;
   targetViews?: number;
   referralBudget?: number;
   contentDestination: ContentDestination | null;
@@ -37,6 +39,10 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
   return {
     campaignObjective: data.objective,
     contentPay: isContent ? { ratePerDeliverable: Number(data.ratePerDeliverable) || 0, deliverables: Number(data.deliverables) || 0 } : null,
+    hybridBonus:
+      isContent && data.payShape === "hybrid"
+        ? { metric: data.bonusMetric, pool: Number(data.bonusPool) || 0, capPerCreator: Number(data.bonusCap) || 0 }
+        : null,
     targetViews: isContent ? undefined : data.views,
     referralBudget: usesReferralBudget(data.objective) ? Number(data.referralBudget) || 0 : undefined,
     contentDestination: data.contentDestination,
@@ -123,8 +129,19 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         <SummaryRow label="Objective" value={objective?.title || "Not set"} />
         {setup.contentPay ? (
           <>
-            <SummaryRow label="Creator Pay Per Deliverable" value={formatNaira(setup.contentPay.ratePerDeliverable)} />
+            <SummaryRow label={setup.hybridBonus ? "Base Pay Per Deliverable" : "Creator Pay Per Deliverable"} value={formatNaira(setup.contentPay.ratePerDeliverable)} />
             <SummaryRow label="Deliverables" value={setup.contentPay.deliverables.toLocaleString()} />
+            {setup.hybridBonus && (
+              <>
+                <SummaryRow label="Bonus Pays For" value={labelFor(BONUS_METRIC_OPTIONS.map((o) => ({ value: o.value, label: o.title })), setup.hybridBonus.metric)} />
+                <SummaryRow label="Bonus Pool" value={formatNaira(setup.hybridBonus.pool)} />
+                <SummaryRow label="Bonus Cap Per Creator" value={formatNaira(setup.hybridBonus.capPerCreator)} />
+                <SummaryRow
+                  label={setup.hybridBonus.metric === "views" ? "Bonus Per 1,000 Views" : "Bonus Per Conversion"}
+                  value={setup.hybridBonus.ratePerThousandViews ? formatNaira(setup.hybridBonus.ratePerThousandViews) : setup.hybridBonus.metric === "views" ? "From our price table" : "Set by our team"}
+                />
+              </>
+            )}
           </>
         ) : (
           setup.targetViews !== undefined && <SummaryRow label="Target Views" value={setup.targetViews.toLocaleString()} />

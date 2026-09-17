@@ -2,8 +2,16 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
-import { Field, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
-import { MAX_DELIVERABLES, MIN_VIEWS, usesReferralBudget, type WizardData } from "./wizard-state";
+import { Field, OptionCard, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
+import {
+  BONUS_METRIC_OPTIONS,
+  MAX_DELIVERABLES,
+  MIN_BONUS_POOL,
+  MIN_VIEWS,
+  PAY_SHAPE_OPTIONS,
+  usesReferralBudget,
+  type WizardData,
+} from "./wizard-state";
 import type { CampaignQuote } from "../types";
 import { MIN_REFERRAL_BUDGET, formatNaira } from "../../lib/referral";
 
@@ -22,9 +30,11 @@ interface QuoteSummaryProps {
 
 // Numbers come from the API's calculator, the same one checkout charges with.
 export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
+  // Hybrid quotes carry the bonus pool in place of a performance budget.
+  const hybrid = quote?.bonusPool !== undefined;
   const rows: { label: string; value: number | undefined }[] = [
-    { label: "Creator Budget", value: quote?.creatorBudget },
-    { label: "Performance Budget", value: quote?.performanceBudget },
+    { label: hybrid ? "Base Budget" : "Creator Budget", value: quote?.creatorBudget },
+    hybrid ? { label: "Bonus Pool", value: quote?.bonusPool } : { label: "Performance Budget", value: quote?.performanceBudget },
     { label: "Platform Fee", value: quote?.platformFee },
   ];
   return (
@@ -95,6 +105,23 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
   );
 }
 
+// A whole-naira amount input with a ₦ prefix.
+function NairaInput({ id, value, placeholder, onChange }: { id: string; value: string; placeholder: string; onChange: (digits: string) => void }) {
+  return (
+    <div className="relative">
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+      <input
+        id={id}
+        inputMode="numeric"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(digitsOnly(e.target.value))}
+        className={cn(TEXT_INPUT_CLASS, "pl-8")}
+      />
+    </div>
+  );
+}
+
 interface StepPayProps {
   data: WizardData;
   update: (patch: Partial<WizardData>) => void;
@@ -107,13 +134,16 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
   const isContent = data.objective === "content";
   const referral = usesReferralBudget(data.objective);
   const actionNoun = data.objective === "downloads" ? "download" : "sign-up";
+  const hybrid = isContent && data.payShape === "hybrid";
 
   return (
     <div className="space-y-8">
       <StepHeading
         title="What you'll pay"
         body={
-          isContent
+          hybrid
+            ? "You set a base for each deliverable you approve and fund a bonus pool. Our fee is added on top of both, so creators get exactly your base and bonus."
+            : isContent
             ? "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate."
             : referral
               ? `You fund a budget and our team sets what creators earn per ${actionNoun}.`
@@ -122,8 +152,28 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
       />
 
       {isContent && (
+        <Field label="How Creators Are Paid">
+          <div role="radiogroup" aria-label="How creators are paid" className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {PAY_SHAPE_OPTIONS.map((option) => (
+              <OptionCard
+                key={option.value}
+                title={option.title}
+                body={option.body}
+                selected={data.payShape === option.value}
+                onSelect={() => update({ payShape: option.value })}
+              />
+            ))}
+          </div>
+        </Field>
+      )}
+
+      {isContent && (
         <>
-          <Field label="Creator Pay Per Approved Deliverable" htmlFor="rate-per-deliverable" hint="A deliverable is one piece of content, such as one video.">
+          <Field
+            label={hybrid ? "Base Pay Per Approved Deliverable" : "Creator Pay Per Approved Deliverable"}
+            htmlFor="rate-per-deliverable"
+            hint="A deliverable is one piece of content, such as one video."
+          >
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
               <input
@@ -153,6 +203,35 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
               className={TEXT_INPUT_CLASS}
             />
           </Field>
+        </>
+      )}
+
+      {hybrid && (
+        <>
+          <Field label="What the Bonus Pays For">
+            <div role="radiogroup" aria-label="What the bonus pays for" className="space-y-2">
+              {BONUS_METRIC_OPTIONS.map((option) => (
+                <OptionCard
+                  key={option.value}
+                  title={option.title}
+                  body={option.body}
+                  selected={data.bonusMetric === option.value}
+                  onSelect={() => update({ bonusMetric: option.value })}
+                />
+              ))}
+            </div>
+          </Field>
+          <Field label="Bonus Pool" htmlFor="bonus-pool" hint={`Minimum ${formatNaira(MIN_BONUS_POOL)}. Paid with the base; what isn't earned is refunded when the campaign ends.`}>
+            <NairaInput id="bonus-pool" placeholder="50000" value={data.bonusPool} onChange={(bonusPool) => update({ bonusPool })} />
+          </Field>
+          <Field label="Most One Creator Can Earn in Bonus" htmlFor="bonus-cap" hint="No more than the bonus pool.">
+            <NairaInput id="bonus-cap" placeholder="10000" value={data.bonusCap} onChange={(bonusCap) => update({ bonusCap })} />
+          </Field>
+          <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
+            {data.bonusMetric === "views"
+              ? "The bonus per 1,000 views comes from our price table."
+              : `Bonus per ${data.bonusMetric === "downloads" ? "download" : "sign-up"} is set by our team. Your app needs to be connected before you pay.`}
+          </p>
         </>
       )}
 

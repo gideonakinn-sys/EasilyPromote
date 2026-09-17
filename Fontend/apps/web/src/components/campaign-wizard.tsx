@@ -28,7 +28,7 @@ import {
   resumeStep,
   savedWizardStep,
   stepProblems,
-  usesReferralBudget,
+  tracksConversions,
   wizardDataFromCampaign,
   type SavedCampaign,
   type WizardData,
@@ -74,7 +74,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   useReveal(step);
 
   const storageKey = draftId ? `${DRAFT_STORAGE_KEY}-${draftId}` : DRAFT_STORAGE_KEY;
-  const referral = usesReferralBudget(data.objective);
+  const referral = tracksConversions(data);
   const connection = useReferralConnection(referral && step === LAST_STEP);
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];

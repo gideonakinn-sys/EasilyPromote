@@ -1,4 +1,5 @@
 import type {
+  BonusMetric,
   CampaignBrief,
   CampaignObjective,
   CampaignSetup,
@@ -105,6 +106,21 @@ export const BADGE_OPTIONS = [
 
 export const MIN_VIEWS = 100000;
 export const MAX_DELIVERABLES = 100;
+// Hybrid pay (ticket 10): the smallest bonus pool, as the API takes it.
+export const MIN_BONUS_POOL = 1000;
+
+export type ContentPayShape = "fixed" | "hybrid";
+
+export const PAY_SHAPE_OPTIONS: { value: ContentPayShape; title: string; body: string }[] = [
+  { value: "fixed", title: "Fixed", body: "A set amount for each deliverable you approve." },
+  { value: "hybrid", title: "Hybrid", body: "A base for each deliverable you approve, plus a bonus as results come in." },
+];
+
+export const BONUS_METRIC_OPTIONS: { value: BonusMetric; title: string; body: string }[] = [
+  { value: "views", title: "Views", body: "Creators earn per 1,000 verified views on their live post, at our price table's rate." },
+  { value: "signups", title: "Sign-ups", body: "Creators earn per sign-up with their code. Our team sets the reward." },
+  { value: "downloads", title: "Downloads", body: "Creators earn per app install with their code. Our team sets the reward." },
+];
 const DEFAULT_VIEWS = 1000000;
 const REFERRAL_OBJECTIVES: CampaignObjective[] = ["signups", "downloads"];
 
@@ -144,6 +160,12 @@ export interface WizardData {
   // saved without it.
   ratePerDeliverable: string;
   deliverables: string;
+  // Hybrid pay (ticket 10): the brand funds a bonus pool and caps what one creator can earn from it;
+  // the bonus rate is never the brand's to set.
+  payShape: ContentPayShape;
+  bonusMetric: BonusMetric;
+  bonusPool: string;
+  bonusCap: string;
   // Views and referral objectives: views from the price table.
   views: number;
   referralBudget: string;
@@ -188,6 +210,10 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   requiredBadges: [],
   ratePerDeliverable: "",
   deliverables: "",
+  payShape: "fixed",
+  bonusMetric: "views",
+  bonusPool: "",
+  bonusCap: "",
   views: DEFAULT_VIEWS,
   referralBudget: "",
   brief: EMPTY_BRIEF,
@@ -198,6 +224,16 @@ export const INITIAL_WIZARD_DATA: WizardData = {
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
   return REFERRAL_OBJECTIVES.includes(objective);
+}
+
+export function isHybrid(data: WizardData): boolean {
+  return data.objective === "content" && data.payShape === "hybrid";
+}
+
+// Whether the brand's app has to be connected before paying: referral objectives, and hybrid
+// campaigns whose bonus pays for sign-ups or downloads.
+export function tracksConversions(data: WizardData): boolean {
+  return usesReferralBudget(data.objective) || (isHybrid(data) && data.bonusMetric !== "views");
 }
 
 export function isObjectiveAvailable(objective: CampaignObjective): boolean {
@@ -245,6 +281,16 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
       if (!rate) problems.push("Set what creators earn for each approved deliverable, in whole naira.");
       if (!count) problems.push("Set how many deliverables you're paying for.");
       else if (count > MAX_DELIVERABLES) problems.push(`You can pay for up to ${MAX_DELIVERABLES} deliverables.`);
+      if (isHybrid(data)) {
+        const pool = wholeNumber(data.bonusPool);
+        const cap = wholeNumber(data.bonusCap);
+        if (!pool || pool < MIN_BONUS_POOL) problems.push(`Fund a bonus pool of at least ₦${MIN_BONUS_POOL.toLocaleString()}, in whole naira.`);
+        if (!cap) problems.push("Set the most one creator can earn in bonus, in whole naira.");
+        else if (pool && cap > pool) problems.push("A creator's bonus cap can't be more than the bonus pool.");
+        if (data.bonusMetric === "views" && data.contentDestination === "brand_page") {
+          problems.push("A views bonus needs creators to post on their own page. Choose creator page or both in step 2, or a sign-up or download bonus.");
+        }
+      }
     } else {
       if (!(data.views >= MIN_VIEWS)) problems.push(`Choose at least ${MIN_VIEWS.toLocaleString()} views.`);
       if (usesReferralBudget(data.objective) && referralBudgetValue(data) < MIN_REFERRAL_BUDGET) {
@@ -320,6 +366,10 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     requiredBadges: list(eligibility.requiredBadges),
     ratePerDeliverable: saved.contentPay ? String(saved.contentPay.ratePerDeliverable) : INITIAL_WIZARD_DATA.ratePerDeliverable,
     deliverables: saved.contentPay ? String(saved.contentPay.deliverables) : INITIAL_WIZARD_DATA.deliverables,
+    payShape: saved.payShape === "hybrid" ? "hybrid" : "fixed",
+    bonusMetric: saved.hybridBonus?.metric || INITIAL_WIZARD_DATA.bonusMetric,
+    bonusPool: saved.hybridBonus ? String(saved.hybridBonus.pool) : "",
+    bonusCap: saved.hybridBonus ? String(saved.hybridBonus.capPerCreator) : "",
     views: saved.targetViews || DEFAULT_VIEWS,
     referralBudget: saved.referral?.requestedBudget ? String(saved.referral.requestedBudget) : "",
     brief: hasBrief
@@ -360,10 +410,17 @@ export function pricingPayload(data: WizardData): Record<string, unknown> {
   if (data.objective === "content") {
     const rate = wholeNumber(data.ratePerDeliverable);
     const count = wholeNumber(data.deliverables);
+    const pool = wholeNumber(data.bonusPool);
+    const cap = wholeNumber(data.bonusCap);
     return {
       campaignObjective: data.objective,
+      payShape: data.payShape,
       // null saves the draft without pay until both are set.
       contentPay: rate && count ? { ratePerDeliverable: rate, deliverables: count } : null,
+      // The bonus only goes with hybrid pay; null saves a hybrid draft without it until it's set.
+      ...(data.payShape === "hybrid" && {
+        hybridBonus: pool && cap ? { metric: data.bonusMetric, pool, capPerCreator: cap } : null,
+      }),
     };
   }
   return {

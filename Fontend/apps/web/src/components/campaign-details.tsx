@@ -814,6 +814,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 setup={{
                   campaignObjective: campaign.campaignObjective,
                   contentPay: campaign.contentPay ?? null,
+                  hybridBonus: campaign.hybridBonus ?? null,
                   targetViews: isContent ? undefined : campaign.targetViews,
                   referralBudget: campaign.referral?.requestedBudget,
                   contentDestination: campaign.contentDestination ?? null,
