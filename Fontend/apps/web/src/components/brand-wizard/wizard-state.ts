@@ -7,6 +7,7 @@ import type {
   CreatorAccess,
 } from "../types";
 import { MIN_REFERRAL_BUDGET } from "../../lib/referral";
+import type { CampaignUsageRights, UsageRightsDuration, UsageRightsExclusivity, UsageRightsType } from "../types";
 
 // The five setup steps, then review and payment.
 export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
@@ -198,6 +199,16 @@ export interface WizardData {
   scriptFileName: string;
   // Niches from the older wizard that aren't creator categories; kept on save.
   otherNiches: string[];
+  // Usage rights for content on the brand's page (SPEC D6, D30): the standard licence or custom terms.
+  usageRightsType: UsageRightsType;
+  usageDuration: UsageRightsDuration;
+  usageExclusivity: UsageRightsExclusivity;
+  usageExclusivityPeriod: string;
+  usagePaidAds: boolean;
+  usageWorldwide: boolean;
+  // Countries, comma-separated, when not worldwide.
+  usageTerritories: string;
+  usageAdditionalTerms: string;
 }
 
 export const EMPTY_BRIEF: WizardBrief = {
@@ -244,6 +255,14 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   scriptUrl: "",
   scriptFileName: "",
   otherNiches: [],
+  usageRightsType: "standard",
+  usageDuration: "perpetual",
+  usageExclusivity: "none",
+  usageExclusivityPeriod: "",
+  usagePaidAds: true,
+  usageWorldwide: true,
+  usageTerritories: "",
+  usageAdditionalTerms: "",
 };
 
 export function usesReferralBudget(objective: CampaignObjective): boolean {
@@ -327,6 +346,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.brief.soundUrl.trim() && !isUrl(data.brief.soundUrl.trim())) problems.push("The sound link must be a full web address.");
     if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference videos must be full web addresses.");
   }
+  if (step === 2) problems.push(...usageRightsProblems(data));
   return problems;
 }
 
@@ -418,6 +438,7 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     scriptUrl: saved.scriptUrl || "",
     scriptFileName: saved.scriptFileName || "",
     otherNiches: list(saved.niches).filter((niche) => !CREATOR_CATEGORIES.includes(niche)),
+    ...usageRightsFromCampaign(saved.usageRights),
   };
 }
 
@@ -519,5 +540,123 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     niches: [...data.otherNiches, ...data.categories],
     scriptUrl: data.scriptUrl || undefined,
     scriptFileName: data.scriptFileName || undefined,
+    usageRights: usageRightsPayload(data),
+  };
+}
+
+// Usage rights (M8, SPEC D6 and D30): only content that goes to the brand's page carries them.
+export const MAX_ADDITIONAL_TERMS = 1000;
+const MAX_EXCLUSIVITY_PERIOD = 100;
+const MAX_TERRITORIES = 50;
+const MAX_TERRITORY_LENGTH = 100;
+const WORLDWIDE = "Worldwide";
+
+export const USAGE_RIGHTS_TYPE_OPTIONS: { value: UsageRightsType; title: string; body: string }[] = [
+  {
+    value: "standard",
+    title: "Standard licence",
+    body: "Use the content forever, on your social channels, in organic posts and paid ads. It isn't exclusive. Creators join without extra terms.",
+  },
+  {
+    value: "custom",
+    title: "Custom terms",
+    body: "Set how long you can use the content, exclusivity, paid ads and where. Creators must accept your terms to take part.",
+  },
+];
+
+export const USAGE_DURATION_OPTIONS: { value: UsageRightsDuration; label: string }[] = [
+  { value: "perpetual", label: "Forever" },
+  { value: "3_months", label: "3 months" },
+  { value: "6_months", label: "6 months" },
+  { value: "12_months", label: "12 months" },
+  { value: "24_months", label: "24 months" },
+];
+
+export const USAGE_EXCLUSIVITY_OPTIONS: { value: UsageRightsExclusivity; title: string; body: string }[] = [
+  { value: "none", title: "Not exclusive", body: "Creators can work with any other brand." },
+  { value: "category", title: "Category exclusive", body: "Creators can't promote a competing brand in your category for a set time." },
+];
+
+export function grantsUsageRights(destination: ContentDestination | null | undefined): boolean {
+  return destination === "brand_page" || destination === "both";
+}
+
+export function parseTerritories(value: string): string[] {
+  const seen = new Set<string>();
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function usageRightsProblems(data: WizardData): string[] {
+  if (!grantsUsageRights(data.contentDestination) || data.usageRightsType !== "custom") return [];
+  const problems: string[] = [];
+  if (data.usageExclusivity === "category") {
+    const period = data.usageExclusivityPeriod.trim();
+    if (!period) problems.push("Say how long creators can't work with a competing brand.");
+    else if (period.length > MAX_EXCLUSIVITY_PERIOD) problems.push(`Keep the exclusivity period to ${MAX_EXCLUSIVITY_PERIOD} characters.`);
+  }
+  if (!data.usageWorldwide) {
+    const territories = parseTerritories(data.usageTerritories);
+    if (territories.length === 0) problems.push("List the countries where you can use the content, or choose worldwide.");
+    else if (territories.length > MAX_TERRITORIES) problems.push(`List up to ${MAX_TERRITORIES} countries.`);
+    else if (territories.some((item) => item.length > MAX_TERRITORY_LENGTH)) problems.push(`Each country can be up to ${MAX_TERRITORY_LENGTH} characters.`);
+  }
+  if (data.usageAdditionalTerms.length > MAX_ADDITIONAL_TERMS) {
+    problems.push(`Keep additional terms to ${MAX_ADDITIONAL_TERMS.toLocaleString()} characters.`);
+  }
+  return problems;
+}
+
+// Custom terms are only sent where content goes to the brand's page; anywhere else the campaign
+// goes back to the standard licence so creators aren't asked to accept terms that don't apply.
+export function usageRightsPayload(data: WizardData): CampaignUsageRights {
+  if (!grantsUsageRights(data.contentDestination) || data.usageRightsType !== "custom") return { type: "standard" };
+  const additional = data.usageAdditionalTerms.trim();
+  return {
+    type: "custom",
+    terms: {
+      duration: data.usageDuration,
+      exclusivity: data.usageExclusivity,
+      exclusivityPeriod: data.usageExclusivity === "category" ? data.usageExclusivityPeriod.trim() || null : null,
+      paidAdsAllowed: data.usagePaidAds,
+      territories: data.usageWorldwide ? [WORLDWIDE] : parseTerritories(data.usageTerritories),
+      additionalTerms: additional || null,
+    },
+  };
+}
+
+export function isWorldwide(territories: string[] | undefined): boolean {
+  return !territories || territories.length === 0 || territories.some((item) => item.toLowerCase() === WORLDWIDE.toLowerCase());
+}
+
+function usageRightsFromCampaign(saved: CampaignUsageRights | null | undefined): Pick<
+  WizardData,
+  | "usageRightsType"
+  | "usageDuration"
+  | "usageExclusivity"
+  | "usageExclusivityPeriod"
+  | "usagePaidAds"
+  | "usageWorldwide"
+  | "usageTerritories"
+  | "usageAdditionalTerms"
+> {
+  const terms = saved?.terms || {};
+  const worldwide = isWorldwide(terms.territories);
+  return {
+    usageRightsType: saved?.type === "custom" ? "custom" : "standard",
+    usageDuration: terms.duration || INITIAL_WIZARD_DATA.usageDuration,
+    usageExclusivity: terms.exclusivity || INITIAL_WIZARD_DATA.usageExclusivity,
+    usageExclusivityPeriod: terms.exclusivityPeriod || "",
+    usagePaidAds: terms.paidAdsAllowed ?? INITIAL_WIZARD_DATA.usagePaidAds,
+    usageWorldwide: worldwide,
+    usageTerritories: worldwide ? "" : (terms.territories || []).join(", "),
+    usageAdditionalTerms: terms.additionalTerms || "",
   };
 }

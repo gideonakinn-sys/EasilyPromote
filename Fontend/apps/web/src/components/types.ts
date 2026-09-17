@@ -758,3 +758,28 @@ export interface CampaignRatingList {
   tags: Array<{ value: RatingTag; label: string }>;
   editWindowDays: number;
 }
+
+// Custom usage-rights terms (M8, SPEC D30): content that goes to the brand's page is under the
+// standard licence (D6) or the brand's own terms. Terms can't change after launch.
+export type UsageRightsType = "standard" | "custom";
+export type UsageRightsDuration = "perpetual" | "3_months" | "6_months" | "12_months" | "24_months";
+export type UsageRightsExclusivity = "none" | "category";
+
+export interface UsageRightsTerms {
+  duration?: UsageRightsDuration;
+  exclusivity?: UsageRightsExclusivity;
+  exclusivityPeriod?: string | null;
+  paidAdsAllowed?: boolean;
+  territories?: string[];
+  additionalTerms?: string | null;
+}
+
+export interface CampaignUsageRights {
+  type: UsageRightsType;
+  version?: number;
+  terms?: UsageRightsTerms;
+}
+
+export interface CampaignSetup {
+  usageRights?: CampaignUsageRights | null;
+}
