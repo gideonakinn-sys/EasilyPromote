@@ -893,6 +893,10 @@ router.delete("/:id", protect, authorizeRoles("business"), async (req, res, next
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only delete draft or pending payment campaigns" });
     }
+    const { hasDependents } = require("../utils/cleanupCancelled");
+    if (await hasDependents(campaign._id)) {
+      return res.status(409).json({ error: "A payment for this campaign is on record, so it can't be deleted", code: "CAMPAIGN_HAS_RECORDS" });
+    }
 
     await Campaign.findByIdAndDelete(req.params.id);
     res.json({ message: "Campaign deleted" });

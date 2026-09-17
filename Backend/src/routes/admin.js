@@ -538,9 +538,17 @@ router.delete("/campaigns/:id", adminGuard, async (req, res, next) => {
     if (!deletable.includes(campaign.status)) {
       return res.status(400).json({ error: "Only draft, pending payment, or cancelled campaigns can be deleted" });
     }
+    // Payments, placements, content and conversions back refunds and pay owed, so a campaign
+    // with any of them is kept (cancelled) rather than deleted.
+    const { hasDependents } = require("../utils/cleanupCancelled");
+    if (await hasDependents(campaign._id)) {
+      return res.status(409).json({
+        error: "This campaign has payments, creators or content on record, so it can't be deleted. It stays cancelled.",
+        code: "CAMPAIGN_HAS_RECORDS",
+      });
+    }
 
-    await Slot.deleteMany({ campaignId: campaign._id });
-    await Submission.deleteMany({ campaignId: campaign._id });
+    await Slot.deleteMany({ campaignId: campaign._id, creatorId: null });
     await campaign.deleteOne();
 
     res.json({ success: true, message: "Campaign deleted" });
