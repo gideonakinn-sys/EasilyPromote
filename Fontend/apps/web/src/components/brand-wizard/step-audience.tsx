@@ -11,6 +11,9 @@ import {
   GENDER_OPTIONS,
   PLATFORM_OPTIONS,
   RANK_OPTIONS,
+  ageFilterActive,
+  genderFilterActive,
+  specificGenders,
   targetingPayload,
   type WizardData,
 } from "./wizard-state";
@@ -23,7 +26,8 @@ interface StepAudienceProps {
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 // Ticket 11: how many creators could join with these settings, updated a moment after the brand
-// stops changing them. Age, gender and interests only rank creators, so they don't change it.
+// stops changing them. Interests only rank creators, so they don't change it; age and gender do
+// only when the brand makes them required.
 function LiveMatchCount({ data }: { data: WizardData }) {
   const key = JSON.stringify(targetingPayload(data));
   const [result, setResult] = React.useState<MatchCount | null>(null);
@@ -67,6 +71,63 @@ function LiveMatchCount({ data }: { data: WizardData }) {
   );
 }
 
+interface HardFilterProps {
+  id: string;
+  label: string;
+  body: string;
+  on: boolean;
+  share: string;
+  showShare: boolean;
+  shareHint: string;
+  onToggle: (on: boolean) => void;
+  onShareChange: (share: string) => void;
+}
+
+// A "Required" switch that turns an age or gender preference into a requirement, with the share
+// of a creator's audience that has to match.
+function HardFilter({ id, label, body, on, share, showShare, shareHint, onToggle, onShareChange }: HardFilterProps) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <span className="space-y-0.5">
+          <span id={`${id}-label`} className="block text-sm font-medium text-stone-900 font-rethink">
+            {label}
+          </span>
+          <span className="block text-xs text-stone-500 font-medium font-rethink leading-relaxed">{body}</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-labelledby={`${id}-label`}
+          onClick={() => onToggle(!on)}
+          className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-stone-900" : "bg-stone-200")}
+        >
+          <span
+            aria-hidden="true"
+            className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-5")}
+          />
+        </button>
+      </div>
+      {showShare && (
+        <Field label="Minimum Audience Share" htmlFor={`${id}-share`} hint={shareHint}>
+          <div className="relative">
+            <input
+              id={`${id}-share`}
+              inputMode="numeric"
+              placeholder="50"
+              value={share}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onShareChange(digitsOnly(e.target.value).slice(0, 3))}
+              className={cn(TEXT_INPUT_CLASS, "pr-10")}
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">%</span>
+          </div>
+        </Field>
+      )}
+    </div>
+  );
+}
+
 export function StepAudience({ data, update }: StepAudienceProps) {
   // "Everyone" and a specific gender don't go together.
   const toggleGender = (value: string) => {
@@ -82,7 +143,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
       <div className="space-y-6">
         <StepHeading
           title="Who do you want to reach?"
-          body="Audience Targeting describes the people watching. Location and platform must match; age, gender and interests help us rank creators."
+          body="Audience Targeting describes the people watching. Location and platform must match; age and gender help us rank creators unless you make them required, and interests only rank."
         />
 
         <Field label="Platforms" hint="Creators need an account on at least one of these.">
@@ -132,11 +193,43 @@ export function StepAudience({ data, update }: StepAudienceProps) {
             selected={data.ageRanges}
             onToggle={(value) => update({ ageRanges: toggleValue(data.ageRanges, value) })}
           />
+          <HardFilter
+            id="require-age"
+            label="Required"
+            body={data.ageRanges.length ? "Only creators whose audience is mostly in these age ranges can take part." : "Pick at least one age range to require it."}
+            on={data.requireAgeMatch}
+            share={data.minAgeShare}
+            showShare={ageFilterActive(data)}
+            shareHint="For example, 50 means at least 50% of a creator's followers are in the age ranges above."
+            onToggle={(requireAgeMatch) => update({ requireAgeMatch })}
+            onShareChange={(minAgeShare) => update({ minAgeShare })}
+          />
         </Field>
 
         <Field label="Gender">
           <ChipGroup label="Gender" options={GENDER_OPTIONS} selected={data.genders} onToggle={toggleGender} />
+          <HardFilter
+            id="require-gender"
+            label="Required"
+            body={
+              specificGenders(data.genders).length
+                ? "Only creators whose audience is mostly the genders above can take part."
+                : "Pick a gender other than Everyone to require it."
+            }
+            on={data.requireGenderMatch}
+            share={data.minGenderShare}
+            showShare={genderFilterActive(data)}
+            shareHint="For example, 50 means at least 50% of a creator's followers are the genders above."
+            onToggle={(requireGenderMatch) => update({ requireGenderMatch })}
+            onShareChange={(minGenderShare) => update({ minGenderShare })}
+          />
         </Field>
+
+        {(data.requireAgeMatch || data.requireGenderMatch) && (
+          <p className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-xs text-amber-800 font-medium font-rethink leading-relaxed">
+            Audience age and gender are self-reported by creators, and many haven&apos;t added them yet. Requiring them may shrink the number of creators who can take part.
+          </p>
+        )}
 
         <Field label="Interests" htmlFor="audience-interests">
           <ListInput
