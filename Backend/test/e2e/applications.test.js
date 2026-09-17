@@ -359,6 +359,54 @@ test("a failure after the place is taken gives the place back and leaves the app
   assert.equal((await heldPlacements(id)).length, 1);
 });
 
+test("approve takes no place on a campaign paused after the brand's request loaded it", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const { testHooks } = require("../../src/services/placements");
+  const { brand, id } = await liveCampaign();
+  const creator = await harness.registerCreator();
+  const applied = await apply(id, creator, {});
+
+  // Paused between loading the campaign and reserving the place.
+  testHooks.beforeReserve = () => Campaign.updateOne({ _id: id }, { $set: { status: "paused" } });
+  try {
+    const refused = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+    assert.equal(refused.status, 409, JSON.stringify(refused.body));
+    assert.equal(refused.body.code, "CAMPAIGN_NOT_LIVE");
+  } finally {
+    testHooks.beforeReserve = null;
+  }
+  assert.equal((await heldPlacements(id)).length, 0, "no place taken");
+  let detail = await harness.api("GET", `/api/campaigns/${id}/applications/${applied.body.id}`, { token: brand.token });
+  assert.equal(detail.body.status, "pending");
+
+  // Paused while the place was being taken: it's given back.
+  await Campaign.updateOne({ _id: id }, { $set: { status: "live" } });
+  testHooks.beforeReserve = null;
+  testHooks.afterTake = () => Campaign.updateOne({ _id: id }, { $set: { status: "paused" } });
+  try {
+    const refused = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+    assert.equal(refused.status, 409, JSON.stringify(refused.body));
+    assert.equal(refused.body.code, "CAMPAIGN_NOT_LIVE");
+  } finally {
+    testHooks.afterTake = null;
+  }
+  assert.equal((await heldPlacements(id)).length, 0, "the place was given back");
+  detail = await harness.api("GET", `/api/campaigns/${id}/applications/${applied.body.id}`, { token: brand.token });
+  assert.equal(detail.body.status, "pending");
+
+  // The pool check reads the campaign's current creator pool, not the one loaded with the request.
+  await Campaign.updateOne({ _id: id }, { $set: { status: "live" } });
+  testHooks.afterTake = () => Campaign.updateOne({ _id: id }, { $set: { creatorPool: 100 } });
+  try {
+    const refused = await harness.api("POST", approveUrl(id, applied.body.id), { token: brand.token });
+    assert.equal(refused.status, 409, JSON.stringify(refused.body));
+    assert.equal(refused.body.code, "CAMPAIGN_FULL");
+  } finally {
+    testHooks.afterTake = null;
+  }
+  assert.equal((await heldPlacements(id)).length, 0);
+});
+
 test("the deadline job puts an approved application with no place back to pending", async () => {
   const { processApplicationDeadlines } = require("../../src/services/applications");
   const CampaignApplication = require("../../src/models/CampaignApplication");

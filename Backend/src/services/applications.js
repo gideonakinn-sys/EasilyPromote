@@ -303,7 +303,7 @@ async function approveApplication({ user, campaignId, applicationId }) {
 
   let reserved;
   try {
-    reserved = await reservePlacementFor({ creatorId: application.creator, campaignId: campaign._id, campaign });
+    reserved = await reservePlacementFor({ creatorId: application.creator, campaignId: campaign._id });
   } catch (error) {
     await undo();
     throw error;
@@ -311,6 +311,9 @@ async function approveApplication({ user, campaignId, applicationId }) {
   if (reserved.status !== 200) {
     await undo();
     const { code, failures } = reserved.body;
+    if (code === "CAMPAIGN_NOT_LIVE") {
+      return refuse(409, "CAMPAIGN_NOT_LIVE", "This campaign isn't live any more, so no place can be reserved. The application is still pending");
+    }
     if (code === "CAMPAIGN_FULL") {
       return refuse(409, "CAMPAIGN_FULL", "No places are left in this campaign. Add places or reject this applicant");
     }

@@ -99,8 +99,8 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
 
 // Campaign engine: applications (ticket 06)
 // Seams for tests only: `afterTake` runs right after a place is taken, to prove a failure
-// there gives the place back.
-const testHooks = { afterTake: null };
+// there gives the place back; `beforeReserve` runs before an approval reads the campaign.
+const testHooks = { afterTake: null, beforeReserve: null };
 
 // Everything joining or applying needs to know about this creator and campaign.
 // `requested` limits the open places to one (older clients).
@@ -157,9 +157,11 @@ async function placementBody(slot, campaign, referralCode, placesLeft) {
 // joining; the Open Call access check and place rank requirements are skipped because the
 // brand picked this creator. A place the creator already holds here is returned as theirs
 // (e.g. left by an earlier approval that failed part-way). Returns { status, body }.
-async function reservePlacementFor({ creatorId, campaignId, campaign: loaded = null }) {
-  // A caller that just loaded the campaign passes it in; its status is still checked here.
-  const campaign = loaded || (await Campaign.findById(campaignId).lean());
+async function reservePlacementFor({ creatorId, campaignId }) {
+  if (testHooks.beforeReserve) await testHooks.beforeReserve({ creatorId, campaignId });
+  // Always read fresh: the caller's copy may be from before a pause. takePlacement checks the
+  // status again once the place is taken.
+  const campaign = await Campaign.findById(campaignId).lean();
   if (!campaign || campaign.status !== "live") return refuse(404, "CAMPAIGN_NOT_LIVE", "Campaign not found or not live");
   const result = await takePlacement({ creatorId, campaign, pickedByBrand: true });
   if (result.status === 409 && result.body.code === "ALREADY_JOINED") {
@@ -229,22 +231,31 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
     if (testHooks.afterTake) await testHooks.afterTake({ slot: claimed, creatorId, campaign });
 
     // The pool check read other reservations before this one was written, so two joins at the
-    // same moment could both fit. Re-check with this one in place and give it back if the
-    // pool is now over-promised or this creator somehow holds two.
-    // The same read counts the places left for the response and the live update.
+    // same moment could both fit. Re-check with this one in place, against the campaign as it is
+    // now, and give it back if the campaign stopped being live, the pool is over-promised or this
+    // creator somehow holds two. The same read counts the places left for the response and the
+    // live update.
     const isHeld = { $in: ["$status", HELD_PLACEMENT_STATUSES] };
-    const [totals] = await Slot.aggregate([
-      { $match: { campaignId: campaign._id, status: { $in: ["available", ...HELD_PLACEMENT_STATUSES] } } },
-      {
-        $group: {
-          _id: null,
-          reward: { $sum: { $cond: [isHeld, "$reward", 0] } },
-          mine: { $sum: { $cond: [{ $and: [isHeld, { $eq: ["$creatorId", creatorId] }] }, 1, 0] } },
-          available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
+    const [current, [totals]] = await Promise.all([
+      Campaign.findById(campaign._id).select("status creatorPool").lean(),
+      Slot.aggregate([
+        { $match: { campaignId: campaign._id, status: { $in: ["available", ...HELD_PLACEMENT_STATUSES] } } },
+        {
+          $group: {
+            _id: null,
+            reward: { $sum: { $cond: [isHeld, "$reward", 0] } },
+            mine: { $sum: { $cond: [{ $and: [isHeld, { $eq: ["$creatorId", creatorId] }] }, 1, 0] } },
+            available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
+          },
         },
-      },
+      ]),
     ]);
-    if (totals && (totals.reward > (campaign.creatorPool || 0) || totals.mine > 1)) {
+    if (!current || current.status !== "live") {
+      await release(claimed, original, creatorId);
+      announcePlacesLeft(campaign._id);
+      return refuse(409, "CAMPAIGN_NOT_LIVE", "This campaign isn't live any more, so no place was reserved");
+    }
+    if (totals && (totals.reward > (current.creatorPool || 0) || totals.mine > 1)) {
       await release(claimed, original, creatorId);
       announcePlacesLeft(campaign._id);
       return totals.mine > 1
