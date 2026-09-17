@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { toObjectId } = require("./objectId");
 const Campaign = require("../models/Campaign");
 const ConversionEvent = require("../models/ConversionEvent");
@@ -16,14 +17,37 @@ const MAX_REWARD_PER_CONVERSION = 1000000;
 
 const { roundMoney } = require("./money");
 
+// Reasons a counted conversion earned nothing that later budget or a reward can pay.
+const PAYABLE_LATER_REASONS = ["budget_exhausted", "rate_not_set"];
+// A back-pay claim this old belongs to a run that died; another run may take it over.
+const PAYING_CLAIM_STALE_MS = 5 * 60 * 1000;
+// Seams for tests only: throw to simulate a crash at that point of back-pay, or act just before a
+// credited top-up starts paying earlier conversions.
+const backPayHooks = { afterClaim: null, afterReserve: null, beforeBackPay: null };
+
+// Counted conversions still waiting for pay, oldest first.
+const waitingForPay = (campaignId, reasons = PAYABLE_LATER_REASONS) => ({
+  campaignId,
+  counted: true,
+  voidedAt: null,
+  unpaidReason: { $in: reasons },
+  rewardAmount: { $not: { $gt: 0 } },
+});
+
 // Reserves the campaign's per-conversion reward for one counted conversion. The pool
 // is decremented with a conditional update, so two conversions racing for the last of
-// the budget can never both be paid.
-async function reserveConversionReward(campaign, counted, now = new Date()) {
+// the budget can never both be paid. `eventId` is the conversion being paid: while older
+// conversions still wait for pay it doesn't draw on the pool and is queued behind them
+// (`queued: true`; the caller runs payQueuedConversions once it's recorded).
+async function reserveConversionReward(campaign, counted, now = new Date(), { eventId = null } = {}) {
   if (!counted) return { rewardAmount: 0, unpaidReason: "not_counted", availableAt: null };
 
   const rate = roundMoney(campaign.referral && campaign.referral.rewardPerConversion);
   if (!(rate > 0)) return { rewardAmount: 0, unpaidReason: "rate_not_set", availableAt: null };
+
+  if (await ConversionEvent.exists({ ...waitingForPay(campaign._id), ...(eventId && { _id: { $ne: eventId } }) })) {
+    return { rewardAmount: 0, unpaidReason: "budget_exhausted", availableAt: null, queued: true };
+  }
 
   const reserved = await Campaign.findOneAndUpdate(
     { _id: campaign._id, "referral.poolRemaining": { $gte: rate } },
@@ -34,6 +58,11 @@ async function reserveConversionReward(campaign, counted, now = new Date()) {
     return { rewardAmount: rate, unpaidReason: null, availableAt: new Date(now.getTime() + REFERRAL_HOLD_MS) };
   }
 
+  await noteBudgetExhausted(campaign, now);
+  return { rewardAmount: 0, unpaidReason: "budget_exhausted", availableAt: null };
+}
+
+async function noteBudgetExhausted(campaign, now) {
   // Only the first unpaid conversion since the last top-up notifies the brand.
   const flagged = await Campaign.updateOne(
     { _id: campaign._id, "referral.budgetExhaustedAt": null },
@@ -48,7 +77,6 @@ async function reserveConversionReward(campaign, counted, now = new Date()) {
       body: `The referral budget for "${campaign.name}" has run out. Conversions are still recorded, but creators aren't paid for new ones until you add more budget.`,
     });
   }
-  return { rewardAmount: 0, unpaidReason: "budget_exhausted", availableAt: null };
 }
 
 // Credits a verified referral-budget payment exactly once, keyed on the Paystack
@@ -108,7 +136,9 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
     },
     { new: true }
   );
-  // Sign-ups recorded while the budget was empty are paid from the new pool first.
+  // Sign-ups recorded while the budget was empty are paid from the new pool first. New sign-ups
+  // arriving meanwhile queue behind them (reserveConversionReward).
+  if (backPayHooks.beforeBackPay) await backPayHooks.beforeBackPay({ campaignId: campaign._id });
   const backPay = await payConversionsAfterTopup(campaign._id);
   const current = backPay.paid > 0 ? await Campaign.findById(campaign._id) : updated;
   return { credited: true, campaign: current, amount, fee, net, backPay };
@@ -303,79 +333,127 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
 // Counted conversions that earned nothing are paid, oldest first, while the referral pool lasts:
 // sign-ups recorded before admin set a reward once it's set, and (with `reasons` including
 // budget_exhausted) sign-ups recorded after the budget ran out once the brand tops up. Each gets a
-// fresh hold from now, so it can still be voided. Every event is claimed before it's paid, so
-// concurrent runs never pay one twice. Returns { paid, unpaid, byCreator: Map(creatorId -> { count, amount }) }.
+// fresh hold from now, so it can still be voided.
+//
+// Crash safety, per conversion: (1) claim it (payingClaim with an attempt id and the reward), leaving
+// unpaidReason as it is; (2) reserve the reward from the pool together with a
+// referral.payingConversions entry for that conversion, so a retry finds the reservation instead of
+// reserving again; (3) record the reward and clear the claim, only if the claim is still this
+// attempt's; (4) drop the entry. A run that dies leaves a claim; after PAYING_CLAIM_STALE_MS another
+// run takes it over and reuses any reservation. A run whose claim was taken over gives back a
+// reservation it made itself. A fresh claim on the oldest waiting conversion stops other runs, so
+// conversions are always paid strictly oldest first.
+// Returns { paid, unpaid, byCreator: Map(creatorId -> { count, amount }) }.
 async function payUnpaidConversions(campaignId, now = new Date(), { reasons = ["rate_not_set"] } = {}) {
   const byCreator = new Map();
   const campaign = await Campaign.findById(campaignId).select("name businessId referral");
   if (!campaign || !(campaign.referral && campaign.referral.rewardPerConversion > 0)) return { paid: 0, unpaid: 0, byCreator };
+  const waiting = waitingForPay(campaign._id, reasons);
+  const unpaidCount = () => ConversionEvent.countDocuments(waiting);
 
-  const events = await ConversionEvent.find({
-    campaignId: campaign._id,
-    counted: true,
-    voidedAt: null,
-    unpaidReason: { $in: reasons },
-  })
-    .sort({ occurredAt: 1, createdAt: 1 })
-    .select("_id");
+  // Entries left by a run that recorded the reward but died before dropping them.
+  const entries = (campaign.referral.payingConversions || []).map((e) => e.conversionId);
+  if (entries.length) {
+    const done = await ConversionEvent.distinct("_id", { _id: { $in: entries }, rewardAmount: { $gt: 0 }, payingClaim: null });
+    if (done.length) await Campaign.updateOne({ _id: campaign._id }, { $pull: { "referral.payingConversions": { conversionId: { $in: done } } } });
+  }
 
   let paid = 0;
-  for (let i = 0; i < events.length; i += 1) {
-    const claimed = await ConversionEvent.findOneAndUpdate(
-      { _id: events[i]._id, unpaidReason: { $in: reasons }, voidedAt: null, rewardAmount: { $not: { $gt: 0 } } },
-      { $set: { unpaidReason: null } }
-    );
-    if (!claimed) continue;
-
-    const reward = await reserveConversionReward(campaign, true, now);
-    if (!(reward.rewardAmount > 0)) {
-      // Only this run's claim and events still waiting are marked; another run may be paying the rest.
-      await ConversionEvent.updateOne({ _id: claimed._id, unpaidReason: null, rewardAmount: { $not: { $gt: 0 } } }, { $set: { unpaidReason: "budget_exhausted" } });
-      const rest = events.slice(i + 1).map((event) => event._id);
-      const marked = rest.length
-        ? await ConversionEvent.updateMany({ _id: { $in: rest }, unpaidReason: { $in: reasons } }, { $set: { unpaidReason: "budget_exhausted" } })
-        : { matchedCount: 0 };
-      return { paid, unpaid: 1 + marked.matchedCount, byCreator };
+  for (;;) {
+    const next = await ConversionEvent.findOne(waiting).sort({ occurredAt: 1, createdAt: 1, _id: 1 }).select("_id payingClaim").lean();
+    if (!next) return { paid, unpaid: 0, byCreator };
+    const previous = next.payingClaim && next.payingClaim.attemptId ? next.payingClaim : null;
+    if (previous && now.getTime() - new Date(previous.at).getTime() < PAYING_CLAIM_STALE_MS) {
+      // Another run is paying the oldest; it carries on in order.
+      return { paid, unpaid: await unpaidCount(), byCreator };
     }
-    await ConversionEvent.updateOne(
-      { _id: claimed._id },
-      { $set: { rewardAmount: reward.rewardAmount, availableAt: reward.availableAt } }
+
+    const attemptId = new mongoose.Types.ObjectId();
+    const amount = previous && previous.amount > 0 ? previous.amount : roundMoney(campaign.referral.rewardPerConversion);
+    const claimed = await ConversionEvent.findOneAndUpdate(
+      { ...waiting, _id: next._id, ...(previous ? { "payingClaim.attemptId": previous.attemptId } : { payingClaim: null }) },
+      { $set: { payingClaim: { attemptId, at: now, amount } } },
+      { new: true }
+    ).lean();
+    if (!claimed) continue;
+    if (backPayHooks.afterClaim) await backPayHooks.afterClaim({ conversionId: claimed._id });
+
+    const reserved = await Campaign.findOneAndUpdate(
+      { _id: campaign._id, "referral.poolRemaining": { $gte: amount }, "referral.payingConversions.conversionId": { $ne: claimed._id } },
+      {
+        $inc: { "referral.poolRemaining": -amount, "referral.earned": amount },
+        $push: { "referral.payingConversions": { conversionId: claimed._id, attemptId } },
+      },
+      { projection: { _id: 1 } }
     );
+    if (!reserved && !(await Campaign.exists({ _id: campaign._id, "referral.payingConversions.conversionId": claimed._id }))) {
+      // The pool can't cover it: let go of the claim; it and everything newer keep waiting.
+      await ConversionEvent.updateOne({ _id: claimed._id, "payingClaim.attemptId": attemptId }, { $set: { payingClaim: null, unpaidReason: "budget_exhausted" } });
+      await ConversionEvent.updateMany({ ...waiting, payingClaim: null }, { $set: { unpaidReason: "budget_exhausted" } });
+      await noteBudgetExhausted(campaign, now);
+      return { paid, unpaid: await ConversionEvent.countDocuments(waitingForPay(campaign._id)), byCreator };
+    }
+    if (backPayHooks.afterReserve) await backPayHooks.afterReserve({ conversionId: claimed._id });
+
+    const recorded = await ConversionEvent.findOneAndUpdate(
+      { _id: claimed._id, "payingClaim.attemptId": attemptId },
+      { $set: { rewardAmount: amount, availableAt: new Date(now.getTime() + REFERRAL_HOLD_MS), unpaidReason: null, payingClaim: null } }
+    );
+    if (!recorded) {
+      // Another run took the claim over; give back a reservation this attempt made (if it's still there).
+      await Campaign.updateOne(
+        { _id: campaign._id, "referral.payingConversions": { $elemMatch: { conversionId: claimed._id, attemptId } } },
+        {
+          $pull: { "referral.payingConversions": { conversionId: claimed._id, attemptId } },
+          $inc: { "referral.poolRemaining": amount, "referral.earned": -amount },
+        }
+      );
+      continue;
+    }
+    await Campaign.updateOne({ _id: campaign._id }, { $pull: { "referral.payingConversions": { conversionId: claimed._id } } });
+
     paid += 1;
     const key = String(claimed.creatorId);
     const entry = byCreator.get(key) || { count: 0, amount: 0 };
     entry.count += 1;
-    entry.amount = roundMoney(entry.amount + reward.rewardAmount);
+    entry.amount = roundMoney(entry.amount + amount);
     byCreator.set(key, entry);
   }
-  return { paid, unpaid: 0, byCreator };
 }
 
-// After a referral top-up: pays sign-ups the empty budget left unpaid (only once a reward is set)
-// and tells each creator paid. Safe to repeat. Never throws: the top-up is already credited.
-async function payConversionsAfterTopup(campaignId, now = new Date()) {
+// Pays waiting conversions and tells each creator paid. Never throws: whatever triggered it (a
+// credited top-up, a recorded conversion) has already happened; a later run finishes the rest.
+async function payWaitingConversions(campaignId, { now = new Date(), cause }) {
   try {
-    const result = await payUnpaidConversions(campaignId, now, { reasons: ["budget_exhausted", "rate_not_set"] });
+    const result = await payUnpaidConversions(campaignId, now, { reasons: PAYABLE_LATER_REASONS });
     if (result.paid > 0) {
       const campaign = await Campaign.findById(campaignId).select("name").lean();
+      const name = campaign ? campaign.name : "a campaign";
       await Notification.insertMany(
         [...result.byCreator.entries()].map(([creatorId, { count, amount }]) => ({
           creatorId,
           campaignId,
           type: "referral_backpay",
           title: "Earlier sign-ups paid",
-          body: `The brand added budget to "${campaign ? campaign.name : "a campaign"}", so ${count} earlier sign-up${count === 1 ? "" : "s"} with your code now earn ₦${amount.toLocaleString()}. It's on hold for 7 days.`,
+          body: `${cause === "topup" ? `The brand added budget to "${name}", so ` : `On "${name}", `}${count} earlier sign-up${count === 1 ? "" : "s"} with your code now earn ₦${amount.toLocaleString()}. It's on hold for 7 days.`,
         }))
       );
     }
     return result;
   } catch (error) {
-    console.error(`[Referral] Paying earlier conversions after a top-up on ${campaignId} failed:`, error.message);
+    console.error(`[Referral] Paying waiting conversions on ${campaignId} failed:`, error.message);
     return { paid: 0, unpaid: 0, byCreator: new Map(), error };
   }
 }
 
+// After a referral top-up: pays sign-ups the empty budget left unpaid (only once a reward is set).
+const payConversionsAfterTopup = (campaignId, now = new Date()) => payWaitingConversions(campaignId, { now, cause: "topup" });
+// After a conversion queued behind older unpaid ones is recorded.
+const payQueuedConversions = (campaignId, now = new Date()) => payWaitingConversions(campaignId, { now, cause: "queued" });
+
 module.exports = {
+  backPayHooks,
+  payQueuedConversions,
   payUnpaidConversions,
   REFERRAL_HOLD_MS,
   MIN_REFERRAL_TOPUP,

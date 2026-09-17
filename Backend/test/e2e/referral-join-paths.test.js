@@ -202,6 +202,133 @@ test("sign-ups recorded after the budget ran out are paid, oldest first, when th
   assert.ok(result.ok, JSON.stringify(result.problems));
 });
 
+// A live sign-up campaign at ₦10,000 per sign-up whose ₦35,000 pool paid 3 and left ₦5,000, with 3
+// more sign-ups recorded unpaid (oldest first in `exhausted`).
+const BIG_REWARD = 10000;
+async function exhaustedSignupCampaign() {
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const { id, key } = await liveSignupCampaign("open_call");
+  const admin = await harness.registerAdmin({ role: "finance_admin" });
+  const reward = await harness.api("PATCH", `/api/admin/referrals/campaigns/${id}/reward`, { token: admin.token, body: { rewardPerConversion: BIG_REWARD } });
+  assert.equal(reward.status, 200, JSON.stringify(reward.body));
+  const creator = await harness.registerCreator();
+  const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  for (let i = 0; i < 6; i += 1) assert.equal((await sendConversion(key, joined.body.referralCode)).status, 200);
+  const exhausted = await ConversionEvent.find({ campaignId: id, unpaidReason: "budget_exhausted" }).sort({ occurredAt: 1, createdAt: 1 }).lean();
+  assert.equal(exhausted.length, 3);
+  return { id, key, code: joined.body.referralCode, exhausted };
+}
+
+// ₦21,428.57 less the 30% fee is ₦15,000: the pool then holds ₦20,000, two rewards.
+const creditTwoRewards = (id, suffix) =>
+  require("../../src/utils/referralEarnings").creditReferralTopup({ campaignId: id, reference: `ref_two_${id}_${suffix}`, amount: 21428.57 });
+
+async function expectTwoPaidOnce(id, exhausted) {
+  const Campaign = require("../../src/models/Campaign");
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const { reconcileCampaignById } = require("../../src/services/campaignReconciliation");
+  const events = await ConversionEvent.find({ _id: { $in: exhausted.map((e) => e._id) } }).lean();
+  const byId = new Map(events.map((e) => [String(e._id), e]));
+  assert.equal(byId.get(String(exhausted[0]._id)).rewardAmount, BIG_REWARD);
+  assert.equal(byId.get(String(exhausted[1]._id)).rewardAmount, BIG_REWARD);
+  assert.equal(byId.get(String(exhausted[2]._id)).rewardAmount, 0);
+  assert.equal(byId.get(String(exhausted[2]._id)).unpaidReason, "budget_exhausted");
+  assert.ok(events.every((e) => !e.payingClaim), "no claim left behind");
+  const campaign = await Campaign.findById(id).lean();
+  assert.equal(campaign.referral.poolRemaining, 0, "pool decremented once per paid conversion");
+  assert.equal(campaign.referral.earned, 5 * BIG_REWARD);
+  assert.equal((campaign.referral.payingConversions || []).length, 0);
+  const result = await reconcileCampaignById(id);
+  assert.ok(result.ok, JSON.stringify(result.problems));
+}
+
+test("back-pay that crashes after claiming a conversion pays it exactly once on the retry", async () => {
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const Campaign = require("../../src/models/Campaign");
+  const earnings = require("../../src/utils/referralEarnings");
+  const { id, exhausted } = await exhaustedSignupCampaign();
+
+  earnings.backPayHooks.afterClaim = async () => {
+    earnings.backPayHooks.afterClaim = null;
+    throw new Error("process died after the claim");
+  };
+  const error = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await creditTwoRewards(id, "claim")).credited, true);
+  } finally {
+    console.error = error;
+    earnings.backPayHooks.afterClaim = null;
+  }
+  const claimed = await ConversionEvent.findById(exhausted[0]._id).lean();
+  assert.equal(claimed.unpaidReason, "budget_exhausted", "still unpaid: nothing reserved yet");
+  assert.equal(claimed.rewardAmount, 0);
+  assert.ok(claimed.payingClaim);
+  assert.equal((await Campaign.findById(id).lean()).referral.poolRemaining, 20000);
+
+  // Straight away the claim is still fresh: nobody else pays past it.
+  assert.equal((await earnings.payUnpaidConversions(id, new Date(), { reasons: ["budget_exhausted"] })).paid, 0);
+  const retried = await earnings.payUnpaidConversions(id, new Date(Date.now() + 10 * 60 * 1000), { reasons: ["budget_exhausted"] });
+  assert.equal(retried.paid, 2);
+  await expectTwoPaidOnce(id, exhausted);
+});
+
+test("back-pay that crashes after reserving the reward never reserves it twice", async () => {
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const Campaign = require("../../src/models/Campaign");
+  const earnings = require("../../src/utils/referralEarnings");
+  const { id, exhausted } = await exhaustedSignupCampaign();
+
+  earnings.backPayHooks.afterReserve = async () => {
+    earnings.backPayHooks.afterReserve = null;
+    throw new Error("process died after the reservation");
+  };
+  const error = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await creditTwoRewards(id, "reserve")).credited, true);
+  } finally {
+    console.error = error;
+    earnings.backPayHooks.afterReserve = null;
+  }
+  const claimed = await ConversionEvent.findById(exhausted[0]._id).lean();
+  assert.equal(claimed.rewardAmount, 0);
+  assert.equal(claimed.unpaidReason, "budget_exhausted");
+  const campaign = await Campaign.findById(id).lean();
+  assert.equal(campaign.referral.poolRemaining, 10000, "reserved once");
+  assert.equal(campaign.referral.payingConversions.length, 1);
+
+  // A Paystack retry of the same payment re-runs back-pay; the stale claim is taken over later.
+  assert.equal((await earnings.payUnpaidConversions(id, new Date(Date.now() + 10 * 60 * 1000), { reasons: ["budget_exhausted"] })).paid, 2);
+  await expectTwoPaidOnce(id, exhausted);
+});
+
+test("a sign-up arriving while a top-up is credited never jumps ahead of older unpaid sign-ups", async () => {
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const earnings = require("../../src/utils/referralEarnings");
+  const { id, key, code, exhausted } = await exhaustedSignupCampaign();
+
+  // ₦7,142.86 less the fee is ₦5,000: with the ₦5,000 left, exactly one reward.
+  let live;
+  earnings.backPayHooks.beforeBackPay = async () => {
+    earnings.backPayHooks.beforeBackPay = null;
+    live = await sendConversion(key, code);
+  };
+  try {
+    const credited = await earnings.creditReferralTopup({ campaignId: id, reference: `ref_race_${id}`, amount: 7142.86 });
+    assert.equal(credited.credited, true);
+  } finally {
+    earnings.backPayHooks.beforeBackPay = null;
+  }
+  assert.equal(live.status, 200, JSON.stringify(live.body));
+  const oldest = await ConversionEvent.findById(exhausted[0]._id).lean();
+  assert.equal(oldest.rewardAmount, BIG_REWARD, "the oldest unpaid sign-up is paid first");
+  const newest = await ConversionEvent.findOne({ campaignId: id }).sort({ occurredAt: -1, createdAt: -1 }).lean();
+  assert.equal(newest.rewardAmount, 0, "the new sign-up waits its turn");
+  assert.equal(newest.unpaidReason, "budget_exhausted");
+  assert.equal(await ConversionEvent.countDocuments({ campaignId: id, rewardAmount: { $gt: 0 } }), 4);
+});
+
 test("a sign-up campaign's referral payout, cancellation refunds and ledger reconcile to the kobo", async () => {
   const Campaign = require("../../src/models/Campaign");
   const ConversionEvent = require("../../src/models/ConversionEvent");

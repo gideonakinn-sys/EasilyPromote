@@ -314,6 +314,19 @@ const campaignSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+      // Back-pay in flight: each earlier conversion's reward is reserved from the pool together with
+      // an entry here, so a retry after a crash finds the reservation instead of reserving twice.
+      // Entries are removed once the conversion records its reward.
+      payingConversions: {
+        type: [
+          {
+            _id: false,
+            conversionId: { type: mongoose.Schema.Types.ObjectId, required: true },
+            attemptId: { type: mongoose.Schema.Types.ObjectId, required: true },
+          },
+        ],
+        default: undefined,
+      },
     },
     completedAt: {
       type: Date,

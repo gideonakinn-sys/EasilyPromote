@@ -10,7 +10,7 @@ const Notification = require("../models/Notification");
 const { decrypt } = require("../utils/crypto");
 const { createRateLimiter } = require("../utils/rateLimit");
 const { emitToUser } = require("../config/socket");
-const { reserveConversionReward } = require("../utils/referralEarnings");
+const { reserveConversionReward, payQueuedConversions } = require("../utils/referralEarnings");
 const { campaignEventTypes } = require("../utils/referralCodes");
 
 const SIGNATURE_TOLERANCE_SECONDS = 300;
@@ -321,7 +321,7 @@ async function processConversion(request, context, source) {
 
   // The event is saved first (it's the idempotency guard); only then is money
   // reserved, so a duplicate delivery can never reserve a reward twice.
-  const reward = await reserveConversionReward(campaign, counted, now);
+  const reward = await reserveConversionReward(campaign, counted, now, { eventId: event._id });
 
   const [updatedCode] = await Promise.all([
     ReferralCode.findByIdAndUpdate(referralCode._id, { $inc: { conversions: counted ? 1 : 0 } }, { new: true }),
@@ -342,6 +342,9 @@ async function processConversion(request, context, source) {
     activateIfPending(referralCode, now),
     markConnected(key, now, { kind: "conversion", source }),
   ]);
+
+  // Queued behind older unpaid conversions: pay whatever the pool covers now, oldest first.
+  if (reward.queued) await payQueuedConversions(campaign._id, now);
 
   const update = {
     campaignId: campaign._id,
