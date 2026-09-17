@@ -18,6 +18,8 @@ import type { AudienceAge, AudienceLocation, CreatorProfile, PortfolioItem } fro
 import { BADGE_LABELS, RatingSummary } from "./creator-rating-summary";
 import { apiRequest, getToken, getUser } from "../lib/api";
 import { platformLabel } from "../lib/campaign-pay";
+import { canonicalAudienceLocation } from "../lib/audience-locations";
+import { AudienceLocationSelect } from "./audience-location-select";
 
 // Must match Backend/src/utils/creatorProfile.js.
 export const CREATOR_CATEGORIES = [
@@ -288,7 +290,7 @@ export function PrivateDetailsSection({ profile, onUpdated, email }: PrivateDeta
   );
 }
 
-// Follower counts per social account (self-reported until read from the platforms).
+// Follower counts per social account: read from Instagram when connected, otherwise self-reported.
 interface FollowerCountsSectionProps extends ProfileSectionProps {
   connectedHandles: Record<string, string>;
 }
@@ -296,9 +298,15 @@ interface FollowerCountsSectionProps extends ProfileSectionProps {
 export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: FollowerCountsSectionProps) {
   const { toast } = useToast();
   const accounts = React.useMemo(() => {
-    const list = (profile.socialAccounts || []).map((a) => ({ platform: a.platform, handle: a.handle, followers: a.followers ?? null }));
+    const list = (profile.socialAccounts || []).map((a) => ({
+      platform: a.platform,
+      handle: a.handle,
+      followers: a.followers ?? null,
+      fromApi: a.followersSource === "api" && a.followers != null,
+      syncedAt: a.followersSyncedAt ?? null,
+    }));
     for (const [platform, handle] of Object.entries(connectedHandles)) {
-      if (!list.some((a) => a.platform === platform)) list.push({ platform, handle, followers: null });
+      if (!list.some((a) => a.platform === platform)) list.push({ platform, handle, followers: null, fromApi: false, syncedAt: null });
     }
     return list;
   }, [profile.socialAccounts, connectedHandles]);
@@ -344,6 +352,16 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
               <p className="text-sm font-medium text-stone-900">{platformLabel(account.platform)}</p>
               <p className="text-xs font-medium text-stone-500 truncate">{account.handle}</p>
             </div>
+            {account.fromApi ? (
+              <div className="text-right">
+                <p className="text-sm font-medium text-stone-900">{(account.followers ?? 0).toLocaleString()}</p>
+                <p className="text-[11px] font-medium text-emerald-700">
+                  From {platformLabel(account.platform)}
+                  {account.syncedAt ? ` · updated ${new Date(account.syncedAt).toLocaleDateString()}` : ""}
+                </p>
+              </div>
+            ) : (
+            <>
             <input
               inputMode="numeric"
               value={drafts[account.platform] ?? ""}
@@ -359,6 +377,8 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
             >
               {savingPlatform === account.platform ? "Saving…" : "Save"}
             </button>
+            </>
+            )}
           </li>
         ))}
       </ul>
@@ -381,7 +401,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
   const [error, setError] = React.useState("");
 
   React.useEffect(() => {
-    setLocations(audience?.locations?.length ? audience.locations : [{ name: "", percentage: 0 }]);
+    setLocations(audience?.locations?.length ? audience.locations.map((l) => ({ ...l, name: canonicalAudienceLocation(l.name) })) : [{ name: "", percentage: 0 }]);
     setAges(Object.fromEntries((audience?.ages || []).map((a) => [a.range, String(a.percentage)])));
     setGenders({
       female: audience?.genders ? String(audience.genders.female) : "",
@@ -467,11 +487,11 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
           <p className="text-xs font-medium text-stone-700">Top locations</p>
           {locations.map((location, index) => (
             <div key={index} className="flex items-center gap-2">
-              <input
+              <AudienceLocationSelect
                 value={location.name}
-                onChange={(e) => updateLocation(index, { name: e.target.value })}
-                placeholder="e.g. Lagos"
-                className={cn(inputClass, "flex-1")}
+                onChange={(name) => updateLocation(index, { name })}
+                exclude={locations.map((l) => l.name)}
+                className="flex-1 min-w-0"
               />
               <input
                 inputMode="decimal"

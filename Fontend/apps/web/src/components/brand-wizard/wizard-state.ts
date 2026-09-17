@@ -21,6 +21,48 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
   { step: 6, title: "Review and launch", short: "Launch" },
 ];
 
+// The four campaign types brands pick from. Views and Referrals can be picked together, which is
+// Hybrid: a views target plus a referral budget (the API's sign-ups objective). Referral campaigns
+// always include a views target, because creators' places come from it.
+export type ObjectiveCategory = "views" | "content" | "referrals" | "hybrid";
+
+export const OBJECTIVE_CATEGORIES: { value: ObjectiveCategory; title: string; body: string }[] = [
+  { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver." },
+  { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve." },
+  {
+    value: "referrals",
+    title: "Referrals",
+    body: "Pay for sign-ups tracked with a code for each creator. Includes a views target so creators get places.",
+  },
+  { value: "hybrid", title: "Hybrid", body: "Views and referrals together: pay for the views creators deliver and for every sign-up." },
+];
+
+export function selectedObjectiveCategories(objective: CampaignObjective | null | undefined): ObjectiveCategory[] {
+  if (!objective) return [];
+  if (objective === "content") return ["content"];
+  if (objective === "views") return ["views"];
+  if (REFERRAL_OBJECTIVE_VALUES.includes(objective)) return ["views", "referrals", "hybrid"];
+  return [];
+}
+
+// Multi-select: Content stands alone; Views and Referrals combine into Hybrid.
+export function objectiveAfterToggle(current: CampaignObjective | null | undefined, category: ObjectiveCategory): CampaignObjective {
+  const referral = !!current && REFERRAL_OBJECTIVE_VALUES.includes(current);
+  switch (category) {
+    case "content":
+      return "content";
+    case "views":
+      // Views stays included while referrals are picked.
+      return referral ? (current as CampaignObjective) : "views";
+    case "referrals":
+      return referral ? "views" : "signups";
+    case "hybrid":
+      return referral ? (current as CampaignObjective) : "signups";
+  }
+}
+
+const REFERRAL_OBJECTIVE_VALUES: CampaignObjective[] = ["signups", "downloads", "leads", "sales", "clicks"];
+
 export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body: string; available: boolean }[] = [
   { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve.", available: true },
   { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver.", available: true },
@@ -131,7 +173,7 @@ export type ContentPayShape = "fixed" | "hybrid";
 
 export const PAY_SHAPE_OPTIONS: { value: ContentPayShape; title: string; body: string }[] = [
   { value: "fixed", title: "Fixed", body: "A set amount for each deliverable you approve." },
-  { value: "hybrid", title: "Hybrid", body: "A base for each deliverable you approve, plus a bonus as results come in." },
+  { value: "hybrid", title: "Fixed + bonus", body: "A base for each deliverable you approve, plus a bonus as results come in." },
 ];
 
 export const BONUS_METRIC_OPTIONS: { value: BonusMetric; title: string; body: string }[] = [

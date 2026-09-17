@@ -4,6 +4,8 @@ import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { countMatchingCreators, getToken, type MatchCount } from "../../lib/api";
 import { ChipGroup, Field, ListInput, StepHeading, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
+import { AudienceLocationSelect } from "../audience-location-select";
+import { canonicalAudienceLocation } from "../../lib/audience-locations";
 import {
   AGE_RANGE_OPTIONS,
   BADGE_OPTIONS,
@@ -156,14 +158,35 @@ export function StepAudience({ data, update }: StepAudienceProps) {
         </Field>
 
         <Field label="Audience Locations" htmlFor="audience-locations" hint="Where a creator's followers are, not where the creator lives.">
-          <ListInput
-            id="audience-locations"
-            items={data.locations}
-            onChange={(locations) => update({ locations })}
-            placeholder="Lagos"
-            maxItems={10}
-            maxLength={60}
-          />
+          <div className="space-y-2">
+            <AudienceLocationSelect
+              id="audience-locations"
+              value=""
+              placeholder={data.locations.length >= 10 ? "Up to 10 locations" : "Add a location"}
+              disabled={data.locations.length >= 10}
+              exclude={data.locations}
+              onChange={(value) => {
+                if (value && !data.locations.includes(value)) update({ locations: [...data.locations, value] });
+              }}
+              className="w-full"
+            />
+            {data.locations.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {data.locations.map((item) => (
+                  <li key={item}>
+                    <button
+                      type="button"
+                      onClick={() => update({ locations: data.locations.filter((existing) => existing !== item) })}
+                      aria-label={`Remove ${item}`}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-medium font-rethink"
+                    >
+                      {canonicalAudienceLocation(item) === "Abuja" ? "Abuja (FCT)" : item} ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Field>
 
         {data.locations.length > 0 && (

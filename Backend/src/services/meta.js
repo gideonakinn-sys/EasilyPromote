@@ -168,11 +168,11 @@ async function refreshInstagramToken(longLivedToken) {
 
 async function getInstagramProfile(accessToken) {
   const params = new URLSearchParams({
-    fields: "user_id,username,account_type,profile_picture_url",
+    fields: "user_id,username,account_type,profile_picture_url,followers_count",
     access_token: accessToken,
   });
   const json = await graphRequest(`${IG_GRAPH}/${graphVersion()}/me?${params.toString()}`);
-  return json; // { user_id, username, account_type, profile_picture_url }
+  return json; // { user_id, username, account_type, profile_picture_url, followers_count }
 }
 
 // ---------------------------------------------------------------------------

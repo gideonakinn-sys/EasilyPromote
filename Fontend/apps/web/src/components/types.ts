@@ -472,6 +472,9 @@ export interface CampaignItem {
 
 export interface SocialAccount {
   followers?: number | null;
+  // "api" when read from the connected platform (Instagram); read-only on the profile.
+  followersSource?: "self_reported" | "api" | null;
+  followersSyncedAt?: string | null;
 }
 
 export interface AudienceLocation {

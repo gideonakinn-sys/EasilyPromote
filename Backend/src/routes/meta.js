@@ -4,6 +4,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const CreatorProfile = require("../models/CreatorProfile");
 const MetaConnection = require("../models/MetaConnection");
+const { setPlatformFollowers } = require("../utils/socialFollowers");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const meta = require("../services/meta");
 const { encrypt } = require("../utils/crypto");
@@ -215,6 +216,9 @@ async function handleInstagramConnect(userId, code) {
   );
 
   await upsertSocialAccount(userId, "instagram", profile.username ? `@${profile.username}` : `@${providerUserId}`);
+  if (await setPlatformFollowers(userId, "instagram", profile.followers_count)) {
+    await MetaConnection.updateOne({ userId, provider: "instagram" }, { $set: { followersSyncedAt: new Date() } });
+  }
 }
 
 async function handleFacebookConnect(userId, code) {

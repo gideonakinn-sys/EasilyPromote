@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
 import { Field, OptionCard, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
-import { OBJECTIVE_OPTIONS, isDestinationUrl, type WizardData } from "./wizard-state";
+import { OBJECTIVE_CATEGORIES, isDestinationUrl, objectiveAfterToggle, selectedObjectiveCategories, type WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
@@ -126,17 +126,15 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
         </DropdownMenu>
       </Field>
 
-      <fieldset className="space-y-3" role="radiogroup" aria-label="Objective">
-        <legend className="text-xs font-medium text-stone-500 font-rethink mb-3">Objective</legend>
-        {OBJECTIVE_OPTIONS.map((option) => (
+      <fieldset className="space-y-3" aria-label="Objective">
+        <legend className="text-xs font-medium text-stone-500 font-rethink mb-3">Objective · pick Views and Referrals together for Hybrid</legend>
+        {OBJECTIVE_CATEGORIES.map((option) => (
           <OptionCard
             key={option.value}
             title={option.title}
             body={option.body}
-            selected={data.objective === option.value}
-            disabled={!option.available}
-            badge={option.available ? undefined : "Coming soon"}
-            onSelect={() => update({ objective: option.value })}
+            selected={selectedObjectiveCategories(data.objective).includes(option.value)}
+            onSelect={() => update({ objective: objectiveAfterToggle(data.objective, option.value) })}
           />
         ))}
       </fieldset>
