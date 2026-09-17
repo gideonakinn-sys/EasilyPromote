@@ -256,8 +256,18 @@ async function creatorFixedEarnings(creatorId, { campaignIds = null, now = new D
   const submissions = await Submission.find({ _id: { $in: credits.map((c) => c.submissionId) } })
     .select("status completedAt")
     .lean();
-  const submissionById = new Map(submissions.map((s) => [String(s._id), s]));
+  return fixedEarningsFrom({
+    credits,
+    submissionById: new Map(submissions.map((s) => [String(s._id), s])),
+    withdrawals: withdrawals.map((group) => ({ campaignId: group._id, withdrawn: group.withdrawn })),
+    now,
+  });
+}
 
+// The same result as creatorFixedEarnings, from rows already loaded: the creator's credited fixed
+// pay, the submissions it was credited for (status, completedAt), and the fixed part of requested
+// or paid withdrawals per campaign ([{ campaignId, withdrawn }]).
+function fixedEarningsFrom({ credits, submissionById, withdrawals, now = new Date() }) {
   const byCampaign = new Map();
   const entryFor = (key, campaignId) => {
     if (!byCampaign.has(key)) {
@@ -283,7 +293,7 @@ async function creatorFixedEarnings(creatorId, { campaignIds = null, now = new D
     } else entry.availableKobo += kobo;
   }
   for (const group of withdrawals) {
-    entryFor(String(group._id), group._id).withdrawnKobo += toKobo(group.withdrawn);
+    entryFor(String(group.campaignId), group.campaignId).withdrawnKobo += toKobo(group.withdrawn);
   }
 
   const result = new Map();
@@ -694,6 +704,7 @@ module.exports = {
   ensureFixedCredit,
   voidUndeliveredPay,
   creatorFixedEarnings,
+  fixedEarningsFrom,
   fixedPayableNow,
   contentBudgetSummary,
   refundUnusedContentBudget,

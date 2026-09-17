@@ -130,25 +130,37 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
       Campaign.countDocuments(filter),
     ]);
 
-    const CreatorProfile = require("../models/CreatorProfile");
-    const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
-    const creatorNiches = creatorProfiles.map((p) =>
-      (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
-    );
+    // Creators whose niches overlap each campaign's niches or category, counted in the database in
+    // one query rather than by loading every creator profile.
+    const nichesOf = (c) =>
+      [...(Array.isArray(c.niches) ? c.niches : []), c.category]
+        .map((n) => (n ? String(n).trim().toLowerCase() : ""))
+        .filter(Boolean);
+    const withNiches = campaigns.map((c, index) => ({ key: `c${index}`, niches: nichesOf(c) })).filter((c) => c.niches.length > 0);
+    const creatorCounts = new Map();
+    if (withNiches.length > 0) {
+      const CreatorProfile = require("../models/CreatorProfile");
+      const [facets] = await CreatorProfile.aggregate([
+        { $match: { "niches.0": { $exists: true } } },
+        {
+          $project: {
+            niches: {
+              $map: { input: "$niches", as: "n", in: { $toLower: { $trim: { input: { $toString: "$$n" } } } } },
+            },
+          },
+        },
+        {
+          $facet: Object.fromEntries(
+            withNiches.map((c) => [c.key, [{ $match: { niches: { $in: c.niches } } }, { $count: "n" }]])
+          ),
+        },
+      ]);
+      for (const c of withNiches) creatorCounts.set(c.key, facets && facets[c.key][0] ? facets[c.key][0].n : 0);
+    }
 
     res.json({
-      campaigns: campaigns.map((c) => {
-        const campaignNiches = [
-          ...(Array.isArray(c.niches) ? c.niches : []),
-          c.category,
-        ]
-          .map((n) => (n ? String(n).trim().toLowerCase() : ""))
-          .filter(Boolean);
-
-        const creatorCount =
-          campaignNiches.length > 0
-            ? creatorNiches.filter((pn) => pn.some((n) => campaignNiches.includes(n))).length
-            : 0;
+      campaigns: campaigns.map((c, index) => {
+        const creatorCount = creatorCounts.get(`c${index}`) || 0;
 
         return {
         id: c._id,

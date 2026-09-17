@@ -226,53 +226,44 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       filter.status = status;
     }
 
-    const submissions = await Submission.find(filter).sort({ submittedAt: -1 });
-
+    // The list, what's been paid per submission and the counts per status, read together.
     // payoutAmount was never stored on submissions; report what has actually been paid
     // for each one from settled views releases in the ledger.
     const Transaction = require("../models/Transaction");
-    const releasedGroups = await Transaction.aggregate([
-      {
-        $match: {
-          campaignId: campaign._id,
-          type: "release",
-          status: "released",
-          bucket: { $nin: ["referral", "fixed"] },
-          submissionId: { $ne: null },
+    const [submissions, releasedGroups, byStatus] = await Promise.all([
+      Submission.find(filter).sort({ submittedAt: -1 }),
+      Transaction.aggregate([
+        {
+          $match: {
+            campaignId: campaign._id,
+            type: "release",
+            status: "released",
+            bucket: { $nin: ["referral", "fixed"] },
+            submissionId: { $ne: null },
+          },
         },
-      },
-      { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+        { $group: { _id: "$submissionId", total: { $sum: "$amount" } } },
+      ]),
+      Submission.aggregate([
+        { $match: { campaignId: campaign._id } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
     ]);
     const releasedBySubmission = new Map(releasedGroups.map((group) => [String(group._id), group.total]));
+    const count = (value) => (byStatus.find((group) => group._id === value) || { count: 0 }).count;
 
     const counts = {
-      new: await Submission.countDocuments({ campaignId: req.params.campaignId, status: "new" }),
-      approved: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "awaiting_post",
-      }),
-      awaitingPost: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "awaiting_post",
-      }),
-      posted: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "posted",
-      }),
-      rejected: await Submission.countDocuments({
-        campaignId: req.params.campaignId,
-        status: "rejected",
-      }),
+      new: count("new"),
+      // Older clients read "approved" as content waiting to be posted.
+      approved: count("awaiting_post"),
+      awaitingPost: count("awaiting_post"),
+      posted: count("posted"),
+      rejected: count("rejected"),
     };
 
     // Campaign engine: content approval (ticket 07)
     const isContent = contentApproval.isContentCampaign(campaign);
     if (isContent) {
-      const byStatus = await Submission.aggregate([
-        { $match: { campaignId: campaign._id } },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]);
-      const count = (value) => (byStatus.find((group) => group._id === value) || { count: 0 }).count;
       Object.assign(counts, {
         changesRequested: count("changes_requested"),
         awaitingDelivery: count("awaiting_delivery"),

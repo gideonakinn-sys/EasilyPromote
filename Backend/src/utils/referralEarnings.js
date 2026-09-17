@@ -183,20 +183,7 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
   }
 
   const [groups, withdrawals] = await Promise.all([
-    ConversionEvent.aggregate([
-      { $match: eventMatch },
-      {
-        $group: {
-          _id: "$campaignId",
-          paidConversions: { $sum: 1 },
-          earned: { $sum: "$rewardAmount" },
-          pending: { $sum: { $cond: [{ $gt: ["$availableAt", now] }, "$rewardAmount", 0] } },
-          // When the next held reward becomes available ($min skips the nulls).
-          nextAvailableAt: { $min: { $cond: [{ $gt: ["$availableAt", now] }, "$availableAt", null] } },
-          held: { $push: { $cond: [{ $gt: ["$availableAt", now] }, { at: "$availableAt", amount: "$rewardAmount" }, "$$REMOVE"] } },
-        },
-      },
-    ]),
+    ConversionEvent.aggregate(conversionEarningsPipeline(eventMatch, now)),
     Withdrawal.aggregate([
       { $match: withdrawalMatch },
       {
@@ -208,7 +195,36 @@ async function creatorReferralEarnings(creatorId, { campaignIds = null, now = ne
     ]),
   ]);
 
-  const withdrawnByCampaign = new Map(withdrawals.map((w) => [String(w._id), roundMoney(w.withdrawn)]));
+  return referralEarningsFrom({ groups, withdrawnByCampaign: new Map(withdrawals.map((w) => [String(w._id), w.withdrawn])) });
+}
+
+// Paid conversions per campaign for one creator, with what's still held at `now`.
+function conversionEarningsPipeline(eventMatch, now) {
+  return [
+    { $match: eventMatch },
+    {
+      $group: {
+        _id: "$campaignId",
+        paidConversions: { $sum: 1 },
+        earned: { $sum: "$rewardAmount" },
+        pending: { $sum: { $cond: [{ $gt: ["$availableAt", now] }, "$rewardAmount", 0] } },
+        // When the next held reward becomes available ($min skips the nulls).
+        nextAvailableAt: { $min: { $cond: [{ $gt: ["$availableAt", now] }, "$availableAt", null] } },
+        held: { $push: { $cond: [{ $gt: ["$availableAt", now] }, { at: "$availableAt", amount: "$rewardAmount" }, "$$REMOVE"] } },
+      },
+    },
+  ];
+}
+
+// Every paid conversion group for a creator (the aggregation creatorReferralEarnings runs).
+function creatorConversionGroups(creatorId, now = new Date()) {
+  return ConversionEvent.aggregate(conversionEarningsPipeline({ creatorId: toObjectId(creatorId), rewardAmount: { $gt: 0 }, voidedAt: null }, now));
+}
+
+// The same result as creatorReferralEarnings, from the conversion groups and the referral part of
+// requested or paid withdrawals per campaign.
+function referralEarningsFrom({ groups, withdrawnByCampaign: rawWithdrawn }) {
+  const withdrawnByCampaign = new Map([...rawWithdrawn].map(([key, withdrawn]) => [key, roundMoney(withdrawn)]));
   const byCampaign = new Map();
   for (const group of groups) {
     const key = String(group._id);
@@ -331,6 +347,8 @@ module.exports = {
   creditReferralTopup,
   refundUnusedReferralBudget,
   creatorReferralEarnings,
+  creatorConversionGroups,
+  referralEarningsFrom,
   payoutStatusOf,
   voidConversion,
 };

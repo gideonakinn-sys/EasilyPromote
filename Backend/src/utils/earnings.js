@@ -43,13 +43,7 @@ async function creatorViewsEarnings(creatorId, { campaignIds = null } = {}) {
     .sort({ claimedAt: -1, createdAt: -1 })
     .lean();
 
-  // One slot per campaign; if a creator somehow holds two, the most recent claim wins.
-  const slotByCampaign = new Map();
-  for (const slot of slots) {
-    if (!slot.campaignId) continue;
-    const key = String(slot.campaignId._id);
-    if (!slotByCampaign.has(key)) slotByCampaign.set(key, slot);
-  }
+  const slotByCampaign = latestSlotPerCampaign(slots);
   const ids = [...slotByCampaign.values()].map((slot) => slot.campaignId._id);
   if (ids.length === 0) return new Map();
 
@@ -76,9 +70,28 @@ async function creatorViewsEarnings(creatorId, { campaignIds = null } = {}) {
       },
     ]),
   ]);
-  const viewsByCampaign = new Map(viewGroups.map((group) => [String(group._id), group.views]));
-  const withdrawnByCampaign = new Map(withdrawalGroups.map((group) => [String(group._id), group.withdrawn]));
+  return viewsEarningsFrom({
+    slotByCampaign,
+    viewsByCampaign: new Map(viewGroups.map((group) => [String(group._id), group.views])),
+    withdrawnByCampaign: new Map(withdrawalGroups.map((group) => [String(group._id), group.withdrawn])),
+  });
+}
 
+// One slot per campaign; if a creator somehow holds two, the most recent claim wins. `slots` are
+// views placements with their campaign populated, most recent claim first.
+function latestSlotPerCampaign(slots) {
+  const slotByCampaign = new Map();
+  for (const slot of slots) {
+    if (!slot.campaignId) continue;
+    const key = String(slot.campaignId._id);
+    if (!slotByCampaign.has(key)) slotByCampaign.set(key, slot);
+  }
+  return slotByCampaign;
+}
+
+// The same result as creatorViewsEarnings, from rows already loaded: views delivered per campaign
+// and views-part withdrawals (requested or paid) per campaign.
+function viewsEarningsFrom({ slotByCampaign, viewsByCampaign, withdrawnByCampaign }) {
   const result = new Map();
   for (const [key, slot] of slotByCampaign) {
     const campaign = slot.campaignId;
@@ -115,8 +128,11 @@ async function releasedViewsTotal(match) {
 
 module.exports = {
   WITHDRAWABLE_CAMPAIGN_STATUSES,
+  COMMITTED_WITHDRAWAL_STATUSES,
   floorKobo,
   viewsEarned,
   creatorViewsEarnings,
+  latestSlotPerCampaign,
+  viewsEarningsFrom,
   releasedViewsTotal,
 };

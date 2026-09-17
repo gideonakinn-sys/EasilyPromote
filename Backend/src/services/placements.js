@@ -3,9 +3,7 @@
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
-const CreatorProfile = require("../models/CreatorProfile");
-const TikTokConnection = require("../models/TikTokConnection");
-const MetaConnection = require("../models/MetaConnection");
+const { loadCreatorAccounts } = require("../utils/creatorAccounts");
 const { joinEligibility } = require("./joinRules");
 const { campaignTerms, fullBrief } = require("../utils/campaignPay");
 const { emitPlacesLeft } = require("../utils/campaignUpdates");
@@ -16,11 +14,8 @@ const JOIN_ORDER = { createdAt: 1, _id: 1 };
 
 // The creator's profile and which platforms they've connected: all joining needs.
 async function loadJoiner(userId) {
-  const [profile, tiktok, metaProviders] = await Promise.all([
-    CreatorProfile.findOne({ userId }).lean(),
-    TikTokConnection.exists({ userId }),
-    MetaConnection.distinct("provider", { userId }),
-  ]);
+  const { profile, tiktok, metaConnections } = await loadCreatorAccounts(userId);
+  const metaProviders = [...new Set(metaConnections.map((c) => c.provider))];
   const connectedPlatforms = [...(tiktok ? ["tiktok"] : []), ...metaProviders.filter(Boolean)];
   return { profile, connectedPlatforms, hasSocial: connectedPlatforms.length > 0 };
 }
@@ -109,15 +104,19 @@ const testHooks = { afterTake: null };
 
 // Everything joining or applying needs to know about this creator and campaign.
 // `requested` limits the open places to one (older clients).
+// The campaign's open and held places come from one query: open ones in join order, held ones
+// for this creator's own place and for what the pool has already promised.
 async function loadJoinContext({ creatorId, campaign, requested = null }) {
-  const [joiner, activeSlots, heldSlot, openSlots] = await Promise.all([
+  const [joiner, activeSlots, campaignSlots] = await Promise.all([
     loadJoiner(creatorId),
     Slot.countDocuments({ creatorId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
-    Slot.findOne({ campaignId: campaign._id, creatorId, status: { $in: HELD_PLACEMENT_STATUSES } }).lean(),
-    requested ? Promise.resolve(null) : Slot.find({ campaignId: campaign._id, status: "available" }).sort(JOIN_ORDER).lean(),
+    Slot.find({ campaignId: campaign._id, status: { $in: ["available", ...HELD_PLACEMENT_STATUSES] } }).sort(JOIN_ORDER).lean(),
   ]);
+  const held = campaignSlots.filter((s) => HELD_PLACEMENT_STATUSES.includes(s.status));
+  const heldSlot = held.find((s) => s.creatorId && String(s.creatorId) === String(creatorId)) || null;
+  const openSlots = campaignSlots.filter((s) => s.status === "available");
   const available = requested ? (requested.status === "available" ? [requested] : []) : openSlots;
-  return { joiner, activeSlots, heldSlot, available };
+  return { joiner, activeSlots, heldSlot, held, available };
 }
 
 // The join eligibility check. A creator the brand picked isn't held to a place's rank
@@ -134,7 +133,7 @@ function checkJoiner({ context, campaign, pickedByBrand = false }) {
   });
 }
 
-async function placementBody(slot, campaign, referralCode) {
+async function placementBody(slot, campaign, referralCode, placesLeft) {
   let code = referralCode;
   if (code === undefined) {
     const ReferralCode = require("../models/ReferralCode");
@@ -149,7 +148,7 @@ async function placementBody(slot, campaign, referralCode) {
     viewTarget: slot.viewTarget,
     reward: slot.reward,
     referralCode: code,
-    placesLeft: await Slot.countDocuments({ campaignId: campaign._id, status: "available" }),
+    placesLeft: placesLeft !== undefined ? placesLeft : await Slot.countDocuments({ campaignId: campaign._id, status: "available" }),
     brief: fullBrief(campaign),
   };
 }
@@ -158,8 +157,9 @@ async function placementBody(slot, campaign, referralCode) {
 // joining; the Open Call access check and place rank requirements are skipped because the
 // brand picked this creator. A place the creator already holds here is returned as theirs
 // (e.g. left by an earlier approval that failed part-way). Returns { status, body }.
-async function reservePlacementFor({ creatorId, campaignId }) {
-  const campaign = await Campaign.findById(campaignId).lean();
+async function reservePlacementFor({ creatorId, campaignId, campaign: loaded = null }) {
+  // A caller that just loaded the campaign passes it in; its status is still checked here.
+  const campaign = loaded || (await Campaign.findById(campaignId).lean());
   if (!campaign || campaign.status !== "live") return refuse(404, "CAMPAIGN_NOT_LIVE", "Campaign not found or not live");
   const result = await takePlacement({ creatorId, campaign, pickedByBrand: true });
   if (result.status === 409 && result.body.code === "ALREADY_JOINED") {
@@ -185,7 +185,7 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
     return refuse(403, "NOT_ELIGIBLE", check.failures[0].message, { failures: check.failures });
   }
 
-  const others = await Slot.find({ campaignId: campaign._id, status: { $in: HELD_PLACEMENT_STATUSES } }).select("reward viewTarget").lean();
+  const others = context.held;
   const committed = {
     reward: others.reduce((sum, s) => sum + (s.reward || 0), 0),
     views: others.reduce((sum, s) => sum + (s.viewTarget || 0), 0),
@@ -231,9 +231,18 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
     // The pool check read other reservations before this one was written, so two joins at the
     // same moment could both fit. Re-check with this one in place and give it back if the
     // pool is now over-promised or this creator somehow holds two.
+    // The same read counts the places left for the response and the live update.
+    const isHeld = { $in: ["$status", HELD_PLACEMENT_STATUSES] };
     const [totals] = await Slot.aggregate([
-      { $match: { campaignId: campaign._id, status: { $in: HELD_PLACEMENT_STATUSES } } },
-      { $group: { _id: null, reward: { $sum: "$reward" }, mine: { $sum: { $cond: [{ $eq: ["$creatorId", creatorId] }, 1, 0] } } } },
+      { $match: { campaignId: campaign._id, status: { $in: ["available", ...HELD_PLACEMENT_STATUSES] } } },
+      {
+        $group: {
+          _id: null,
+          reward: { $sum: { $cond: [isHeld, "$reward", 0] } },
+          mine: { $sum: { $cond: [{ $and: [isHeld, { $eq: ["$creatorId", creatorId] }] }, 1, 0] } },
+          available: { $sum: { $cond: [{ $eq: ["$status", "available"] }, 1, 0] } },
+        },
+      },
     ]);
     if (totals && (totals.reward > (campaign.creatorPool || 0) || totals.mine > 1)) {
       await release(claimed, original, creatorId);
@@ -255,20 +264,21 @@ async function takePlacement({ creatorId, campaign, requested = null, committedV
       }
     }
 
-    body = await placementBody(claimed, campaign, referralCode);
+    body = await placementBody(claimed, campaign, referralCode, totals ? totals.available : 0);
   } catch (error) {
     await release(claimed, original, creatorId);
     announcePlacesLeft(campaign._id);
     throw error;
   }
 
-  announcePlacesLeft(campaign._id);
+  announcePlacesLeft(campaign._id, body.placesLeft);
   return { status: 200, body };
 }
 
-// Live places-left update for creators; never allowed to fail a join.
-function announcePlacesLeft(campaignId) {
-  emitPlacesLeft(campaignId).catch((error) => console.error(`[Placements] Places-left update for ${campaignId} failed:`, error.message));
+// Live places-left update for creators; never allowed to fail a join. `placesLeft`, when this
+// request already counted it on a live campaign, saves the lookup.
+function announcePlacesLeft(campaignId, placesLeft) {
+  emitPlacesLeft(campaignId, { placesLeft }).catch((error) => console.error(`[Placements] Places-left update for ${campaignId} failed:`, error.message));
 }
 
 module.exports = {

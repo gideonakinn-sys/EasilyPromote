@@ -30,6 +30,8 @@ const campaignApplicationSchema = new mongoose.Schema(
 campaignApplicationSchema.index({ campaign: 1, creator: 1 }, { unique: true });
 campaignApplicationSchema.index({ campaign: 1, status: 1, matchScore: -1 });
 campaignApplicationSchema.index({ status: 1, appliedAt: 1 });
+// A creator's own applications, newest first (creator dashboard).
+campaignApplicationSchema.index({ creator: 1, appliedAt: -1 });
 
 const CampaignApplication = mongoose.model("CampaignApplication", campaignApplicationSchema);
 

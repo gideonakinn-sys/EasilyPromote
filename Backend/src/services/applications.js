@@ -183,6 +183,12 @@ async function buildMyApplications(userId) {
     .populate({ path: "campaign", select: CAMPAIGN_FIELDS_FOR_PAY, populate: { path: "businessId", select: "name avatar" } })
     .sort({ appliedAt: -1 })
     .lean();
+  return myApplicationsFrom(applications);
+}
+
+// "My applications" from applications (newest first) whose campaign and its brand are loaded
+// with CAMPAIGN_FIELDS_FOR_PAY and "name avatar".
+function myApplicationsFrom(applications) {
   return applications
     .filter((a) => a.campaign)
     .map((a) => ({
@@ -268,7 +274,9 @@ async function getApplication({ user, campaignId, applicationId }) {
   };
 }
 
-async function brandName(campaign) {
+// `user` is the brand acting on its own campaign when it's already loaded (the request's user).
+async function brandName(campaign, user = null) {
+  if (user && String(user._id) === String(campaign.businessId) && user.name) return user.name;
   const brand = await User.findById(campaign.businessId).select("name").lean();
   return (brand && brand.name) || "The brand";
 }
@@ -295,7 +303,7 @@ async function approveApplication({ user, campaignId, applicationId }) {
 
   let reserved;
   try {
-    reserved = await reservePlacementFor({ creatorId: application.creator, campaignId: campaign._id });
+    reserved = await reservePlacementFor({ creatorId: application.creator, campaignId: campaign._id, campaign });
   } catch (error) {
     await undo();
     throw error;
@@ -313,7 +321,7 @@ async function approveApplication({ user, campaignId, applicationId }) {
   }
 
   const placement = reserved.body;
-  const name = await brandName(campaign).catch(() => "The brand");
+  const name = await brandName(campaign, user).catch(() => "The brand");
   await notify({
     to: application.creator,
     role: "creator",
@@ -488,6 +496,8 @@ module.exports = {
   applyToCampaign,
   withdrawApplication,
   buildMyApplications,
+  myApplicationsFrom,
+  CAMPAIGN_FIELDS_FOR_PAY,
   listApplications,
   getApplication,
   approveApplication,

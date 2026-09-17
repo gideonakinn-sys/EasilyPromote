@@ -136,9 +136,13 @@ async function emitCampaignStatus(campaign) {
 // Places left on a campaign, sent to creators (who browse the marketplace) whenever it
 // changes: a join, a released place, a cancellation, a top-up, an admin resize or a
 // deleted account. A campaign that isn't live has no places. Returns the count.
-async function emitPlacesLeft(campaignId) {
-  const campaign = await Campaign.findById(campaignId).select("status").lean();
-  const placesLeft = campaign && campaign.status === "live" ? await Slot.countDocuments({ campaignId, status: "available" }) : 0;
+// `known.placesLeft`: a count the caller just made on a campaign it knows is live.
+async function emitPlacesLeft(campaignId, known = {}) {
+  let placesLeft = known.placesLeft;
+  if (placesLeft === undefined) {
+    const campaign = await Campaign.findById(campaignId).select("status").lean();
+    placesLeft = campaign && campaign.status === "live" ? await Slot.countDocuments({ campaignId, status: "available" }) : 0;
+  }
   emitToRole("creator", "campaign-places", { campaignId: String(campaignId), placesLeft });
   return placesLeft;
 }

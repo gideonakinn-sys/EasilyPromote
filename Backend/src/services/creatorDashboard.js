@@ -1,17 +1,19 @@
-const CreatorProfile = require("../models/CreatorProfile");
+const mongoose = require("mongoose");
+const { loadCreatorAccounts } = require("../utils/creatorAccounts");
 const { ownAudience, publicPortfolio, publicStats } = require("../utils/creatorProfile");
 const Campaign = require("../models/Campaign");
+const CampaignApplication = require("../models/CampaignApplication");
 const Slot = require("../models/Slot");
 const ReferralCode = require("../models/ReferralCode");
-const { creatorReferralEarnings } = require("../utils/referralEarnings");
+const User = require("../models/User");
+const Withdrawal = require("../models/Withdrawal");
+const { creatorConversionGroups, referralEarningsFrom } = require("../utils/referralEarnings");
 const { campaignEventTypes } = require("../utils/referralCodes");
-const { creatorViewsEarnings, releasedViewsTotal, floorKobo } = require("../utils/earnings");
-const { creatorFixedEarnings, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
+const { latestSlotPerCampaign, viewsEarningsFrom, floorKobo, COMMITTED_WITHDRAWAL_STATUSES } = require("../utils/earnings");
+const { fixedEarningsFrom, FIXED_WITHDRAWABLE_CAMPAIGN_STATUSES } = require("../utils/fixedPay");
 const { roundMoney } = require("../utils/money");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
-const TikTokConnection = require("../models/TikTokConnection");
-const MetaConnection = require("../models/MetaConnection");
 const meta = require("./meta");
 const { rankAtLeast } = require("./creatorScore");
 const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
@@ -21,16 +23,35 @@ const { joinEligibility, campaignFailures } = require("./joinRules");
 const { recommendation, sortRecommended } = require("./recommendations");
 const { ACTIVE_PLACEMENT_STATUSES, HELD_PLACEMENT_STATUSES, MAX_ACTIVE_PLACEMENTS } = require("../utils/placementStatuses");
 const { deliveryProgress, mapStatusToCreator } = require("../utils/campaignUpdates");
-const { buildMyApplications } = require("./applications"); // Campaign engine: applications (ticket 06)
+const { myApplicationsFrom, CAMPAIGN_FIELDS_FOR_PAY } = require("./applications"); // Campaign engine: applications (ticket 06)
 
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("./contentApproval");
 const { contentLabelFor } = require("./submissionEvents");
 
-// Everything the creator dashboard shows is derived from the same handful of
-// documents. Loading them once per request (instead of once per endpoint, and
-// again inside every helper) is where most of the round trips went.
+// Everything the creator dashboard shows is derived from the same handful of documents. They're
+// loaded once per request by loadCreatorData, in three rounds of parallel queries (the creator's
+// own rows; the campaigns and ledger rows those point at; brands and open places), and every
+// section is built from them. The dashboard is about 15 queries whatever the creator holds.
 
+// Fields each section reads from a campaign. Sections see exactly these, as they did when each
+// loaded its own campaigns, so a response never gains or loses a field.
+const MY_CAMPAIGN_FIELDS =
+  "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective contentDestination";
+const RELEASED_CAMPAIGN_FIELDS =
+  "name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay contentDestination";
+const WALLET_CAMPAIGN_FIELDS = "name status targetViews costPerView viewsDelivered referral";
+const VIEWS_EARNINGS_CAMPAIGN_FIELDS = "name status businessId";
+
+const toObjectId = (value) => (value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value)));
+
+// A lean document reduced to _id and `fields` (those it has), like a mongoose select.
+function project(doc, fields) {
+  if (!doc) return null;
+  const out = { _id: doc._id };
+  for (const field of fields.split(" ")) if (field in doc) out[field] = doc[field];
+  return out;
+}
 
 function lockReasonFor({ hasSocial, hasNiches }) {
   if (hasSocial && hasNiches) return null;
@@ -39,13 +60,9 @@ function lockReasonFor({ hasSocial, hasNiches }) {
     : "Connect a social account to unlock campaigns";
 }
 
-// Profile + social connections, fetched in parallel. Shared by every builder below.
+// Profile + social connections, in one query. Shared by every builder below.
 async function loadContext(userId) {
-  const [profile, tiktok, metaConnections] = await Promise.all([
-    CreatorProfile.findOne({ userId }).lean(),
-    TikTokConnection.findOne({ userId }).lean(),
-    MetaConnection.find({ userId }).lean(),
-  ]);
+  const { profile, tiktok, metaConnections } = await loadCreatorAccounts(userId);
 
   const niches = Array.isArray(profile && profile.niches) ? profile.niches : [];
   const hasSocial = Boolean(tiktok || metaConnections.length > 0);
@@ -69,6 +86,140 @@ async function loadContext(userId) {
     lockReason,
   };
 }
+
+// ── Loading ─────────────────────────────────────────────────────────────────
+
+// Rejected or appealed content whose place went back to the campaign: the creator still sees the
+// campaign so they can read why and appeal. `submissions` are newest first.
+function waitingReleasedSubmissions(submissions, heldCampaignIds) {
+  const latest = new Map();
+  for (const sub of submissions) {
+    const key = String(sub.campaignId);
+    if (!heldCampaignIds.has(key) && sub.slotId && !latest.has(key)) latest.set(key, sub);
+  }
+  return [...latest.values()].filter((sub) => ["rejected", "appealed"].includes(sub.status));
+}
+
+// Loads what the requested sections need: { marketplace, myCampaigns, wallet, applications }.
+async function loadCreatorData(user, ctx, sections) {
+  const creatorId = toObjectId(ctx.userId);
+  const now = new Date();
+  const need = (...names) => names.some((name) => sections[name]);
+  const handle = ctx.profile ? ctx.profile.username : user && user.name;
+
+  // Round 1: the creator's own rows.
+  const [slots, submissions, withdrawals, conversionGroups, referralCodes, applications, recentTransactions] = await Promise.all([
+    Slot.find({ creatorId }).sort({ createdAt: -1 }).lean(),
+    need("myCampaigns", "wallet") ? Submission.find({ creatorId }).sort({ createdAt: -1 }).lean() : [],
+    need("myCampaigns", "wallet")
+      ? Withdrawal.find({ creatorId, status: { $ne: "rejected" } })
+          .select("campaignId kind amount viewsAmount referralAmount fixedAmount status requestedAt")
+          .sort({ _id: 1 })
+          .lean()
+      : [],
+    need("myCampaigns", "wallet") ? creatorConversionGroups(creatorId, now) : [],
+    need("myCampaigns") ? ReferralCode.find({ creatorId }).select("slotId code status conversions").lean() : [],
+    need("applications") ? CampaignApplication.find({ creator: creatorId }).sort({ appliedAt: -1 }).lean() : [],
+    need("wallet") ? Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean() : [],
+  ]);
+
+  const heldCampaignIds = new Set(slots.map((slot) => String(slot.campaignId)));
+  const released = need("myCampaigns") ? waitingReleasedSubmissions(submissions, heldCampaignIds) : [];
+  const campaignIds = new Set([
+    ...(need("myCampaigns", "wallet") ? heldCampaignIds : []),
+    ...applications.map((a) => String(a.campaign)),
+    ...released.map((s) => String(s.campaignId)),
+  ]);
+  const submissionIds = submissions.map((s) => s._id);
+
+  // Round 2: the campaigns those rows point at (and every live one for the marketplace), the
+  // ledger rows the wallet reads, and the content timeline.
+  const campaignFilter = need("marketplace")
+    ? { $or: [{ status: "live" }, { _id: { $in: [...campaignIds].map(toObjectId) } }] }
+    : { _id: { $in: [...campaignIds].map(toObjectId) } };
+  const [campaigns, ledger, events] = await Promise.all([
+    need("marketplace") || campaignIds.size > 0 ? Campaign.find(campaignFilter).sort({ createdAt: -1 }).lean() : [],
+    need("wallet")
+      ? Transaction.find({
+          // Each branch is served by its own index. Older views releases carry only a submission.
+          $or: [
+            { creatorId, type: "fixed_credit", status: "credited" },
+            { creatorId, type: "release", status: "released", bucket: { $nin: ["referral", "fixed"] } },
+            ...(submissionIds.length > 0
+              ? [{ submissionId: { $in: submissionIds }, type: "release", status: "released", bucket: { $nin: ["referral", "fixed"] } }]
+              : []),
+          ],
+        })
+          .select("type campaignId submissionId amount")
+          .lean()
+      : [],
+    need("myCampaigns") && submissions.length > 0 ? listEventsForSubmissions(submissionIds) : [],
+  ]);
+  const campaignById = new Map(campaigns.map((c) => [String(c._id), c]));
+
+  // Round 3: brands for everything that shows one, and the marketplace's open places.
+  const brandIds = new Set();
+  const addBrand = (campaign) => campaign && campaign.businessId && brandIds.add(String(campaign.businessId));
+  if (need("myCampaigns")) {
+    slots.forEach((slot) => addBrand(campaignById.get(String(slot.campaignId))));
+    released.forEach((sub) => addBrand(campaignById.get(String(sub.campaignId))));
+  }
+  applications.forEach((a) => addBrand(campaignById.get(String(a.campaign))));
+  const heldForMarketplace = new Set(slots.filter((s) => HELD_PLACEMENT_STATUSES.includes(s.status)).map((s) => String(s.campaignId)));
+  const openCampaigns = need("marketplace")
+    ? campaigns.filter((c) => c.status === "live" && !heldForMarketplace.has(String(c._id)))
+    : [];
+  openCampaigns.forEach(addBrand);
+
+  const [brands, availableSlots] = await Promise.all([
+    brandIds.size > 0 ? User.find({ _id: { $in: [...brandIds].map(toObjectId) } }).select("name avatar").lean() : [],
+    openCampaigns.length > 0
+      ? Slot.find({ campaignId: { $in: openCampaigns.map((c) => c._id) }, status: "available" }).sort({ createdAt: 1, _id: 1 }).lean()
+      : [],
+  ]);
+  const brandById = new Map(brands.map((b) => [String(b._id), b]));
+  const withBrand = (campaign) => (campaign ? { ...campaign, businessId: campaign.businessId ? brandById.get(String(campaign.businessId)) || null : campaign.businessId } : null);
+
+  return {
+    now,
+    slots,
+    submissions,
+    withdrawals,
+    conversionGroups,
+    referralCodes,
+    applications,
+    recentTransactions,
+    released,
+    campaignById,
+    ledger,
+    events,
+    openCampaigns,
+    availableSlots,
+    withBrand,
+  };
+}
+
+// Requested or paid withdrawals summed per campaign, per pot, as the earnings helpers count them.
+function committedWithdrawals(withdrawals) {
+  const views = new Map();
+  const referral = new Map();
+  const fixed = [];
+  const add = (map, key, amount) => map.set(key, (map.get(key) || 0) + amount);
+  for (const w of withdrawals.filter((row) => COMMITTED_WITHDRAWAL_STATUSES.includes(row.status))) {
+    const key = String(w.campaignId);
+    if (w.kind !== "referral") add(views, key, w.kind === "campaign" ? w.viewsAmount || 0 : w.amount);
+    if (w.kind === "referral") add(referral, key, w.amount);
+    else if (w.kind === "campaign" && w.referralAmount > 0) add(referral, key, w.referralAmount);
+    if (w.kind === "campaign" && w.fixedAmount > 0) fixed.push({ campaignId: w.campaignId, withdrawn: w.fixedAmount });
+  }
+  return { views, referral, fixed };
+}
+
+function referralEarningsOf(data) {
+  return referralEarningsFrom({ groups: data.conversionGroups, withdrawnByCampaign: committedWithdrawals(data.withdrawals).referral });
+}
+
+// ── Sections ────────────────────────────────────────────────────────────────
 
 function buildProfile(user, ctx) {
   const profile = ctx.profile;
@@ -149,42 +300,23 @@ function normalizeNiches(list) {
     .filter(Boolean);
 }
 
-async function buildMarketplace(ctx) {
-  const { userId, profile } = ctx;
+async function buildMarketplace(ctx, data = null) {
+  data = data || (await loadCreatorData(null, ctx, { marketplace: true }));
+  const { profile } = ctx;
   const creatorRank = profile ? profile.rank : "rank1";
+  const activeSlots = data.slots.filter((s) => ACTIVE_PLACEMENT_STATUSES.includes(s.status)).length;
 
-  const [activeSlots, claimedCampaignIds, campaigns] = await Promise.all([
-    Slot.countDocuments({ creatorId: userId, status: { $in: ACTIVE_PLACEMENT_STATUSES } }),
-    Slot.distinct("campaignId", { creatorId: userId, status: { $in: HELD_PLACEMENT_STATUSES } }),
-    Campaign.find({ status: "live" })
-      .populate("businessId", "name avatar")
-      .sort({ createdAt: -1 })
-      .lean(),
-  ]);
-
-  const claimedCampaignSet = new Set(claimedCampaignIds.map((id) => id.toString()));
-  const openCampaigns = campaigns.filter((c) => !claimedCampaignSet.has(c._id.toString()));
-
-  // One query for every campaign's open slots, instead of one query per campaign, in the
-  // order a join takes them so each card shows the pay of the place the creator would get.
-  const availableSlots = openCampaigns.length > 0
-    ? await Slot.find({
-        campaignId: { $in: openCampaigns.map((c) => c._id) },
-        status: "available",
-      })
-        .sort({ createdAt: 1, _id: 1 })
-        .lean()
-    : [];
-
+  // Open places for every campaign in one query, in the order a join takes them, so each card shows
+  // the pay of the place the creator would get.
   const slotsByCampaign = new Map();
-  for (const slot of availableSlots) {
+  for (const slot of data.availableSlots) {
     const key = slot.campaignId.toString();
     if (!slotsByCampaign.has(key)) slotsByCampaign.set(key, []);
     slotsByCampaign.get(key).push(slot);
   }
 
   const marketplace = [];
-  for (const campaign of openCampaigns) {
+  for (const campaign of data.openCampaigns.map(data.withBrand)) {
     const slots = slotsByCampaign.get(campaign._id.toString()) || [];
     if (slots.length === 0) continue;
 
@@ -344,27 +476,12 @@ function contentApprovalFields(campaign, submission, timeline) {
 }
 
 // Rejected content gives its place back to the campaign, but the creator still sees the campaign
-// so they can read why and appeal. `submissions` are newest first.
-async function releasedContentCampaigns(submissions, heldItems, eventsBySubmission) {
-  const held = new Set(heldItems.map((item) => String(item.id)));
-  const latest = new Map();
-  for (const sub of submissions) {
-    const key = String(sub.campaignId);
-    if (!held.has(key) && sub.slotId && !latest.has(key)) latest.set(key, sub);
-  }
-  const waiting = [...latest.values()].filter((sub) => ["rejected", "appealed"].includes(sub.status));
-  if (waiting.length === 0) return [];
-
-  const campaigns = await Campaign.find({ _id: { $in: waiting.map((sub) => sub.campaignId) } })
-    .select("name category status coverImageUrl contentBrief platforms businessId brief campaignObjective campaignModel payShape contentPay contentDestination")
-    .populate("businessId", "name avatar")
-    .lean();
-  const byId = new Map(campaigns.map((campaign) => [String(campaign._id), campaign]));
-
-  return waiting
-    .filter((sub) => byId.has(String(sub.campaignId)) && contentApproval.isContentCampaign(byId.get(String(sub.campaignId))))
-    .map((sub) => {
-      const campaign = byId.get(String(sub.campaignId));
+// so they can read why and appeal.
+function releasedContentCampaigns(data, eventsBySubmission) {
+  return data.released
+    .map((sub) => ({ sub, campaign: data.withBrand(project(data.campaignById.get(String(sub.campaignId)), RELEASED_CAMPAIGN_FIELDS)) }))
+    .filter(({ campaign }) => campaign && contentApproval.isContentCampaign(campaign))
+    .map(({ sub, campaign }) => {
       const pay = payPerUnit(campaign, null);
       return {
         id: campaign._id,
@@ -394,52 +511,36 @@ async function releasedContentCampaigns(submissions, heldItems, eventsBySubmissi
     });
 }
 
-async function buildMyCampaigns(ctx) {
-  const { userId } = ctx;
-
-  const [slots, submissions, referralCodes, referralEarnings] = await Promise.all([
-    Slot.find({ creatorId: userId })
-      .populate({
-        path: "campaignId",
-        select: "name category status coverImageUrl contentBrief keyMessageCta whatToAvoid goal competitors uniqueSellingPoint funFact platforms contentStyle startDate endDate targetViews viewsDelivered costPerView scriptUrl scriptFileName businessId referral brief campaignObjective campaignModel payShape contentPay creatorAccess objective contentDestination",
-        populate: { path: "businessId", select: "name avatar" },
-      })
-      .sort({ createdAt: -1 })
-      .lean(),
-    Submission.find({ creatorId: userId }).sort({ createdAt: -1 }).lean(),
-    ReferralCode.find({ creatorId: userId }).select("slotId code status conversions").lean(),
-    creatorReferralEarnings(userId),
-  ]);
-
+async function buildMyCampaigns(ctx, data = null) {
+  data = data || (await loadCreatorData(null, ctx, { myCampaigns: true }));
+  const { submissions } = data;
+  const referralEarnings = referralEarningsOf(data);
   const submissionMap = indexSubmissionsByCampaign(submissions);
-  const referralBySlot = new Map(referralCodes.map((code) => [code.slotId.toString(), code]));
+  const referralBySlot = new Map(data.referralCodes.map((code) => [code.slotId.toString(), code]));
 
   // Newest first, matching how the drawer stacks its activity list.
   const eventsBySubmission = {};
-  if (submissions.length > 0) {
-    const events = await listEventsForSubmissions(submissions.map((s) => s._id));
-    for (const event of events) {
-      const key = event.submissionId.toString();
-      if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
-      eventsBySubmission[key].unshift({
-        id: event._id,
-        type: event.type,
-        label: labelFor(event.type),
-        actor: event.actor,
-        actorName: event.actorName,
-        reason: event.reason,
-        statusAfter: event.statusAfter,
-        metadata: event.metadata,
-        at: event.createdAt,
-        time: timeAgo(event.createdAt),
-      });
-    }
+  for (const event of data.events) {
+    const key = event.submissionId.toString();
+    if (!eventsBySubmission[key]) eventsBySubmission[key] = [];
+    eventsBySubmission[key].unshift({
+      id: event._id,
+      type: event.type,
+      label: labelFor(event.type),
+      actor: event.actor,
+      actorName: event.actorName,
+      reason: event.reason,
+      statusAfter: event.statusAfter,
+      metadata: event.metadata,
+      at: event.createdAt,
+      time: timeAgo(event.createdAt),
+    });
   }
 
-  const campaigns = slots
-    .filter((slot) => slot.campaignId)
-    .map((slot) => {
-      const campaign = slot.campaignId;
+  const campaigns = data.slots
+    .map((slot) => ({ slot, campaign: data.withBrand(project(data.campaignById.get(String(slot.campaignId)), MY_CAMPAIGN_FIELDS)) }))
+    .filter(({ campaign }) => campaign)
+    .map(({ slot, campaign }) => {
       const submission = submissionMap[campaign._id.toString()];
 
       let status = mapStatusToCreator(submission, campaign, slot);
@@ -509,37 +610,55 @@ async function buildMyCampaigns(ctx) {
     });
 
   // Campaign engine: content approval (ticket 07)
-  const released = await releasedContentCampaigns(submissions, campaigns, eventsBySubmission);
+  const released = releasedContentCampaigns(data, eventsBySubmission);
   return { campaigns: [...campaigns, ...released], locked: ctx.locked, lockReason: ctx.lockReason };
 }
 
-async function buildWallet(user, ctx) {
-  const { userId, profile } = ctx;
-  const handle = profile ? profile.username : user.name;
+async function buildWallet(user, ctx, data = null) {
+  data = data || (await loadCreatorData(user, ctx, { wallet: true }));
+  const { profile } = ctx;
+  const { now } = data;
+  const withdrawn = committedWithdrawals(data.withdrawals);
 
-  const now = new Date();
-  const [transactions, submissions, slots, referralEarnings, viewsEarnings, fixedEarnings] = await Promise.all([
-    Transaction.find({ creatorHandle: handle }).sort({ date: -1 }).limit(50).lean(),
-    Submission.find({ creatorId: userId }).select("_id").lean(),
-    Slot.find({ creatorId: userId })
-      .populate({ path: "campaignId", select: "name status targetViews costPerView viewsDelivered referral" })
-      .lean(),
-    creatorReferralEarnings(userId),
-    creatorViewsEarnings(userId),
-    creatorFixedEarnings(userId, { now }),
-  ]);
+  const referralEarnings = referralEarningsOf(data);
+
+  // Views earnings per campaign, with the same formula as withdrawals: views placements, most recent
+  // claim first, and views delivered across the creator's submissions.
+  const viewsSlots = data.slots
+    .filter((slot) => slot.kind !== "deliverable")
+    .map((slot) => ({ ...slot, campaignId: project(data.campaignById.get(String(slot.campaignId)), VIEWS_EARNINGS_CAMPAIGN_FIELDS) }))
+    .sort((a, b) => new Date(b.claimedAt || 0) - new Date(a.claimedAt || 0) || new Date(b.createdAt) - new Date(a.createdAt));
+  const viewsByCampaign = new Map();
+  for (const sub of data.submissions) {
+    const key = String(sub.campaignId);
+    viewsByCampaign.set(key, (viewsByCampaign.get(key) || 0) + (sub.viewsDelivered || 0));
+  }
+  const viewsEarnings = viewsEarningsFrom({
+    slotByCampaign: latestSlotPerCampaign(viewsSlots),
+    viewsByCampaign,
+    withdrawnByCampaign: withdrawn.views,
+  });
+
+  const credits = data.ledger.filter((t) => t.type === "fixed_credit");
+  const fixedEarnings = fixedEarningsFrom({
+    credits,
+    submissionById: new Map(data.submissions.map((s) => [String(s._id), s])),
+    withdrawals: withdrawn.fixed,
+    now,
+  });
 
   // Paid views payouts come from the ledger. Older releases carry only a submission;
   // newer ones also record the creator.
-  const totalReleased = await releasedViewsTotal({
-    $or: [
-      { creatorId: new (require("mongoose").Types.ObjectId)(String(userId)) },
-      { submissionId: { $in: submissions.map((s) => s._id) } },
-    ],
-  });
+  const totalReleased = data.ledger.filter((t) => t.type === "release").reduce((sum, t) => sum + t.amount, 0);
+
+  // Placements in the order the wallet always listed them (the creatorId + status index: by status,
+  // then oldest first), each with the campaign fields the wallet reads.
+  const slots = [...data.slots]
+    .sort((a, b) => (a.status === b.status ? (String(a._id) < String(b._id) ? -1 : 1) : a.status < b.status ? -1 : 1))
+    .map((slot) => ({ ...slot, campaignId: project(data.campaignById.get(String(slot.campaignId)), WALLET_CAMPAIGN_FIELDS) }));
 
   // Every campaign with views earnings, using the same formula as withdrawals.
-  const viewsByCampaign = [...viewsEarnings.values()]
+  const viewsByCampaignList = [...viewsEarnings.values()]
     .filter((entry) => entry.views > 0 || entry.withdrawn > 0)
     .map((entry) => ({
       id: entry.campaignId,
@@ -555,11 +674,11 @@ async function buildWallet(user, ctx) {
     }));
 
   const withdrawableBalance = floorKobo(
-    viewsByCampaign.filter((c) => c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+    viewsByCampaignList.filter((c) => c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
   );
 
   // Kept for older clients: earnings on campaigns that aren't finished yet.
-  const pendingByCampaign = viewsByCampaign
+  const pendingByCampaign = viewsByCampaignList
     .filter((c) => ["live", "paused", "under_review"].includes(c.status))
     .map((c) => ({
       id: c.id,
@@ -572,19 +691,17 @@ async function buildWallet(user, ctx) {
 
   // Earned but not withdrawable until the campaign is approved.
   const pendingBalance = floorKobo(
-    viewsByCampaign.filter((c) => !c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
+    viewsByCampaignList.filter((c) => !c.withdrawable).reduce((sum, c) => sum + c.availableToWithdraw, 0)
   );
   const payout = profile && profile.payoutAccount;
 
   // Withdrawals are once a week per campaign: views earnings, and referral earnings and fixed
   // pay past their hold, go out together.
-  const Withdrawal = require("../models/Withdrawal");
   const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate } = require("../utils/payoutSchedule");
   const weekStart = payoutWeekStart(now);
-  const recentWithdrawals = await Withdrawal.find({
-    creatorId: userId,
-    $or: [{ status: { $in: ["pending", "processing"] } }, { status: { $ne: "rejected" }, requestedAt: { $gte: weekStart } }],
-  }).lean();
+  const recentWithdrawals = data.withdrawals.filter(
+    (w) => ["pending", "processing"].includes(w.status) || new Date(w.requestedAt) >= weekStart
+  );
 
   const withdrawCampaigns = [];
   const seenCampaigns = new Set();
@@ -715,7 +832,7 @@ async function buildWallet(user, ctx) {
     withdrawableBalance,
     pendingBalance,
     pendingByCampaign,
-    viewsByCampaign,
+    viewsByCampaign: viewsByCampaignList,
     withdrawCampaigns,
     payoutSchedule: { nextPayoutDate: nextPayoutDate(now), minimumPerCampaign: MIN_CAMPAIGN_WITHDRAWAL },
     hasBankAccount: !!(payout && payout.paystackRecipientCode),
@@ -742,7 +859,7 @@ async function buildWallet(user, ctx) {
       holdDays: 7,
       byCampaign: fixedByCampaign,
     },
-    recentTransactions: transactions.map((t) => ({
+    recentTransactions: data.recentTransactions.map((t) => ({
       id: t._id,
       createdAt: t.date,
       date: t.date,
@@ -754,18 +871,27 @@ async function buildWallet(user, ctx) {
   };
 }
 
-// The whole dashboard in one round trip. The per-section builders share one
-// context, so the profile and social lookups happen once, not six times.
+// "My applications", with each campaign's pay fields and brand.
+function buildApplications(data) {
+  return myApplicationsFrom(
+    data.applications.map((application) => ({
+      ...application,
+      campaign: data.withBrand(project(data.campaignById.get(String(application.campaign)), CAMPAIGN_FIELDS_FOR_PAY)),
+    }))
+  );
+}
+
+// The whole dashboard in one round trip, from one load shared by every section.
 async function buildDashboard(user) {
   const ctx = await loadContext(user._id);
   const profile = buildProfile(user, ctx);
   if (!profile) return null;
 
-  const [campaigns, marketplace, wallet, applications] = await Promise.all([
-    buildMyCampaigns(ctx),
-    buildMarketplace(ctx),
-    buildWallet(user, ctx),
-    buildMyApplications(ctx.userId),
+  const data = await loadCreatorData(user, ctx, { marketplace: true, myCampaigns: true, wallet: true, applications: true });
+  const [campaigns, marketplace, wallet] = await Promise.all([
+    buildMyCampaigns(ctx, data),
+    buildMarketplace(ctx, data),
+    buildWallet(user, ctx, data),
   ]);
 
   return {
@@ -773,7 +899,7 @@ async function buildDashboard(user) {
     campaigns,
     marketplace,
     wallet,
-    applications,
+    applications: buildApplications(data),
     tiktok: buildTikTokStatus(ctx),
     meta: buildMetaStatus(ctx),
   };
@@ -781,6 +907,7 @@ async function buildDashboard(user) {
 
 module.exports = {
   loadContext,
+  loadCreatorData,
   buildProfile,
   buildTikTokStatus,
   buildMetaStatus,
