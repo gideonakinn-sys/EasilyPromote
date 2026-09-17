@@ -111,6 +111,7 @@ test("creators see a clicks campaign as a reward per click with its destination 
   assert.deepEqual(card.pay, { amount: REWARD, unit: "click" });
   assert.equal(card.campaignObjective, "clicks");
   assert.equal(card.destinationDomain, "brand.example");
+  assert.equal(card.usageRights.type, "standard", "usage terms reach the card so custom ones can be accepted before joining");
 
   const mine = await harness.api("GET", "/api/creators/dashboard", { token: creator.token });
   const row = mine.body.campaigns.campaigns.find((c) => String(c.id) === id);
