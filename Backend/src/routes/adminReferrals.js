@@ -556,7 +556,8 @@ async function conversionFilter(query) {
   if (isObjectId(query.brandId)) filter.businessId = query.brandId;
   if (isObjectId(query.campaignId)) filter.campaignId = query.campaignId;
   if (isObjectId(query.creatorId)) filter.creatorId = query.creatorId;
-  if (EVENT_TYPES.includes(query.eventType)) filter.eventType = query.eventType;
+  // "click" is recorded internally by tracked links (M8 batch 7), never sent by webhooks.
+  if (EVENT_TYPES.includes(query.eventType) || query.eventType === "click") filter.eventType = query.eventType;
 
   const from = parseDate(query.from);
   const to = parseDate(query.to);

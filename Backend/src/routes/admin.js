@@ -287,6 +287,10 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
               }
             : null,
         hasPayments,
+        // M8 batch 7: clicks destination and usage-rights terms (SPEC D29, D30).
+        campaignObjective: campaign.campaignObjective || null,
+        destinationUrl: campaign.destinationUrl || null,
+        usageRights: campaign.usageRights && campaign.usageRights.type ? campaign.usageRights : null,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
           ? { id: campaign.businessId._id, name: campaign.businessId.name, email: campaign.businessId.email }

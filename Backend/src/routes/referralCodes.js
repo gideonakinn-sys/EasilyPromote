@@ -99,6 +99,11 @@ async function buildCodeRows(campaign) {
       conversions: code ? code.conversions : 0,
       earned: earnedByCreator.get(creatorKey) || 0,
       loadedAt: code ? code.loadedAt : null,
+      // M8 batch 7: the usage-rights version the creator accepted on joining (SPEC D30).
+      usageRightsAccepted:
+        slot.usageRightsAccepted && slot.usageRightsAccepted.acceptedAt
+          ? { version: slot.usageRightsAccepted.version, acceptedAt: slot.usageRightsAccepted.acceptedAt }
+          : null,
     };
   });
 }
@@ -303,7 +308,14 @@ router.get("/:id/referral-codes", ...businessOnly, async (req, res, next) => {
     const campaign = await loadOwnedCampaign(req, res);
     if (!campaign) return;
 
-    const [rows, codePrefix] = await Promise.all([buildCodeRows(campaign), brandCodePrefix(campaign.businessId)]);
+    const unpaidMatch = (reason) => ({ campaignId: campaign._id, counted: true, voidedAt: null, unpaidReason: reason, rewardAmount: { $not: { $gt: 0 } } });
+    const [rows, codePrefix, waitingForBudget, waitingForReward] = await Promise.all([
+      buildCodeRows(campaign),
+      brandCodePrefix(campaign.businessId),
+      // M8 batch 7: counted conversions (or clicks) not paid yet; paid oldest first after a top-up or once a reward is set.
+      ConversionEvent.countDocuments(unpaidMatch("budget_exhausted")),
+      ConversionEvent.countDocuments(unpaidMatch("rate_not_set")),
+    ]);
     res.json({
       referral: serializeSettings(campaign),
       codePrefix,
@@ -313,6 +325,8 @@ router.get("/:id/referral-codes", ...businessOnly, async (req, res, next) => {
         awaitingBusiness: rows.filter((row) => row.status === "awaiting_business").length,
         missing: rows.filter((row) => row.status === "missing").length,
         conversions: campaign.referral ? campaign.referral.conversions : 0,
+        waitingForBudget,
+        waitingForReward,
       },
       codes: rows,
     });
