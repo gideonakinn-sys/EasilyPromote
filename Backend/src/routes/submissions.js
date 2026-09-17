@@ -8,6 +8,7 @@ const CreatorProfile = require("../models/CreatorProfile");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { emitCampaignUpdate } = require("../utils/campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+const { recordViewDelta } = require("../services/viewSnapshots");
 
 const router = express.Router();
 
@@ -425,8 +426,16 @@ router.post("/:id/sync-stats", protect, authorizeRoles("admin", "super_admin"), 
       submission.postedPlatforms.push({ platform, postUrl: "", views: views || 0, likes: likes || 0, comments: comments || 0 });
     }
 
+    const previousViews = submission.viewsDelivered || 0;
     submission.viewsDelivered = submission.postedPlatforms.reduce((sum, p) => sum + (p.views || 0), 0);
     await submission.save();
+    if (submission.viewsDelivered > previousViews) {
+      await recordViewDelta({
+        campaignId: submission.campaignId,
+        submissionId: submission._id,
+        delta: submission.viewsDelivered - previousViews,
+      });
+    }
 
     const campaign = await Campaign.findById(submission.campaignId);
     if (campaign) {

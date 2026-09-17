@@ -6,6 +6,7 @@ const meta = require("../services/meta");
 const { decrypt } = require("../utils/crypto");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+const { recordViewDelta } = require("../services/viewSnapshots");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -222,6 +223,11 @@ async function syncMetaViews() {
                 views: submission.viewsDelivered,
                 delta: submission.viewsDelivered - previousViews,
               },
+            });
+            await recordViewDelta({
+              campaignId: submission.campaignId,
+              submissionId: submission._id,
+              delta: submission.viewsDelivered - previousViews,
             });
           }
         }

@@ -5,6 +5,7 @@ const TikTokConnection = require("../models/TikTokConnection");
 const tiktok = require("../services/tiktok");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+const { recordViewDelta } = require("../services/viewSnapshots");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -175,6 +176,11 @@ async function syncTiktokViews() {
                 delta: submission.viewsDelivered - previousViews,
                 videoId,
               },
+            });
+            await recordViewDelta({
+              campaignId: submission.campaignId,
+              submissionId: submission._id,
+              delta: submission.viewsDelivered - previousViews,
             });
           }
           await updateCampaignFromSubmission(submission);
