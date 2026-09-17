@@ -142,6 +142,20 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
   );
 }
 
+function dedupeCampaigns(items: MarketplaceCampaign[]): MarketplaceCampaign[] {
+  const seen = new Set<string>();
+  const result: MarketplaceCampaign[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const key = item.id || `campaign-${i}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
 interface CardGridProps {
   campaigns: MarketplaceCampaign[];
   onOpen: (campaign: MarketplaceCampaign) => void;
@@ -151,14 +165,17 @@ interface CardGridProps {
 function CardGrid({ campaigns, onOpen, appliedIds }: CardGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-      {campaigns.map((campaign) => (
-        <MarketplaceCard
-          key={campaign.id}
-          campaign={campaign}
-          onOpen={() => onOpen(campaign)}
-          applied={appliedIds.has(campaign.id)}
-        />
-      ))}
+      {campaigns.map((campaign, idx) => {
+        const itemKey = campaign.id || `campaign-${idx}`;
+        return (
+          <MarketplaceCard
+            key={itemKey}
+            campaign={campaign}
+            onOpen={() => onOpen(campaign)}
+            applied={Boolean(campaign.id && appliedIds.has(campaign.id))}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -228,8 +245,13 @@ export function CampaignMarketplace({
     hybrid: { ...INITIAL_TAB_STATE },
   });
 
+  const inFlightTabsRef = React.useRef<Set<PayTab>>(new Set());
+
   const fetchTab = React.useCallback(
     async (targetTab: PayTab, force = false) => {
+      if (inFlightTabsRef.current.has(targetTab)) return;
+      inFlightTabsRef.current.add(targetTab);
+
       setTabsState((prev) => {
         if (!force && prev[targetTab].loaded) return prev;
         return {
@@ -245,19 +267,19 @@ export function CampaignMarketplace({
       try {
         const res = await getMarketplaceSections(targetTab, 12);
         const recommended: SectionState = {
-          items: mapMarketplaceItems(res.sections.recommended.campaigns as unknown as Array<Record<string, unknown>>),
+          items: dedupeCampaigns(mapMarketplaceItems(res.sections.recommended.campaigns as unknown as Array<Record<string, unknown>>)),
           nextCursor: res.sections.recommended.nextCursor,
           total: res.sections.recommended.total,
           loadingMore: false,
         };
         const trending: SectionState = {
-          items: mapMarketplaceItems(res.sections.trending.campaigns as unknown as Array<Record<string, unknown>>),
+          items: dedupeCampaigns(mapMarketplaceItems(res.sections.trending.campaigns as unknown as Array<Record<string, unknown>>)),
           nextCursor: res.sections.trending.nextCursor,
           total: res.sections.trending.total,
           loadingMore: false,
         };
         const newSection: SectionState = {
-          items: mapMarketplaceItems(res.sections.new.campaigns as unknown as Array<Record<string, unknown>>),
+          items: dedupeCampaigns(mapMarketplaceItems(res.sections.new.campaigns as unknown as Array<Record<string, unknown>>)),
           nextCursor: res.sections.new.nextCursor,
           total: res.sections.new.total,
           loadingMore: false,
@@ -304,7 +326,7 @@ export function CampaignMarketplace({
             }>("/creators/marketplace", {
               token: getToken() || undefined,
             });
-            const allItems = mapMarketplaceItems(legacy.campaigns);
+            const allItems = dedupeCampaigns(mapMarketplaceItems(legacy.campaigns));
             const filtered = targetTab === "all" ? allItems : allItems.filter((c) => payShapeOf(c) === targetTab);
             const rec = filtered.filter((c) => c.recommended);
             const trn = filtered.filter((c) => c.trending && !c.recommended);
@@ -346,17 +368,24 @@ export function CampaignMarketplace({
             loaded: false,
           },
         }));
+      } finally {
+        inFlightTabsRef.current.delete(targetTab);
       }
     },
     [setMarketplaceMeta, upsertMarketplaceCampaigns]
   );
 
-  // Load initial tab on mount or tab change if not loaded
+  const currentTab = tabsState[tab];
+  const isLoaded = currentTab.loaded;
+  const isLoading = currentTab.loading;
+  const hasError = Boolean(currentTab.error);
+
+  // Load initial tab on mount or tab change if not loaded, not loading, and no error
   React.useEffect(() => {
-    if (!tabsState[tab].loaded && !tabsState[tab].loading) {
+    if (!isLoaded && !isLoading && !hasError) {
       fetchTab(tab);
     }
-  }, [tab, tabsState, fetchTab]);
+  }, [tab, isLoaded, isLoading, hasError, fetchTab]);
 
   const loadMore = async (section: "recommended" | "trending" | "new") => {
     const currentTabState = tabsState[tab];
@@ -376,7 +405,7 @@ export function CampaignMarketplace({
 
     try {
       const res = await getMarketplaceSectionPage(section, tab, sectionState.nextCursor, 12);
-      const newItems = mapMarketplaceItems(res.campaigns as unknown as Array<Record<string, unknown>>);
+      const newItems = dedupeCampaigns(mapMarketplaceItems(res.campaigns as unknown as Array<Record<string, unknown>>));
 
       setTabsState((prev) => {
         const existingItems = prev[tab][section].items;
@@ -413,7 +442,6 @@ export function CampaignMarketplace({
     }
   };
 
-  const currentTab = tabsState[tab];
   const allLoadedCampaigns = React.useMemo(() => {
     return [
       ...currentTab.recommended.items,
