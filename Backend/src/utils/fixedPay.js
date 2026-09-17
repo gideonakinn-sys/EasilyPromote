@@ -42,7 +42,7 @@ const HOLDING_REFUND_STATUSES = ["refund_pending", "refunded"];
 const SEND_LOCK_MS = 5 * 60 * 1000;
 
 // Test seam: runs after a refund row is written and reserved, before anything is sent to Paystack.
-const refundHooks = { beforeSend: null };
+const refundHooks = { beforeSend: null, afterPaystackAccepted: null };
 
 function toObjectId(value) {
   return value instanceof mongoose.Types.ObjectId ? value : new mongoose.Types.ObjectId(String(value));
@@ -342,7 +342,12 @@ function refundView(row) {
     platformFee: row.refundBreakdown ? row.refundBreakdown.platformFee : 0,
     status: row.status,
     state,
-    error: state === "failed" ? failed.map((p) => p.error).filter(Boolean).join("; ") || row.adminNotes || "Refund failed" : null,
+    error:
+      state === "failed"
+        ? failed.map((p) => p.error).filter(Boolean).join("; ") || row.adminNotes || "Refund failed"
+        : state === "not_sent"
+          ? unsent.map((p) => p.error).filter(Boolean).join("; ") || null
+          : null,
     retryable: state === "failed" || state === "not_sent",
     createdAt: row.date || row.createdAt,
   };
@@ -467,30 +472,72 @@ async function applyFixedRefundOutcome(row) {
   if (parts.length > 0 && processed.length === parts.length) row.status = "refunded";
   else if (failed.length > 0 && processed.length === 0 && moving.length === 0) row.status = "refund_failed";
   else row.status = "refund_pending";
+  const unchecked = parts.filter((p) => p.status === "pending" && !p.sentAt && !p.paystackRefundId && p.error);
   row.adminNotes = failed.length
     ? `Refund failed: ${failed.map((p) => `₦${p.amount.toLocaleString()} (${p.error || "failed"})`).join("; ")}`
-    : null;
+    : unchecked.length
+      ? `Not sent: ${unchecked.map((p) => p.error).join("; ")}`
+      : null;
   row.refundSendingUntil = undefined;
   await row.save();
   if (row.status === "refund_failed") await releaseReservation(row);
   return row;
 }
 
+const LOOKUP_FAILED = "Couldn't check Paystack, try again";
+
 // Sends every part of a fixed refund row that hasn't gone to Paystack yet. The caller holds the
-// row's send lock.
+// row's send lock. Before sending, Paystack's refunds for the payment are checked: a crash after
+// Paystack accepted a refund but before it was saved here leaves a refund we don't know about, so a
+// matching one (same amount, created since this row, not already recorded on another row) is
+// adopted instead of sent again. If that check fails nothing is sent and the part stays retryable.
 async function sendFixedRefund(row, note) {
+  const rowCreatedAt = new Date(row.createdAt || row.date);
   for (const part of row.refundParts) {
     if (part.status !== "pending" || part.sentAt || part.paystackRefundId || !part.chargeReference) continue;
+
+    let existing;
     try {
-      const result = await paystack.createRefund({ transaction: part.chargeReference, amount: part.amount, merchant_note: note });
+      existing = await paystack.listRefunds({ transaction: part.chargeReference });
+    } catch (error) {
+      part.error = LOOKUP_FAILED;
+      console.error(`[FixedPay] Couldn't list Paystack refunds for ${part.chargeReference}:`, error.message);
+      continue;
+    }
+    const recorded = new Set(
+      (await Transaction.distinct("refundParts.paystackRefundId", { type: "refund", "refundParts.chargeReference": part.chargeReference })).filter(Boolean).map(String)
+    );
+    const match = (existing || []).find(
+      (refund) =>
+        toKobo(refund.amount) === toKobo(part.amount) &&
+        refund.status !== "failed" &&
+        !recorded.has(String(refund.id)) &&
+        (!refund.createdAt || new Date(refund.createdAt) >= new Date(rowCreatedAt.getTime() - 1000))
+    );
+    if (match) {
       part.sentAt = new Date();
-      part.paystackRefundId = result && result.id != null ? String(result.id) : null;
-      if (result && result.status === "processed") part.status = "processed";
+      part.paystackRefundId = String(match.id);
+      part.error = null;
+      if (match.status === "processed") part.status = "processed";
+      console.warn(`[FixedPay] Adopted Paystack refund ${match.id} for ${part.chargeReference} instead of sending it again`);
+      continue;
+    }
+
+    let result;
+    try {
+      result = await paystack.createRefund({ transaction: part.chargeReference, amount: part.amount, merchant_note: note });
     } catch (error) {
       part.status = "failed";
       part.error = error.message;
       console.error(`[FixedPay] Paystack refund failed for ${part.chargeReference}:`, error.message);
+      continue;
     }
+    // Test seam: a crash after Paystack accepted the refund, before it's saved here.
+    if (refundHooks.afterPaystackAccepted) await refundHooks.afterPaystackAccepted(row);
+    part.sentAt = new Date();
+    part.error = null;
+    part.paystackRefundId = result && result.id != null ? String(result.id) : null;
+    if (result && result.status === "processed") part.status = "processed";
   }
   return applyFixedRefundOutcome(row);
 }

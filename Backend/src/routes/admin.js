@@ -260,7 +260,7 @@ router.get("/campaigns/:id/content-budget", adminGuard, async (req, res, next) =
 const moneyGuard = [protect, authorizeRoles("finance_admin", "super_admin")];
 
 // Logs a refund attempt, tells the brand once Paystack has it, and answers with the real outcome:
-// 200 when sent or refunded, 502 when it failed (retryable).
+// 200 when sent or refunded, 502 when it failed or couldn't be sent (retryable).
 async function answerRefund(req, res, { refund, campaignId, action, note }) {
   const campaign = await Campaign.findById(campaignId).select("name businessId");
   await recordAdminActivity(req, {
@@ -290,8 +290,9 @@ async function answerRefund(req, res, { refund, campaignId, action, note }) {
     });
   }
   const summary = await contentBudgetSummary(campaignId);
-  res.status(refund.state === "failed" ? 502 : 200).json({
-    success: refund.state !== "failed",
+  const wentThrough = ["sent", "refunded"].includes(refund.state);
+  res.status(wentThrough ? 200 : 502).json({
+    success: wentThrough,
     refund,
     summary: summary ? summary.summary : null,
   });

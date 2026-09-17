@@ -78,7 +78,7 @@ function outcomeMessage(refund: ContentRefund) {
   if (refund.state === "refunded") return `${naira(refund.amount)} refunded.`;
   if (refund.state === "sent") return `${naira(refund.amount)} sent to Paystack. It shows as refunded once Paystack confirms it.`;
   if (refund.state === "failed") return `Refund failed: ${refund.error || "Paystack didn't accept it"}. You can retry it.`;
-  return `${naira(refund.amount)} refund wasn't sent. Retry it.`;
+  return `${naira(refund.amount)} refund wasn't sent${refund.error ? `: ${refund.error}` : ""}. Retry it.`;
 }
 
 export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPanelProps) {

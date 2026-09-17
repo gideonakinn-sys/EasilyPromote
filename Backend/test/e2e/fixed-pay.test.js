@@ -541,6 +541,70 @@ test("a refund interrupted after its row is written is retried from that row and
   assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
 });
 
+test("a refund Paystack accepted just before a crash is adopted on retry, never sent twice", async () => {
+  const { Transaction } = models();
+  const fixedPay = require("../../src/utils/fixedPay");
+  const admin = await finance();
+  const { id } = await finishedCampaignWithOneUnused(admin);
+
+  fixedPay.refundHooks.afterPaystackAccepted = () => {
+    throw new Error("simulated crash after Paystack accepted");
+  };
+  try {
+    assert.equal((await refundUnused(admin, id)).status, 500);
+  } finally {
+    fixedPay.refundHooks.afterPaystackAccepted = null;
+  }
+  const [row] = await Transaction.find({ campaignId: id, type: "refund" }).lean();
+  const charge = row.refundParts[0].chargeReference;
+  assert.equal(harness.paystack.refunds(charge).length, 1, "Paystack has the refund");
+  let budget = await budgetOf(admin, id);
+  assert.equal(budget.refunds[0].state, "not_sent", "our row never recorded it");
+  // The crashed request's send lock has run out (time fixture).
+  await Transaction.updateOne({ _id: row._id }, { $set: { refundSendingUntil: new Date(Date.now() - 1000) } });
+
+  const retried = await retryRefund(admin, id, row._id);
+  assert.equal(retried.status, 200, JSON.stringify(retried.body));
+  assert.equal(retried.body.refund.state, "sent");
+  assert.equal(harness.paystack.refunds(charge).length, 1, "adopted, not sent again");
+  const adopted = await Transaction.findById(row._id).lean();
+  assert.equal(adopted.refundParts[0].paystackRefundId, String(harness.paystack.refunds(charge)[0].id));
+  budget = await budgetOf(admin, id);
+  assert.ok(budget.reconciliation.ok, JSON.stringify(budget.reconciliation.problems));
+});
+
+test("when Paystack's refund list can't be checked, nothing is sent and the refund stays retryable", async () => {
+  const { Transaction } = models();
+  const admin = await finance();
+  const { id } = await finishedCampaignWithOneUnused(admin);
+  const paystack = paystackModule();
+  const originalList = paystack.listRefunds;
+  paystack.listRefunds = async () => {
+    throw new Error("Paystack timed out");
+  };
+  let charge;
+  try {
+    const refused = await refundUnused(admin, id);
+    assert.equal(refused.status, 502, JSON.stringify(refused.body));
+    assert.equal(refused.body.refund.state, "not_sent");
+    assert.equal(refused.body.refund.retryable, true);
+    assert.match(refused.body.refund.error, /Couldn't check Paystack, try again/);
+    const [row] = await Transaction.find({ campaignId: id, type: "refund" }).lean();
+    charge = row.refundParts[0].chargeReference;
+    assert.equal(harness.paystack.refunds(charge).length, 0, "nothing sent");
+    assert.equal(row.status, "refund_pending");
+    assert.equal((await retryRefund(admin, id, row._id)).status, 502, "still can't check");
+    assert.equal(harness.paystack.refunds(charge).length, 0);
+  } finally {
+    paystack.listRefunds = originalList;
+  }
+  const [row] = await Transaction.find({ campaignId: id, type: "refund" }).lean();
+  const retried = await retryRefund(admin, id, row._id);
+  assert.equal(retried.status, 200, JSON.stringify(retried.body));
+  assert.equal(retried.body.refund.state, "sent");
+  assert.equal(harness.paystack.refunds(charge).length, 1);
+});
+
 test("rejected content isn't refundable while it can still be appealed; after 7 days without an appeal it is", async () => {
   const { Submission } = models();
   const admin = await finance();

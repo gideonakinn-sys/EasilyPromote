@@ -115,6 +115,8 @@ function stubPaystack() {
   const checkouts = new Map();
   const checkoutMetadata = new Map();
   const paid = new Map();
+  const refunds = [];
+  let refundCounter = 1000;
   const stub = {
     async initializeTransaction({ amount, reference, metadata }) {
       checkouts.set(reference, amount);
@@ -144,8 +146,14 @@ function stubPaystack() {
     async initiateTransfer({ reference, amount }) {
       return { reference, amount, status: "success", transfer_code: `TRF_${reference}` };
     },
+    // Records every refund it accepts, so tests can see what Paystack holds.
     async createRefund({ transaction, amount }) {
-      return { transaction, amount, status: "pending" };
+      const refund = { id: refundCounter++, transaction, amount, status: "pending", createdAt: new Date().toISOString() };
+      refunds.push(refund);
+      return { ...refund };
+    },
+    async listRefunds({ transaction }) {
+      return refunds.filter((r) => r.transaction === transaction).map((r) => ({ ...r }));
     },
     verifyWebhookSignature() {
       return true;
@@ -158,6 +166,8 @@ function stubPaystack() {
   return {
     // Naira amount the checkout for this reference asked Paystack to charge.
     charged: (reference) => checkouts.get(reference),
+    // Refunds Paystack accepted against this original payment.
+    refunds: (transaction) => refunds.filter((r) => r.transaction === transaction),
     // Metadata the checkout for this reference sent to Paystack.
     metadata: (reference) => checkoutMetadata.get(reference),
     // Makes Paystack report the checkout as paid; defaults to the amount it was opened for.
