@@ -411,6 +411,9 @@ const campaignSchema = new mongoose.Schema(
 campaignSchema.index({ businessId: 1, status: 1, createdAt: -1 });
 // Marketplace and background syncs: every campaign in a given status.
 campaignSchema.index({ status: 1, createdAt: -1 });
+// Marketplace (M8): how many campaigns are live and when one last changed, read from the index alone on
+// every marketplace request.
+campaignSchema.index({ status: 1, updatedAt: -1 });
 
 campaignSchema.pre("save", function (next) {
   if (this.isModified("status") && this.status === "completed" && !this.completedAt) {

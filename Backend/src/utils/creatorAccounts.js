@@ -6,12 +6,19 @@ const CreatorProfile = require("../models/CreatorProfile");
 const TikTokConnection = require("../models/TikTokConnection");
 const MetaConnection = require("../models/MetaConnection");
 
-// Returns { profile, tiktok, metaConnections } as lean documents (null / [] when missing).
-async function loadCreatorAccounts(userId) {
+// Returns { profile, tiktok, metaConnections, extra } as lean documents (null / [] when missing).
+// Options (the paged marketplace, M8): `profileFields`, a space-separated list, loads only those profile
+// fields; `unions`, { [source]: { coll, pipeline } }, adds more of the creator's rows to the same round
+// trip, returned as extra[source] (an array).
+async function loadCreatorAccounts(userId, { profileFields = null, unions = {} } = {}) {
   const id = toObjectId(userId);
+  const extraStages = Object.entries(unions).map(([source, { coll, pipeline }]) => ({
+    $unionWith: { coll, pipeline: [...pipeline, { $addFields: { _accountSource: source } }] },
+  }));
   const rows = await CreatorProfile.aggregate([
     { $match: { userId: id } },
     { $limit: 1 },
+    ...(profileFields ? [{ $project: Object.fromEntries(profileFields.split(" ").map((field) => [field, 1])) }] : []),
     { $addFields: { _accountSource: "profile" } },
     {
       $unionWith: {
@@ -34,6 +41,7 @@ async function loadCreatorAccounts(userId) {
         ],
       },
     },
+    ...extraStages,
   ]);
   const from = (source) =>
     rows
@@ -43,7 +51,8 @@ async function loadCreatorAccounts(userId) {
         delete doc._accountSource;
         return doc;
       });
-  return { profile: from("profile")[0] || null, tiktok: from("tiktok")[0] || null, metaConnections: from("meta") };
+  const extra = Object.fromEntries(Object.keys(unions).map((source) => [source, from(source)]));
+  return { profile: from("profile")[0] || null, tiktok: from("tiktok")[0] || null, metaConnections: from("meta"), extra };
 }
 
 module.exports = { loadCreatorAccounts };

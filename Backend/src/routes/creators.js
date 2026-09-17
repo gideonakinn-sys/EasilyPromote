@@ -15,6 +15,7 @@ const {
   buildWallet,
   buildDashboard,
 } = require("../services/creatorDashboard");
+const { buildMarketplaceSections, buildMarketplaceSection, MarketplaceError } = require("../services/marketplace");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const {
   audienceSchema,
@@ -44,7 +45,9 @@ router.get("/profile/me", protect, async (req, res, next) => {
 // campaigns, marketplace, wallet and social connection state.
 router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
-    const dashboard = await buildDashboard(req.user);
+    // ?marketplace=none leaves the marketplace out: web clients with marketplace paging (M8) load it
+    // from /marketplace/sections instead.
+    const dashboard = await buildDashboard(req.user, { marketplace: req.query.marketplace !== "none" });
     if (!dashboard) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
@@ -283,6 +286,26 @@ router.get("/marketplace", protect, authorizeRoles("creator"), async (req, res, 
     const ctx = await loadContext(req.user._id);
     res.json(await buildMarketplace(ctx));
   } catch (error) {
+    next(error);
+  }
+});
+
+// Marketplace sections (M8): the first page of Recommended for You, Trending and New for a pay-shape
+// tab (?tab=all|fixed|performance|hybrid&limit=12), then one section's next page with its cursor.
+router.get("/marketplace/sections", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    res.json(await buildMarketplaceSections(req.user._id, req.query));
+  } catch (error) {
+    if (error instanceof MarketplaceError) return res.status(error.status).json({ error: error.message, code: error.code });
+    next(error);
+  }
+});
+
+router.get("/marketplace/sections/:section", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    res.json(await buildMarketplaceSection(req.user._id, req.params.section, req.query));
+  } catch (error) {
+    if (error instanceof MarketplaceError) return res.status(error.status).json({ error: error.message, code: error.code });
     next(error);
   }
 });
