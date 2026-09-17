@@ -118,3 +118,23 @@ test("targeting locations with no minimum share only ranks; platform names ignor
   const result = evaluateEligibility(creator({ audience: undefined }), campaign);
   assert.deepEqual(result.failures, []);
 });
+
+test("age and gender become hard requirements only when the brand opts in (D8 amended, M8)", () => {
+  const base = { locations: ["Lagos"], ageRanges: ["25-34"], genders: ["female"] };
+  const young = creator({ audience: { source: "self_reported", locations: [{ name: "Lagos", percentage: 60 }], ages: [{ range: "18-24", percentage: 90 }, { range: "25-34", percentage: 10 }], genders: { female: 20, male: 80, other: 0 } } });
+
+  assert.equal(evaluateEligibility(young, { audienceTargeting: base, creatorEligibility: {} }).eligible, true, "off by default");
+
+  const required = { audienceTargeting: { ...base, requireAgeMatch: true, requireGenderMatch: true, minGenderShare: 30 }, creatorEligibility: {} };
+  assert.deepEqual(evaluateEligibility(young, required).failures, [
+    { criterion: "audienceAge", message: "Needs at least 50% of your audience aged 25-34 (you have 10%)" },
+    { criterion: "audienceGender", message: "Needs at least 30% of your audience female (you have 20%)" },
+  ]);
+
+  const noData = creator({ audience: { source: "self_reported", locations: [{ name: "Lagos", percentage: 60 }] } });
+  const failures = evaluateEligibility(noData, required).failures.map((f) => f.criterion);
+  assert.deepEqual(failures, ["audienceAge", "audienceGender"]);
+
+  const zeroShare = { audienceTargeting: { ...base, requireAgeMatch: true, minAgeShare: 0 }, creatorEligibility: {} };
+  assert.equal(evaluateEligibility(young, zeroShare).eligible, true, "a 0% minimum is respected, not treated as 50%");
+});

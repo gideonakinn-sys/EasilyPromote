@@ -280,10 +280,11 @@ const campaignSchema = new mongoose.Schema(
       interests: { type: [String], default: undefined },
       platforms: { type: [String], default: undefined },
       // M8 batch 7: opt-in hard filters (SPEC D8 amended). Defaults leave existing campaigns unaffected.
-      requireAgeMatch: { type: Boolean, default: false },
-      minAgeShare: { type: Number, default: 50, min: 0, max: 100 },
-      requireGenderMatch: { type: Boolean, default: false },
-      minGenderShare: { type: Number, default: 50, min: 0, max: 100 },
+      // Unset means off / 50%, so existing campaigns and responses don't change.
+      requireAgeMatch: Boolean,
+      minAgeShare: { type: Number, min: 0, max: 100 },
+      requireGenderMatch: Boolean,
+      minGenderShare: { type: Number, min: 0, max: 100 },
     },
     creatorEligibility: {
       minFollowers: Number,

@@ -84,7 +84,14 @@ const setupSchema = z.object({
     })
     .optional(),
   // M8 batch 7: clicks campaigns redirect to this URL (SPEC D29).
-  destinationUrl: z.string().url().max(2000).optional().nullable(),
+  destinationUrl: z
+    .string()
+    .trim()
+    .max(2000)
+    .url()
+    .refine((value) => /^https?:$/.test(new URL(value).protocol), "The destination link must start with http:// or https://")
+    .optional()
+    .nullable(),
   // M8 batch 7: custom usage-rights terms (SPEC D30).
   usageRights: z
     .object({

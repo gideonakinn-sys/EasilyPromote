@@ -1,3 +1,6 @@
+// M8: public tracked links for clicks campaigns (SPEC D29). GET /r/:campaignId/:code redirects to the
+// campaign's stored destination (never a URL from the request) and pays the creator for a
+// valid click from the referral budget, the same way a verified conversion is paid.
 const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
@@ -7,170 +10,152 @@ const ClickEvent = require("../models/ClickEvent");
 const ConversionEvent = require("../models/ConversionEvent");
 const { reserveConversionReward } = require("../utils/referralEarnings");
 
-// Salt for hashing visitor IPs. Uses a per-process random salt; in production,
-// set CLICK_HASH_SALT for consistency across restarts (not strictly required since
-// clicks expire in 30 days anyway).
-const HASH_SALT = process.env.CLICK_HASH_SALT || crypto.randomBytes(16).toString("hex");
-
-// 24-hour deduplication window.
-const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-// Bot and crawler user-agent patterns.
-const BOT_UA_RE =
-  /bot|crawl|spider|slurp|facebookexternalhit|whatsapp|twitterbot|slackbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|applebot|bingbot|googlebot|yandex|yahoo/i;
-
-// Per-IP rate limiting: max clicks per window from one IP.
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
-const ipHitCounts = new Map();
-// Cleanup expired entries every 2 minutes.
+const FALLBACK_URL = "https://easilypromote.com";
+
+// Link-preview fetchers and crawlers never count as clicks.
+const BOT_UA_RE =
+  /bot|crawl|spider|slurp|preview|facebookexternalhit|whatsapp|twitterbot|slackbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|applebot|bingbot|googlebot|yandex|headless|curl|wget|python-requests|axios|node-fetch/i;
+
+// Visitor hashes use a key derived from a server secret, so dedupe holds across restarts and
+// instances without storing raw IPs.
+function hashKey() {
+  const secret = process.env.TOKEN_ENCRYPTION_KEY || process.env.TIKTOK_TOKEN_KEY || process.env.JWT_SECRET || "";
+  return crypto.createHash("sha256").update(`click-visitor:${secret}`).digest();
+}
+
+// The visitor's IP. Cloudflare sets CF-Connecting-IP and overwrites any value a client sends;
+// without it, the last X-Forwarded-For entry is the one our own proxy appended (earlier
+// entries are client-supplied and can be forged).
+function clientIp(req) {
+  const cf = req.headers["cf-connecting-ip"];
+  if (typeof cf === "string" && cf.trim()) return cf.trim();
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const parts = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return (req.socket && req.socket.remoteAddress) || "unknown";
+}
+
+const hits = new Map();
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of ipHitCounts) {
-    if (now - entry.start > RATE_LIMIT_WINDOW_MS) ipHitCounts.delete(key);
-  }
+  for (const [ip, entry] of hits) if (now - entry.start > RATE_LIMIT_WINDOW_MS) hits.delete(ip);
 }, 2 * 60 * 1000).unref();
 
-function hashIp(ip) {
-  return crypto.createHmac("sha256", HASH_SALT).update(ip).digest("hex");
-}
-
-function getClientIp(req) {
-  // Trust first entry in X-Forwarded-For when behind a proxy.
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return req.ip || req.connection.remoteAddress || "unknown";
-}
-
-function isRateLimited(ip) {
+function rateLimited(ip) {
   const now = Date.now();
-  const entry = ipHitCounts.get(ip);
+  const entry = hits.get(ip);
   if (!entry || now - entry.start > RATE_LIMIT_WINDOW_MS) {
-    ipHitCounts.set(ip, { start: now, count: 1 });
+    hits.set(ip, { start: now, count: 1 });
     return false;
   }
-  entry.count++;
+  entry.count += 1;
   return entry.count > RATE_LIMIT_MAX;
 }
 
-// GET /r/:code — public redirect handler for clicks campaigns.
-// No authentication required. Redirects to the campaign's destinationUrl.
-router.get("/:code", async (req, res) => {
+// Records one valid click and reserves its reward. The ClickEvent insert (unique on code,
+// visitor and 24-hour window) is the idempotency guard: only the request that wins it goes
+// on to record the conversion and reserve money, so simultaneous clicks can't both pay.
+async function recordClick({ req, referralCode, campaign, now }) {
+  const ua = req.headers["user-agent"] || "";
+  if (req.method !== "GET" || !ua || BOT_UA_RE.test(ua)) return;
+  if (campaign.status !== "live") return;
+
+  const ip = clientIp(req);
+  if (rateLimited(ip)) return;
+
+  const visitorHash = crypto.createHmac("sha256", hashKey()).update(`${ip}|${ua}`).digest("hex");
+  const windowStart = Math.floor(now.getTime() / DEDUPE_WINDOW_MS);
   try {
-    const code = (req.params.code || "").toUpperCase().trim();
-    if (!code) return res.status(404).send("Not found");
+    await ClickEvent.create({
+      code: referralCode.code,
+      visitorHash,
+      windowStart,
+      campaignId: campaign._id,
+      creatorId: referralCode.creatorId,
+      createdAt: now,
+    });
+  } catch (error) {
+    if (error.code === 11000) return;
+    throw error;
+  }
 
-    // HEAD requests: redirect without recording.
-    const isHead = req.method === "HEAD";
+  let event;
+  try {
+    event = await ConversionEvent.create({
+      businessId: campaign.businessId,
+      campaignId: campaign._id,
+      referralCodeId: referralCode._id,
+      creatorId: referralCode.creatorId,
+      eventId: `click_${referralCode.code}_${visitorHash}_${windowStart}`,
+      eventType: "click",
+      occurredAt: now,
+    });
+  } catch (error) {
+    if (error.code === 11000) return;
+    throw error;
+  }
 
-    // Bot check: redirect without recording.
-    const ua = req.headers["user-agent"] || "";
-    const isBot = BOT_UA_RE.test(ua);
+  const reward = await reserveConversionReward(campaign, true, now, { eventId: event._id });
+  await Promise.all([
+    ConversionEvent.updateOne(
+      { _id: event._id },
+      {
+        $set: {
+          counted: true,
+          rewardAmount: reward.rewardAmount,
+          unpaidReason: reward.rewardAmount > 0 ? null : reward.unpaidReason,
+          availableAt: reward.availableAt,
+        },
+      }
+    ),
+    ReferralCode.updateOne({ _id: referralCode._id }, { $inc: { conversions: 1 } }),
+    Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } }),
+  ]);
 
-    // Look up the referral code and its campaign.
-    const referralCode = await ReferralCode.findOne({ code, isActive: true })
-      .select("campaignId creatorId code conversions")
-      .lean();
-    if (!referralCode) return res.status(404).send("Not found");
+  const io = req.app.get("io");
+  if (io) {
+    const payload = {
+      campaignId: campaign._id.toString(),
+      creatorId: referralCode.creatorId.toString(),
+      eventType: "click",
+      rewardAmount: reward.rewardAmount,
+    };
+    io.to(`creator_${referralCode.creatorId}`).emit("referral-conversion", payload);
+    io.to(`brand_${campaign.businessId}`).emit("referral-conversion", payload);
+  }
+}
 
-    const campaign = await Campaign.findById(referralCode.campaignId)
+// Codes are only unique within a brand, so the link carries the campaign: /r/:campaignId/:code.
+router.get("/:campaignId/:code", async (req, res) => {
+  let destination = null;
+  try {
+    const { campaignId } = req.params;
+    const code = String(req.params.code || "").toUpperCase().trim();
+    if (!/^[a-f0-9]{24}$/i.test(campaignId) || !code || code.length > 64) return res.status(404).send("Not found");
+
+    const campaign = await Campaign.findOne({ _id: campaignId, campaignObjective: "clicks", destinationUrl: { $type: "string" } })
       .select("campaignObjective destinationUrl status referral businessId name")
       .lean();
     if (!campaign) return res.status(404).send("Not found");
-
-    // Only clicks campaigns use this redirect.
-    if (campaign.campaignObjective !== "clicks") return res.status(404).send("Not found");
-    if (!campaign.destinationUrl) return res.status(404).send("Not found");
-
-    // Campaign must be live.
+    const referralCode = await ReferralCode.findOne({ campaignId: campaign._id, code, status: { $ne: "disabled" } })
+      .select("campaignId creatorId code")
+      .lean();
+    if (!referralCode) return res.status(404).send("Not found");
     if (!["live", "paused"].includes(campaign.status)) return res.status(404).send("Not found");
 
-    const destinationUrl = campaign.destinationUrl;
-
-    // Bots and HEAD requests: redirect without recording a click.
-    if (isHead || isBot) return res.redirect(302, destinationUrl);
-
-    // Rate limit check.
-    const clientIp = getClientIp(req);
-    if (isRateLimited(clientIp)) return res.redirect(302, destinationUrl);
-
-    const visitorHash = hashIp(clientIp);
-
-    // 24-hour deduplication: check if this visitor already clicked this code recently.
-    const dedupCutoff = new Date(Date.now() - DEDUP_WINDOW_MS);
-    const existing = await ClickEvent.findOne({
-      code,
-      visitorHash,
-      createdAt: { $gte: dedupCutoff },
-    }).lean();
-
-    if (existing) {
-      // Already counted within the dedup window; redirect without recording.
-      return res.redirect(302, destinationUrl);
-    }
-
-    // Record the click event for deduplication.
-    await ClickEvent.create({
-      code,
-      visitorHash,
-      campaignId: campaign._id,
-      creatorId: referralCode.creatorId,
-    });
-
-    // Record a conversion event and reserve the creator's reward.
-    const now = new Date();
-    const eventId = `click_${code}_${visitorHash}_${now.getTime()}`;
-
-    // Check if this exact click was already recorded as a conversion (idempotency).
-    const existingConversion = await ConversionEvent.findOne({
-      businessId: campaign.businessId,
-      eventId,
-    }).lean();
-
-    if (!existingConversion) {
-      // The click matches the campaign's conversion type.
-      const counted = true;
-      const reward = await reserveConversionReward(campaign, counted, now, { eventId: null });
-
-      await ConversionEvent.create({
-        businessId: campaign.businessId,
-        campaignId: campaign._id,
-        referralCodeId: referralCode._id,
-        creatorId: referralCode.creatorId,
-        eventId,
-        eventType: "click",
-        occurredAt: now,
-        counted,
-        rewardAmount: reward.rewardAmount,
-        unpaidReason: reward.unpaidReason,
-        availableAt: reward.availableAt,
-      });
-
-      // Increment the referral code's conversion counter and the campaign's.
-      await Promise.all([
-        ReferralCode.updateOne({ _id: referralCode._id }, { $inc: { conversions: 1 } }),
-        Campaign.updateOne({ _id: campaign._id }, { $inc: { "referral.conversions": 1 } }),
-      ]);
-
-      // Emit socket events if the io instance is available.
-      const io = req.app.get("io");
-      if (io) {
-        const payload = {
-          campaignId: campaign._id.toString(),
-          creatorId: referralCode.creatorId.toString(),
-          eventType: "click",
-          rewardAmount: reward.rewardAmount,
-        };
-        io.to(`creator_${referralCode.creatorId}`).emit("referral-conversion", payload);
-        io.to(`brand_${campaign.businessId}`).emit("referral-conversion", payload);
-      }
-    }
-
-    return res.redirect(302, destinationUrl);
+    destination = campaign.destinationUrl;
+    await recordClick({ req, referralCode, campaign, now: new Date() });
+    return res.redirect(302, destination);
   } catch (error) {
-    console.error("[Redirect] Error processing click:", error);
-    // On error, still try to redirect if we have a destination.
-    return res.status(302).redirect("https://easilypromote.com");
+    console.error("[Redirect] Click failed:", error.message);
+    // The visitor still reaches the brand's page when counting fails; only an unknown link
+    // falls back to the EasilyPromote site.
+    return res.redirect(302, destination || FALLBACK_URL);
   }
 });
 

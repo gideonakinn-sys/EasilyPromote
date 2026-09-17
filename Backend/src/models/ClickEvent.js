@@ -24,6 +24,11 @@ const clickEventSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // 24-hour window number (ms since epoch / 24h): one paid click per visitor per link per window.
+    windowStart: {
+      type: Number,
+      required: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -33,7 +38,7 @@ const clickEventSchema = new mongoose.Schema(
   { timestamps: false }
 );
 
-// Deduplication within 24h per code and visitor hash.
-clickEventSchema.index({ code: 1, visitorHash: 1, createdAt: -1 });
+// The idempotency guard: a second click in the same window fails this insert and isn't paid.
+clickEventSchema.index({ code: 1, visitorHash: 1, windowStart: 1 }, { unique: true });
 
 module.exports = mongoose.model("ClickEvent", clickEventSchema);

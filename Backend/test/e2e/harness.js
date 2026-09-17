@@ -297,6 +297,7 @@ async function startHarness({ mongod: external = null } = {}) {
   }
 
   return {
+    baseUrl,
     api,
     rawPost,
     paystack,

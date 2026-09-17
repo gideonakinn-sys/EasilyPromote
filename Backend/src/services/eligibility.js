@@ -100,7 +100,7 @@ function evaluateEligibility(profile, campaign) {
   // When the brand opts in, age and gender become hard requirements instead of ranking-only.
   const targetAgeRanges = targeting.ageRanges || [];
   if (targeting.requireAgeMatch && targetAgeRanges.length) {
-    const minShare = targeting.minAgeShare || 50;
+    const minShare = Number.isFinite(targeting.minAgeShare) ? targeting.minAgeShare : 50;
     const hasAgeData = Boolean(profile.audience && profile.audience.ages && profile.audience.ages.length);
     if (!hasAgeData) {
       fail("audienceAge", `Add your audience age breakdown to join campaigns targeting ${listWithOr(targetAgeRanges)}`);
@@ -114,7 +114,7 @@ function evaluateEligibility(profile, campaign) {
 
   const targetGenders = (targeting.genders || []).filter((g) => g !== "all");
   if (targeting.requireGenderMatch && targetGenders.length) {
-    const minShare = targeting.minGenderShare || 50;
+    const minShare = Number.isFinite(targeting.minGenderShare) ? targeting.minGenderShare : 50;
     const hasGenderData = Boolean(profile.audience && profile.audience.genders);
     if (!hasGenderData) {
       fail("audienceGender", `Add your audience gender breakdown to join campaigns targeting ${listWithOr(targetGenders)}`);
