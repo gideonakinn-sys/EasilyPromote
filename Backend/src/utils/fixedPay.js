@@ -31,6 +31,7 @@ const paystack = require("../services/paystack");
 const { isContentCampaign } = require("./campaignPay");
 const { toKobo, fromKobo, roundMoney } = require("./money");
 const rules = require("./fixedPayRules");
+const { ACTIVE_PLACEMENT_STATUSES } = require("./placementStatuses");
 
 const { FIXED_HOLD_MS, UNDELIVERED_VOID_AFTER_MS, fixedCreditState, canStillEarn, unusedBudgetRefund, refundFor } = rules;
 
@@ -222,7 +223,29 @@ async function voidUndeliveredPay({ submissionId, now = new Date() }) {
       { $pull: { "fixedPay.creditedSubmissions": submission._id }, $inc: { "fixedPay.credited": -credit.amount } }
     );
   }
+  await freeVoidedPlacement(submission, campaign._id);
   return { voided, amount, submission, campaign };
+}
+
+// The creator's place stops counting toward their active placements. On a live campaign that can
+// still pay the deliverable it goes back to the campaign for another creator; otherwise it closes.
+// Only a place still active for this creator is touched, so repeats do nothing.
+async function freeVoidedPlacement(submission, campaignId) {
+  const current = await Campaign.findById(campaignId).select("status contentPay creatorPool fixedPay").lean();
+  const filter = {
+    ...(submission.slotId ? { _id: submission.slotId } : { campaignId, kind: "deliverable" }),
+    creatorId: submission.creatorId,
+    status: { $in: ACTIVE_PLACEMENT_STATUSES },
+  };
+  const reopen = Boolean(current && current.status === "live" && hasRoomFor(current, current.contentPay && current.contentPay.ratePerDeliverable));
+  const freed = await Slot.findOneAndUpdate(
+    filter,
+    reopen ? { $set: { creatorId: null, status: "available", claimedAt: null, submissionUrl: null } } : { $set: { status: "closed" } }
+  );
+  if (freed && reopen) {
+    const { emitPlacesLeft } = require("./campaignUpdates");
+    await emitPlacesLeft(campaignId).catch((error) => console.error(`[FixedPay] Places-left update for ${campaignId} failed:`, error.message));
+  }
 }
 
 // ── Creator earnings ────────────────────────────────────────────────────────

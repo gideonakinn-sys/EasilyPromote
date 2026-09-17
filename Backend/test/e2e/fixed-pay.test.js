@@ -729,6 +729,48 @@ test("admin voids pay for approved content never delivered: reversed, back in th
   assert.equal(now.status, 200, JSON.stringify(now.body));
 });
 
+test("voided undelivered pay frees the creator's placement: reopened on a live campaign, closed otherwise", async () => {
+  const { Campaign, Submission } = models();
+  const Slot = require("../../src/models/Slot");
+  const { ACTIVE_PLACEMENT_STATUSES } = require("../../src/utils/placementStatuses");
+  const admin = await finance();
+  const activeFor = (creator) => Slot.countDocuments({ creatorId: creator.id, status: { $in: ACTIVE_PLACEMENT_STATUSES } });
+  const overdue = (submissionId) =>
+    Submission.updateOne({ _id: submissionId }, { $set: { reviewedAt: new Date(Date.now() - 15 * DAY), fixedPayDueAt: new Date(Date.now() - 15 * DAY) } });
+  const voidPay = (submissionId) => harness.api("POST", `/api/admin/submissions/${submissionId}/void-undelivered`, { token: admin.token });
+
+  // Live, one deliverable: the place goes back to the campaign and another creator can take it.
+  const live = await liveContentCampaign({ destination: "brand_page", deliverables: 1 });
+  const first = await joinAndSubmit(live.id);
+  await approve(live.brand, first);
+  assert.equal(await activeFor(first), 1);
+  const late = await harness.registerCreator();
+  assert.equal((await harness.api("POST", `/api/campaigns/${live.id}/join`, { token: late.token })).status, 409, "full while the first creator holds it");
+  await overdue(first.submissionId);
+  const voided = await voidPay(first.submissionId);
+  assert.equal(voided.status, 200, JSON.stringify(voided.body));
+  assert.equal(await activeFor(first), 0, "no longer counts toward the creator's 3 active placements");
+  const rejoined = await harness.api("POST", `/api/campaigns/${live.id}/join`, { token: late.token });
+  assert.equal(rejoined.status, 200, JSON.stringify(rejoined.body));
+  assert.equal((await voidPay(first.submissionId)).status, 200, "voiding again is harmless");
+  const again = await harness.api("POST", `/api/campaigns/${live.id}/join`, { token: first.token });
+  assert.equal(again.body.code, "CONTENT_NOT_DELIVERED", "the creator who didn't deliver can't take a place again");
+  assert.equal(await activeFor(late), 1, "the new creator's place is untouched");
+  assert.equal((await harness.api("GET", "/api/creators/dashboard", { token: first.token })).status, 200);
+
+  // Paused: the place closes instead of reopening.
+  const paused = await liveContentCampaign({ destination: "brand_page", deliverables: 1 });
+  const second = await joinAndSubmit(paused.id);
+  await approve(paused.brand, second);
+  await Campaign.updateOne({ _id: paused.id }, { $set: { status: "paused" } });
+  await overdue(second.submissionId);
+  assert.equal((await voidPay(second.submissionId)).status, 200);
+  assert.equal(await activeFor(second), 0);
+  const closed = await Slot.findOne({ campaignId: paused.id }).lean();
+  assert.equal(closed.status, "closed");
+  assert.equal((await harness.api("GET", "/api/creators/dashboard", { token: second.token })).status, 200);
+});
+
 test("a payout re-checks fixed pay and releases only credits delivered and past their hold", async () => {
   const { Campaign, Submission, Transaction, Withdrawal } = models();
   const { creditFixedPay } = require("../../src/utils/fixedPay");

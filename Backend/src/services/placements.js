@@ -90,7 +90,14 @@ async function joinCampaign({ user, campaignId, slotId, committedViews }) {
   // Rejected (or appealed) content frees the place for someone else; the creator appeals
   // instead of taking a new place they couldn't submit to. Only Open Call joins check this:
   // an approved application can't be approved again, and approval never reads submissions (ADR 0002).
-  if (await Submission.exists({ campaignId: campaign._id, creatorId, status: { $in: ["rejected", "appealed"] } })) {
+  const earlier = await Submission.findOne({ campaignId: campaign._id, creatorId, status: { $in: ["rejected", "appealed", "not_delivered"] } })
+    .select("status")
+    .lean();
+  if (earlier && earlier.status === "not_delivered") {
+    // Their pay was voided and the place given to someone else.
+    return refuse(409, "CONTENT_NOT_DELIVERED", "Your approved content for this campaign was never delivered, so you can't join it again");
+  }
+  if (earlier) {
     return refuse(409, "CONTENT_REJECTED", "Your content for this campaign was rejected. You can appeal the decision instead of joining again");
   }
 
