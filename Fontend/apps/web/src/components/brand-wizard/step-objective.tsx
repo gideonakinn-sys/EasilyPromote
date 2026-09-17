@@ -133,8 +133,8 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
             key={option.value}
             title={option.title}
             body={option.body}
-            selected={selectedObjectiveCategories(data.objective).includes(option.value)}
-            onSelect={() => update({ objective: objectiveAfterToggle(data.objective, option.value) })}
+            selected={selectedObjectiveCategories(data).includes(option.value)}
+            onSelect={() => update(objectiveAfterToggle(data, option.value))}
           />
         ))}
       </fieldset>

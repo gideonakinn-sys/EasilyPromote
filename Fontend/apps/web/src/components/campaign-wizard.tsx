@@ -405,7 +405,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <HugeiconsIcon icon={CircleDashedIcon} size={16} className={step === s ? "text-stone-900" : "text-stone-500"} />
                     )}
                   </span>
-                  <span className={cn("text-sm font-medium font-rethink", step === s ? "text-stone-900" : "text-stone-400")}>{title}</span>
+                  <span className={cn("text-sm font-medium font-rethink", step === s ? "text-stone-900" : "text-stone-400")}>
+                    {/* Only Content asks where the content goes (SPEC D31). */}
+                    {s === 2 && data.objective !== "content" ? "Creator access" : title}
+                  </span>
                 </button>
               ))}
             </nav>
