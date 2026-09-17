@@ -22,7 +22,10 @@ const transactionSchema = new mongoose.Schema(
       // it never counts toward escrow and waits for an admin to refund it.
       // transfer_fee: Paystack's fee on a creator payout, paid by the platform and kept
       // against the campaign for its books; never part of escrow.
-      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment", "transfer_fee"],
+      // fixed_credit: a content campaign's fixed pay owed to a creator for one submission
+      // (ticket 09), reserved from the creator pool and paid out later by a release.
+      // fixed_void: reverses a fixed credit that was never delivered; the amount goes back to the pool.
+      enum: ["escrow_deposit", "release", "refund", "topup", "unmatched_payment", "transfer_fee", "fixed_credit", "fixed_void"],
       required: true,
     },
     views: {
@@ -46,8 +49,9 @@ const transactionSchema = new mongoose.Schema(
     status: {
       type: String,
       // Refunds: refund_pending until Paystack confirms every part, refund_failed when any
-      // part needs a manual refund. Unmatched payments sit in under_review.
-      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review"],
+      // part needs a manual refund. Unmatched payments sit in under_review. Fixed credits
+      // are "credited" while owed and "voided" once reversed.
+      enum: ["escrow_deposit", "released", "refunded", "failed", "refund_pending", "refund_failed", "under_review", "credited", "voided"],
       required: true,
     },
     adminNotes: {
@@ -62,6 +66,8 @@ const transactionSchema = new mongoose.Schema(
             chargeReference: { type: String, default: null },
             amount: { type: Number, required: true },
             paystackRefundId: { type: String, default: null },
+            // When Paystack accepted the refund request (fixed refunds; Paystack may not return an id).
+            sentAt: { type: Date, default: null },
             status: { type: String, enum: ["pending", "processed", "failed"], default: "pending" },
             error: { type: String, default: null },
           },
@@ -74,13 +80,35 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    // Which pot the money belongs to. Views and referral budgets are funded and paid
-    // out separately, so escrow checks and refunds must never mix them. Rows written
-    // before referral budgets existed have no bucket and count as views.
+    // Which pot the money belongs to. Views, referral and fixed (content campaign) budgets
+    // are funded and paid out separately, so escrow checks and refunds must never mix them.
+    // Rows written before referral budgets existed have no bucket and count as views.
     bucket: {
       type: String,
-      enum: ["views", "referral"],
+      enum: ["views", "referral", "fixed"],
       default: "views",
+    },
+    // Deposits and top-ups: the platform fee inside the amount paid.
+    feeAmount: {
+      type: Number,
+      default: undefined,
+    },
+    // Fixed refunds: set while a request is sending parts to Paystack, so two retries can't both send.
+    refundSendingUntil: {
+      type: Date,
+      default: undefined,
+    },
+    // A content campaign's unused-budget refund: what the amount is made of.
+    refundBreakdown: {
+      type: new mongoose.Schema(
+        {
+          deliverables: { type: Number, required: true },
+          creatorBudget: { type: Number, required: true },
+          platformFee: { type: Number, required: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
     },
     // Set on releases so a payout can be credited to its creator without a submission
     // (referral payouts have none).
@@ -107,6 +135,12 @@ transactionSchema.index(
 transactionSchema.index({ transferReference: 1 }, { sparse: true });
 // Paystack refund webhooks name the original payment.
 transactionSchema.index({ "refundParts.chargeReference": 1 }, { sparse: true });
+// Creator wallet and payouts: a creator's fixed credits and releases; older views releases by submission.
+transactionSchema.index({ creatorId: 1, type: 1, status: 1 });
+transactionSchema.index({ submissionId: 1, type: 1 });
+// Ops alerts: refunds still pending or failed, oldest first; campaigns with recent money movement.
+transactionSchema.index({ type: 1, status: 1, createdAt: 1 });
+transactionSchema.index({ updatedAt: -1 });
 // Creator wallet: recent transactions for a handle.
 transactionSchema.index({ creatorHandle: 1, date: -1 });
 

@@ -16,6 +16,14 @@ const {
   buildDashboard,
 } = require("../services/creatorDashboard");
 const { protect, authorizeRoles } = require("../middleware/auth");
+const {
+  audienceSchema,
+  categoriesSchema,
+  portfolioSchema,
+  ownAudience,
+  publicPortfolio,
+  brandSafeProfile,
+} = require("../utils/creatorProfile");
 
 const router = express.Router();
 
@@ -46,13 +54,20 @@ router.get("/dashboard", protect, authorizeRoles("creator"), async (req, res, ne
   }
 });
 
+const socialAccountSchema = z.object({
+  platform: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  handle: z.string({ required_error: "Platform and handle are required" }).trim().min(1, "Platform and handle are required"),
+  // Self-reported; null clears it.
+  followers: z.number().int("Followers must be a whole number").min(0).nullable().optional(),
+});
+
 router.post("/profile/socials", protect, async (req, res, next) => {
   try {
-    const { platform, handle } = req.body;
-
-    if (!platform || !handle) {
-      return res.status(400).json({ error: "Platform and handle are required" });
+    const parsed = socialAccountSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
     }
+    const { platform, handle, followers } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -65,11 +80,13 @@ router.post("/profile/socials", protect, async (req, res, next) => {
     if (existing) {
       existing.handle = handle;
       existing.verified = false;
+      if (followers !== undefined) existing.followers = followers === null ? undefined : followers;
     } else {
       profile.socialAccounts.push({
         platform: platform.toLowerCase(),
         handle,
         verified: false,
+        followers: followers === null ? undefined : followers,
       });
     }
 
@@ -109,7 +126,13 @@ router.post("/profile/niches", protect, async (req, res, next) => {
       const existingLower = new Set(existing.map((e) => e.name.toLowerCase()));
       const missing = uniqueNames.filter((n) => !existingLower.has(n.toLowerCase()));
       if (missing.length > 0) {
-        await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })));
+        // Another creator may add the same niche at the same moment; theirs is as good as ours.
+        try {
+          await Niche.insertMany(missing.map((name) => ({ name, enabled: true, sortOrder: 0 })), { ordered: false });
+        } catch (error) {
+          const writeErrors = error.writeErrors || (error.code === 11000 ? [error] : null);
+          if (!writeErrors || writeErrors.some((e) => (e.code || (e.err && e.err.code)) !== 11000)) throw error;
+        }
       }
     }
 
@@ -121,9 +144,25 @@ router.post("/profile/niches", protect, async (req, res, next) => {
   }
 });
 
+const basicsSchema = z.object({
+  displayName: z.string().trim().max(100).optional(),
+  bio: z.string().max(300).optional(),
+  country: z.string().trim().max(60).optional(),
+  city: z.string().trim().max(60).optional(),
+  state: z.string().trim().max(60).optional(),
+  legalName: z.string().trim().max(150).optional(),
+  phone: z.string().trim().max(30).optional(),
+  avatar: z.string().optional(),
+  categories: categoriesSchema.optional(),
+});
+
 router.put("/profile/me", protect, async (req, res, next) => {
   try {
-    const { displayName, bio, country, avatar } = req.body;
+    const parsed = basicsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+    const { displayName, bio, country, city, state, legalName, phone, avatar, categories } = parsed.data;
 
     const profile = await CreatorProfile.findOne({ userId: req.user._id });
     if (!profile) {
@@ -133,6 +172,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
     if (displayName !== undefined) profile.displayName = displayName;
     if (bio !== undefined) profile.bio = bio;
     if (country !== undefined) profile.country = country;
+    if (city !== undefined) profile.city = city;
+    if (state !== undefined) profile.state = state;
+    if (legalName !== undefined) profile.legalName = legalName;
+    if (phone !== undefined) profile.phone = phone;
+    if (categories !== undefined) profile.categories = categories;
 
     await profile.save();
 
@@ -147,6 +191,11 @@ router.put("/profile/me", protect, async (req, res, next) => {
       displayName: profile.displayName,
       bio: profile.bio,
       country: profile.country,
+      city: profile.city || "",
+      state: profile.state || "",
+      legalName: profile.legalName || "",
+      phone: profile.phone || "",
+      categories: profile.categories || [],
       avatar: avatar !== undefined ? avatar : undefined,
     });
   } catch (error) {
@@ -154,10 +203,64 @@ router.put("/profile/me", protect, async (req, res, next) => {
   }
 });
 
+// Replaces the creator's audience breakdown. Each part sent overwrites that part only.
+router.put("/profile/audience", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = audienceSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    const { locations, ages, genders, proofUrl } = parsed.data;
+    // Self-reported numbers need a screenshot of the creator's analytics (D7).
+    if (!proofUrl && !(profile.audience && profile.audience.proofUrl)) {
+      return res.status(400).json({ error: "Add a screenshot of your analytics as proof" });
+    }
+    if (locations !== undefined) profile.set("audience.locations", locations);
+    if (ages !== undefined) profile.set("audience.ages", ages);
+    if (genders !== undefined) profile.set("audience.genders", genders);
+    if (proofUrl !== undefined) profile.set("audience.proofUrl", proofUrl);
+    profile.set("audience.source", "self_reported");
+    profile.set("audience.updatedAt", new Date());
+    await profile.save();
+
+    res.json({ audience: ownAudience(profile.audience) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Replaces the whole portfolio, so one call adds, removes or reorders items.
+router.put("/profile/portfolio", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const parsed = portfolioSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message });
+    }
+
+    const profile = await CreatorProfile.findOne({ userId: req.user._id });
+    if (!profile) {
+      return res.status(404).json({ error: "Creator profile not found" });
+    }
+
+    profile.portfolio = parsed.data.items;
+    await profile.save();
+
+    res.json({ portfolio: publicPortfolio(profile.portfolio) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/", async (req, res, next) => {
   try {
-    const creators = await CreatorProfile.find().populate("userId", "name email");
-    res.json(creators);
+    const creators = await CreatorProfile.find().populate("userId", "name avatar");
+    res.json(creators.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -168,8 +271,8 @@ router.get("/leaderboard", async (req, res, next) => {
     const leaderboard = await CreatorProfile.find()
       .sort({ creatorScore: -1 })
       .limit(50)
-      .populate("userId", "name");
-    res.json(leaderboard);
+      .populate("userId", "name avatar");
+    res.json(leaderboard.map((c) => brandSafeProfile(c, c.userId)));
   } catch (error) {
     next(error);
   }
@@ -315,13 +418,14 @@ router.delete("/bank-account", protect, authorizeRoles("creator"), async (req, r
 });
 
 // ─── POST /creators/withdrawals ──────────────────────────────────────────────
-// Creators withdraw once a week per campaign: views earnings and referral earnings past
-// their hold go out together, and are paid on the Friday that ends the payout week.
+// Creators withdraw once a week per campaign: views earnings, and referral earnings and fixed
+// pay past their hold, go out together, and are paid on the Friday that ends the payout week.
 router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res, next) => {
   try {
     const { MIN_CAMPAIGN_WITHDRAWAL, payoutWeekStart, nextPayoutDate, formatPayoutDate } = require("../utils/payoutSchedule");
     const { creatorViewsEarnings, floorKobo } = require("../utils/earnings");
     const { creatorReferralEarnings } = require("../utils/referralEarnings");
+    const { creatorFixedEarnings } = require("../utils/fixedPay");
 
     const { campaignId } = req.body || {};
     // Older clients still send a kind and amount; they withdraw only that part.
@@ -377,15 +481,19 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
     }
 
     const key = String(campaign._id);
-    const [viewsMap, referralMap] = await Promise.all([
+    const [viewsMap, referralMap, fixedMap] = await Promise.all([
       creatorViewsEarnings(req.user._id, { campaignIds: [campaign._id] }),
       creatorReferralEarnings(req.user._id, { campaignIds: [campaign._id] }),
+      creatorFixedEarnings(req.user._id, { campaignIds: [campaign._id], now }),
     ]);
     const views = viewsMap.get(key);
     const referral = referralMap.get(key);
+    const fixed = fixedMap.get(key);
 
     let viewsAmount = viewsEligible && onlyKind !== "referral" && views ? views.availableToWithdraw : 0;
     let referralAmount = onlyKind !== "views" && referral ? referral.availableToWithdraw : 0;
+    // Fixed pay past its hold goes out with the rest; older kind-only requests leave it alone.
+    const fixedAmount = !onlyKind && fixed ? fixed.availableToWithdraw : 0;
     if (requestedAmount !== null) {
       const cap = onlyKind === "referral" ? referralAmount : viewsAmount;
       if (requestedAmount > cap) {
@@ -397,18 +505,23 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       else viewsAmount = floorKobo(requestedAmount);
     }
 
-    const amount = floorKobo(viewsAmount + referralAmount);
+    const amount = floorKobo(viewsAmount + referralAmount + fixedAmount);
     if (amount <= 0) {
       const onHold = referral ? referral.pending : 0;
-      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0);
-      return res.status(400).json({
-        error:
-          onHold > 0
-            ? `₦${onHold.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`
-            : withdrawn > 0
-              ? "You've already withdrawn everything earned so far on this campaign."
-              : "You haven't earned anything on this campaign yet.",
-      });
+      const withdrawn = (views ? views.withdrawn : 0) + (referral ? referral.withdrawn : 0) + (fixed ? fixed.withdrawn : 0);
+      const fixedHeld = fixed && !onlyKind ? fixed.onHold : 0;
+      const fixedAwaiting = fixed && !onlyKind ? fixed.awaitingDelivery : 0;
+      let error = "You haven't earned anything on this campaign yet.";
+      if (fixedHeld > 0) {
+        error = `₦${fixedHeld.toLocaleString()} of your fixed pay on this campaign is on hold until ${formatPayoutDate(fixed.holdUntil)}.`;
+      } else if (fixedAwaiting > 0) {
+        error = `₦${fixedAwaiting.toLocaleString()} of your fixed pay on this campaign is waiting for the brand to confirm delivery.`;
+      } else if (onHold > 0) {
+        error = `₦${onHold.toLocaleString()} of your referral earnings on this campaign is still in the 7-day hold.`;
+      } else if (withdrawn > 0) {
+        error = "You've already withdrawn everything earned so far on this campaign.";
+      }
+      return res.status(400).json({ error });
     }
     if (amount < MIN_CAMPAIGN_WITHDRAWAL) {
       return res.status(400).json({
@@ -430,6 +543,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
         amount,
         viewsAmount: floorKobo(viewsAmount),
         referralAmount: floorKobo(referralAmount),
+        fixedAmount: floorKobo(fixedAmount),
         status: "pending",
         requestedAt: now,
       });
@@ -446,6 +560,7 @@ router.post("/withdrawals", protect, authorizeRoles("creator"), async (req, res,
       amount: withdrawal.amount,
       viewsAmount: withdrawal.viewsAmount,
       referralAmount: withdrawal.referralAmount,
+      fixedAmount: withdrawal.fixedAmount,
       status: withdrawal.status,
       payoutDate,
       message: `Withdrawal requested. It's paid on ${formatPayoutDate(payoutDate)}.`,
@@ -472,6 +587,7 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
         amount: w.amount,
         viewsAmount: w.kind === "campaign" ? w.viewsAmount : w.kind === "referral" ? 0 : w.amount,
         referralAmount: w.kind === "campaign" ? w.referralAmount : w.kind === "referral" ? w.amount : 0,
+        fixedAmount: w.kind === "campaign" ? w.fixedAmount || 0 : 0,
         // Requests are paid on the Friday that ends the week they were made in.
         payoutDate: ["pending", "processing"].includes(w.status) ? nextPayoutDate(w.requestedAt) : null,
         status: w.status,
@@ -488,14 +604,11 @@ router.get("/withdrawals", protect, authorizeRoles("creator"), async (req, res, 
 
 router.get("/:id", async (req, res, next) => {
   try {
-    const creator = await CreatorProfile.findById(req.params.id).populate(
-      "userId",
-      "name email"
-    );
+    const creator = await CreatorProfile.findById(req.params.id).populate("userId", "name avatar");
     if (!creator) {
       return res.status(404).json({ error: "Creator profile not found" });
     }
-    res.json(creator);
+    res.json(brandSafeProfile(creator, creator.userId));
   } catch (error) {
     next(error);
   }

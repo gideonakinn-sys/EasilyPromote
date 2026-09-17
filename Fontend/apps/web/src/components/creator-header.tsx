@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Home01Icon, ClipboardIcon, Wallet03Icon, Menu01Icon, ChevronDownIcon, UserIcon, Logout01Icon } from "@hugeicons/core-free-icons";
+import { Home01Icon, ClipboardIcon, Wallet03Icon, Menu01Icon, ChevronDownIcon, UserIcon, Logout01Icon, HelpCircleIcon } from "@hugeicons/core-free-icons";
 import { MobileDrawer } from "@ep/ui/components/mobile-drawer";
 import {
   DropdownMenu,
@@ -97,6 +98,14 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         </button>
 
         <div className="justify-self-end flex items-center gap-3">
+          <Link
+            href="/help/creators"
+            className="hidden md:flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-stone-900"
+          >
+            <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-stone-500" />
+            <span>Help</span>
+          </Link>
+
           {/* Rank — desktop: full pill with rank + view count */}
           {!isOnboarding && (
             <div className="hidden md:flex items-center gap-1.5 bg-white rounded-full pl-1 pr-3 py-1">
@@ -254,6 +263,14 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             <HugeiconsIcon icon={Wallet03Icon} size={18} />
             Wallet
           </button>
+          <Link
+            href="/help/creators"
+            onClick={() => setIsMenuOpen(false)}
+            className="flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl text-stone-600"
+          >
+            <HugeiconsIcon icon={HelpCircleIcon} size={18} />
+            Help
+          </Link>
         </MobileDrawer>
       </div>
     </header>

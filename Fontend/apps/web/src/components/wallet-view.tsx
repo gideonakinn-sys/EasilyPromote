@@ -37,6 +37,34 @@ function formatPayoutDay(iso?: string | null) {
   });
 }
 
+const POT_LABEL: Record<"fixed" | "referral", string> = {
+  fixed: "Fixed Pay On Hold",
+  referral: "Referral Pay On Hold",
+};
+
+const roundKobo = (value: number) => Math.round(value * 100) / 100;
+
+// "₦15,000 unlocks 12 November, ₦7,500 later": the next unlock with its own amount.
+function unlockText(unlocks: Array<{ date: string; amount: number }>) {
+  if (unlocks.length === 0) return null;
+  const [next, ...rest] = unlocks;
+  const later = roundKobo(rest.reduce((sum, u) => sum + u.amount, 0));
+  return `₦${next.amount.toLocaleString()} unlocks ${formatHoldDate(next.date)}${later > 0 ? `, ₦${later.toLocaleString()} later` : ""}`;
+}
+
+function formatHoldDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Africa/Lagos" });
+}
+
+// What a campaign has ready to withdraw, pot by pot: fixed pay, performance (views) pay, referral pay.
+function availableParts(c: WithdrawCampaign) {
+  const parts: string[] = [];
+  if ((c.earnings?.fixed ?? 0) > 0 || (c.fixedAvailable ?? 0) > 0) parts.push(`Fixed ₦${(c.fixedAvailable ?? 0).toLocaleString()}`);
+  parts.push(`Performance ₦${c.viewsAvailable.toLocaleString()}`);
+  parts.push(`Referrals ₦${c.referralAvailable.toLocaleString()}`);
+  return parts.join(" · ");
+}
+
 // "paid on Friday 18 September", or, once that Friday has come, that it's in the payout run.
 function payoutTiming(iso?: string | null) {
   if (iso && new Date(iso).getTime() <= Date.now()) return "in this week's payout run";
@@ -48,7 +76,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   const { toast } = useToast();
 
   const withdrawCampaigns = walletData?.withdrawCampaigns ?? [];
-  // Withdrawals carry views and referral earnings together, so the headline does too.
+  // Withdrawals carry fixed, views and referral pay together, so the headline does too.
   const withdrawable = walletData?.withdrawCampaigns
     ? Math.round(withdrawCampaigns.reduce((sum, c) => sum + c.total, 0) * 100) / 100
     : (walletData?.withdrawableBalance ?? walletData?.balance ?? 0);
@@ -84,6 +112,10 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   // Referral earnings: held 7 days per conversion, then withdrawable with the campaign's views earnings.
   const referral = walletData?.referral;
   const referralCampaigns = referral?.byCampaign ?? [];
+
+  // Fixed pay: credited per deliverable, withdrawable once delivery is confirmed and 7 days have passed.
+  const fixed = walletData?.fixed;
+  const fixedCampaigns = fixed?.byCampaign ?? [];
 
   const fetchWithdrawals = React.useCallback(async () => {
     try {
@@ -298,7 +330,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         <div className="space-y-0.5">
           <span className="text-[10px] font-medium text-stone-500 block">Withdraw by campaign</span>
           <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
-            Once a week per campaign, views and referral earnings together. Requests are paid on {nextPayoutDay}. Minimum ₦
+            Once a week per campaign, fixed, performance and referral pay together. Requests are paid on {nextPayoutDay}. Minimum ₦
             {minimum.toLocaleString()} per campaign.
           </p>
         </div>
@@ -307,7 +339,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         )}
         {withdrawCampaigns.length === 0 ? (
           <p className="font-rethink text-xs text-stone-500 font-medium">
-            Earnings from views, and referral earnings past their 7-day hold, show up here.
+            Earnings from views, and fixed and referral pay past their 7-day hold, show up here.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -320,13 +352,30 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-rethink text-sm font-medium text-stone-800 truncate">{c.title}</p>
-                      <p className="font-rethink text-xs text-stone-500">
-                        Views ₦{c.viewsAvailable.toLocaleString()} · Referrals ₦{c.referralAvailable.toLocaleString()}
-                        {c.referralOnHold > 0 && ` · ₦${c.referralOnHold.toLocaleString()} on hold`}
-                      </p>
+                      <p className="font-rethink text-xs text-stone-500">{availableParts(c)}</p>
                     </div>
                     <span className="font-rethink text-sm font-medium text-stone-900 shrink-0">₦{c.total.toLocaleString()}</span>
                   </div>
+                  {(c.onHold ?? []).length > 0 && (
+                    <ul className="space-y-0.5">
+                      {(c.onHold ?? []).map((hold) => (
+                        <li
+                          key={`${hold.pot}-${hold.until ?? hold.reason}`}
+                          className="font-rethink text-[11px] font-medium text-stone-500 flex justify-between gap-3"
+                        >
+                          <span>
+                            {POT_LABEL[hold.pot]} · {hold.until ? `Unlocks ${formatHoldDate(hold.until)}` : hold.reason}
+                          </span>
+                          <span className="tabular-nums shrink-0">₦{hold.amount.toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {c.payoutDate && ["available", "below_minimum", "nothing_yet"].includes(state) && (
+                    <p className="font-rethink text-[11px] font-medium text-stone-400">
+                      Payout Day: {formatPayoutDay(c.payoutDate)}
+                    </p>
+                  )}
                   {state === "available" && (
                     <button
                       onClick={() => setConfirmCampaign(c)}
@@ -351,7 +400,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                       Reach ₦{minimum.toLocaleString()} to withdraw. Your ₦{c.total.toLocaleString()} carries over.
                     </p>
                   )}
-                  {state === "nothing_yet" && c.referralOnHold > 0 && (
+                  {state === "nothing_yet" && c.referralOnHold > 0 && !c.onHold && (
                     <p className="font-rethink text-[11px] font-medium text-stone-500">
                       ₦{c.referralOnHold.toLocaleString()} of referral earnings is in its 7-day hold.
                     </p>
@@ -379,7 +428,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 <div className="min-w-0">
                   <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
                   <p className="font-rethink text-xs text-stone-500">
-                    {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views · ₦{c.earned.toLocaleString()} earned
+                    {(c.views || 0).toLocaleString()} / {(c.viewTarget || 0).toLocaleString()} views · ₦{c.earned.toLocaleString()} earned
                     {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
                   </p>
                 </div>
@@ -387,6 +436,43 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   <span className="font-rethink font-medium text-stone-900 block">₦{c.availableToWithdraw.toLocaleString()}</span>
                   <span className="font-rethink text-[10px] text-stone-500">{c.withdrawable ? "available" : "not yet withdrawable"}</span>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fixedCampaigns.length > 0 && (
+        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium text-stone-500">Fixed Pay</span>
+            <span className="font-rethink text-sm font-medium text-stone-900">₦{(fixed?.earned ?? 0).toLocaleString()}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-medium text-stone-500 block">On Hold</span>
+              <span className="font-rethink text-sm font-medium text-stone-900">
+                ₦{roundKobo((fixed?.awaitingDelivery ?? 0) + (fixed?.onHold ?? 0)).toLocaleString()}
+              </span>
+            </div>
+            <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-medium text-stone-500 block">Withdrawable</span>
+              <span className="font-rethink text-sm font-medium text-green-700">₦{(fixed?.availableToWithdraw ?? 0).toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="space-y-2.5">
+            {fixedCampaigns.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
+                  <p className="font-rethink text-xs text-stone-500">
+                    {c.deliverables} deliverable{c.deliverables === 1 ? "" : "s"}
+                    {c.awaitingDelivery > 0 && ` · ₦${c.awaitingDelivery.toLocaleString()} waiting for the brand to confirm delivery`}
+                    {c.onHold > 0 && (c.unlocks ?? []).length > 0 && ` · ${unlockText(c.unlocks ?? [])}`}
+                    {c.withdrawn > 0 && ` · ₦${c.withdrawn.toLocaleString()} withdrawn`}
+                  </p>
+                </div>
+                <span className="font-rethink font-medium text-stone-900 shrink-0">₦{c.earned.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -401,7 +487,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-medium text-stone-500 block">On hold ({referral?.holdDays ?? 7} days)</span>
+              <span className="text-[10px] font-medium text-stone-500 block">On Hold ({referral?.holdDays ?? 7} Days)</span>
               <span className="font-rethink text-sm font-medium text-stone-900">₦{(referral?.pending ?? 0).toLocaleString()}</span>
             </div>
             <div className="bg-white border border-stone-200/60 rounded-xl px-3 py-2">
@@ -454,6 +540,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 </div>
                 {w.kind === "campaign" && (
                   <p className="font-rethink text-[11px] text-stone-500 font-medium mt-0.5">
+                    {(w.fixedAmount ?? 0) > 0 && `Fixed ₦${(w.fixedAmount ?? 0).toLocaleString()} · `}
                     Views ₦{(w.viewsAmount ?? 0).toLocaleString()} · Referrals ₦{(w.referralAmount ?? 0).toLocaleString()}
                   </p>
                 )}
@@ -503,6 +590,12 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
               </p>
             </div>
             <dl className="bg-stone-50 rounded-2xl p-4 space-y-2 text-sm font-rethink">
+              {(confirmCampaign.fixedAvailable ?? 0) > 0 && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-stone-500 font-medium">Fixed Pay</dt>
+                  <dd className="text-stone-900 font-medium tabular-nums">₦{(confirmCampaign.fixedAvailable ?? 0).toLocaleString()}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <dt className="text-stone-500 font-medium">Views earnings</dt>
                 <dd className="text-stone-900 font-medium tabular-nums">₦{confirmCampaign.viewsAvailable.toLocaleString()}</dd>

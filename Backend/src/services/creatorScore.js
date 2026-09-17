@@ -26,7 +26,8 @@ const WEIGHTS = {
 };
 
 const DELIVERED_STATUSES = ["posted", "verifying"];
-const CLEAN_SUBMISSION_STATUSES = ["approved", "awaiting_post", "posted", "verifying"];
+// Campaign engine: content approval (ticket 07) adds the content delivery statuses and completed.
+const CLEAN_SUBMISSION_STATUSES = ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"];
 const COMPLETED_SLOT_STATUSES = ["approved", "paid"];
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -129,6 +130,28 @@ function scoreFromFactors(factors) {
   return Math.round((weighted / availableWeight) * 100);
 }
 
+// Performance a brand sees on a creator's profile, from submissions that were posted.
+function computeCampaignStats(submissions) {
+  const delivered = submissions.filter((s) => DELIVERED_STATUSES.includes(s.status));
+  const totalCampaignViews = delivered.reduce((sum, s) => sum + (s.viewsDelivered || 0), 0);
+
+  let platformViews = 0;
+  let interactions = 0;
+  for (const s of delivered) {
+    for (const p of s.postedPlatforms || []) {
+      platformViews += p.views || 0;
+      interactions += (p.likes || 0) + (p.comments || 0);
+    }
+  }
+
+  return {
+    avgViews: delivered.length ? Math.round(totalCampaignViews / delivered.length) : 0,
+    engagementRate: platformViews > 0 ? Math.round((interactions / platformViews) * 1000) / 10 : null,
+    pastCampaigns: new Set(delivered.map((s) => String(s.campaignId))).size,
+    totalCampaignViews,
+  };
+}
+
 async function computeCreatorStanding(userId, now = Date.now()) {
   const [slots, submissions] = await Promise.all([
     Slot.find({ creatorId: userId }),
@@ -160,6 +183,7 @@ async function computeCreatorStanding(userId, now = Date.now()) {
     rank: rankForViews(verifiedViews),
     verifiedViews,
     completionRate: completion === null ? 0 : Math.round(completion * 100),
+    stats: computeCampaignStats(submissions),
     factors,
   };
 }
@@ -171,6 +195,7 @@ async function recalculateCreator(profile, now = Date.now()) {
   profile.creatorScore = standing.creatorScore;
   profile.verifiedViews = standing.verifiedViews;
   profile.completionRate = standing.completionRate;
+  profile.stats = { ...standing.stats, updatedAt: new Date(now) };
   profile.scoreBreakdown = standing.factors;
   profile.markModified("scoreBreakdown");
   profile.standingUpdatedAt = new Date(now);

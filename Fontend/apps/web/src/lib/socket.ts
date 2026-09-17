@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import type { CreatorBrief } from "../components/types";
 import { getToken } from "./api";
 
 const SOCKET_URL = (() => {
@@ -19,6 +20,23 @@ const SOCKET_URL = (() => {
 })();
 
 let socket: Socket | null = null;
+
+// The one shared connection, opened on first use.
+function ensureSocket(token: string): Socket {
+  if (!socket) {
+    socket = io(SOCKET_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socket.on("connect", () => {
+      console.log("[Socket] Connected");
+    });
+    socket.on("disconnect", () => {
+      console.log("[Socket] Disconnected");
+    });
+  }
+  return socket;
+}
 
 export interface CampaignUpdate {
   campaignId: string;
@@ -72,6 +90,60 @@ export function useCampaignUpdates(onUpdate?: (data: CampaignUpdate) => void) {
   }, []);
 
   return socket;
+}
+
+// Campaign engine: creator marketplace (tickets 01/04/05)
+// Places left on a campaign, sent to creators whenever it changes.
+export interface CampaignPlacesUpdate {
+  campaignId: string;
+  placesLeft: number;
+}
+
+export function useCampaignPlaces(onUpdate?: (data: CampaignPlacesUpdate) => void) {
+  const updateRef = useRef(onUpdate);
+  updateRef.current = onUpdate;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const connection = ensureSocket(token);
+    const handleUpdate = (data: CampaignPlacesUpdate) => updateRef.current?.(data);
+    connection.on("campaign-places", handleUpdate);
+    return () => {
+      connection.off("campaign-places", handleUpdate);
+    };
+  }, []);
+}
+
+// Campaign engine: applications (ticket 06)
+// Sent to the creator when their application is decided or expires, and to the brand when
+// an application arrives, is withdrawn or waits for review.
+export interface ApplicationUpdate {
+  campaignId: string;
+  type: string;
+  applicationId?: string;
+  status?: string;
+  // Sent to the creator with an approval.
+  placement?: { id: string; kind: "views" | "deliverable"; reward: number; referralCode: string | null };
+  brief?: CreatorBrief;
+}
+
+export function useApplicationUpdates(onUpdate?: (data: ApplicationUpdate) => void) {
+  const updateRef = useRef(onUpdate);
+  updateRef.current = onUpdate;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    const connection = ensureSocket(token);
+    const handleUpdate = (data: ApplicationUpdate) => updateRef.current?.(data);
+    connection.on("application-update", handleUpdate);
+    return () => {
+      connection.off("application-update", handleUpdate);
+    };
+  }, []);
 }
 
 export function useSocket(

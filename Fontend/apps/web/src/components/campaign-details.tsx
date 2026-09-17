@@ -13,6 +13,12 @@ import { apiRequest, getToken } from "../lib/api";
 import { DEFAULT_TIERS, computePriceForViews, type TierPoint } from "../lib/pricing";
 import { codeFormatText, conversionNounFor, referralApi, type ReferralCodeRow, type ReferralSettings } from "../lib/referral";
 import { CampaignReferrals } from "./campaign-referrals";
+import { CampaignSetupSummary } from "./brand-wizard/campaign-setup-summary";
+import { ConfirmDeleteModal } from "./confirm-delete-modal";
+import { CampaignApplicants } from "./campaign-applicants"; // Campaign engine: applications (ticket 06)
+import type { CampaignSetup } from "./types";
+// Campaign engine: content approval (ticket 07)
+import { ContentSubmissionsReview } from "./content-submissions-review";
 
 import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg";
 import submissionsEmpty from "@ep/ui/assets/submissions-empty.png";
@@ -126,12 +132,13 @@ function IncreaseViewsContent({
   );
 }
 
-interface CampaignData {
+interface CampaignData extends Partial<CampaignSetup> {
   id: string;
   name: string;
   category: string;
   coverImageUrl?: string;
-  targetViews: number;
+  // Content campaigns have no view target.
+  targetViews?: number;
   budget: number;
   costPerView: number;
   startDate: string;
@@ -180,6 +187,16 @@ interface SubmissionData {
   reviewedAt?: string;
 }
 
+// A content campaign's money, from GET /payouts/campaign/:id (ticket 09).
+interface ContentPayouts {
+  deliverables: number;
+  paidOut: number;
+  owed: number;
+  refundable: number;
+  refunded: number;
+  refundPending: number;
+}
+
 interface SubmissionCounts {
   new: number;
   approved: number;
@@ -221,6 +238,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const [paying, setPaying] = useState(false);
   const [topupSuccess, setTopupSuccess] = useState(false);
   const [topupError, setTopupError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [contentPayouts, setContentPayouts] = useState<ContentPayouts | null>(null);
 
   useReveal(activeTab);
 
@@ -268,6 +287,23 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       cancelled = true;
     };
   }, [campaignId, referralEnabled]);
+
+  // Content campaigns: what's been paid out, what creators are still owed and what's refundable.
+  const isContentCampaign = campaign?.campaignModel === "content";
+  useEffect(() => {
+    if (!isContentCampaign || activeTab !== "Payouts") return;
+    let cancelled = false;
+    apiRequest<{ content: ContentPayouts | null }>(`/payouts/campaign/${campaignId}`, { token: getToken() || undefined })
+      .then((data) => {
+        if (!cancelled) setContentPayouts(data.content);
+      })
+      .catch(() => {
+        if (!cancelled) setContentPayouts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, isContentCampaign, activeTab]);
 
   useEffect(() => {
     const load = async () => {
@@ -331,14 +367,21 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
     return () => clearTimeout(timer);
   }, [topupError]);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeleteDraft = async () => {
-    if (!window.confirm("Are you sure you want to delete this campaign? This cannot be undone.")) return;
+    setDeleting(true);
     try {
       const token = getToken();
       await apiRequest(`/campaigns/${campaignId}`, { method: "DELETE", token: token || undefined });
+      setShowDeleteConfirm(false);
       onClose?.();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to delete campaign");
+      setShowDeleteConfirm(false);
+      setActionError(err instanceof Error ? err.message : "We couldn't delete this campaign.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -384,7 +427,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       });
       window.location.href = data.authorization_url;
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to initialize payment");
+      setActionError(err instanceof Error ? err.message : "Failed to initialize payment");
       setPaying(false);
     }
   }, [campaignId, additionalViews, additionalCost]);
@@ -447,12 +490,18 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
   const currentStatus = campaign.status;
   const formattedBudget = `₦${campaign.budget.toLocaleString()}`;
-  const formattedTarget = `${campaign.targetViews.toLocaleString()} views`;
+  const formattedTarget = `${(campaign.targetViews || 0).toLocaleString()} views`;
+  const isContent = campaign.campaignModel === "content";
 
   const totalEscrowed = campaign.budget;
   // platformFeePercent is stored as a whole percentage (30 means 30%).
   const feePercent = campaign.platformFeePercent ?? 30;
-  const platformFee = campaign.platformFee || Math.round(campaign.budget * (feePercent / 100));
+  // Content campaigns add the fee on top of creators' pay (D2); views campaigns take it from inside the price.
+  const platformFee =
+    campaign.platformFee ||
+    (isContent
+      ? Math.round(campaign.budget - campaign.budget / (1 + feePercent / 100))
+      : Math.round(campaign.budget * (feePercent / 100)));
   const creatorPool = campaign.creatorPool || totalEscrowed - platformFee;
   // Settled views payouts from the ledger; submissions never stored payout amounts.
   const releasedTotal = campaign.viewsReleased ?? 0;
@@ -582,10 +631,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {/* Action Button */}
             <div>
               {(currentStatus === "draft" || currentStatus === "pending_payment") ? (
-                <button onClick={handleDeleteDraft} className="w-full py-3 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink">
+                <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-3 bg-red-50 text-red-600 font-semibold text-sm rounded-full border border-red-200 font-rethink">
                   Delete campaign
                 </button>
-              ) : (
+              ) : isContent ? null : (
                 <button
                   onClick={() => setShowIncreaseViews(!showIncreaseViews)}
                   className="w-full py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
@@ -616,10 +665,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Campaign Details Key-Value List */}
             <div className="space-y-4 pt-2">
-              <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                <span className="text-stone-500">Target Views</span>
-                <span className="text-stone-800">{formattedTarget}</span>
-              </div>
+              {!isContent && (
+                <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
+                  <span className="text-stone-500">Target Views</span>
+                  <span className="text-stone-800">{formattedTarget}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
                 <span className="text-stone-500">Budget</span>
                 <span className="text-stone-800">{formattedBudget}</span>
@@ -753,8 +804,30 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               </div>
             )}
 
+            {/* Campaign engine: applications (ticket 06) */}
+            {campaign.creatorAccess === "application_required" && campaign.status !== "draft" && campaign.status !== "pending_payment" && (
+              <CampaignApplicants campaignId={campaign.id} />
+            )}
+
+            {campaign.campaignObjective && (
+              <CampaignSetupSummary
+                setup={{
+                  campaignObjective: campaign.campaignObjective,
+                  contentPay: campaign.contentPay ?? null,
+                  targetViews: isContent ? undefined : campaign.targetViews,
+                  referralBudget: campaign.referral?.requestedBudget,
+                  contentDestination: campaign.contentDestination ?? null,
+                  creatorAccess: campaign.creatorAccess ?? null,
+                  audienceTargeting: campaign.audienceTargeting || {},
+                  creatorEligibility: campaign.creatorEligibility || {},
+                  brief: campaign.brief || {},
+                }}
+              />
+            )}
+
             <div className="border border-dashed border-stone-200 rounded-2xl p-4 space-y-4">
-              {/* Campaign Progress */}
+              {/* Campaign Progress (views campaigns) */}
+              {!isContent && (<>
               <div className="space-y-2">
                 <span className="text-xs font-medium text-stone-500 block">Campaign progress</span>
                 <div className="flex items-center gap-3">
@@ -767,9 +840,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.progressPercent}%</span>
                 </div>
                 <span className="text-xs text-stone-500 font-medium font-rethink">
-                  {campaign.viewsDelivered.toLocaleString()} / {campaign.targetViews.toLocaleString()} views
+                  {campaign.viewsDelivered.toLocaleString()} / {(campaign.targetViews || 0).toLocaleString()} views
                 </span>
               </div>
+              </>)}
 
               {campaign.referral?.enabled && (
                 <>
@@ -828,8 +902,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 </>
               )}
 
-              {/* Divider */}
-              <div className="border-t border-dashed border-stone-200" />
+              {!isContent && <div className="border-t border-dashed border-stone-200" />}
 
               {/* Creators on Campaign */}
               <div className="space-y-1">
@@ -844,8 +917,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
         {/* ================= TAB 2: SUBMISSION ================= */}
         {activeTab === "Submission" && (
-          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : "w-[350px] mx-auto")}>
-            {submissionsError ? (
+          <div className={cn("space-y-6 pb-10", isMobile ? "w-full" : campaign.campaignModel === "content" ? "w-[520px] mx-auto" : "w-[350px] mx-auto")}>
+            {/* Campaign engine: content approval (ticket 07) */}
+            {campaign.campaignModel === "content" ? (
+              <ContentSubmissionsReview campaignId={campaign.id} isMobile={isMobile} />
+            ) : submissionsError ? (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
@@ -893,6 +969,29 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         {/* ================= TAB 3: PAYOUTS ================= */}
         {activeTab === "Payouts" && (
           <div className={cn("space-y-10 pb-10", isMobile ? "w-full" : "w-[520px] mx-auto")}>
+            {isContent ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Paid Out", value: contentPayouts?.paidOut ?? 0 },
+                  { label: "Owed To Creators", value: contentPayouts?.owed ?? 0 },
+                  {
+                    label: "Refundable",
+                    value: contentPayouts?.refundable ?? 0,
+                  },
+                ].map((item) => (
+                  <div key={item.label} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+                    <span className="text-[10px] font-medium text-stone-500 block">{item.label}</span>
+                    <span className="font-rethink font-medium text-xl text-stone-900 block">₦{item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+                {contentPayouts && contentPayouts.refunded + contentPayouts.refundPending > 0 && (
+                  <p className="sm:col-span-3 font-rethink text-xs text-stone-500 font-medium">
+                    ₦{(contentPayouts.refunded + contentPayouts.refundPending).toLocaleString()} of unused budget refunded to you
+                    {contentPayouts.refundPending > 0 && " (on its way)"}.
+                  </p>
+                )}
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>
@@ -907,6 +1006,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 <span className="font-rethink font-medium text-xl text-stone-900 block">₦{pendingEscrow.toLocaleString()}</span>
               </div>
             </div>
+            )}
 
             {submissions.filter(s => s.payoutStatus).length === 0 && (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
@@ -963,6 +1063,19 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
         </div>
       )}
 
+      {/* Delete and payment errors */}
+      {actionError && (
+        <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3" role="alert">
+          <div className="space-y-1">
+            <p className="font-rethink font-medium text-sm text-red-800">Something went wrong</p>
+            <p className="font-rethink text-xs text-red-600 font-medium">{actionError}</p>
+          </div>
+          <button onClick={() => setActionError("")} aria-label="Dismiss" className="text-red-400 ml-auto">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      )}
+
       {/* Topup error banner */}
       {topupError && (
         <div className="fixed top-4 left-4 right-4 z-[60] bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
@@ -978,6 +1091,14 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
           </button>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        open={showDeleteConfirm}
+        title="Delete this campaign?"
+        busy={deleting}
+        onCancel={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteDraft}
+      />
     </div>
   );
 }

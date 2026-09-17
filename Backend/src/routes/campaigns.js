@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Campaign = require("../models/Campaign");
 const Slot = require("../models/Slot");
 const Submission = require("../models/Submission");
@@ -7,6 +8,7 @@ const Notification = require("../models/Notification");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { initializeTransaction, verifyTransaction } = require("../services/paystack");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
+const { reopenClosedPlaces } = require("../utils/fixedPay");
 const { creditTopup } = require("../utils/topups");
 const { emitCampaignStatus } = require("../utils/campaignUpdates");
 const { parseReferralSettings, campaignEventTypes } = require("../utils/referralCodes");
@@ -16,17 +18,18 @@ const { recordUnmatchedPayment } = require("../utils/refunds");
 const { expectedPaymentAmount, bookCampaignPayment, brandAppVerified } = require("../utils/campaignPayments");
 const { MIN_REFERRAL_TOPUP } = require("../utils/referralEarnings");
 
-const OBJECTIVES = ["views", "actions"];
+function sendSetupError(res, setup) {
+  return res.status(setup.status).json({ error: setup.error, ...(setup.code && { code: setup.code }) });
+}
 
-// Referral tracking follows the objective: actions turn it on; views turn it off and
-// clear the referral budget.
-function objectiveUpdates(objective) {
-  const next = OBJECTIVES.includes(objective) ? objective : "views";
-  return {
-    objective: next,
-    "referral.enabled": next === "actions",
-    ...(next === "views" && { "referral.requestedBudget": 0 }),
-  };
+// Top-ups buy more views, which content campaigns don't have. Returns true when it refused.
+function refuseContentTopup(res, campaign) {
+  if (campaign.campaignModel !== "content") return false;
+  res.status(409).json({
+    error: "Top-ups buy more views, so they aren't available for content campaigns.",
+    code: "TOPUP_NOT_FOR_CONTENT",
+  });
+  return true;
 }
 
 // True when an edit changes what the brand's open checkout should charge.
@@ -50,6 +53,7 @@ function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
   return nextObjective === "actions" && requestedBudget !== undefined && Math.round(Number(requestedBudget)) !== currentBudget;
 }
 const { releasedViewsTotal } = require("../utils/earnings");
+const { resolveCampaignSetup, editSetupUpdates, campaignSetupView } = require("../utils/campaignSetup");
 
 const router = express.Router();
 
@@ -130,28 +134,30 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
   try {
     const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral, objective } = req.body;
 
+    const setup = resolveCampaignSetup(req.body);
+    if (setup.error) return sendSetupError(res, setup);
+
     const referralSettings = parseReferralSettings(referral);
     if (referralSettings.error) {
       return res.status(400).json({ error: referralSettings.error });
     }
-    // Older clients send referral.enabled without an objective.
-    const campaignObjective =
-      objective !== undefined ? (objective === "actions" ? "actions" : "views") : referralSettings.value.enabled ? "actions" : "views";
+    // Older clients send only `objective` (or referral.enabled); the setup maps both ways.
+    const campaignObjective = setup.legacyObjective;
     const referralValues = { ...referralSettings.value, enabled: campaignObjective === "actions" };
+    if (setup.referralEventTypes) {
+      referralValues.eventTypes = setup.referralEventTypes;
+      referralValues.eventType = setup.referralEventTypes[0];
+    }
     if (campaignObjective === "views") referralValues.requestedBudget = 0;
-
-    const { getPriceForViews } = require("../config/pricing");
-    const budget = getPriceForViews(targetViews);
-    const costPerView = Math.round((budget / targetViews) * 1000) / 1000;
+    const isContent = setup.updates.campaignModel === "content";
 
     const campaign = await Campaign.create({
       businessId: req.user._id,
       coverImageUrl: coverImageUrl || null,
       name,
       category,
-      targetViews,
-      costPerView,
-      budget,
+      targetViews: isContent ? undefined : targetViews,
+      ...setup.updates,
       contentBrief: contentBrief || null,
       keyMessageCta: keyMessageCta || null,
       whatToAvoid: whatToAvoid || null,
@@ -167,6 +173,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       objective: campaignObjective,
       referral: referralValues,
       status: "draft",
+      wizardStep: req.body.wizardStep,
     });
 
     res.status(201).json({
@@ -174,7 +181,28 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       status: campaign.status,
       budget: campaign.budget,
       costPerView: campaign.costPerView,
+      quote: setup.quote,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// What the wizard shows the brand before saving: the same calculator checkout charges from.
+// With a campaignId, the setup is quoted as an edit of that campaign, at its own platform fee.
+router.post("/quote", protect, authorizeRoles("business"), async (req, res, next) => {
+  try {
+    const { campaignId, ...body } = req.body || {};
+    let current = null;
+    if (campaignId !== undefined) {
+      current = mongoose.isValidObjectId(campaignId) ? await Campaign.findById(campaignId) : null;
+      if (!current || current.businessId.toString() !== req.user._id.toString()) {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+    }
+    const setup = resolveCampaignSetup(body, current);
+    if (setup.error) return sendSetupError(res, setup);
+    res.json({ quote: setup.quote });
   } catch (error) {
     next(error);
   }
@@ -192,7 +220,10 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Campaign cannot be paid" });
     }
-
+    const isContent = campaign.campaignModel === "content";
+    if (isContent && !(campaign.contentPay && campaign.contentPay.ratePerDeliverable)) {
+      return res.status(400).json({ error: "Set what creators earn per deliverable before paying.", code: "CONTENT_PAY_REQUIRED" });
+    }
     // Referral campaigns pay their referral budget in the same checkout, and only once the
     // brand's app is connected: Paystack can't hold the money while they finish setup.
     const referralAmount =
@@ -211,7 +242,18 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         });
       }
     }
-    const total = campaign.budget + referralAmount;
+    // A draft is charged the calculator's total as it stands, so one priced under an older
+    // price table pays what the wizard quotes today. An open checkout keeps its price: a
+    // payment still arriving from an earlier checkout tab must match it.
+    let total = campaign.budget + referralAmount;
+    if (campaign.status === "draft") {
+      const setup = resolveCampaignSetup({}, campaign);
+      if (setup.error) return sendSetupError(res, setup);
+      for (const [field, value] of Object.entries(setup.money)) {
+        if (field !== "contentPay") campaign[field] = value;
+      }
+      total = setup.quote.total;
+    }
 
     const reference = `ep_${campaign._id}_${Date.now()}`;
 
@@ -226,7 +268,10 @@ router.post("/:id/pay", protect, authorizeRoles("business"), async (req, res, ne
         campaignId: campaign._id.toString(),
         businessId: req.user._id.toString(),
         campaignName: campaign.name,
-        viewsAmount: campaign.budget,
+        // The campaign's own price (views price, or a content campaign's pay plus fee) and the
+        // referral budget. viewsAmount stays for performance campaigns' older readers.
+        campaignAmount: campaign.budget,
+        ...(!isContent && { viewsAmount: campaign.budget }),
         referralAmount,
       },
       callback_url,
@@ -346,13 +391,8 @@ router.patch("/:id", protect, async (req, res, next) => {
 
     // A new size or referral budget mid-checkout is a new price. The campaign goes back to
     // draft so the old checkout can't put it live; a payment still made on it is recorded for refund.
-    const repriced =
-      campaign.status === "pending_payment" &&
-      changesPrice(campaign, {
-        targetViews: req.body.targetViews,
-        objective: req.body.objective,
-        requestedBudget: req.body.referral ? req.body.referral.requestedBudget : undefined,
-      });
+    const edit = editSetupUpdates(req.body, campaign);
+    if (edit.error) return sendSetupError(res, edit);
 
     const allowedFields = [
       "coverImageUrl",
@@ -373,9 +413,12 @@ router.patch("/:id", protect, async (req, res, next) => {
       "platforms",
       "contentStyle",
       "niches",
+      "wizardStep",
     ];
     const updates = {};
     for (const field of allowedFields) {
+      // Content campaigns have no view target; the setup below owns targetViews for the rest.
+      if (field === "targetViews") continue;
       if (req.body[field] !== undefined) {
         updates[field] =
           field === "contentStyle" && typeof req.body[field] === "string"
@@ -395,16 +438,18 @@ router.patch("/:id", protect, async (req, res, next) => {
       }
     }
 
-    if (req.body.objective !== undefined) {
-      Object.assign(updates, objectiveUpdates(req.body.objective));
-    }
+    // Objective, setup and — only when size or pay changes — price, fee and creator pool from
+    // one quote, so the pool can't go stale (findOneAndUpdate skips the model's save hook).
+    Object.assign(updates, edit.updates);
 
-    if (req.body.targetViews !== undefined) {
-      const { getPriceForViews } = require("../config/pricing");
-      updates.budget = getPriceForViews(req.body.targetViews);
-      updates.costPerView = Math.round((updates.budget / req.body.targetViews) * 1000) / 1000;
-    }
-
+    const repriced =
+      campaign.status === "pending_payment" &&
+      (edit.priceChanged ||
+        changesPrice(campaign, {
+          targetViews: edit.isContent ? undefined : req.body.targetViews,
+          objective: updates.objective,
+          requestedBudget: req.body.referral ? req.body.referral.requestedBudget : undefined,
+        }));
     if (repriced) {
       updates.status = "draft";
       updates.paymentReference = null;
@@ -441,6 +486,7 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
 
     const { step, data } = req.body;
     const updates = {};
+    let priceChanged = false;
 
     if (step === 1) {
       if (data.coverImageUrl !== undefined) updates.coverImageUrl = data.coverImageUrl;
@@ -449,10 +495,10 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.startDate !== undefined) updates.startDate = data.startDate;
       if (data.endDate !== undefined) updates.endDate = data.endDate;
       if (data.targetViews !== undefined) {
-        updates.targetViews = data.targetViews;
-        const { getPriceForViews } = require("../config/pricing");
-        updates.budget = getPriceForViews(data.targetViews);
-        updates.costPerView = Math.round((updates.budget / data.targetViews) * 1000) / 1000;
+        const edit = editSetupUpdates({ targetViews: data.targetViews }, campaign);
+        if (edit.error) return sendSetupError(res, edit);
+        Object.assign(updates, edit.updates);
+        priceChanged = priceChanged || edit.priceChanged;
       }
       if (data.scriptUrl !== undefined) updates.scriptUrl = data.scriptUrl;
       if (data.scriptFileName !== undefined) updates.scriptFileName = data.scriptFileName;
@@ -464,7 +510,12 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
       if (data.contentStyle !== undefined) updates.contentStyle = data.contentStyle;
       if (data.niches !== undefined) updates.niches = data.niches;
     } else if (step === 3) {
-      if (data.objective !== undefined) Object.assign(updates, objectiveUpdates(data.objective));
+      if (data.objective !== undefined || data.referral !== undefined) {
+        const edit = editSetupUpdates({ objective: data.objective, referral: data.referral }, campaign);
+        if (edit.error) return sendSetupError(res, edit);
+        Object.assign(updates, edit.updates);
+        priceChanged = priceChanged || edit.priceChanged;
+      }
       if (data.referral !== undefined) {
         const referralSettings = parseReferralSettings(data.referral);
         if (referralSettings.error) {
@@ -479,11 +530,12 @@ router.patch("/:id/save-and-close", protect, async (req, res, next) => {
     // As in PATCH /:id: a new size or referral budget mid-checkout is a new price, so back to draft.
     if (
       campaign.status === "pending_payment" &&
-      changesPrice(campaign, {
-        targetViews: updates.targetViews,
-        objective: updates.objective,
-        requestedBudget: updates["referral.requestedBudget"],
-      })
+      (priceChanged ||
+        changesPrice(campaign, {
+          targetViews: updates.targetViews,
+          objective: updates.objective,
+          requestedBudget: updates["referral.requestedBudget"],
+        }))
     ) {
       updates.status = "draft";
       updates.paymentReference = null;
@@ -549,6 +601,7 @@ router.post("/:id/topup-init", protect, authorizeRoles("business"), async (req, 
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
+    if (refuseContentTopup(res, campaign)) return;
 
     const reference = `ep_topup_${campaign._id}_${Date.now()}`;
 
@@ -591,6 +644,7 @@ router.patch("/:id/topup", protect, authorizeRoles("business"), async (req, res,
     if (!["live", "under_review", "paused"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only top up active campaigns" });
     }
+    if (refuseContentTopup(res, campaign)) return;
 
     // The callback URL carries `amount` in the query string, so the request body
     // is not evidence of anything. Only Paystack decides what was paid, and only
@@ -685,6 +739,7 @@ router.patch("/:id/resume", protect, async (req, res, next) => {
     campaign.status = "live";
     await campaign.save();
     await ensureCampaignSlots(campaign);
+    await reopenClosedPlaces(campaign);
 
     emitCampaignStatus(campaign);
 
@@ -724,6 +779,19 @@ router.patch("/:id/cancel", protect, async (req, res, next) => {
   }
 });
 
+// Open Call join: runs the creator's eligibility and reserves a placement in one step.
+router.post("/:id/join", protect, authorizeRoles("creator"), async (req, res, next) => {
+  try {
+    const { joinCampaign } = require("../services/placements");
+    // Views campaigns may commit to a share of the views, as the older claim did.
+    const committedViews = req.body ? req.body.committedViews : undefined;
+    const result = await joinCampaign({ user: req.user, campaignId: req.params.id, committedViews });
+    res.status(result.status).json(result.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id", protect, async (req, res, next) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
@@ -744,12 +812,15 @@ router.get("/:id", protect, async (req, res, next) => {
         Submission.countDocuments({ campaignId: campaign._id }),
         Submission.countDocuments({
           campaignId: campaign._id,
-          status: { $in: ["approved", "awaiting_post", "posted"] },
+          // Campaign engine: content approval (ticket 07) adds verifying, the delivery statuses and completed.
+          status: { $in: ["approved", "awaiting_post", "posted", "verifying", "awaiting_delivery", "awaiting_receipt", "completed"] },
         }),
         Submission.countDocuments({ campaignId: campaign._id, status: "new" }),
+        // Distinct creators holding a place; open and closed places have no creator.
         Slot.distinct("creatorId", {
           campaignId: campaign._id,
-          status: { $ne: "available" },
+          creatorId: { $ne: null },
+          status: { $nin: ["available", "closed"] },
         }).then((ids) => ids.length),
       ]);
 
@@ -790,7 +861,9 @@ router.get("/:id", protect, async (req, res, next) => {
       submissionsAwaitingReview,
       creatorCount,
       objective: campaign.objective || "views",
+      ...campaignSetupView(campaign),
       paymentAmount: campaign.paymentAmount || 0,
+      wizardStep: campaign.wizardStep || null,
       referral: {
         requestedBudget: campaign.referral ? campaign.referral.requestedBudget || 0 : 0,
         enabled: Boolean(campaign.referral && campaign.referral.enabled),
@@ -823,6 +896,10 @@ router.delete("/:id", protect, authorizeRoles("business"), async (req, res, next
     }
     if (!["draft", "pending_payment"].includes(campaign.status)) {
       return res.status(400).json({ error: "Can only delete draft or pending payment campaigns" });
+    }
+    const { hasDependents } = require("../utils/cleanupCancelled");
+    if (await hasDependents(campaign._id)) {
+      return res.status(409).json({ error: "A payment for this campaign is on record, so it can't be deleted", code: "CAMPAIGN_HAS_RECORDS" });
     }
 
     await Campaign.findByIdAndDelete(req.params.id);

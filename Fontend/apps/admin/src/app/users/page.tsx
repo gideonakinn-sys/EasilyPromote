@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { CreatorVerificationDialog, type ConnectedAccount } from "../../components/creator-verification-dialog";
+import { DeleteUserDialog } from "../../components/delete-user-dialog";
 
 interface UserItem {
   id: string;
@@ -22,6 +24,8 @@ interface UserItem {
     lifetimeEarnings: number;
     socialAccounts?: Array<{ platform: string; handle: string; verified: boolean }>;
     niches?: string[];
+    verifiedAt?: string | null;
+    connectedAccounts?: ConnectedAccount[];
   } | null;
 }
 
@@ -35,6 +39,13 @@ export default function AdminUsersPage() {
   const [rankInput, setRankInput] = useState<string>("rank1");
   const [scoreInput, setScoreInput] = useState<number>(50);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<UserItem | null>(null);
+  // Only super admins can delete accounts (the API refuses everyone else).
+  const [canDeleteUsers, setCanDeleteUsers] = useState(false);
+  useEffect(() => {
+    setCanDeleteUsers(getUser()?.role === "super_admin");
+  }, []);
+  const [verifyingUser, setVerifyingUser] = useState<UserItem | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -78,21 +89,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  const deleteUser = async (user: UserItem) => {
-    if (!window.confirm(`Delete account for "${user.name}"?\n\nThis permanently removes the user, their profile, campaigns, submissions, placements, transactions, and notifications. This cannot be undone.`)) return;
-    try {
-      setActionLoading(true);
-      await apiRequest(`/admin/users/${user.id}`, {
-        method: "DELETE",
-        token: getToken() || undefined,
-      });
-      fetchUsers();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   const handleSaveRank = async () => {
     if (!selectedUser) return;
@@ -220,6 +216,13 @@ export default function AdminUsersPage() {
                             {u.creatorProfile?.rank || "rank1"}
                           </span>
                           <span className="text-[11px] text-stone-400 block">Score: {u.creatorProfile?.creatorScore || 0}/100</span>
+                          {u.creatorProfile?.verifiedAt ? (
+                            <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-medium text-blue-700">Verified</span>
+                          ) : (
+                            <span className="mt-1 block text-[10px] font-medium text-stone-400">
+                              {(u.creatorProfile?.connectedAccounts || []).length > 0 ? "Not Verified" : "No Connected Account"}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-stone-400">N/A</span>
@@ -254,6 +257,14 @@ export default function AdminUsersPage() {
                             Edit Rank
                           </button>
                         )}
+                        {u.role === "creator" && u.creatorProfile && (
+                          <button
+                            onClick={() => setVerifyingUser(u)}
+                            className="px-3 py-1.5 bg-white border border-stone-200 text-stone-800 rounded-full text-xs font-semibold"
+                          >
+                            {u.creatorProfile.verifiedAt ? "Remove Verification" : "Verify Creator"}
+                          </button>
+                        )}
                         <button
                           onClick={() => toggleUserStatus(u.id, u.isActive)}
                           disabled={actionLoading}
@@ -265,9 +276,9 @@ export default function AdminUsersPage() {
                         >
                           {u.isActive ? "Deactivate" : "Activate"}
                         </button>
-                        {u.role !== "admin" && u.role !== "super_admin" && (
+                        {canDeleteUsers && u.role !== "admin" && u.role !== "super_admin" && (
                           <button
-                            onClick={() => deleteUser(u)}
+                            onClick={() => setDeletingUser(u)}
                             disabled={actionLoading}
                             className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold transition-all"
                           >
@@ -337,6 +348,36 @@ export default function AdminUsersPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {verifyingUser && verifyingUser.creatorProfile && (
+          <CreatorVerificationDialog
+            creatorId={verifyingUser.id}
+            creatorName={verifyingUser.name}
+            verifiedAt={verifyingUser.creatorProfile.verifiedAt || null}
+            connectedAccounts={verifyingUser.creatorProfile.connectedAccounts || []}
+            onClose={() => setVerifyingUser(null)}
+            onChanged={(verifiedAt) => {
+              const id = verifyingUser.id;
+              setUsers((current) =>
+                current.map((u) => (u.id === id && u.creatorProfile ? { ...u, creatorProfile: { ...u.creatorProfile, verifiedAt } } : u))
+              );
+              setVerifyingUser(null);
+            }}
+          />
+        )}
+
+        {deletingUser && (
+          <DeleteUserDialog
+            userId={deletingUser.id}
+            userName={deletingUser.name}
+            role={deletingUser.role}
+            onClose={() => setDeletingUser(null)}
+            onDeleted={() => {
+              setDeletingUser(null);
+              fetchUsers();
+            }}
+          />
         )}
       </main>
     </div>

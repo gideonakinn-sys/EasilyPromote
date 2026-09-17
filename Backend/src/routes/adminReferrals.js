@@ -26,6 +26,10 @@ const router = express.Router();
 // because disabling a code or revoking a key breaks a brand's live integration.
 const viewGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 const actGuard = [protect, authorizeRoles("admin", "super_admin")];
+// Rewards are money creators earn from the brand's budget, so finance admins set them too.
+const rewardGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin")];
+// Voiding a conversion gives its reward back to the pool: money, so finance and super admins (D19).
+const moneyGuard = [protect, authorizeRoles("finance_admin", "super_admin")];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CSV_MAX_ROWS = 50000;
@@ -672,7 +676,7 @@ router.get("/conversions.csv", viewGuard, async (req, res, next) => {
 
 // ─── POST /api/admin/referrals/conversions/:id/void ───────────────────────────
 // Voids a fake or reversed conversion while its earnings are still on hold.
-router.post("/conversions/:id/void", actGuard, async (req, res, next) => {
+router.post("/conversions/:id/void", moneyGuard, async (req, res, next) => {
   try {
     const note = requireNote(req, res);
     if (!note) return;
@@ -801,7 +805,7 @@ router.post("/keys/:id/revoke", actGuard, async (req, res, next) => {
 
 // ─── PATCH /api/admin/referrals/campaigns/:id/reward ──────────────────────────
 // Brands fund the referral budget; our team decides what creators earn per conversion.
-router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
+router.patch("/campaigns/:id/reward", rewardGuard, async (req, res, next) => {
   try {
     if (!isObjectId(req.params.id)) return res.status(404).json({ error: "Campaign not found" });
     const amount = Math.round(Number(req.body && req.body.rewardPerConversion) * 100) / 100;
@@ -809,8 +813,16 @@ router.patch("/campaigns/:id/reward", actGuard, async (req, res, next) => {
       return res.status(400).json({ error: `Enter a reward between ₦1 and ₦${MAX_REWARD_PER_CONVERSION.toLocaleString()}` });
     }
 
-    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral");
+    const campaign = await Campaign.findById(req.params.id).select("name businessId status referral rateAuthority");
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+    // Admin sets rewards only where admin is the rate authority (ADR 0003); campaigns from
+    // before the campaign engine have no rateAuthority and are referral campaigns if enabled.
+    if (campaign.rateAuthority && campaign.rateAuthority !== "admin") {
+      return res.status(409).json({
+        error: "This campaign's creator rate isn't set by our team",
+        code: "RATE_NOT_ADMIN_SET",
+      });
+    }
     if (!(campaign.referral && campaign.referral.enabled)) {
       return res.status(400).json({ error: "Referral tracking isn't on for this campaign" });
     }

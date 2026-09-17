@@ -79,14 +79,22 @@ const campaignSchema = new mongoose.Schema(
     endDate: {
       type: Date,
     },
+    // Content campaigns pay per deliverable, so only performance campaigns need views.
     targetViews: {
       type: Number,
-      required: [true, "Target views is required"],
+      required: [
+        function () {
+          // Update validators run against the query, not the document; edits keep what's stored.
+          if (typeof this.getUpdate === "function") return false;
+          return this.campaignModel !== "content";
+        },
+        "Target views is required",
+      ],
       min: 1,
     },
     costPerView: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
     budget: {
@@ -132,6 +140,100 @@ const campaignSchema = new mongoose.Schema(
       type: Number,
       default: 5,
       min: 1,
+    },
+    // The brand wizard step a draft was last saved on, so it reopens there.
+    wizardStep: {
+      type: Number,
+      min: 1,
+      max: 6,
+    },
+    // ── Campaign engine (ADR 0001): new fields beside the older ones below. ──
+    campaignObjective: {
+      type: String,
+      enum: ["content", "views", "engagement", "downloads", "signups", "leads", "sales", "other"],
+    },
+    campaignModel: {
+      type: String,
+      enum: ["content", "performance"],
+    },
+    payShape: {
+      type: String,
+      enum: ["fixed", "performance", "hybrid"],
+    },
+    // Who sets what a creator earns per unit (ADR 0003).
+    rateAuthority: {
+      type: String,
+      enum: ["brand", "admin", "platform"],
+    },
+    performanceMetric: {
+      type: String,
+      enum: ["views", "clicks", "downloads", "signups", "sales", "leads", "engagement", null],
+      default: undefined,
+    },
+    // Content campaigns only: set by the brand.
+    contentPay: {
+      ratePerDeliverable: Number,
+      deliverables: Number,
+    },
+    // Content campaigns: what the creator pool has promised and given back (ticket 09). Only
+    // written by the atomic conditional updates in utils/fixedPay.js.
+    fixedPay: {
+      // One entry per submission whose fixed pay is credited; its length is deliverables paid.
+      creditedSubmissions: { type: [mongoose.Schema.Types.ObjectId], default: undefined },
+      credited: { type: Number, default: undefined },
+      // Capacity held by unused-budget refunds that are pending or succeeded, one entry per refund
+      // row. The refund rows are the record; this is the lock credits check against.
+      refundReservations: {
+        type: [
+          new mongoose.Schema(
+            {
+              refundId: { type: mongoose.Schema.Types.ObjectId, required: true },
+              deliverables: { type: Number, required: true },
+              creatorBudget: { type: Number, required: true },
+              platformFee: { type: Number, required: true },
+            },
+            { _id: false }
+          ),
+        ],
+        default: undefined,
+      },
+    },
+    contentDestination: {
+      type: String,
+      enum: ["creator_page", "brand_page", "both"],
+    },
+    creatorAccess: {
+      type: String,
+      enum: ["open_call", "application_required"],
+    },
+    audienceTargeting: {
+      locations: { type: [String], default: undefined },
+      // Share of a creator's audience that must be in the locations above, combined.
+      minLocationShare: Number,
+      ageRanges: { type: [String], default: undefined },
+      genders: { type: [String], default: undefined },
+      interests: { type: [String], default: undefined },
+      platforms: { type: [String], default: undefined },
+    },
+    creatorEligibility: {
+      minFollowers: Number,
+      minEngagementRate: Number,
+      categories: { type: [String], default: undefined },
+      verifiedOnly: Boolean,
+      minRank: String,
+      requiredBadges: { type: [String], default: undefined },
+    },
+    brief: {
+      summary: String,
+      dos: { type: [String], default: undefined },
+      donts: { type: [String], default: undefined },
+      hashtags: { type: [String], default: undefined },
+      soundUrl: String,
+      referenceVideos: { type: [String], default: undefined },
+      tone: String,
+      keyMessages: { type: [String], default: undefined },
+      productInfo: String,
+      approvalRequirements: String,
     },
     // What the brand wants: views only, or people taking an action in their app, which
     // adds referral tracking funded by a referral budget.
@@ -212,6 +314,19 @@ const campaignSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+      // Back-pay in flight: each earlier conversion's reward is reserved from the pool together with
+      // an entry here, so a retry after a crash finds the reservation instead of reserving twice.
+      // Entries are removed once the conversion records its reward.
+      payingConversions: {
+        type: [
+          {
+            _id: false,
+            conversionId: { type: mongoose.Schema.Types.ObjectId, required: true },
+            attemptId: { type: mongoose.Schema.Types.ObjectId, required: true },
+          },
+        ],
+        default: undefined,
+      },
     },
     completedAt: {
       type: Date,
@@ -230,12 +345,13 @@ campaignSchema.pre("save", function (next) {
   if (this.isModified("status") && this.status === "completed" && !this.completedAt) {
     this.completedAt = new Date();
   }
-  if (this.isModified("targetViews") && !this._skipPriceRecalculation) {
+  if (this.campaignModel !== "content" && this.isModified("targetViews") && !this._skipPriceRecalculation) {
     const { getPriceForViews } = require("../config/pricing");
     this.budget = getPriceForViews(this.targetViews);
     this.costPerView = Math.round((this.budget / this.targetViews) * 1000) / 1000;
   }
-  if (this.isModified("budget") || this.isModified("platformFeePercent")) {
+  // Content campaigns add the fee on top of the creator budget (D2); their route sets all three.
+  if (this.campaignModel !== "content" && (this.isModified("budget") || this.isModified("platformFeePercent"))) {
     this.platformFee = this.budget * (this.platformFeePercent / 100);
     this.creatorPool = this.budget - this.platformFee;
   }

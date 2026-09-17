@@ -89,6 +89,8 @@ export interface CampaignItem {
     | "approved_post"
     | "live_tracking"
     | "delivered"
+    // Campaign engine: content approval (ticket 07): rejected content, appealable.
+    | "rejected"
     | "cancelled";
   reward: number;
   viewTarget?: number;
@@ -188,7 +190,8 @@ export interface WalletData {
     availableToWithdraw: number;
     withdrawable: boolean;
   }>;
-  // Weekly per-campaign withdrawals: views and referral earnings past their hold together.
+  // Weekly per-campaign withdrawals: views earnings, and referral earnings and fixed pay past
+  // their hold, together.
   withdrawCampaigns?: Array<{
     id: string;
     title: string;
@@ -196,10 +199,43 @@ export interface WalletData {
     viewsAvailable: number;
     referralAvailable: number;
     referralOnHold: number;
+    fixedAvailable?: number;
+    fixedOnHold?: number;
+    fixedAwaitingDelivery?: number;
+    fixedHoldUntil?: string | null;
+    // What the campaign has earned per pot, withdrawn or not.
+    earnings?: { fixed: number; performance: number; referral: number };
+    // Money not withdrawable yet, and why.
+    onHold?: Array<{ pot: "fixed" | "referral"; amount: number; reason: string; until: string | null }>;
+    onHoldTotal?: number;
+    payoutDate?: string;
     total: number;
     state: "available" | "below_minimum" | "nothing_yet" | "requested" | "withdrawn_this_week";
     requested: { amount: number; status: string; payoutDate: string } | null;
   }>;
+  // Fixed pay from content campaigns, credited per deliverable.
+  fixed?: {
+    earned: number;
+    awaitingDelivery: number;
+    onHold: number;
+    availableToWithdraw: number;
+    withdrawn: number;
+    holdDays: number;
+    byCampaign: Array<{
+      id: string;
+      title: string;
+      status: string | null;
+      deliverables: number;
+      earned: number;
+      awaitingDelivery: number;
+      onHold: number;
+      holdUntil: string | null;
+      // Each unlock date with the amount that unlocks then, soonest first.
+      unlocks?: Array<{ date: string; amount: number }>;
+      withdrawn: number;
+      availableToWithdraw: number;
+    }>;
+  };
   payoutSchedule?: { nextPayoutDate: string; minimumPerCampaign: number };
   hasBankAccount: boolean;
   bankName?: string | null;
@@ -246,6 +282,7 @@ export interface WithdrawalItem {
   amount: number;
   viewsAmount?: number;
   referralAmount?: number;
+  fixedAmount?: number;
   // The Friday a pending or processing withdrawal is paid.
   payoutDate?: string | null;
   status: "pending" | "processing" | "rejected" | "released";
@@ -253,4 +290,375 @@ export interface WithdrawalItem {
   requestedAt: string;
   reviewedAt?: string | null;
   releasedAt?: string | null;
+}
+
+// Campaign engine: brand wizard (ticket 03)
+export type CampaignObjective = "content" | "views" | "downloads" | "signups" | "engagement" | "leads" | "sales" | "other";
+export type ContentDestination = "creator_page" | "brand_page" | "both";
+export type CreatorAccess = "open_call" | "application_required";
+
+export interface ContentPay {
+  ratePerDeliverable: number;
+  deliverables: number;
+}
+
+export interface AudienceTargeting {
+  locations?: string[];
+  minLocationShare?: number;
+  ageRanges?: string[];
+  genders?: string[];
+  interests?: string[];
+  platforms?: string[];
+}
+
+export interface CreatorEligibility {
+  minFollowers?: number;
+  minEngagementRate?: number;
+  categories?: string[];
+  verifiedOnly?: boolean;
+  minRank?: string;
+  requiredBadges?: string[];
+}
+
+export interface CampaignBrief {
+  summary?: string;
+  dos?: string[];
+  donts?: string[];
+  hashtags?: string[];
+  soundUrl?: string;
+  referenceVideos?: string[];
+  tone?: string;
+  keyMessages?: string[];
+  productInfo?: string;
+  approvalRequirements?: string;
+}
+
+// The Campaign v2 setup as GET /campaigns/:id returns it.
+export interface CampaignSetup {
+  campaignObjective: CampaignObjective | null;
+  campaignModel: "content" | "performance" | null;
+  payShape: "fixed" | "performance" | "hybrid" | null;
+  rateAuthority: "brand" | "admin" | "platform" | null;
+  contentPay: ContentPay | null;
+  contentDestination: ContentDestination | null;
+  creatorAccess: CreatorAccess | null;
+  audienceTargeting: AudienceTargeting;
+  creatorEligibility: CreatorEligibility;
+  brief: CampaignBrief;
+}
+
+// What a brand pays, from the same calculator checkout charges with.
+export interface CampaignQuote {
+  creatorBudget: number;
+  performanceBudget: number;
+  platformFee: number;
+  total: number;
+}
+
+// Campaign engine: creator marketplace (tickets 01/04/05)
+// Interface declarations below merge into the ones above.
+
+export type ProfileSection = ProfileFocusSection | "audience" | "portfolio";
+
+export type PayShape = "fixed" | "performance" | "hybrid";
+
+// What one unit of work earns. amount is null while EasilyPromote is still setting a sign-up reward.
+export interface PayPerUnit {
+  amount: number | null;
+  unit: string;
+}
+
+export interface CreatorBrief {
+  summary: string;
+  dos: string[];
+  donts: string[];
+  hashtags: string[];
+  soundUrl: string | null;
+  referenceVideos: string[];
+  tone: string | null;
+  keyMessages: string[];
+  productInfo: string | null;
+  approvalRequirements: string | null;
+}
+
+export interface EligibilityFailure {
+  criterion: string;
+  message: string;
+}
+
+export interface MarketplaceCampaign {
+  campaignModel?: "content" | "performance";
+  payShape?: PayShape;
+  creatorAccess?: CreatorAccess;
+  pay?: PayPerUnit;
+  targetPlatforms?: string[];
+  targetLocations?: string[];
+  placesLeft?: number;
+  briefSummary?: string;
+  publishedAt?: string;
+  eligible?: boolean;
+  ineligibleReasons?: string[];
+  matchScore?: number;
+  recommended?: boolean;
+}
+
+export interface CampaignItem {
+  kind?: "views" | "deliverable";
+  brief?: CreatorBrief;
+  pay?: PayPerUnit;
+}
+
+export interface SocialAccount {
+  followers?: number | null;
+}
+
+export interface AudienceLocation {
+  name: string;
+  percentage: number;
+}
+
+export interface AudienceAge {
+  range: string;
+  percentage: number;
+}
+
+export interface AudienceGenders {
+  female: number;
+  male: number;
+  other: number;
+}
+
+export interface CreatorAudience {
+  locations: AudienceLocation[];
+  ages: AudienceAge[];
+  genders: AudienceGenders | null;
+  source: "self_reported" | "api";
+  proofUrl: string | null;
+  updatedAt: string | null;
+}
+
+export interface PortfolioItem {
+  url: string;
+  thumbnailUrl: string | null;
+  platform: string;
+  title: string;
+  views: number;
+  category: string | null;
+}
+
+export interface CreatorStats {
+  avgViews: number;
+  engagementRate: number | null;
+  pastCampaigns: number;
+  totalCampaignViews: number;
+  updatedAt: string | null;
+}
+
+export interface CreatorProfile {
+  city?: string;
+  state?: string;
+  legalName?: string;
+  phone?: string;
+  categories?: string[];
+  audience?: CreatorAudience | null;
+  portfolio?: PortfolioItem[];
+  verified?: boolean;
+  badges?: string[];
+  stats?: CreatorStats;
+}
+
+// POST /campaigns/:id/join
+export interface JoinResult {
+  id: string;
+  campaignId: string;
+  status: string;
+  kind: "views" | "deliverable";
+  reward: number;
+  viewTarget?: number;
+  referralCode: string | null;
+  placesLeft: number;
+  brief: CreatorBrief;
+}
+
+// Campaign engine: applications (ticket 06)
+
+export type ApplicationStatus = "pending" | "approved" | "rejected" | "withdrawn" | "expired";
+
+// A creator's own application, from the dashboard payload (`applications`).
+export interface MyApplication {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  campaignStatus?: string;
+  status: ApplicationStatus;
+  pitch: string;
+  pay: PayPerUnit | null;
+  appliedAt: string;
+  expiresAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string;
+  coverImageUrl?: string | null;
+  brandName?: string;
+  brandAvatar?: string | null;
+}
+
+export interface ApplicantPlatform {
+  platform: string;
+  handle: string | null;
+  followers: number | null;
+}
+
+export interface ApplicantLocation {
+  city: string;
+  state: string;
+  country: string;
+}
+
+// One applicant row in the brand's list.
+export interface ApplicationRow {
+  id: string;
+  status: ApplicationStatus;
+  pitch: string;
+  matchScore: number;
+  appliedAt: string;
+  expiresAt: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string;
+  creator: {
+    id: string;
+    name: string;
+    username: string;
+    photo: string | null;
+    verified: boolean;
+    location: ApplicantLocation | null;
+    topPlatform: ApplicantPlatform | null;
+    categories: string[];
+  };
+}
+
+export type ApplicationCounts = Record<ApplicationStatus | "all", number>;
+
+export interface ApplicationList {
+  counts: ApplicationCounts;
+  applications: ApplicationRow[];
+}
+
+export interface ApplicantPortfolioItem extends PortfolioItem {
+  matchesCampaign: boolean;
+}
+
+// Sections come back in the order the brand should read them for this campaign.
+export type ApplicantSection =
+  | { key: "platforms"; emphasis: boolean; data: { accounts: ApplicantPlatform[] } }
+  | { key: "categories"; emphasis: boolean; data: { categories: string[]; matching: string[] } }
+  | {
+      key: "audience";
+      emphasis: boolean;
+      data: {
+        targetedLocations: string[];
+        targetedShare: number;
+        locations: AudienceLocation[];
+        topLocation: AudienceLocation | null;
+        topAge: AudienceAge | null;
+        genders: AudienceGenders | null;
+        source: "self_reported" | "api" | null;
+      };
+    }
+  | {
+      key: "performance";
+      emphasis: boolean;
+      data: { avgViews: number; engagementRate: number | null; pastCampaigns: number; totalCampaignViews: number };
+    }
+  | { key: "portfolio"; emphasis: boolean; data: { categories: string[]; items: ApplicantPortfolioItem[] } }
+  | { key: "badges"; emphasis: boolean; data: { badges: string[]; completionRate: number } };
+
+export interface ApplicationDetail extends ApplicationRow {
+  applicant: {
+    name: string;
+    username: string;
+    photo: string | null;
+    verified: boolean;
+    location: ApplicantLocation;
+  };
+  sections: ApplicantSection[];
+}
+
+// POST /campaigns/:id/applications/:applicationId/approve
+export interface ApprovedApplication extends ApplicationRow {
+  placement: { id: string; kind: "views" | "deliverable"; reward: number; viewTarget?: number; referralCode: string | null };
+  placesLeft: number;
+}
+
+// Campaign engine: content approval (ticket 07)
+// Interface declarations below merge into the ones above.
+
+export type ContentSubmissionStatus =
+  | "new"
+  | "changes_requested"
+  | "rejected"
+  | "appealed"
+  | "awaiting_post"
+  | "verifying"
+  | "awaiting_delivery"
+  | "awaiting_receipt"
+  | "completed";
+
+export interface ContentChangeRequest {
+  round: number;
+  notes: string;
+  requestedAt: string;
+  videoUrl: string | null;
+  caption: string | null;
+  resubmittedAt: string | null;
+}
+
+// Where a content submission's approval and delivery stand. status is null before the
+// creator has submitted anything.
+export interface ContentApproval {
+  status: ContentSubmissionStatus | null;
+  destination: ContentDestination;
+  maxChangeRequests: number;
+  changeRequestsLeft: number;
+  changeRequests: ContentChangeRequest[];
+  autoApproved?: boolean;
+  // When whatever waits on the brand (review, receipt, post verification) is done automatically.
+  brandDueAt?: string | null;
+  rejectionReason?: string | null;
+  appealReason?: string | null;
+  delivery?: { url: string; sharedAt: string | null; confirmedAt: string | null } | null;
+  usageRights?: { licence: string; acceptedAt: string; acceptedBy: string | null } | null;
+  // Judged by the server: brief hashtags the submitted and posted captions don't carry.
+  missingHashtags?: string[];
+  postedCaption?: string | null;
+  postedMissingHashtags?: string[];
+  postVerifiedAt?: string | null;
+  completedAt?: string | null;
+  licence: string | null;
+  // Creator dashboard only.
+  requiredHashtags?: string[];
+}
+
+export interface CampaignItem {
+  contentApproval?: ContentApproval;
+}
+
+// One submission in GET /submissions/campaign/:id for a content campaign.
+export interface ContentSubmission extends ContentApproval {
+  id: string;
+  creatorId: string;
+  creatorHandle: string;
+  videoUrl?: string;
+  caption?: string;
+  submittedAt: string;
+  postedPlatforms?: Array<{ platform: string; postUrl: string }>;
+}
+
+export interface ContentReviewData {
+  submissions: ContentSubmission[];
+  contentApproval?: {
+    destination: ContentDestination;
+    maxChangeRequests: number;
+    licence: string;
+    brief: CreatorBrief;
+  };
 }

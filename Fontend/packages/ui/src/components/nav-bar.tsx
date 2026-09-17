@@ -1,7 +1,8 @@
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ChevronDownIcon, UserIcon, Logout01Icon } from "@hugeicons/core-free-icons";
+import { ChevronDownIcon, UserIcon, Logout01Icon, HelpCircleIcon } from "@hugeicons/core-free-icons";
 import { cn } from "../lib/utils";
 import { MobileDrawer } from "../components/mobile-drawer";
 import {
@@ -22,6 +23,8 @@ export interface NavBarProps {
   userAvatarUrl?: string;
   onLogout?: () => void;
   onAvatarChange?: (file: File) => void;
+  /** Where the Help link goes; no link when left out. */
+  helpHref?: string;
   className?: string;
 }
 
@@ -32,6 +35,7 @@ export function NavBar({
   userAvatarUrl,
   onLogout,
   onAvatarChange,
+  helpHref,
   className,
 }: NavBarProps) {
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
@@ -70,8 +74,17 @@ export function NavBar({
           )}
         </div>
 
-        {/* Desktop Profile Dropdown */}
-        <div className="hidden md:block">
+        {/* Desktop Help link and Profile Dropdown */}
+        <div className="hidden md:flex items-center gap-3">
+          {helpHref && (
+            <Link
+              href={helpHref}
+              className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-stone-900 font-rethink"
+            >
+              <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-stone-500" />
+              <span>Help</span>
+            </Link>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 bg-white rounded-full pl-2 pr-4 py-1.5 cursor-pointer">
@@ -139,6 +152,16 @@ export function NavBar({
                 )}
               </div>
             </button>
+            {helpHref && (
+              <Link
+                href={helpHref}
+                onClick={() => setIsProfileOpen(false)}
+                className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+              >
+                <HugeiconsIcon icon={HelpCircleIcon} size={16} />
+                <span className="font-medium">Help</span>
+              </Link>
+            )}
             {onLogout && (
               <button
                 onClick={() => {

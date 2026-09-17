@@ -135,7 +135,19 @@ async function createRefund({ transaction, amount, merchant_note }) {
   });
 }
 
+// Refunds Paystack already holds against one original payment (id or reference), amounts in naira.
+async function listRefunds({ transaction }) {
+  const data = await paystackRequest(`/refund?transaction=${encodeURIComponent(transaction)}&perPage=100`);
+  return (Array.isArray(data) ? data : []).map((refund) => ({
+    id: refund.id,
+    amount: (Number(refund.amount) || 0) / 100,
+    status: refund.status,
+    createdAt: refund.createdAt || refund.created_at || refund.refunded_at || null,
+  }));
+}
+
 module.exports = {
+  listRefunds,
   fetchBalance,
   fetchTransfer,
   initializeTransaction,

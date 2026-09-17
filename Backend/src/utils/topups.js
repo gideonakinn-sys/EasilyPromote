@@ -63,6 +63,7 @@ async function creditTopup({ campaignId, reference, amount }) {
     await campaign.save();
 
     await addTopupSlots(campaign, extraViews, extraPool);
+    await require("./campaignUpdates").emitPlacesLeft(campaign._id);
   }
 
   return { credited: true, campaign, amount, extraViews };

@@ -2,6 +2,7 @@ const express = require("express");
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
+const PaystackWebhookFailure = require("../models/PaystackWebhookFailure");
 const { verifyWebhookSignature } = require("../services/paystack");
 const { emitToUser } = require("../config/socket");
 const { ensureCampaignSlots } = require("../utils/ensureSlots");
@@ -14,7 +15,23 @@ const { recordUnmatchedPayment, applyRefundEvent } = require("../utils/refunds")
 
 const router = express.Router();
 
+// A signed webhook we couldn't process is recorded for the ops alerts job; the error still
+// reaches the error handler so Paystack sees a failure and retries.
+async function recordProcessingFailure(event, reference, error) {
+  try {
+    await PaystackWebhookFailure.create({
+      event: event || null,
+      reference: reference || null,
+      error: String((error && error.message) || error || "Unknown error").slice(0, 1000),
+    });
+  } catch (recordError) {
+    console.error("[Webhooks] Couldn't record a Paystack webhook failure:", recordError.message);
+  }
+}
+
 router.post("/paystack", express.raw({ type: "application/json" }), async (req, res, next) => {
+  let failureEvent = null;
+  let failureReference = null;
   try {
     const signature = req.headers["x-paystack-signature"];
 
@@ -23,8 +40,11 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
       return res.status(401).json({ error: "Invalid signature" });
     }
 
+    failureEvent = "unparsed";
     const payload = JSON.parse(req.body.toString("utf8"));
     const { event, data } = payload;
+    failureEvent = event;
+    failureReference = data && data.reference;
 
     if (event === "charge.success") {
       const reference = data.reference;
@@ -165,6 +185,7 @@ router.post("/paystack", express.raw({ type: "application/json" }), async (req, 
 
     res.sendStatus(200);
   } catch (error) {
+    if (failureEvent) await recordProcessingFailure(failureEvent, failureReference, error);
     next(error);
   }
 });

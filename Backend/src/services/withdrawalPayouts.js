@@ -7,16 +7,14 @@ const paystack = require("./paystack");
 const { recordAdminActivity } = require("./adminActivity");
 const { campaignEscrowBalance } = require("../utils/escrow");
 const { settleRelease, revertRelease } = require("../utils/payouts");
+const { fixedPayableNow } = require("../utils/fixedPay");
+const { roundMoney } = require("../utils/money");
 
 // Paystack transfer states that mean the money is still moving.
 const IN_FLIGHT = ["pending", "processing", "otp", "receipt"];
 
 function reply(status, body) {
   return { status, body };
-}
-
-function roundMoney(value) {
-  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 // Paystack's NGN transfer fee tiers, used when a transfer response doesn't state its fee.
@@ -26,13 +24,14 @@ function estimateTransferFee(amount) {
   return 50;
 }
 
-// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views and referral
-// earnings together; older withdrawals are one or the other.
+// What a withdrawal pays, per pot. Weekly campaign withdrawals carry views, referral and fixed
+// pay together; older withdrawals are views or referral only.
 function withdrawalParts(withdrawal) {
   if (withdrawal.kind === "campaign") {
     return [
       { bucket: "views", amount: roundMoney(withdrawal.viewsAmount) },
       { bucket: "referral", amount: roundMoney(withdrawal.referralAmount) },
+      { bucket: "fixed", amount: roundMoney(withdrawal.fixedAmount) },
     ].filter((part) => part.amount > 0);
   }
   return [{ bucket: withdrawal.kind === "referral" ? "referral" : "views", amount: roundMoney(withdrawal.amount) }];
@@ -131,7 +130,32 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
     }
   }
 
-  const parts = withdrawalParts(withdrawal);
+  let parts = withdrawalParts(withdrawal);
+
+  // Fixed pay is checked again at payout: only credits whose content is delivered and whose 7-day
+  // hold is over can be released, whatever was eligible when the withdrawal was requested.
+  const fixedPart = parts.find((part) => part.bucket === "fixed");
+  let capNote = null;
+  if (fixedPart) {
+    const payable = await fixedPayableNow({ creatorId: withdrawal.creatorId, campaignId: campaign._id });
+    if (fixedPart.amount > payable) {
+      const amount = roundMoney(withdrawal.amount - fixedPart.amount + payable);
+      capNote = `Fixed pay capped at payout from ₦${fixedPart.amount.toLocaleString()} to ₦${payable.toLocaleString()}: the rest isn't delivered or past its hold yet`;
+      if (!(amount > 0)) {
+        await backToPending();
+        return reply(400, { error: `Nothing in this withdrawal can be paid yet. ${capNote}.`, code: "FIXED_PAY_NOT_ELIGIBLE" });
+      }
+      await Withdrawal.updateOne(
+        { _id: withdrawal._id },
+        { $set: { fixedAmount: payable, amount, adminNotes: [withdrawal.adminNotes, capNote].filter(Boolean).join(" | ") } }
+      );
+      withdrawal.fixedAmount = payable;
+      withdrawal.amount = amount;
+      withdrawal.adminNotes = [withdrawal.adminNotes, capNote].filter(Boolean).join(" | ");
+      parts = withdrawalParts(withdrawal);
+    }
+  }
+
   if (parts.length === 0) {
     await backToPending();
     return reply(400, { error: "This withdrawal has nothing to pay" });
@@ -144,7 +168,7 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
     if (part.amount > available) {
       await backToPending();
       return reply(400, {
-        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
+        error: `Insufficient funds in this campaign's ${part.bucket === "referral" ? "referral budget" : part.bucket === "fixed" ? "fixed pay owed" : "escrow"}. Available: ₦${Math.max(available, 0).toLocaleString()}`,
       });
     }
   }
@@ -275,7 +299,10 @@ async function payWithdrawal({ withdrawalId, note = null, req = null, skipBalanc
     if (err.code !== 11000) console.error("[Payouts] Could not record transfer fee:", err.message);
   }
 
-  await Withdrawal.updateOne({ _id: withdrawal._id }, { $set: { adminNotes: note || withdrawal.adminNotes || null } });
+  await Withdrawal.updateOne(
+    { _id: withdrawal._id },
+    { $set: { adminNotes: [note, capNote].filter(Boolean).join(" | ") || withdrawal.adminNotes || null } }
+  );
 
   // Test mode settles instantly; live transfers come back "pending" and are finalised by
   // the transfer.success webhook. Settling is idempotent.

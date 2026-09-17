@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sidebar } from "../components/sidebar";
+import { NeedsAttention } from "../components/needs-attention";
 import { apiRequest, getToken, isAuthenticated } from "../lib/api";
 
 interface StatsData {
@@ -39,6 +40,8 @@ export default function AdminOverviewPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [alertsRefreshKey, setAlertsRefreshKey] = useState(0);
+  const [authed, setAuthed] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -59,6 +62,7 @@ export default function AdminOverviewPage() {
       router.push("/login");
       return;
     }
+    setAuthed(true);
     fetchStats();
   }, [router, fetchStats]);
 
@@ -77,7 +81,10 @@ export default function AdminOverviewPage() {
             <p className="text-sm text-stone-500 mt-1">Real-time stats, escrow status, and system operations</p>
           </div>
           <button
-            onClick={fetchStats}
+            onClick={() => {
+              fetchStats();
+              setAlertsRefreshKey((key) => key + 1);
+            }}
             className="self-start md:self-auto px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -94,6 +101,8 @@ export default function AdminOverviewPage() {
             <span>{error}</span>
           </div>
         )}
+
+        {authed && <NeedsAttention refreshKey={alertsRefreshKey} />}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">

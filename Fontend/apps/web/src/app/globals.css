@@ -109,3 +109,11 @@
     font-size: 16px;
   }
 }
+
+/* Vaul pads side drawers with an off-screen ::after twice their width (to cover the gap
+   when dragged). Side drawers here aren't dragged, and the padding lets a focused input
+   scroll the drawer sideways, clipping its content. */
+[data-vaul-drawer][data-vaul-drawer-direction="right"]::after,
+[data-vaul-drawer][data-vaul-drawer-direction="left"]::after {
+  display: none;
+}

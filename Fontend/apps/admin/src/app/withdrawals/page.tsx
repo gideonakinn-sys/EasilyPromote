@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
-import { apiRequest, getToken, isAuthenticated } from "../../lib/api";
+import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
+import { MONEY_ROLES } from "../../lib/roles";
 
 interface WithdrawalItem {
   id: string;
@@ -14,6 +15,10 @@ interface WithdrawalItem {
   creatorId: string;
   creatorName: string;
   amount: number;
+  kind?: "views" | "referral" | "campaign";
+  viewsAmount?: number;
+  referralAmount?: number;
+  fixedAmount?: number;
   status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   targetViews: number | null;
@@ -40,6 +45,12 @@ export default function AdminWithdrawalsPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
+  // Approving or rejecting a withdrawal is for finance admins and super admins.
+  const [canReview, setCanReview] = useState(false);
+
+  useEffect(() => {
+    setCanReview(MONEY_ROLES.includes(getUser()?.role || ""));
+  }, []);
 
   const fetchWithdrawals = useCallback(async () => {
     try {
@@ -180,7 +191,15 @@ export default function AdminWithdrawalsPage() {
 
                     <td className="px-6 py-4 font-mono text-stone-600">{formatCurrency(w.escrowBalance)}</td>
 
-                    <td className="px-6 py-4 font-bold text-stone-900">{formatCurrency(w.amount)}</td>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-stone-900">{formatCurrency(w.amount)}</p>
+                      {w.kind === "campaign" && (
+                        <p className="text-[10px] text-stone-500 mt-0.5 whitespace-nowrap">
+                          Views {formatCurrency(w.viewsAmount ?? 0)} · Referral {formatCurrency(w.referralAmount ?? 0)} · Fixed{" "}
+                          {formatCurrency(w.fixedAmount ?? 0)}
+                        </p>
+                      )}
+                    </td>
 
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${
@@ -197,7 +216,9 @@ export default function AdminWithdrawalsPage() {
                     </td>
 
                     <td className="px-6 py-4">
-                      {w.status === "pending" ? (
+                      {w.status === "pending" && !canReview ? (
+                        <span className="text-[11px] text-stone-400">Finance admins review withdrawals</span>
+                      ) : w.status === "pending" ? (
                         <div className="space-y-2">
                           <input
                             value={note[w.id] || ""}

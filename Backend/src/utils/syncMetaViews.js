@@ -6,6 +6,8 @@ const meta = require("../services/meta");
 const { decrypt } = require("../utils/crypto");
 const { emitCampaignUpdate } = require("./campaignUpdates");
 const { recordEvent } = require("../services/submissionEvents");
+// Campaign engine: content approval (ticket 07)
+const { isContentCampaign } = require("./campaignPay");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -47,6 +49,9 @@ function extractFacebookVideoId(url) {
 async function updateCampaignFromSubmission(submission) {
   const campaign = await Campaign.findById(submission.campaignId);
   if (!campaign) return;
+  // Campaign engine: content approval (ticket 07). Content campaigns have no view target, and
+  // their live posts sit in "verifying"; views never complete them.
+  if (isContentCampaign(campaign)) return;
 
   const totalViews = await Submission.aggregate([
     { $match: { campaignId: campaign._id, status: { $in: ["posted", "verifying"] } } },

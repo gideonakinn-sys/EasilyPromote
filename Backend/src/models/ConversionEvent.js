@@ -77,6 +77,18 @@ const conversionEventSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
+    // An earlier unpaid conversion a back-pay run is paying: which attempt claimed it, when, and the
+    // reward it reserves. Cleared when the reward is recorded or the pool can't cover it; a claim
+    // older than a few minutes (a crashed run) can be taken over.
+    payingClaim: {
+      type: {
+        _id: false,
+        attemptId: mongoose.Schema.Types.ObjectId,
+        at: Date,
+        amount: Number,
+      },
+      default: null,
+    },
   },
   { timestamps: true }
 );

@@ -204,6 +204,7 @@ function BrandDashboardContent() {
         userAvatarUrl={userAvatarUrl}
         onLogout={handleLogout}
         onAvatarChange={handleAvatarUpload}
+        helpHref="/help/brands"
       />
 
       {showAlert && draftCount > 0 && (

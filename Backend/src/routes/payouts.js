@@ -2,6 +2,8 @@ const express = require("express");
 const Campaign = require("../models/Campaign");
 const Transaction = require("../models/Transaction");
 const { protect } = require("../middleware/auth");
+const { isContentCampaign } = require("../utils/campaignPay");
+const { contentBudgetSummary } = require("../utils/fixedPay");
 
 const router = express.Router();
 
@@ -47,15 +49,32 @@ router.get("/campaign/:campaignId", protect, async (req, res, next) => {
       creator: t.creatorHandle || null,
       views: t.views || null,
       amount: t.amount,
+      type: t.type,
       status: t.status,
     }));
 
+    // Content campaigns: money creators are owed and the fee on delivered work are never
+    // refundable. Paid out, owed and refundable (the D5 formula) are shown separately.
+    let content = null;
+    if (isContentCampaign(campaign)) {
+      const { summary } = await contentBudgetSummary(campaign._id);
+      content = {
+        deliverables: summary.deliverables,
+        paidOut: summary.paidOut,
+        owed: summary.owedAmount,
+        refundable: summary.refundable.amount,
+        refunded: summary.refundedAmount,
+        refundPending: summary.refundPendingAmount,
+      };
+    }
+
     res.json({
-      totalEscrowed: deposited,
+      totalEscrowed: content ? deposited - transactions.filter((t) => t.type === "release" && t.status === "escrow_deposit").reduce((sum, t) => sum + t.amount, 0) : deposited,
       creatorPool: campaign.creatorPool,
-      released,
-      pendingInEscrow: Math.max(pendingInEscrow, 0),
-      refundable,
+      released: content ? content.paidOut : released,
+      pendingInEscrow: content ? content.owed : Math.max(pendingInEscrow, 0),
+      refundable: content ? content.refundable : refundable,
+      content,
       platformFeePercent: campaign.platformFeePercent,
       platformFeeAmount: campaign.platformFee,
       ledger,
