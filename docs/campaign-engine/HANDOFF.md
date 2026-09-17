@@ -261,7 +261,7 @@ Recommended design (from reading the referral code): run a clicks campaign **on 
 
 **Tracked link format is `/r/<campaignId>/<referral code>`** (codes are only unique per brand). Mounted in `Backend/src/app.js` on the API host, so the public link is `<API origin>/r/...` unless a short domain is routed there.
 
-Still to do (frontend only, no screens exist yet):
+**Screens built and merged (18 Sep)** by five parallel agents: wizard Clicks + destination link, age/gender Required switches, usage-rights choice and custom terms; creator card `₦X / click`, tracked link with Copy, terms acceptance on join/apply; brand clicks stats and usage rights; admin click filters, campaign terms panel. Web and admin typecheck clean; backend 99 unit + 222 end-to-end pass. **Not browser-checked yet** — do a manual pass of each screen against a local stack before pushing. The list below is what was built, kept for reference:
 1. Wizard: Clicks objective card with a destination URL field (http/https) and "reward set by our team" copy; age/gender "required" toggles with minimum share and a self-reported-data warning; usage rights choice (standard or custom terms) for brand page / both.
 2. Marketplace card and creator campaign page: `₦X / click`, the tracked link with a Copy button; custom terms shown with an "I accept these usage terms" checkbox that sends `usageRightsAccepted: { version }` on join (`POST /api/campaigns/:id/join`) and apply.
 3. Brand campaign page: valid clicks and spend (conversion rows with `eventType: "click"`). Admin referrals page: `click` in event type filters.

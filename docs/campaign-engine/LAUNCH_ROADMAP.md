@@ -321,9 +321,9 @@ For beta, Fixed payouts use the existing withdrawal pipeline: approved/delivered
 - [ ] Audience demographics pulled from TikTok / Instagram APIs where scopes allow; "Verified audience" label replaces "Self-reported"
 - [x] Automated badges: Top Creator, High Performer, Reliable Creator, Campaign Pro from creator score, completion rate and brand ratings (add a post-campaign brand rating) — built: brand ratings (SPEC D24), badge rules with minimum samples and hysteresis, admin overrides, pre-existing badges kept for review (D25)
 - [x] Recommended v2 using past campaign results; Trending weighted by fill speed — built: Recommended v2 (SPEC D26), Trending v2 (D27), marketplace sections API & cursor paging (D28), web UI on sections with in-memory tab caching
-- [ ] New performance metrics: Clicks, Leads, Sales, Engagement (clicks via tracked links; leads / sales via the existing webhook contract)
-- [ ] Age / gender / interests as hard filters once data is trustworthy
-- [ ] Custom usage-rights terms per campaign
+- [x] New performance metrics: Clicks, Leads, Sales, Engagement (clicks via tracked links; leads / sales via the existing webhook contract)
+- [x] Age / gender / interests as hard filters once data is trustworthy — built: age and gender opt-in per campaign (D8 amended); interests stay ranking-only; Engagement stays Coming soon
+- [x] Custom usage-rights terms per campaign (D30)
 
 ---
 
