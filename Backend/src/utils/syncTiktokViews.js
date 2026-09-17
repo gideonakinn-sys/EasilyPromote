@@ -10,6 +10,8 @@ const { recordViewDelta } = require("../services/viewSnapshots");
 const { isContentCampaign } = require("./campaignPay");
 // Hybrid pay (ticket 10): verified posts on views-bonus campaigns keep syncing, and earn their bonus.
 const { viewsBonusSubmissionFilter, accrueAllViewsBonuses } = require("./hybridBonus");
+const { handleTikTokError } = require("../services/socialReconnect");
+const { postPredatesCampaign } = require("../services/postIdentity");
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -88,7 +90,8 @@ async function syncTiktokViews() {
     errors: [],
   };
 
-  const connections = await TikTokConnection.find().select("+accessTokenEnc +refreshTokenEnc");
+  // Connections waiting for the creator to reconnect (D32) are skipped until they do.
+  const connections = await TikTokConnection.find({ needsReconnect: { $ne: true } }).select("+accessTokenEnc +refreshTokenEnc");
   if (connections.length === 0) {
     console.log("[TikTok Sync] Skipped — no TikTok connections");
     return summary;
@@ -147,6 +150,10 @@ async function syncTiktokViews() {
           const metrics = videoMap.get(videoId);
 
           let entry = (submission.postedPlatforms || []).find((p) => p.platform === "tiktok");
+          // D35: a video published before the content was approved doesn't count.
+          const publishedAt = metrics.create_time ? new Date(Number(metrics.create_time) * 1000) : null;
+          if (await postPredatesCampaign(submission, entry || null, publishedAt, "TikTok sync")) continue;
+
           if (!entry) {
             entry = (submission.postedPlatforms || []).find((p) =>
               p.postUrl && /tiktok\.com|vt\.tiktok\.com|vm\.tiktok\.com/i.test(String(p.postUrl))
@@ -197,10 +204,14 @@ async function syncTiktokViews() {
         }
       }
 
-      connection.lastSyncedAt = new Date();
-      await connection.save();
+      await TikTokConnection.updateOne({ _id: connection._id }, { $set: { lastSyncedAt: new Date() } });
       console.log(`[TikTok Sync] Updated ${data.videos.length} submission(s) for user ${userId}`);
     } catch (error) {
+      // A token TikTok won't accept or refresh flags the connection (D32) instead of retrying every run.
+      if (await handleTikTokError(userId, error)) {
+        summary.errors.push(`${userId}: needs reconnecting`);
+        continue;
+      }
       console.error(`[TikTok Sync] Failed for user ${userId}:`, error.message);
       summary.errors.push(`${userId}: ${error.message}`);
     }

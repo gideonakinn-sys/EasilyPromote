@@ -47,6 +47,7 @@ const { reconcileCampaignById } = require("../services/campaignReconciliation");
 const { BonusError, bonusBudgetSummary, refundUnusedBonusPool } = require("../utils/hybridBonus");
 const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
 const { campaignHasPayments, campaignPaymentBooked } = require("../utils/campaignPayments");
+const { reconnectView } = require("../services/socialReconnect");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 // Moving money (paying or reviewing withdrawals, the payout run and payout check, refunds, voids,
@@ -1008,14 +1009,15 @@ router.get("/users", adminGuard, async (req, res, next) => {
     const creatorIds = users.filter((u) => u.role === "creator").map((u) => u._id);
     const [tiktokConnections, metaConnections] = creatorIds.length
       ? await Promise.all([
-          TikTokConnection.find({ userId: { $in: creatorIds } }).select("userId username").lean(),
-          MetaConnection.find({ userId: { $in: creatorIds } }).select("userId provider username").lean(),
+          TikTokConnection.find({ userId: { $in: creatorIds } }).select("userId username needsReconnect needsReconnectAt needsReconnectReason").lean(),
+          MetaConnection.find({ userId: { $in: creatorIds } }).select("userId provider username needsReconnect needsReconnectAt needsReconnectReason").lean(),
         ])
       : [[], []];
     // Connected social accounts per creator: what verification (D13) requires.
     const connectedMap = {};
-    for (const c of tiktokConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: "tiktok", username: c.username || null });
-    for (const c of metaConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: c.provider || "meta", username: c.username || null });
+    // D32: a flagged connection still counts as connected, with when it started needing reconnecting.
+    for (const c of tiktokConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: "tiktok", username: c.username || null, ...reconnectView(c) });
+    for (const c of metaConnections) (connectedMap[c.userId.toString()] ||= []).push({ platform: c.provider || "meta", username: c.username || null, ...reconnectView(c) });
 
     const [campaignCounts, submissionCounts, creatorProfiles] = await Promise.all([
       Campaign.aggregate([

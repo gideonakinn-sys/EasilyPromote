@@ -16,6 +16,7 @@ const { roundMoney } = require("../utils/money");
 const Submission = require("../models/Submission");
 const Transaction = require("../models/Transaction");
 const meta = require("./meta");
+const { reconnectView } = require("./socialReconnect");
 const { listEventsForSubmissions, labelFor } = require("./submissionEvents");
 const { timeAgo } = require("../utils/timeAgo");
 const { payPerUnit, fullBrief, campaignTerms } = require("../utils/campaignPay");
@@ -292,6 +293,7 @@ function buildTikTokStatus(ctx) {
     scopes: connection.scopes,
     expiresAt: connection.expiresAt,
     connectedAt: connection.connectedAt,
+    ...reconnectView(connection),
   };
 }
 
@@ -307,6 +309,7 @@ function buildMetaStatus(ctx) {
       expiresAt: c.expiresAt,
       connectedAt: c.connectedAt,
       pages: (c.pages || []).map((p) => ({ pageId: p.pageId, name: p.name, igBusinessId: p.igBusinessId })),
+      ...reconnectView(c),
     };
   }
   // `configured` tells the UI whether this deployment has app credentials for

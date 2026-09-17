@@ -72,6 +72,17 @@ const metaConnectionSchema = new mongoose.Schema(
     followersSyncedAt: {
       type: Date,
     },
+    // Set when the provider refuses the token for good (revoked, password changed, expired past
+    // refresh). The sync jobs skip the connection until the creator connects again, which clears it.
+    needsReconnect: {
+      type: Boolean,
+    },
+    needsReconnectAt: {
+      type: Date,
+    },
+    needsReconnectReason: {
+      type: String,
+    },
     lastSyncedAt: {
       type: Date,
     },

@@ -8,6 +8,7 @@ const { setPlatformFollowers } = require("../utils/socialFollowers");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const meta = require("../services/meta");
 const { encrypt } = require("../utils/crypto");
+const { CLEAR_RECONNECT, reconnectView } = require("../services/socialReconnect");
 
 const router = express.Router();
 
@@ -211,7 +212,8 @@ async function handleInstagramConnect(userId, code) {
 
   await MetaConnection.findOneAndUpdate(
     { userId, provider: "instagram" },
-    { $set: update, $setOnInsert: { userId, provider: "instagram" } },
+    // Connecting again clears a "needs reconnecting" flag (D32).
+    { $set: update, $setOnInsert: { userId, provider: "instagram" }, $unset: CLEAR_RECONNECT },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
@@ -253,7 +255,7 @@ async function handleFacebookConnect(userId, code) {
 
   await MetaConnection.findOneAndUpdate(
     { userId, provider: "facebook" },
-    { $set: update, $setOnInsert: { userId, provider: "facebook" } },
+    { $set: update, $setOnInsert: { userId, provider: "facebook" }, $unset: CLEAR_RECONNECT },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
@@ -277,6 +279,7 @@ router.get("/status", protect, authorizeRoles("creator"), async (req, res, next)
         expiresAt: c.expiresAt,
         connectedAt: c.connectedAt,
         pages: (c.pages || []).map((p) => ({ pageId: p.pageId, name: p.name, igBusinessId: p.igBusinessId })),
+        ...reconnectView(c),
       };
     }
     // `configured` tells the UI whether this deployment has app credentials for

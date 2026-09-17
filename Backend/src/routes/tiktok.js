@@ -7,6 +7,8 @@ const { protect, authorizeRoles } = require("../middleware/auth");
 const tiktok = require("../services/tiktok");
 const { decrypt } = require("../utils/crypto");
 const TikTokConnection = require("../models/TikTokConnection");
+const { reconnectView } = require("../services/socialReconnect");
+const { postAlreadyUsed, POST_ALREADY_USED_MESSAGE } = require("../services/postIdentity");
 
 const router = express.Router();
 
@@ -110,6 +112,10 @@ router.get("/callback", async (req, res) => {
       existing.username = userInfo.username || existing.username;
       existing.displayName = userInfo.display_name || existing.displayName;
       existing.avatarUrl = userInfo.avatar_url || existing.avatarUrl;
+      // Connecting again clears a "needs reconnecting" flag (D32).
+      existing.needsReconnect = undefined;
+      existing.needsReconnectAt = undefined;
+      existing.needsReconnectReason = undefined;
       await tiktok.saveTokens(existing, tokens);
     } else {
       const connection = new TikTokConnection({
@@ -160,6 +166,7 @@ router.get("/status", protect, authorizeRoles("creator"), async (req, res, next)
       scopes: connection.scopes,
       expiresAt: connection.expiresAt,
       connectedAt: connection.connectedAt,
+      ...reconnectView(connection),
     });
   } catch (error) {
     next(error);
@@ -248,6 +255,10 @@ router.post("/videos/:videoId/link-submission", protect, authorizeRoles("creator
     }
 
     const videoId = req.params.videoId || extractTikTokVideoId(submission.postedPlatforms?.find((p) => p.platform === "tiktok")?.postUrl);
+    // D34: one post, one submission.
+    if (videoId && (await postAlreadyUsed(submission._id, [`https://www.tiktok.com/@_/video/${videoId}`]))) {
+      return res.status(409).json({ error: POST_ALREADY_USED_MESSAGE, code: "POST_ALREADY_USED" });
+    }
     submission.tiktokVideoId = videoId || null;
     await submission.save();
 

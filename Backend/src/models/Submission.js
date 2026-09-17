@@ -11,6 +11,11 @@ const postedPlatformSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // D34: the post's stable identity (e.g. "instagram:<shortcode>", "tiktok:<video id>"), so one post
+    // can't be linked to two submissions. Rows saved before it existed are matched on postUrl.
+    postKey: {
+      type: String,
+    },
     views: {
       type: Number,
       default: 0,
@@ -115,6 +120,13 @@ const submissionSchema = new mongoose.Schema(
     tiktokVideoId: {
       type: String,
       default: null,
+    },
+    // D35: the live post was published before the content was approved, so the sync doesn't count its views.
+    postPredatesCampaign: {
+      type: Boolean,
+    },
+    postPredatesCampaignAt: {
+      type: Date,
     },
     payoutAmount: {
       type: Number,
@@ -222,6 +234,8 @@ submissionSchema.index({ creatorId: 1, createdAt: -1 });
 // submission on one campaign.
 submissionSchema.index({ campaignId: 1, status: 1 });
 submissionSchema.index({ campaignId: 1, creatorId: 1 });
+// D34: is this post already linked to another submission?
+submissionSchema.index({ "postedPlatforms.postKey": 1 }, { partialFilterExpression: { "postedPlatforms.postKey": { $type: "string" } } });
 // Campaign engine: content approval (ticket 07)
 // Deadline job: content waiting on the brand, oldest first.
 submissionSchema.index({ status: 1, awaitingBrandSince: 1 });

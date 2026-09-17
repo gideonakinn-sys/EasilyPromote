@@ -49,6 +49,17 @@ const tiktokConnectionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    // Set when the provider refuses the token for good (revoked, password changed, expired past
+    // refresh). The sync jobs skip the connection until the creator connects again, which clears it.
+    needsReconnect: {
+      type: Boolean,
+    },
+    needsReconnectAt: {
+      type: Date,
+    },
+    needsReconnectReason: {
+      type: String,
+    },
     lastSyncedAt: {
       type: Date,
     },

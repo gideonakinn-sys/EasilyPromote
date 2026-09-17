@@ -13,6 +13,7 @@ const { recordViewDelta } = require("../services/viewSnapshots");
 // Campaign engine: content approval (ticket 07)
 const contentApproval = require("../services/contentApproval");
 const { fullBrief } = require("../utils/campaignPay");
+const { postAlreadyUsed, postKeyFor, POST_ALREADY_USED_MESSAGE } = require("../services/postIdentity");
 
 const router = express.Router();
 
@@ -485,17 +486,26 @@ router.patch("/:id/mark-posted", protect, async (req, res, next) => {
       ? posts
       : [{ platform, postUrl: url }];
 
+    // D34: one post, one submission.
+    if (await postAlreadyUsed(submission._id, newPosts.filter((p) => p && normalizePlatform(p.platform) && p.postUrl).map((p) => p.postUrl))) {
+      return res.status(409).json({ error: POST_ALREADY_USED_MESSAGE, code: "POST_ALREADY_USED" });
+    }
+
     const postedPlatforms = submission.postedPlatforms || [];
     for (const post of newPosts) {
       const normalized = normalizePlatform(post.platform);
       if (!normalized) continue;
       const entry = postedPlatforms.find((e) => e.platform === normalized);
       if (entry) {
-        if (post.postUrl !== undefined) entry.postUrl = post.postUrl;
+        if (post.postUrl !== undefined) {
+          entry.postUrl = post.postUrl;
+          entry.postKey = postKeyFor(post.postUrl);
+        }
       } else {
         postedPlatforms.push({
           platform: normalized,
           postUrl: post.postUrl || "",
+          postKey: postKeyFor(post.postUrl),
           views: 0,
           likes: 0,
           comments: 0,
