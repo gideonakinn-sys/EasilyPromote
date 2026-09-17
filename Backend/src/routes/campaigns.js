@@ -55,13 +55,21 @@ function changesPrice(campaign, { targetViews, objective, requestedBudget }) {
 const { releasedViewsTotal } = require("../utils/earnings");
 const { resolveCampaignSetup, editSetupUpdates, campaignSetupView, matchCountSchema } = require("../utils/campaignSetup");
 const { matchCount } = require("../services/creatorMatchCount");
+const { refreshPriceTable } = require("../config/pricing");
 const { createRateLimiter } = require("../utils/rateLimit");
 
 const router = express.Router();
 
+// Quotes, drafts and checkouts price from the per-view table admin sets (ticket 11); re-read it when
+// it's more than a minute old, so a change made on another API instance applies here too.
+router.use(async (req, res, next) => {
+  await refreshPriceTable();
+  next();
+});
+
 router.get("/pricing", async (req, res, next) => {
   try {
-    const { COST_PER_VIEW, TIER_PRICING } = require("../config/pricing");
+    const { COST_PER_VIEW, getTierPricing } = require("../config/pricing");
     const Industry = require("../models/Industry");
     const categories = { ...COST_PER_VIEW.categories };
     const industries = await Industry.find({ enabled: true, costPerView: { $gt: 0 } });
@@ -71,7 +79,7 @@ router.get("/pricing", async (req, res, next) => {
     res.json({
       default: COST_PER_VIEW.default,
       categories,
-      tiers: TIER_PRICING,
+      tiers: getTierPricing(),
     });
   } catch (err) {
     next(err);

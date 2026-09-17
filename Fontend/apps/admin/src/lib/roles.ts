@@ -10,3 +10,6 @@ export const COMPLETE_ROLES: readonly string[] = ["admin", "super_admin", "finan
 
 // Setting or changing a sign-up reward.
 export const REWARD_ROLES: readonly string[] = ["admin", "super_admin", "finance_admin"];
+
+// Changing the per-view price table (ticket 11).
+export const PRICE_ROLES: readonly string[] = ["super_admin", "finance_admin"];

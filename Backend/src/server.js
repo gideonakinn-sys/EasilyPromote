@@ -16,12 +16,15 @@ const { startApplicationDeadlines } = require("./utils/applicationDeadlines");
 const { startContentAutoApprove } = require("./services/contentApproval");
 const { startOpsAlerts } = require("./services/opsAlerts");
 const { startAutoRefunds } = require("./services/autoRefunds");
+const { refreshPriceTable } = require("./config/pricing");
 
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
   await connectDB();
   await seedDefaultAdmin();
+  // The per-view price table admin set (ticket 11); the defaults until one is saved.
+  await refreshPriceTable({ force: true });
   startCancelledCleanup();
   startTikTokSync();
   startMetaSync();

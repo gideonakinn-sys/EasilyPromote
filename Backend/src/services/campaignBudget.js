@@ -1,7 +1,7 @@
 // Prices a campaign (decisions D1–D14 are in docs/campaign-engine/SPEC.md). The brand wizard
 // and checkout are meant to share this, so what a brand is shown
 // is exactly what they are charged.
-const { getPriceForViews, TIER_PRICING } = require("../config/pricing");
+const { getPriceForViews, getTierPricing } = require("../config/pricing");
 const { OBJECTIVES, usesReferralTracking } = require("../utils/campaignObjectives");
 const { roundMoney } = require("../utils/referralEarnings");
 
@@ -14,7 +14,7 @@ const BONUS_METRICS = ["views", "signups", "downloads"];
 // What a creator earns per 1,000 verified views of a hybrid bonus: the creator's share of the price
 // table's first tier (ADR 0003: views are priced by EasilyPromote, never by the brand).
 function bonusViewsRate(platformFeePercent = DEFAULT_PLATFORM_FEE_PERCENT) {
-  const [tier] = TIER_PRICING;
+  const [tier] = getTierPricing();
   const creatorShareKobo = Math.round(tier.price * 100 * (1 - platformFeePercent / 100));
   return Math.floor((creatorShareKobo * 1000) / tier.views) / 100;
 }

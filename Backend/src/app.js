@@ -92,6 +92,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin/referrals", adminReferralRoutes);
 app.use("/api/admin/activity", adminActivityRoutes);
 app.use("/api/admin/alerts", adminAlertRoutes);
+app.use("/api/admin/pricing", require("./routes/adminPricing")); // Price Table (ticket 11)
 app.use("/api/admin", adminRoutes);
 app.use("/api/platforms", platformRoutes);
 app.use("/api/niches", nicheRoutes);

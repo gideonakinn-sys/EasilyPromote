@@ -77,3 +77,23 @@ test("the views bonus rate is the creator's share of the price table's first tie
   assert.equal(bonusViewsRate(), 3010);
   assert.equal(bonusViewsRate(25), 3225);
 });
+
+test("the price table admin sets is validated and prices new quotes and the views-bonus rate", () => {
+  const pricing = require("../../src/config/pricing");
+  const { bonusViewsRate } = require("../../src/services/campaignBudget");
+  assert.equal(pricing.validateTiers(pricing.DEFAULT_TIER_PRICING.map((t) => ({ ...t }))).tiers.length, 9);
+  assert.match(pricing.validateTiers("nope").error, /list/);
+  assert.match(pricing.validateTiers([{ views: 2000, price: 100 }, { views: 1000, price: 200 }]).error, /views must be more/);
+  assert.throws(() => pricing.setTierPricing([{ views: 1000, price: 1 }]), /Invalid price table/);
+  try {
+    pricing.setTierPricing([{ views: 100000, price: 500000 }, { views: 200000, price: 900000 }], 3);
+    assert.equal(pricing.priceTableVersion, 3);
+    assert.equal(quoteCampaign({ objective: "views", targetViews: 100000 }).quote.total, 500000);
+    assert.equal(quoteCampaign({ objective: "views", targetViews: 150000 }).quote.total, 700000);
+    assert.equal(bonusViewsRate(30), 3500);
+  } finally {
+    pricing.setTierPricing(pricing.DEFAULT_TIER_PRICING, 0);
+  }
+  assert.equal(quoteCampaign({ objective: "views", targetViews: 100000 }).quote.total, 430000);
+  assert.equal(bonusViewsRate(30), 3010);
+});

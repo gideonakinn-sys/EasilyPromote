@@ -26,6 +26,7 @@ const TARGET_FILTERS = [
   { value: "webhook_key", label: "Signing keys" },
   { value: "conversion", label: "Conversions" },
   { value: "ops_alert", label: "Alerts" },
+  { value: "price_table", label: "Price table" },
 ];
 
 const ACTION_LABELS: Record<string, string> = {
@@ -39,6 +40,7 @@ const ACTION_LABELS: Record<string, string> = {
   "webhook_key.revoked": "Revoked signing key",
   "conversion.voided": "Voided conversion",
   "ops_alert.resolved": "Resolved alert",
+  "pricing.view_tiers_updated": "Changed per-view price table",
 };
 
 const ACTION_TONES: Record<string, string> = {
