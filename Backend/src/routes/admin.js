@@ -1084,6 +1084,130 @@ router.get("/users", adminGuard, async (req, res, next) => {
   }
 });
 
+// ─── GET /api/admin/social-connections ────────────────────────────────────────
+// One row per connected TikTok / Instagram / Facebook account, with the creator, followers from the
+// creator profile and whether the platform stopped accepting the connection (SPEC D32). Never selects tokens.
+const SOCIAL_PLATFORMS = ["tiktok", "instagram", "facebook"];
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CONNECTION_FIELDS = {
+  userId: 1,
+  username: 1,
+  displayName: 1,
+  avatarUrl: 1,
+  connectedAt: 1,
+  lastSyncedAt: 1,
+  needsReconnect: 1,
+  needsReconnectAt: 1,
+  needsReconnectReason: 1,
+};
+
+router.get("/social-connections", adminGuard, async (req, res, next) => {
+  try {
+    const platform = SOCIAL_PLATFORMS.includes(req.query.platform) ? req.query.platform : "all";
+    const status = ["healthy", "needs_reconnect"].includes(req.query.status) ? req.query.status : "all";
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const match = {};
+    if (platform !== "all") match.platform = platform;
+    if (status === "needs_reconnect") match.needsReconnect = true;
+    if (status === "healthy") match.needsReconnect = { $ne: true };
+    if (q) {
+      const rx = new RegExp(escapeRegex(q), "i");
+      match.$or = [{ "user.name": rx }, { "user.email": rx }, { username: rx }, { displayName: rx }];
+    }
+
+    const [result] = await TikTokConnection.aggregate([
+      { $project: { ...CONNECTION_FIELDS, platform: { $literal: "tiktok" } } },
+      { $unionWith: { coll: MetaConnection.collection.name, pipeline: [{ $project: { ...CONNECTION_FIELDS, platform: "$provider" } }] } },
+      {
+        $lookup: {
+          from: User.collection.name,
+          let: { uid: "$userId" },
+          pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$uid"] } } }, { $project: { name: 1, email: 1, avatar: 1 } }],
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                creators: { $addToSet: "$userId" },
+                tiktok: { $sum: { $cond: [{ $eq: ["$platform", "tiktok"] }, 1, 0] } },
+                instagram: { $sum: { $cond: [{ $eq: ["$platform", "instagram"] }, 1, 0] } },
+                facebook: { $sum: { $cond: [{ $eq: ["$platform", "facebook"] }, 1, 0] } },
+                needsReconnect: { $sum: { $cond: [{ $eq: ["$needsReconnect", true] }, 1, 0] } },
+              },
+            },
+          ],
+          rows: [
+            { $match: match },
+            { $sort: { connectedAt: -1, _id: -1 } },
+            { $facet: { count: [{ $count: "n" }], items: [{ $skip: (page - 1) * limit }, { $limit: limit }] } },
+          ],
+        },
+      },
+    ]);
+
+    const t = result.totals[0] || {};
+    const rowsFacet = result.rows[0] || { count: [], items: [] };
+    const items = rowsFacet.items;
+    const total = rowsFacet.count[0] ? rowsFacet.count[0].n : 0;
+
+    const profiles = items.length
+      ? await CreatorProfile.find({ userId: { $in: [...new Set(items.map((c) => String(c.userId)))] } })
+          .select("userId socialAccounts verifiedAt")
+          .lean()
+      : [];
+    const profileMap = {};
+    for (const p of profiles) profileMap[String(p.userId)] = p;
+
+    res.json({
+      connections: items.map((c) => {
+        const profile = profileMap[String(c.userId)];
+        const account = profile && (profile.socialAccounts || []).find((a) => a.platform === c.platform);
+        return {
+          id: `${c.platform}:${c._id}`,
+          creator: {
+            id: c.userId,
+            name: c.user.name,
+            email: c.user.email,
+            avatar: c.user.avatar || null,
+            verified: Boolean(profile && profile.verifiedAt),
+          },
+          platform: c.platform,
+          username: c.username || null,
+          displayName: c.displayName || null,
+          avatarUrl: c.avatarUrl || null,
+          handle: (account && account.handle) || null,
+          followers: account && typeof account.followers === "number" ? account.followers : null,
+          followersSource: (account && account.followersSource) || null,
+          followersSyncedAt: (account && account.followersSyncedAt) || null,
+          connectedAt: c.connectedAt || null,
+          lastSyncedAt: c.lastSyncedAt || null,
+          ...reconnectView(c),
+        };
+      }),
+      totals: {
+        connectedCreators: t.creators ? t.creators.length : 0,
+        tiktok: t.tiktok || 0,
+        instagram: t.instagram || 0,
+        facebook: t.facebook || 0,
+        needsReconnect: t.needsReconnect || 0,
+      },
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/admin/users/:id ─────────────────────────────────────────────────
 router.get("/users/:id", adminGuard, async (req, res, next) => {
   try {
