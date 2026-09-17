@@ -758,3 +758,39 @@ export interface CampaignRatingList {
   tags: Array<{ value: RatingTag; label: string }>;
   editWindowDays: number;
 }
+
+// M8 batch 7 (SPEC D29, D30): clicks campaigns and custom usage-rights terms, as creators see them.
+export interface CreatorUsageTerms {
+  duration?: "perpetual" | "3_months" | "6_months" | "12_months" | "24_months";
+  exclusivity?: "none" | "category";
+  exclusivityPeriod?: string | null;
+  paidAdsAllowed?: boolean;
+  territories?: string[];
+  additionalTerms?: string | null;
+}
+
+export interface CreatorUsageRights {
+  type: "standard" | "custom";
+  version: number;
+  terms: CreatorUsageTerms;
+}
+
+// Sent on join and apply for campaigns with custom terms.
+export interface UsageRightsAcceptance {
+  version: number;
+}
+
+export interface MarketplaceCampaign {
+  campaignObjective?: string;
+  contentDestination?: ContentDestination | null;
+  // Where a clicks campaign's tracked link lands (hostname only).
+  destinationDomain?: string | null;
+  usageRights?: CreatorUsageRights | null;
+}
+
+export interface CampaignItem {
+  campaignObjective?: string;
+  contentDestination?: ContentDestination | null;
+  destinationDomain?: string | null;
+  usageRights?: CreatorUsageRights | null;
+}

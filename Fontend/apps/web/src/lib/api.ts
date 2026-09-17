@@ -97,11 +97,12 @@ export class ApiRequestError extends Error {
 const applicationsToken = () => getToken() || undefined;
 
 export const applicationsApi = {
-  apply(campaignId: string, pitch: string) {
+  // M8 batch 7: `usageRightsAccepted` is required by campaigns with custom usage terms (SPEC D30).
+  apply(campaignId: string, pitch: string, usageRightsAccepted?: { version: number }) {
     return apiRequest<MyApplication>(`/campaigns/${campaignId}/apply`, {
       method: "POST",
       token: applicationsToken(),
-      body: JSON.stringify(pitch.trim() ? { pitch: pitch.trim() } : {}),
+      body: JSON.stringify({ ...(pitch.trim() ? { pitch: pitch.trim() } : {}), ...(usageRightsAccepted ? { usageRightsAccepted } : {}) }),
     });
   },
   withdraw(campaignId: string) {

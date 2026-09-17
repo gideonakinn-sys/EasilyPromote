@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
-import type { EligibilityFailure, MarketplaceCampaign, MyApplication } from "./types";
+import type { EligibilityFailure, MarketplaceCampaign, MyApplication, UsageRightsAcceptance } from "./types";
 import type { ApplyOutcome } from "./creator-dashboard-context";
 import { ApplicationStatusBadge } from "./application-status-badge";
 import { formatShortDate } from "../lib/applications";
+import { UsageRightsTerms } from "./usage-rights-terms";
+import { USAGE_TERMS_NOT_ACCEPTED, needsUsageAcceptance } from "../lib/creator-campaign-terms";
 
 // Campaign engine: applications (ticket 06)
 // Apply on an Application Required campaign: an optional pitch, then a confirmation.
@@ -14,7 +16,7 @@ const MAX_PITCH = 500;
 // A creator's applications and what they can do with them, passed down from the dashboard.
 export interface ApplicationActions {
   list: MyApplication[];
-  onApply: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  onApply: (campaignId: string, pitch: string, usageRightsAccepted?: UsageRightsAcceptance) => Promise<ApplyOutcome>;
   onWithdraw: (campaignId: string) => Promise<boolean>;
 }
 
@@ -26,7 +28,7 @@ interface CampaignApplyPanelProps {
   reasons: string[];
   blockedReason: string | null;
   places: number;
-  onApply: (campaignId: string, pitch: string) => Promise<ApplyOutcome>;
+  onApply: (campaignId: string, pitch: string, usageRightsAccepted?: UsageRightsAcceptance) => Promise<ApplyOutcome>;
   onWithdraw: (campaignId: string) => Promise<boolean>;
 }
 
@@ -44,25 +46,36 @@ export function CampaignApplyPanel({
   const [withdrawing, setWithdrawing] = React.useState(false);
   const [justApplied, setJustApplied] = React.useState(false);
   const [error, setError] = React.useState<{ message: string; failures: EligibilityFailure[] } | null>(null);
+  // M8 batch 7 (SPEC D30): custom usage terms must be accepted before applying.
+  const [termsAccepted, setTermsAccepted] = React.useState(false);
+  const [termsError, setTermsError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setPitch("");
     setJustApplied(false);
     setError(null);
+    setTermsAccepted(false);
+    setTermsError(null);
   }, [campaign.id]);
 
   const allReasons = blockedReason ? [blockedReason, ...reasons] : reasons;
   // Withdrawn and expired applications can be sent again.
   const canReapply = !application || application.status === "withdrawn" || application.status === "expired";
-  const canApply = canReapply && allReasons.length === 0 && places > 0 && !sending;
+  const termsRequired = needsUsageAcceptance(campaign);
+  const canApply = canReapply && allReasons.length === 0 && places > 0 && !sending && (!termsRequired || termsAccepted);
 
   const apply = async () => {
     setSending(true);
     setError(null);
-    const outcome = await onApply(campaign.id, pitch);
+    setTermsError(null);
+    const acceptance = termsRequired && campaign.usageRights ? { version: campaign.usageRights.version } : undefined;
+    const outcome = await onApply(campaign.id, pitch, acceptance);
     setSending(false);
     if (outcome.ok) setJustApplied(true);
-    else setError({ message: outcome.message, failures: outcome.failures });
+    else if (outcome.code === USAGE_TERMS_NOT_ACCEPTED) {
+      setTermsAccepted(false);
+      setTermsError("Accept these usage terms to apply. If they just changed, read them again first.");
+    } else setError({ message: outcome.message, failures: outcome.failures });
   };
 
   const withdraw = async () => {
@@ -146,6 +159,19 @@ export function CampaignApplyPanel({
             {pitch.length}/{MAX_PITCH}
           </p>
         </div>
+      )}
+
+      {allReasons.length === 0 && places > 0 && (
+        <UsageRightsTerms
+          campaign={campaign}
+          accepted={termsAccepted}
+          onAcceptedChange={(value) => {
+            setTermsAccepted(value);
+            if (value) setTermsError(null);
+          }}
+          error={termsError}
+          disabled={sending}
+        />
       )}
 
       {error && (
