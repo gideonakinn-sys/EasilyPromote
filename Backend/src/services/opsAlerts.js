@@ -34,6 +34,7 @@ const { reconcileCampaigns } = require("./campaignReconciliation");
 const { isContentCampaign } = require("../utils/campaignPay");
 const { toObjectId } = require("../utils/objectId");
 const { plural } = require("../utils/plural");
+const { sendEmail } = require("./email");
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -460,7 +461,6 @@ function alertEmail(alerts) {
 async function emailAlerts(alerts) {
   const to = process.env.OPS_ALERT_EMAIL;
   if (!to || alerts.length === 0) return;
-  const { sendEmail } = require("./email");
   const result = await sendEmail({ to: to.split(",").map((s) => s.trim()).filter(Boolean), ...alertEmail(alerts) });
   if (!result.sent) throw new Error(`Alert email not sent: ${result.error || result.reason || "unknown reason"}`);
 }

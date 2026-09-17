@@ -116,6 +116,8 @@ export default function AdminCampaignsPage() {
       postedAt?: string;
       submittedAt?: string;
     }>;
+    // The API's cancel rule: the brand paid something (checkout or top-up).
+    campaign?: { hasPayments?: boolean };
   } | null>(null);
 
   const fetchPlatforms = useCallback(async () => {
@@ -249,6 +251,7 @@ export default function AdminCampaignsPage() {
           postedAt?: string;
           submittedAt?: string;
         }>;
+        campaign?: { hasPayments?: boolean };
       }>(`/admin/campaigns/${campaignId}`, {
         token: getToken() || undefined,
       });
@@ -943,7 +946,7 @@ export default function AdminCampaignsPage() {
 
                     {/* Cancelling a paid campaign sends refunds: finance and super admins only. */}
                     {selectedCampaign.status !== "cancelled" &&
-                      (canMoveMoney || ["draft", "pending_payment"].includes(selectedCampaign.status)) && (
+                      (canMoveMoney || campaignDetail?.campaign?.hasPayments === false) && (
                       <button
                         onClick={() => handleStatusChange(selectedCampaign.id, "cancelled")}
                         disabled={actionLoading || !statusNote.trim()}
@@ -964,7 +967,7 @@ export default function AdminCampaignsPage() {
                       </button>
                     )}
                   </div>
-                  {!canMoveMoney && ["live", "paused", "under_review", "completed"].includes(selectedCampaign.status) && (
+                  {!canMoveMoney && selectedCampaign.status !== "cancelled" && campaignDetail?.campaign?.hasPayments === true && (
                     <p className="mt-3 text-[11px] font-medium text-stone-500">
                       Cancelling a paid campaign sends refunds, so only finance admins and super admins can do it.
                     </p>

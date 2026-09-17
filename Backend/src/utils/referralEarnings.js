@@ -16,6 +16,7 @@ const MAX_REFERRAL_TOPUP = 50000000;
 const MAX_REWARD_PER_CONVERSION = 1000000;
 
 const { roundMoney } = require("./money");
+const { refundCampaignBucket } = require("./refunds");
 
 // Reasons a counted conversion earned nothing that later budget or a reward can pay.
 const PAYABLE_LATER_REASONS = ["budget_exhausted", "rate_not_set"];
@@ -169,7 +170,6 @@ async function refundUnusedReferralBudget(campaignId) {
   const unused = feePercent < 100 ? roundMoney((remaining * 100) / (100 - feePercent)) : 0;
   if (unused <= 0) return 0;
 
-  const { refundCampaignBucket } = require("./refunds");
   const refund = await refundCampaignBucket({
     campaignId,
     bucket: "referral",

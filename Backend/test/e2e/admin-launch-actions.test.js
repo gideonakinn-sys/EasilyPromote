@@ -194,6 +194,28 @@ test("the admin user list shows each creator's connected accounts and verificati
   assert.equal(refused.body.code, "SOCIAL_ACCOUNT_REQUIRED");
 });
 
+test("voiding a referral conversion returns money to the pool, so only finance and super admins can do it", async () => {
+  for (const role of ["admin", "support"]) {
+    const other = await harness.registerAdmin({ role });
+    const res = await harness.api("POST", `/api/admin/referrals/conversions/${FAKE_ID}/void`, { token: other.token, body: { note: "Fake" } });
+    assert.equal(res.status, 403, role);
+  }
+  for (const role of ["finance_admin", "super_admin"]) {
+    const allowed = await harness.registerAdmin({ role });
+    const res = await harness.api("POST", `/api/admin/referrals/conversions/${FAKE_ID}/void`, { token: allowed.token, body: { note: "Fake" } });
+    assert.equal(res.status, 404, `${role}: ${JSON.stringify(res.body)}`);
+  }
+});
+
+test("the admin campaign detail says whether the campaign has payments, as the cancel rule does", async () => {
+  const admin = await harness.registerAdmin({ role: "support" });
+  const { id } = await paidCampaign({ name: "Paid detail", category: "Music", targetViews: 100000 });
+  assert.equal((await harness.api("GET", `/api/admin/campaigns/${id}`, { token: admin.token })).body.campaign.hasPayments, true);
+  const brand = await harness.registerBrand();
+  const draft = await harness.api("POST", "/api/campaigns", { token: brand.token, body: { name: "Unpaid detail", category: "Music", targetViews: 100000 } });
+  assert.equal((await harness.api("GET", `/api/admin/campaigns/${draft.body.id}`, { token: admin.token })).body.campaign.hasPayments, false);
+});
+
 test("finance admins set and change sign-up rewards; support can't", async () => {
   const BusinessProfile = model("BusinessProfile");
   const brand = await harness.registerBrand();

@@ -10,7 +10,7 @@
 //   MONGODB_URI=<connection string> node scripts/checkUniqueIndexConflicts.js
 
 const mongoose = require("mongoose");
-const { connectReadOnly } = require("./readOnlyConnection");
+const { connectReadOnly } = require("./scriptConnection");
 
 async function duplicates(collection, match, groupId, extra) {
   return mongoose.connection

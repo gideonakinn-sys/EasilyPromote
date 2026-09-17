@@ -28,6 +28,8 @@ const viewGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admi
 const actGuard = [protect, authorizeRoles("admin", "super_admin")];
 // Rewards are money creators earn from the brand's budget, so finance admins set them too.
 const rewardGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin")];
+// Voiding a conversion gives its reward back to the pool: money, so finance and super admins (D19).
+const moneyGuard = [protect, authorizeRoles("finance_admin", "super_admin")];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CSV_MAX_ROWS = 50000;
@@ -674,7 +676,7 @@ router.get("/conversions.csv", viewGuard, async (req, res, next) => {
 
 // ─── POST /api/admin/referrals/conversions/:id/void ───────────────────────────
 // Voids a fake or reversed conversion while its earnings are still on hold.
-router.post("/conversions/:id/void", actGuard, async (req, res, next) => {
+router.post("/conversions/:id/void", moneyGuard, async (req, res, next) => {
   try {
     const note = requireNote(req, res);
     if (!note) return;

@@ -106,7 +106,7 @@ function summarizeChecks({ environment, migration, conflicts, reconciliation, se
 
 async function runChecks({ staging }) {
   // Before any model loads: nothing may build an index or create a collection.
-  const { connectReadOnly, disableAutoBuild } = require("./readOnlyConnection");
+  const { connectReadOnly, disableAutoBuild } = require("./scriptConnection");
   disableAutoBuild();
   const mongoose = require("mongoose");
   const { migrateCampaignsToV2 } = require("./migrateCampaignV2");

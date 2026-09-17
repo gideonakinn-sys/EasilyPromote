@@ -1,4 +1,5 @@
 const BusinessProfile = require("../models/BusinessProfile");
+const Transaction = require("../models/Transaction");
 const { bookEscrowDeposit } = require("./escrow");
 const { creditReferralTopup, roundMoney } = require("./referralEarnings");
 const { isContentCampaign } = require("./campaignPay");
@@ -35,4 +36,10 @@ async function brandAppVerified(businessId) {
   return Boolean(profile && profile.referralVerification && profile.referralVerification.verifiedAt);
 }
 
-module.exports = { expectedPaymentAmount, bookCampaignPayment, brandAppVerified };
+// Whether the brand has paid anything into this campaign (its checkout or a top-up). Cancelling a
+// paid campaign sends refunds, so only finance and super admins can; the admin panel reads the same rule.
+async function campaignHasPayments(campaignId) {
+  return Boolean(await Transaction.exists({ campaignId, type: { $in: ["escrow_deposit", "topup"] } }));
+}
+
+module.exports = { expectedPaymentAmount, bookCampaignPayment, brandAppVerified, campaignHasPayments };

@@ -11,7 +11,7 @@
 
 require("dotenv").config();
 // Before any model loads: nothing may build an index or create a collection.
-const { connectReadOnly, disableAutoBuild } = require("./readOnlyConnection");
+const { connectReadOnly, disableAutoBuild } = require("./scriptConnection");
 disableAutoBuild();
 const mongoose = require("mongoose");
 const { reconcileAllCampaigns } = require("../src/services/campaignReconciliation");

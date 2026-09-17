@@ -28,7 +28,8 @@ Roles come from `authorizeRoles` in `Backend/src/routes/admin.js` and `adminRefe
 | **Refund unused content budget, retry a refund** | `POST /admin/campaigns/:id/refund-unused`, `/refunds/:refundId/retry` | ✗ | ✓ | ✓ | ✗ |
 | **Void undelivered fixed pay** | `POST /admin/submissions/:id/void-undelivered` | ✗ | ✓ | ✓ | ✗ |
 | Set or change a sign-up reward | `PATCH /admin/referrals/campaigns/:id/reward` | ✓ | ✓ | ✓ | ✗ |
-| Void a conversion, disable a code, revoke a signing key | `/admin/referrals/...` | ✓ | ✓ | ✗ | ✗ |
+| **Void a conversion** (its reward goes back to the pool, D19) | `POST /admin/referrals/conversions/:id/void` | ✗ | ✓ | ✓ | ✗ |
+| Disable a code, revoke a signing key | `/admin/referrals/codes/...`, `/keys/...` | ✓ | ✓ | ✗ | ✗ |
 | Create an admin | `POST /admin/create-admin` | ✗ | ✓ | ✗ | ✗ |
 
 Every action that moves money (bold above, apart from Complete) is for `finance_admin` and `super_admin`. The panel disables or hides those buttons for other roles and says who can use them; the API answers 403 "Not authorized for this action" (`MONEY_ROLE_REQUIRED` when cancelling a paid campaign) if they're called anyway.
@@ -66,8 +67,10 @@ Same dialog. The new amount applies to **new conversions only**; earlier convers
 ### Things to know
 
 - A conversion that arrives when the pool can't cover the reward is recorded unpaid (budget exhausted) and the brand is told once.
-- **When the brand tops up the referral budget**, those unpaid conversions are paid first from the new pool, oldest first, while it lasts, each with a fresh 7-day hold (so it can still be voided). It happens as soon as the top-up is credited (Paystack webhook or the brand's return from checkout), and again on any repeat of either, so an interrupted back-pay finishes on the retry. Each conversion is claimed before it's paid, so retries and simultaneous webhooks never pay one twice. Every creator paid gets one "Earlier sign-ups paid" notification per top-up. Anything the top-up can't cover stays unpaid for the next top-up. Nothing is back-paid until a reward is set.
-- To remove a fake or reversed conversion: **Referrals** → **Conversions** → void it with a note. Only possible while its 7-day hold is running; the reward goes back to the pool.
+- **When the brand tops up the referral budget**, those unpaid conversions are paid first from the new pool, oldest first, while it lasts, each with a fresh 7-day hold (so it can still be voided). It happens as soon as the top-up is credited (Paystack webhook or the brand's return from checkout), and again on any repeat of either. Every creator paid gets one "Earlier sign-ups paid" notification per top-up. Anything the top-up can't cover stays unpaid (budget exhausted) for the next top-up. Nothing is back-paid until a reward is set.
+- **Strictly oldest first.** While older sign-ups wait for pay, a new one never draws on the pool: it's recorded as budget exhausted, queued behind them, and the waiting ones are paid in order straight away as far as the pool goes.
+- **A conversion is never paid twice and a conversion stays unpaid until its reward is really reserved.** Each is claimed first (the claim records the attempt and the reward), then its reward is reserved from the pool together with a marker for that conversion, then the reward is recorded and the claim cleared. If the API dies part-way, the claim is taken over after 5 minutes by the next back-pay run (the next top-up, a repeat of one, or a new sign-up on the campaign) and any reservation already made is reused, so the pool is decremented once. Until then, newer sign-ups on that campaign wait.
+- To remove a fake or reversed conversion: **Referrals** → **Conversions** → void it with a note (`finance_admin`, `super_admin`). Only possible while its 7-day hold is running; the reward goes back to the pool.
 
 ---
 
@@ -124,7 +127,7 @@ For content going to the brand's page (brand page or both): if approved content 
 2. Each row shows the creator, approval date, and either "can be voided from <date>" or an enabled **Void Undelivered Pay** button. It's enabled **14 days after approval**, or straight away if the campaign is cancelled.
 3. Press it and confirm in the modal. This can't be undone.
 4. Effect: the submission becomes `not_delivered`; if pay was credited, a `fixed_void` ledger row reverses it and the amount goes back to the campaign; the creator is notified; the action is logged (`submission.fixed_pay_voided`). The deliverable now counts as unused for refunds.
-5. The creator's placement is freed and no longer counts toward their 3 active placements: on a **live** campaign that can still pay the deliverable it goes back to the campaign for another creator; otherwise (paused, completed, cancelled) it's **closed**. The creator who didn't deliver can't join that campaign again (`CONTENT_NOT_DELIVERED`).
+5. The creator's placement is freed and no longer counts toward their 3 active placements: on a **live** campaign that can still pay the deliverable it goes back to the campaign for another creator; otherwise (paused, completed, cancelled) it's **closed**. Either way the place loses its creator; the not-delivered submission records the creator and who voided it (`notDeliveredBy`). Closed places never count as creators (the brand's creator count counts distinct creators holding a place), whether closed by a void or by Complete Campaign. If a paused campaign is resumed (by the brand or an admin), places closed while it was paused reopen, up to the deliverables bought; if it's completed or cancelled instead, they stay closed and the deliverable is refundable. The creator who didn't deliver can't join that campaign again (`CONTENT_NOT_DELIVERED`).
 
 Refusals: `NOT_AWAITING_DELIVERY` (the creator already delivered or it isn't approved), `NOT_VOIDABLE_YET` (under 14 days on a campaign that isn't cancelled), `NO_BRAND_DELIVERY` (creator-page campaign). Voiding twice is harmless.
 
@@ -379,7 +382,7 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 | `paystack_webhook_failing` | Paystack Webhooks Failing | 3+ Paystack webhooks failed to process in the last hour. Each processing failure (the handler threw; not a bad signature) is recorded in `paystackwebhookfailures` (kept 30 days) with the event, reference and error. Paystack retries them; check the API logs. | Payouts & Escrow |
 | `content_deadline_stuck` | Content Deadline Not Processed | Content has waited on the brand for more than 73 hours (the 72-hour job plus an hour). | The campaign |
 | `application_expiry_stuck` | Applications Not Expired | Applications pending more than 7 days and 2 hours. | The campaign |
-| `views_submission_stuck` | Views Posts Not Shared | Views content approved more than 7 days ago whose creator never shared the live post (`awaiting_post`). | The campaign |
+| `views_submission_stuck` | Views Posts Not Shared | Views content on a live or paused campaign approved more than 7 days ago whose creator never shared the live post (`awaiting_post`). Once the campaign is completed or cancelled the alert resolves. | The campaign |
 | `reconciliation_mismatch` | Campaign Books Don't Balance | A campaign's books don't balance (§8). Checked on every run for campaigns with money movement in the last 48 hours and for every campaign already flagged (whatever its age or status), and once a day for every live, paused or recently finished campaign with money. The daily pass is recorded in the database (`jobstates`), so restarting the API doesn't repeat it. | The campaign |
 
 "The campaign" links open **Campaigns** with that campaign's detail (`/campaigns?open=<id>`).
@@ -387,7 +390,7 @@ The ops alerts job (`services/opsAlerts.js`) runs every 15 minutes inside the AP
 **How an alert lives:**
 - One open alert per kind and subject. Seeing the problem again updates its message; it isn't duplicated.
 - It **resolves by itself only when its subject is checked again and the problem is gone.** A campaign that drops out of the recent-money window, or a failed payout older than 30 days, stays open until it's actually re-checked and fine.
-- **Resolve** (admin, super admin, finance admin) marks it handled. If the problem is still there, it **reopens and is emailed again** when the problem changes (a different amount, status or count, another failed transfer on the same withdrawal, a different set of reconciliation problems; webhook counts only when they roughly double) or **24 hours after it was resolved**, whichever comes first. The panel shows **Reopened**.
+- **Resolve** (admin, super admin, finance admin) marks it handled. If the problem is still there, it **reopens and is emailed again** when the problem really changes: a different amount or status on a withdrawal or refund, another failed transfer on the same withdrawal, a count of stuck items or failed webhooks roughly doubling, or for a reconciliation mismatch a different kind of mismatch or a discrepancy of a different order of magnitude (money moving on the campaign doesn't count) or **24 hours after it was resolved**, whichever comes first. The panel shows **Reopened**.
 - If the problem clears and comes back later, that's a new alert.
 - An alert is marked emailed only once the email went out. A failed send is retried on the next run (log: `[OpsAlerts] Alert email failed`).
 

@@ -55,7 +55,7 @@ test("the pre-deploy checks, conflict check, reconciliation and migration dry ru
 
   // The same functions through the shared read-only connection, then every model's
   // index and collection step allowed to finish.
-  const { connectReadOnly } = require("../../scripts/readOnlyConnection");
+  const { connectReadOnly } = require("../../scripts/scriptConnection");
   const { findUniqueIndexConflicts } = require("../../scripts/checkUniqueIndexConflicts");
   const { migrateCampaignsToV2 } = require("../../scripts/migrateCampaignV2");
   const { reconcileAllCampaigns } = require("../../src/services/campaignReconciliation");
@@ -79,7 +79,11 @@ test("the pre-deploy checks, conflict check, reconciliation and migration dry ru
 test("every check script connects through the read-only connection", () => {
   for (const script of ["preDeployChecks.js", "reconcileCampaigns.js", "checkUniqueIndexConflicts.js", "migrateCampaignV2.js"]) {
     const source = fs.readFileSync(path.join(__dirname, "..", "..", "scripts", script), "utf8");
-    assert.match(source, /connectReadOnly\(/, `${script} uses connectReadOnly`);
+    assert.match(source, /connectReadOnly/, `${script} uses connectReadOnly`);
     assert.doesNotMatch(source, /mongoose\s*\.connect\(/, `${script} doesn't connect on its own`);
   }
+  // Only the migration writes, through the connection named for it, with the same no-build options.
+  const { NO_AUTO_BUILD } = require("../../scripts/scriptConnection");
+  assert.deepEqual(NO_AUTO_BUILD, { autoIndex: false, autoCreate: false });
+  assert.match(fs.readFileSync(path.join(__dirname, "..", "..", "scripts", "migrateCampaignV2.js"), "utf8"), /connectForMigration/);
 });

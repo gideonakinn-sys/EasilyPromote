@@ -8,7 +8,7 @@
 //
 // Either way it builds no index and creates no collection (the API does that when it starts);
 // --apply only writes the fields above on existing campaigns.
-const { disableAutoBuild } = require("./readOnlyConnection");
+const { disableAutoBuild } = require("./scriptConnection");
 
 if (require.main === module) disableAutoBuild();
 const Campaign = require("../src/models/Campaign");
@@ -52,9 +52,9 @@ module.exports = { migrateCampaignsToV2, v2FieldsFor };
 if (require.main === module) {
   require("dotenv").config();
   const mongoose = require("mongoose");
-  const { connectReadOnly } = require("./readOnlyConnection");
+  const { connectReadOnly, connectForMigration } = require("./scriptConnection");
   const apply = process.argv.includes("--apply");
-  connectReadOnly(process.env.MONGODB_URI)
+  (apply ? connectForMigration : connectReadOnly)(process.env.MONGODB_URI)
     .then(() => migrateCampaignsToV2({ dryRun: !apply, log: console.log }))
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));

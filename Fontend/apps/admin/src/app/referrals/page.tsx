@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../../components/sidebar";
 import { apiDownload, apiRequest, getUser, isAuthenticated } from "../../lib/api";
-import { REWARD_ROLES } from "../../lib/roles";
+import { MONEY_ROLES, REWARD_ROLES } from "../../lib/roles";
 
 type Tab = "overview" | "brands" | "campaigns" | "conversions";
 type Tone = "green" | "amber" | "red" | "blue" | "stone";
@@ -1319,8 +1319,10 @@ export default function AdminReferralsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
   const [canAct, setCanAct] = useState(false);
-  // Finance admins can set rewards but not disable codes, revoke keys or void conversions.
+  // Finance admins can set rewards and void conversions but not disable codes or revoke keys.
   const [canSetReward, setCanSetReward] = useState(false);
+  // Voiding a conversion gives its reward back to the pool: finance and super admins only.
+  const [canVoidConversions, setCanVoidConversions] = useState(false);
   const [openBrandId, setOpenBrandId] = useState<string | null>(null);
   const [openCampaign, setOpenCampaign] = useState<{ id: string; name: string } | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -1335,6 +1337,7 @@ export default function AdminReferralsPage() {
     }
     setCanAct(ACTION_ROLES.includes(getUser()?.role || ""));
     setCanSetReward(REWARD_ROLES.includes(getUser()?.role || ""));
+    setCanVoidConversions(MONEY_ROLES.includes(getUser()?.role || ""));
   }, [router]);
 
   return (
@@ -1346,8 +1349,9 @@ export default function AdminReferralsPage() {
           <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Referrals</h1>
           <p className="text-sm text-stone-500 mt-1">
             Referral codes, conversions and brand integrations across the platform.
-            {!canAct && canSetReward && " You can set rewards; admins and super admins can disable codes, revoke keys or void conversions."}
+            {!canAct && canSetReward && " You can set rewards; admins and super admins can disable codes or revoke keys."}
             {!canAct && !canSetReward && " You have view-only access; admins, super admins and finance admins can set rewards."}
+            {!canVoidConversions && " Only finance admins and super admins can void conversions."}
           </p>
         </header>
 
@@ -1387,7 +1391,7 @@ export default function AdminReferralsPage() {
             initialNeedsReward={showNeedsReward}
           />
         )}
-        {tab === "conversions" && <ConversionsTab canAct={canAct} onAction={setPendingAction} />}
+        {tab === "conversions" && <ConversionsTab canAct={canVoidConversions} onAction={setPendingAction} />}
       </main>
 
       {openBrandId && (

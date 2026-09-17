@@ -83,7 +83,7 @@ Existing variables the new features depend on; confirm they're set in production
 
 Run from a checkout of the merged release, in `Backend/` after `npm ci`, with `MONGODB_URI` pointing at production (a restored copy of the backup is even better for the migration dry run). The scripts load `dotenv`, but a variable already set in the environment wins; don't rely on a local `.env`.
 
-**All check scripts are read-only.** `preDeployChecks.js`, `checkUniqueIndexConflicts.js`, `reconcileCampaigns.js` and `migrateCampaignV2.js` connect through `scripts/readOnlyConnection.js` with Mongoose's `autoIndex` and `autoCreate` off, so they never build an index or create a collection (a test runs them against a throwaway database and checks nothing was added). The migration with `--apply` writes only the Campaign v2 fields on existing campaigns; indexes are built by the API when it starts (§6).
+**All check scripts are read-only.** `preDeployChecks.js`, `checkUniqueIndexConflicts.js`, `reconcileCampaigns.js` and `migrateCampaignV2.js` connect through `scripts/scriptConnection.js` (`connectReadOnly`; the migration's `--apply` uses `connectForMigration`, named for the fact that it writes, with the same options) with Mongoose's `autoIndex` and `autoCreate` off, so they never build an index or create a collection (a test runs them against a throwaway database and checks nothing was added). The migration with `--apply` writes only the Campaign v2 fields on existing campaigns; indexes are built by the API when it starts (§6).
 
 **MongoDB 4.4 or newer is required** (the creator dashboard and join read with `$unionWith`). `preDeployChecks.js` reads the server version and blocks below 4.4.
 

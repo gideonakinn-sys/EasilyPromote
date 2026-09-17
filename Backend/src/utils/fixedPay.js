@@ -33,6 +33,7 @@ const { toKobo, fromKobo, roundMoney } = require("./money");
 const rules = require("./fixedPayRules");
 const { ACTIVE_PLACEMENT_STATUSES } = require("./placementStatuses");
 const { emitPlacesLeft } = require("./campaignUpdates");
+const { buildRefundParts } = require("./refunds");
 
 const { FIXED_HOLD_MS, UNDELIVERED_VOID_AFTER_MS, fixedCreditState, canStillEarn, unusedBudgetRefund, refundFor } = rules;
 
@@ -600,7 +601,6 @@ const lockFilter = (now) => ({ $or: [{ refundSendingUntil: null }, { refundSendi
 // marked sent, refunded or failed. A failed row releases its reservation and can be retried; a row
 // interrupted before step 4 stays reserved and is retried from the same row.
 async function refundUnusedContentBudget({ campaignId, expectedAmount = null, note = null, now = new Date() }) {
-  const { buildRefundParts } = require("./refunds");
   const loaded = await contentBudgetSummary(campaignId, now);
   if (!loaded) throw new FixedPayError(404, "NOT_CONTENT_CAMPAIGN", "Content campaign not found");
   const { campaign, snapshot, summary } = loaded;

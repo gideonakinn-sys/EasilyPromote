@@ -11,9 +11,13 @@ const Transaction = require("../models/Transaction");
 const Notification = require("../models/Notification");
 const Platform = require("../models/Platform");
 const Industry = require("../models/Industry");
+const TikTokConnection = require("../models/TikTokConnection");
+const MetaConnection = require("../models/MetaConnection");
+const { hasDependents } = require("../utils/cleanupCancelled");
+const { seedIndustries } = require("../utils/seedIndustries");
 const { protect, authorizeRoles } = require("../middleware/auth");
 const { ensureCampaignSlots, syncCampaignSlots } = require("../utils/ensureSlots");
-const { emitCampaignUpdate, emitCampaignStatus } = require("../utils/campaignUpdates");
+const { emitCampaignUpdate, emitCampaignStatus, emitPlacesLeft } = require("../utils/campaignUpdates");
 const Withdrawal = require("../models/Withdrawal");
 const paystack = require("../services/paystack");
 const { campaignEscrowBalance, refundViewsEscrow } = require("../utils/escrow");
@@ -38,6 +42,7 @@ const {
 } = require("../utils/fixedPay");
 const { reconcileCampaignById } = require("../services/campaignReconciliation");
 const { completeCampaign, CompletionError, COMPLETE_ROLES } = require("../services/campaignCompletion");
+const { campaignHasPayments } = require("../utils/campaignPayments");
 
 const adminGuard = [protect, authorizeRoles("admin", "super_admin", "finance_admin", "support")];
 // Moving money (paying or reviewing withdrawals, the payout run and payout check, refunds, voids,
@@ -157,7 +162,6 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
     const withNiches = campaigns.map((c, index) => ({ key: `c${index}`, niches: nichesOf(c) })).filter((c) => c.niches.length > 0);
     const creatorCounts = new Map();
     if (withNiches.length > 0) {
-      const CreatorProfile = require("../models/CreatorProfile");
       const [facets] = await CreatorProfile.aggregate([
         { $match: { "niches.0": { $exists: true } } },
         {
@@ -225,9 +229,10 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
     const campaign = await Campaign.findById(req.params.id).populate("businessId", "name email");
     if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
-    const [slots, submissions] = await Promise.all([
+    const [slots, submissions, hasPayments] = await Promise.all([
       Slot.find({ campaignId: campaign._id }).populate("creatorId", "name email"),
       Submission.find({ campaignId: campaign._id }).populate("creatorId", "name email"),
+      campaignHasPayments(campaign._id),
     ]);
 
     res.json({
@@ -254,6 +259,7 @@ router.get("/campaigns/:id", adminGuard, async (req, res, next) => {
         progressPercent: campaign.targetViews > 0 ? Math.min(Math.round(((campaign.viewsDelivered || 0) / campaign.targetViews) * 100), 100) : 0,
         slotCount: campaign.slotCount || 5,
         campaignModel: campaign.campaignModel || "performance",
+        hasPayments,
         createdAt: campaign.createdAt,
         brand: campaign.businessId
           ? { id: campaign.businessId._id, name: campaign.businessId.name, email: campaign.businessId.email }
@@ -433,7 +439,7 @@ router.patch("/campaigns/:id", adminGuard, async (req, res, next) => {
     // campaigns have one placement per deliverable bought, so their count can't change here.
     if (slotCount !== undefined && campaign.campaignModel !== "content") {
       await syncCampaignSlots(campaign, slotCount);
-      await require("../utils/campaignUpdates").emitPlacesLeft(campaign._id);
+      await emitPlacesLeft(campaign._id);
     }
 
     res.json({
@@ -502,7 +508,7 @@ router.patch("/campaigns/:id/status", adminGuard, async (req, res, next) => {
 
     // Cancelling a paid campaign refunds its views and referral budget automatically.
     if (status === "cancelled" && !MONEY_ROLES.includes(req.user.role)) {
-      const paid = await Transaction.exists({ campaignId: campaign._id, type: { $in: ["escrow_deposit", "topup"] } });
+      const paid = await campaignHasPayments(campaign._id);
       if (paid) {
         return res.status(403).json({
           error: "Only finance admins and super admins can cancel a paid campaign, because cancelling sends refunds",
@@ -586,7 +592,6 @@ router.delete("/campaigns/:id", adminGuard, async (req, res, next) => {
     }
     // Payments, placements, content and conversions back refunds and pay owed, so a campaign
     // with any of them is kept (cancelled) rather than deleted.
-    const { hasDependents } = require("../utils/cleanupCancelled");
     if (await hasDependents(campaign._id)) {
       return res.status(409).json({
         error: "This campaign has payments, creators or content on record, so it can't be deleted. It stays cancelled.",
@@ -803,8 +808,6 @@ router.get("/users", adminGuard, async (req, res, next) => {
 
     const userIds = users.map((u) => u._id);
     const creatorIds = users.filter((u) => u.role === "creator").map((u) => u._id);
-    const TikTokConnection = require("../models/TikTokConnection");
-    const MetaConnection = require("../models/MetaConnection");
     const [tiktokConnections, metaConnections] = creatorIds.length
       ? await Promise.all([
           TikTokConnection.find({ userId: { $in: creatorIds } }).select("userId username").lean(),
@@ -1284,12 +1287,10 @@ router.delete("/platforms/:id", adminGuard, async (req, res, next) => {
 // ─── GET /api/admin/industries ─────────────────────────────────────────────────
 router.get("/industries", adminGuard, async (req, res, next) => {
   try {
-    const { seedIndustries } = require("../utils/seedIndustries");
     await seedIndustries();
 
     const industries = await Industry.find().sort({ sortOrder: 1, name: 1 });
 
-    const CreatorProfile = require("../models/CreatorProfile");
     const creatorProfiles = await CreatorProfile.find({}, { niches: 1 });
     const creatorNiches = creatorProfiles.map((p) =>
       (p.niches || []).map((n) => String(n).trim().toLowerCase()).filter(Boolean)
