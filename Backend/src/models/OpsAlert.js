@@ -11,6 +11,7 @@ const OPS_ALERT_KINDS = [
   "views_submission_stuck",
   "auto_refund_failed",
   "reconciliation_mismatch",
+  "social_reconnect_needed",
 ];
 
 // Something the ops team needs to look at, found by the ops alerts job (services/opsAlerts.js).
@@ -25,7 +26,8 @@ const opsAlertSchema = new mongoose.Schema(
     subjectType: {
       type: String,
       // "system" for alerts about the platform as a whole (subjectId is all zeros).
-      enum: ["withdrawal", "transaction", "business", "campaign", "system"],
+      // "connection": a creator's MetaConnection or TikTokConnection (one per creator + provider).
+      enum: ["withdrawal", "transaction", "business", "campaign", "system", "connection"],
       required: true,
     },
     subjectId: { type: mongoose.Schema.Types.ObjectId, required: true },
