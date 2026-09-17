@@ -29,6 +29,9 @@ interface CampaignItem {
   creatorCount?: number;
   statusNote?: string;
   campaignModel?: "content" | "performance";
+  // Hybrid pay (ticket 10): budget, creator pool and fee are the base; the bonus pool is paid beside them.
+  payShape?: "fixed" | "performance" | "hybrid" | null;
+  hybridBonus?: { metric: string; pool: number; platformFee: number; poolRemaining: number } | null;
   createdAt: string;
   brand?: { id: string; name: string; email: string };
 }
@@ -447,7 +450,10 @@ export default function AdminCampaignsPage() {
 
                       <td className="px-6 py-4">
                         <p className="font-bold text-stone-900">{formatCurrency(c.budget)}</p>
-                        <p className="text-[11px] text-stone-500">Creator Pool: {formatCurrency(c.creatorPool)}</p>
+                        <p className="text-[11px] text-stone-500">
+                          {c.hybridBonus ? "Base Pool" : "Creator Pool"}: {formatCurrency(c.creatorPool)}
+                        </p>
+                        {c.hybridBonus && <p className="text-[11px] text-stone-500">Bonus Pool: {formatCurrency(c.hybridBonus.pool)}</p>}
                       </td>
 
                       <td className="px-6 py-4">
@@ -538,11 +544,13 @@ export default function AdminCampaignsPage() {
                 {/* Financial Summary */}
                 <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Budget</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">{selectedCampaign.hybridBonus ? "Base Budget" : "Total Budget"}</span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.budget)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Creator Pool ({sharePercent(selectedCampaign.creatorPool, selectedCampaign.budget)})</span>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                      {selectedCampaign.hybridBonus ? "Base Pool" : "Creator Pool"} ({sharePercent(selectedCampaign.creatorPool, selectedCampaign.budget)})
+                    </span>
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.creatorPool)}</span>
                   </div>
                   <div>
@@ -550,6 +558,23 @@ export default function AdminCampaignsPage() {
                     <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.platformFee)}</span>
                   </div>
                 </div>
+
+                {selectedCampaign.hybridBonus && (
+                  <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Pool</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.pool)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Fee</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.platformFee)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Left</span>
+                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.poolRemaining)}</span>
+                    </div>
+                  </div>
+                )}
 
                 {selectedCampaign.campaignModel === "content" && (
                   <ContentBudgetPanel campaignId={selectedCampaign.id} campaignName={selectedCampaign.name} />

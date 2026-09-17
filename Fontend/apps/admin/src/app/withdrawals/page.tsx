@@ -19,6 +19,7 @@ interface WithdrawalItem {
   viewsAmount?: number;
   referralAmount?: number;
   fixedAmount?: number;
+  bonusAmount?: number;
   status: "pending" | "processing" | "rejected" | "released";
   adminNotes?: string | null;
   targetViews: number | null;
@@ -197,6 +198,7 @@ export default function AdminWithdrawalsPage() {
                         <p className="text-[10px] text-stone-500 mt-0.5 whitespace-nowrap">
                           Views {formatCurrency(w.viewsAmount ?? 0)} · Referral {formatCurrency(w.referralAmount ?? 0)} · Fixed{" "}
                           {formatCurrency(w.fixedAmount ?? 0)}
+                          {(w.bonusAmount ?? 0) > 0 && ` · Bonus ${formatCurrency(w.bonusAmount ?? 0)}`}
                         </p>
                       )}
                     </td>

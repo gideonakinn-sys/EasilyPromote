@@ -210,6 +210,12 @@ router.get("/campaigns", adminGuard, async (req, res, next) => {
         statusNote: c.statusNote,
         campaignModel: c.campaignModel || "performance",
         contentPay: c.campaignModel === "content" ? c.contentPay : undefined,
+        // Hybrid campaigns (ticket 10): budget, creatorPool and platformFee are the base; the bonus pool is beside them.
+        payShape: c.payShape || null,
+        hybridBonus:
+          c.hybridBonus && c.hybridBonus.metric
+            ? { metric: c.hybridBonus.metric, pool: c.hybridBonus.pool, platformFee: c.hybridBonus.platformFee || 0, poolRemaining: c.hybridBonus.poolRemaining || 0 }
+            : null,
         createdAt: c.createdAt,
         brand: c.businessId
           ? { id: c.businessId._id, name: c.businessId.name, email: c.businessId.email }

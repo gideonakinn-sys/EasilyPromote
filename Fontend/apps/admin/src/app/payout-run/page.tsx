@@ -13,6 +13,7 @@ interface RunLine {
   viewsAmount: number;
   referralAmount: number;
   fixedAmount?: number;
+  bonusAmount?: number;
   amount: number;
   estimatedFee: number;
   requestedAt: string;
@@ -28,6 +29,7 @@ interface RunGroup {
   viewsEscrow: number;
   referralEscrow: number;
   fixedEscrow?: number;
+  bonusEscrow?: number;
   lines: RunLine[];
   amount: number;
   estimatedFees: number;
@@ -296,6 +298,7 @@ export default function PayoutRunPage() {
                         {group.brandName} · {group.campaignStatus || "unknown"} · views escrow {naira(group.viewsEscrow)} · referral budget{" "}
                         {naira(group.referralEscrow)}
                         {(group.fixedEscrow ?? 0) > 0 && ` · fixed pay owed ${naira(group.fixedEscrow ?? 0)}`}
+                        {(group.bonusEscrow ?? 0) > 0 && ` · bonus owed ${naira(group.bonusEscrow ?? 0)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -317,6 +320,7 @@ export default function PayoutRunPage() {
                           <th className="px-6 py-3">Views</th>
                           <th className="px-6 py-3">Referral</th>
                           <th className="px-6 py-3">Fixed</th>
+                          <th className="px-6 py-3">Bonus</th>
                           <th className="px-6 py-3">Total</th>
                           <th className="px-6 py-3">Est. fee</th>
                           <th className="px-6 py-3">Requested</th>
@@ -343,6 +347,7 @@ export default function PayoutRunPage() {
                             <td className="px-6 py-4 font-mono">{naira(line.viewsAmount)}</td>
                             <td className="px-6 py-4 font-mono">{naira(line.referralAmount)}</td>
                             <td className="px-6 py-4 font-mono">{naira(line.fixedAmount ?? 0)}</td>
+                            <td className="px-6 py-4 font-mono">{naira(line.bonusAmount ?? 0)}</td>
                             <td className="px-6 py-4 font-mono font-bold text-stone-900">{naira(line.amount)}</td>
                             <td className="px-6 py-4 font-mono text-stone-500">{naira(line.estimatedFee)}</td>
                             <td className="px-6 py-4 text-stone-500 whitespace-nowrap">

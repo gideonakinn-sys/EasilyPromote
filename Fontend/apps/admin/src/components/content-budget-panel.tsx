@@ -26,8 +26,45 @@ interface UndeliveredItem {
   voidable: boolean;
 }
 
+// Hybrid pay (ticket 10): a hybrid campaign's bonus pool beside its base.
+interface BonusRefund {
+  id: string;
+  amount: number;
+  status: "refund_pending" | "refunded" | "refund_failed";
+  error: string | null;
+  createdAt: string;
+}
+
+interface BonusBudget {
+  metric: "views" | "signups" | "downloads";
+  pool: number;
+  platformFee: number;
+  capPerCreator: number;
+  ratePerThousandViews: number | null;
+  rewardPerConversion: number | null;
+  creators: number;
+  creditedAmount: number;
+  paidOut: number;
+  owedAmount: number;
+  poolRemaining: number;
+  refundedPool: number;
+  refundAllowed: boolean;
+  refundableFrom: string | null;
+  refundable: { pool: number; platformFee: number; amount: number };
+  refunds: BonusRefund[];
+}
+
+const BONUS_METRIC_LABEL: Record<BonusBudget["metric"], string> = { views: "Views", signups: "Sign-ups", downloads: "Downloads" };
+const BONUS_REFUND_LABEL: Record<BonusRefund["status"], string> = {
+  refunded: "Refunded",
+  refund_pending: "Sent, Waiting For Paystack",
+  refund_failed: "Failed, Refund By Hand In Paystack",
+};
+
 interface ContentBudget {
   status: string;
+  payShape?: "fixed" | "hybrid";
+  bonus?: BonusBudget | null;
   ratePerDeliverable: number;
   deliverables: number;
   completed: number;
@@ -54,6 +91,7 @@ interface RefundResponse {
 
 type PendingAction =
   | { kind: "refund" }
+  | { kind: "refundBonus" }
   | { kind: "retry"; refund: ContentRefund }
   | { kind: "void"; item: UndeliveredItem };
 
@@ -126,6 +164,24 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
           text: data.voided ? `${naira(data.amount)} voided and returned to the campaign.` : "This pay was already voided.",
           failed: false,
         });
+      } else if (pending.kind === "refundBonus" && budget.bonus) {
+        // A failed refund answers 502 with the refund in the body, so it's read directly.
+        const token = getToken();
+        const res = await fetch(`${API_URL}/admin/campaigns/${campaignId}/refund-unused-bonus`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ expectedAmount: budget.bonus.refundable.amount }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { refund?: BonusRefund; error?: string };
+        if (data.refund) {
+          const failed = data.refund.status === "refund_failed";
+          setMessage({
+            text: failed
+              ? `Bonus refund failed: ${data.refund.error || "Paystack didn't accept it"}. Refund it by hand in Paystack.`
+              : `${naira(data.refund.amount)} of unused bonus sent to Paystack.`,
+            failed,
+          });
+        } else setError(data.error || `Request failed (${res.status})`);
       } else {
         const path =
           pending.kind === "retry"
@@ -170,7 +226,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
   return (
     <div className="pt-4 border-t border-stone-200 space-y-3 font-rethink">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-medium text-stone-500">Deliverables And Fixed Pay</h4>
+        <h4 className="text-xs font-medium text-stone-500">{budget?.bonus ? "Deliverables And Base Pay" : "Deliverables And Fixed Pay"}</h4>
         {budget && (
           <span className="text-[11px] font-medium text-stone-400">{naira(budget.ratePerDeliverable)} per deliverable</span>
         )}
@@ -273,6 +329,67 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
               Refund Unused Budget
             </button>
           </div>
+          {budget.bonus && (
+            <div className="pt-3 border-t border-stone-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-medium text-stone-500">Bonus Pool</h4>
+                <span className="text-[11px] font-medium text-stone-400">
+                  {BONUS_METRIC_LABEL[budget.bonus.metric]} ·{" "}
+                  {budget.bonus.metric === "views"
+                    ? `${naira(budget.bonus.ratePerThousandViews ?? 0)} per 1,000 views`
+                    : budget.bonus.rewardPerConversion
+                      ? `${naira(budget.bonus.rewardPerConversion)} per conversion`
+                      : "reward not set"}{" "}
+                  · cap {naira(budget.bonus.capPerCreator)}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "Pool", value: budget.bonus.pool },
+                  { label: "Fee On Pool", value: budget.bonus.platformFee },
+                  { label: "Credited", value: budget.bonus.creditedAmount },
+                  { label: "Paid Out", value: budget.bonus.paidOut },
+                  { label: "Owed", value: budget.bonus.owedAmount },
+                  { label: "Left In Pool", value: budget.bonus.poolRemaining },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                    <span className="text-[10px] font-medium text-stone-400 block">{stat.label}</span>
+                    <span className="text-sm font-medium text-stone-900 tabular-nums">{naira(stat.value)}</span>
+                  </div>
+                ))}
+              </div>
+              {budget.bonus.refunds.map((refund) => (
+                <div key={refund.id} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                  <p className="text-xs font-medium text-stone-900">
+                    {naira(refund.amount)} unused bonus · {shortDate(refund.createdAt)}
+                  </p>
+                  <p className={refund.status === "refund_failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-stone-500"}>
+                    {BONUS_REFUND_LABEL[refund.status]}
+                    {refund.error && `: ${refund.error}`}
+                  </p>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] font-medium text-stone-500">
+                  {!budget.bonus.refundAllowed
+                    ? budget.bonus.refundableFrom
+                      ? `The unused bonus can be refunded from ${shortDate(budget.bonus.refundableFrom)}, once conversions stop counting.`
+                      : "The unused bonus can be refunded once the campaign is completed or cancelled."
+                    : budget.bonus.refundable.amount > 0
+                      ? `${naira(budget.bonus.refundable.amount)} refundable: ${naira(budget.bonus.refundable.pool)} unused pool and its fee.`
+                      : "No unused bonus to refund."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPending({ kind: "refundBonus" })}
+                  disabled={!budget.bonus.refundAllowed || budget.bonus.refundable.amount <= 0 || working || !canMoveMoney}
+                  className="shrink-0 px-4 py-2 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
+                >
+                  Refund Unused Bonus
+                </button>
+              </div>
+            </div>
+          )}
           {!canMoveMoney && (
             <p className="text-[11px] font-medium text-stone-400">Only finance admins and super admins can refund, retry refunds or void pay.</p>
           )}
@@ -293,7 +410,33 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
             className="bg-white rounded-2xl max-w-sm w-full p-6 border border-stone-200 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {pending.kind === "void" ? (
+            {pending.kind === "refundBonus" && budget.bonus ? (
+              <>
+                <div className="space-y-1">
+                  <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+                    Refund {naira(budget.bonus.refundable.amount)} Of Unused Bonus?
+                  </h3>
+                  <p className="text-xs font-medium text-stone-500 leading-relaxed">
+                    Sent back to the brand&apos;s Paystack payment for &quot;{campaignName}&quot;. No more bonus can be earned from what&apos;s refunded;
+                    bonus already credited stays owed to creators. Paystack fees aren&apos;t deducted.
+                  </p>
+                </div>
+                <dl className="bg-stone-50 rounded-xl p-4 space-y-2 text-xs">
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-medium text-stone-500">Unused Pool</dt>
+                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.pool)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-medium text-stone-500">Platform Fee On It</dt>
+                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.platformFee)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-stone-200 pt-2">
+                    <dt className="font-medium text-stone-900">Refund</dt>
+                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.amount)}</dd>
+                  </div>
+                </dl>
+              </>
+            ) : pending.kind === "void" ? (
               <div className="space-y-1">
                 <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
                   Void Undelivered Pay?
