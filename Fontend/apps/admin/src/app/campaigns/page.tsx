@@ -7,6 +7,13 @@ import { apiRequest, getToken, getUser, isAuthenticated } from "../../lib/api";
 import { ContentBudgetPanel } from "../../components/content-budget-panel";
 import { CompleteCampaignDialog } from "../../components/complete-campaign-dialog";
 import { COMPLETE_ROLES, MONEY_ROLES } from "../../lib/roles";
+import {
+  CampaignTermsPanel,
+  TermsAcceptedText,
+  acceptedTermsByCreator,
+  type CampaignUsageRights,
+  type SlotWithTerms,
+} from "../../components/campaign-terms-panel";
 
 interface CampaignItem {
   id: string;
@@ -111,7 +118,7 @@ export default function AdminCampaignsPage() {
       _id?: string;
       id?: string;
       creatorHandle: string;
-      creatorId?: { name?: string; email?: string };
+      creatorId?: { _id?: string; name?: string; email?: string };
       status: string;
       viewsDelivered: number;
       postedPlatforms?: Array<{ platform: string; postUrl?: string; views?: number; likes?: number; comments?: number }>;
@@ -120,7 +127,14 @@ export default function AdminCampaignsPage() {
       submittedAt?: string;
     }>;
     // The API's cancel rule: the brand paid something (checkout or top-up).
-    campaign?: { hasPayments?: boolean };
+    campaign?: {
+      hasPayments?: boolean;
+      // M8 batch 7 (SPEC D29, D30)
+      campaignObjective?: string | null;
+      destinationUrl?: string | null;
+      usageRights?: CampaignUsageRights | null;
+    };
+    slots?: SlotWithTerms[];
   } | null>(null);
 
   const fetchPlatforms = useCallback(async () => {
@@ -588,6 +602,15 @@ export default function AdminCampaignsPage() {
                   </p>
                 </div>
 
+                {campaignDetail?.campaign && (
+                  <CampaignTermsPanel
+                    campaignObjective={campaignDetail.campaign.campaignObjective}
+                    destinationUrl={campaignDetail.campaign.destinationUrl}
+                    usageRights={campaignDetail.campaign.usageRights}
+                    slots={campaignDetail.slots}
+                  />
+                )}
+
                 {/* Platform Metrics per Creator */}
                 <div className="pt-4 border-t border-stone-200">
                   <div className="flex items-center justify-between mb-3">
@@ -616,6 +639,11 @@ export default function AdminCampaignsPage() {
                                   {sub.creatorId?.name || sub.creatorHandle || "Creator"}
                                 </p>
                                 <p className="text-[11px] text-stone-400">@{sub.creatorHandle} · {sub.status}</p>
+                                <TermsAcceptedText
+                                  accepted={
+                                    sub.creatorId?._id ? acceptedTermsByCreator(campaignDetail.slots).get(sub.creatorId._id) : null
+                                  }
+                                />
                               </div>
                               <span className="text-sm font-bold text-stone-900">
                                 {(sub.viewsDelivered ?? 0).toLocaleString()} views

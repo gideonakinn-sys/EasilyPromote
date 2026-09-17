@@ -153,7 +153,19 @@ interface PendingAction {
 }
 
 const ACTION_ROLES = ["admin", "super_admin"];
-const EVENT_TYPES = ["install", "signup", "lead", "purchase", "deposit", "custom"];
+const EVENT_TYPES = ["install", "signup", "lead", "purchase", "deposit", "custom", "click"];
+// M8 batch 7: "click" is recorded by tracked links on Clicks campaigns (SPEC D29).
+const EVENT_LABELS: Record<string, string> = {
+  install: "Downloads",
+  signup: "Sign-ups",
+  lead: "Leads",
+  purchase: "Purchases",
+  deposit: "Deposits",
+  custom: "Custom",
+  click: "Clicks",
+};
+const eventLabel = (type: string | null | undefined) => (type ? EVENT_LABELS[type] || type : "—");
+const eventLabels = (types: (string | null | undefined)[]) => types.map(eventLabel).join(", ");
 const CAMPAIGN_STATUSES = ["all", "live", "paused", "completed", "cancelled"];
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -392,6 +404,7 @@ const CONVERSION_NOUNS: Record<string, [string, string]> = {
   purchase: ["purchase", "purchases"],
   deposit: ["deposit", "deposits"],
   custom: ["conversion", "conversions"],
+  click: ["click", "clicks"],
 };
 
 function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; onClose: () => void; onDone: () => void }) {
@@ -549,7 +562,7 @@ function CodesPanel({
     try {
       const data = await apiRequest<{ campaign: { eventType: string | null; eventTypes?: string[] }; codes: CodeRow[] }>(`/admin/referrals/campaigns/${campaign.id}/codes`);
       setCodes(data.codes);
-      setEventType(data.campaign.eventTypes?.length ? data.campaign.eventTypes.join(", ") : data.campaign.eventType);
+      setEventType(data.campaign.eventTypes?.length ? eventLabels(data.campaign.eventTypes).toLowerCase() : data.campaign.eventType ? eventLabel(data.campaign.eventType).toLowerCase() : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load codes");
     } finally {
@@ -712,7 +725,7 @@ function BrandPanel({
                         <td className="px-6 py-4">
                           <StatusBadge status={campaign.status} />
                         </td>
-                        <td className="px-6 py-4">{(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType]).join(", ")}</td>
+                        <td className="px-6 py-4">{eventLabels(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType])}</td>
                         <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.conversions)}</td>
                         <td className="px-6 py-4 font-mono">{numberFormat.format(campaign.viewsDelivered)}</td>
                         <td className="px-6 py-4">
@@ -1103,7 +1116,7 @@ function CampaignsTab({
                     <td className="px-6 py-4">
                       <StatusBadge status={campaign.status} />
                     </td>
-                    <td className="px-6 py-4">{(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType]).join(", ")}</td>
+                    <td className="px-6 py-4">{eventLabels(campaign.eventTypes?.length ? campaign.eventTypes : [campaign.eventType])}</td>
                     <td className="px-6 py-4 font-mono">
                       {campaign.activeCodes} / {campaign.codes} active
                     </td>
@@ -1194,10 +1207,11 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
 
   const exportCsv = async () => {
     setDownloading(true);
+    setError("");
     try {
       await apiDownload(`/admin/referrals/conversions.csv?${filterParams(applied)}`, `referral-conversions-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Export failed");
+      setError(err instanceof Error ? err.message : "Export failed");
     } finally {
       setDownloading(false);
     }
@@ -1224,7 +1238,7 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
             <option value="">All events</option>
             {EVENT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type}
+                {eventLabel(type)}
               </option>
             ))}
           </select>
@@ -1260,7 +1274,7 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
                     <td className="px-6 py-4 font-semibold text-stone-800">{row.campaign.name || "—"}</td>
                     <td className="px-6 py-4">{row.creator.username ? `@${row.creator.username}` : row.creator.name || "—"}</td>
                     <td className="px-6 py-4 font-mono">{row.code || "—"}</td>
-                    <td className="px-6 py-4">{row.eventType}</td>
+                    <td className="px-6 py-4">{eventLabel(row.eventType)}</td>
                     <td className="px-6 py-4">{row.counted ? <StatusBadge status="active" /> : <span className="text-stone-400">No</span>}</td>
                     <td className="px-6 py-4 font-mono text-stone-500 max-w-[180px] truncate" title={row.eventId}>
                       {row.eventId}
