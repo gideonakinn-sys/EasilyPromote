@@ -149,6 +149,59 @@ test("Application Required: approving an applicant creates the code, and a signe
   assert.equal(wallet.referral.byCampaign.find((c) => String(c.id) === id).pending, REWARD);
 });
 
+test("sign-ups recorded after the budget ran out are paid, oldest first, when the brand tops up; never twice", async () => {
+  const Campaign = require("../../src/models/Campaign");
+  const ConversionEvent = require("../../src/models/ConversionEvent");
+  const Notification = require("../../src/models/Notification");
+  const { reconcileCampaignById } = require("../../src/services/campaignReconciliation");
+  const { id, key } = await liveSignupCampaign("open_call");
+  await setReward(id);
+  const creator = await harness.registerCreator();
+  const joined = await harness.api("POST", `/api/campaigns/${id}/join`, { token: creator.token });
+  assert.equal(joined.status, 200, JSON.stringify(joined.body));
+
+  // ₦35,000 pool at ₦2,500 each: 14 paid, then 3 recorded unpaid.
+  for (let i = 0; i < 17; i += 1) assert.equal((await sendConversion(key, joined.body.referralCode)).status, 200);
+  const exhausted = await ConversionEvent.find({ campaignId: id, unpaidReason: "budget_exhausted" }).sort({ occurredAt: 1, createdAt: 1 }).lean();
+  assert.equal(exhausted.length, 3);
+  assert.equal((await Campaign.findById(id).lean()).referral.poolRemaining, 0);
+
+  const topUp = (reference, amount) =>
+    harness.api("POST", "/api/webhooks/paystack", {
+      body: { event: "charge.success", data: { reference, amount: Math.round(amount * 100), currency: "NGN", metadata: { type: "referral_topup", campaignId: id } } },
+    });
+
+  // ₦7,142.86 less the 30% fee is ₦5,000: two of the three.
+  assert.equal((await topUp(`ref_topup_${id}_1`, 7142.86)).status, 200);
+  let events = await ConversionEvent.find({ _id: { $in: exhausted.map((e) => e._id) } }).lean();
+  const byId = new Map(events.map((e) => [String(e._id), e]));
+  assert.equal(byId.get(String(exhausted[0]._id)).rewardAmount, REWARD, "oldest paid first");
+  assert.equal(byId.get(String(exhausted[1]._id)).rewardAmount, REWARD);
+  assert.equal(byId.get(String(exhausted[2]._id)).rewardAmount, 0);
+  assert.equal(byId.get(String(exhausted[2]._id)).unpaidReason, "budget_exhausted");
+  assert.ok(new Date(byId.get(String(exhausted[0]._id)).availableAt) > new Date(Date.now() + 6 * DAY), "a fresh 7-day hold");
+  assert.equal((await Campaign.findById(id).lean()).referral.poolRemaining, 0);
+  const told = await Notification.find({ creatorId: creator.id, campaignId: id, type: "referral_backpay" }).lean();
+  assert.equal(told.length, 1, "the creator is told once per top-up");
+  assert.match(told[0].body, /2 earlier sign-ups/);
+
+  // The same payment again (Paystack retry) pays nothing more.
+  assert.equal((await topUp(`ref_topup_${id}_1`, 7142.86)).status, 200);
+  assert.equal(await ConversionEvent.countDocuments({ campaignId: id, rewardAmount: { $gt: 0 } }), 16);
+
+  // Two deliveries of the next top-up at once: the last one is paid exactly once.
+  const results = await Promise.all([topUp(`ref_topup_${id}_2`, 3571.43), topUp(`ref_topup_${id}_2`, 3571.43)]);
+  assert.ok(results.every((r) => r.status === 200));
+  events = await ConversionEvent.find({ campaignId: id }).lean();
+  assert.equal(events.filter((e) => e.rewardAmount > 0).length, 17);
+  assert.equal(events.filter((e) => e.unpaidReason).length, 0);
+  const campaign = await Campaign.findById(id).lean();
+  assert.equal(campaign.referral.poolRemaining, 0);
+  assert.equal(campaign.referral.earned, 17 * REWARD);
+  const result = await reconcileCampaignById(id);
+  assert.ok(result.ok, JSON.stringify(result.problems));
+});
+
 test("a sign-up campaign's referral payout, cancellation refunds and ledger reconcile to the kobo", async () => {
   const Campaign = require("../../src/models/Campaign");
   const ConversionEvent = require("../../src/models/ConversionEvent");

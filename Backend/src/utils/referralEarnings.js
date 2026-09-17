@@ -89,7 +89,11 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
     },
     { upsert: true, new: false, setDefaultsOnInsert: true }
   );
-  if (existing) return { credited: false, alreadyCredited: true, campaign };
+  if (existing) {
+    // A repeat (webhook retry, the brand's return) finishes any back-pay an earlier call didn't.
+    const backPay = await payConversionsAfterTopup(campaign._id);
+    return { credited: false, alreadyCredited: true, campaign, backPay };
+  }
 
   const updated = await Campaign.findByIdAndUpdate(
     campaign._id,
@@ -104,7 +108,10 @@ async function creditReferralTopup({ campaignId, reference, amount, fromCampaign
     },
     { new: true }
   );
-  return { credited: true, campaign: updated, amount, fee, net };
+  // Sign-ups recorded while the budget was empty are paid from the new pool first.
+  const backPay = await payConversionsAfterTopup(campaign._id);
+  const current = backPay.paid > 0 ? await Campaign.findById(campaign._id) : updated;
+  return { credited: true, campaign: current, amount, fee, net, backPay };
 }
 
 // On cancellation: stop new rewards and refund what was never promised to creators,
@@ -293,43 +300,79 @@ async function voidConversion(eventId, { reason, voidedBy, now = new Date() }) {
   return { ok: true, event: previous, campaign, refundedToPool: previous.rewardAmount > 0 ? previous.rewardAmount : 0 };
 }
 
-// Sign-ups recorded before admin set a reward are paid once it's set, oldest first, while
-// the referral pool lasts. Each gets a fresh hold from now, so it can still be voided.
-async function payUnpaidConversions(campaignId, now = new Date()) {
+// Counted conversions that earned nothing are paid, oldest first, while the referral pool lasts:
+// sign-ups recorded before admin set a reward once it's set, and (with `reasons` including
+// budget_exhausted) sign-ups recorded after the budget ran out once the brand tops up. Each gets a
+// fresh hold from now, so it can still be voided. Every event is claimed before it's paid, so
+// concurrent runs never pay one twice. Returns { paid, unpaid, byCreator: Map(creatorId -> { count, amount }) }.
+async function payUnpaidConversions(campaignId, now = new Date(), { reasons = ["rate_not_set"] } = {}) {
+  const byCreator = new Map();
   const campaign = await Campaign.findById(campaignId).select("name businessId referral");
-  if (!campaign || !(campaign.referral && campaign.referral.rewardPerConversion > 0)) return { paid: 0, unpaid: 0 };
+  if (!campaign || !(campaign.referral && campaign.referral.rewardPerConversion > 0)) return { paid: 0, unpaid: 0, byCreator };
 
   const events = await ConversionEvent.find({
     campaignId: campaign._id,
     counted: true,
     voidedAt: null,
-    unpaidReason: "rate_not_set",
+    unpaidReason: { $in: reasons },
   })
     .sort({ occurredAt: 1, createdAt: 1 })
     .select("_id");
 
   let paid = 0;
   for (let i = 0; i < events.length; i += 1) {
-    // Claim the event first so two admins setting the reward can't both pay it.
     const claimed = await ConversionEvent.findOneAndUpdate(
-      { _id: events[i]._id, unpaidReason: "rate_not_set", voidedAt: null },
+      { _id: events[i]._id, unpaidReason: { $in: reasons }, voidedAt: null, rewardAmount: { $not: { $gt: 0 } } },
       { $set: { unpaidReason: null } }
     );
     if (!claimed) continue;
 
     const reward = await reserveConversionReward(campaign, true, now);
     if (!(reward.rewardAmount > 0)) {
-      const rest = events.slice(i).map((event) => event._id);
-      await ConversionEvent.updateMany({ _id: { $in: rest } }, { $set: { unpaidReason: "budget_exhausted" } });
-      return { paid, unpaid: rest.length };
+      // Only this run's claim and events still waiting are marked; another run may be paying the rest.
+      await ConversionEvent.updateOne({ _id: claimed._id, unpaidReason: null, rewardAmount: { $not: { $gt: 0 } } }, { $set: { unpaidReason: "budget_exhausted" } });
+      const rest = events.slice(i + 1).map((event) => event._id);
+      const marked = rest.length
+        ? await ConversionEvent.updateMany({ _id: { $in: rest }, unpaidReason: { $in: reasons } }, { $set: { unpaidReason: "budget_exhausted" } })
+        : { matchedCount: 0 };
+      return { paid, unpaid: 1 + marked.matchedCount, byCreator };
     }
     await ConversionEvent.updateOne(
-      { _id: events[i]._id },
+      { _id: claimed._id },
       { $set: { rewardAmount: reward.rewardAmount, availableAt: reward.availableAt } }
     );
     paid += 1;
+    const key = String(claimed.creatorId);
+    const entry = byCreator.get(key) || { count: 0, amount: 0 };
+    entry.count += 1;
+    entry.amount = roundMoney(entry.amount + reward.rewardAmount);
+    byCreator.set(key, entry);
   }
-  return { paid, unpaid: 0 };
+  return { paid, unpaid: 0, byCreator };
+}
+
+// After a referral top-up: pays sign-ups the empty budget left unpaid (only once a reward is set)
+// and tells each creator paid. Safe to repeat. Never throws: the top-up is already credited.
+async function payConversionsAfterTopup(campaignId, now = new Date()) {
+  try {
+    const result = await payUnpaidConversions(campaignId, now, { reasons: ["budget_exhausted", "rate_not_set"] });
+    if (result.paid > 0) {
+      const campaign = await Campaign.findById(campaignId).select("name").lean();
+      await Notification.insertMany(
+        [...result.byCreator.entries()].map(([creatorId, { count, amount }]) => ({
+          creatorId,
+          campaignId,
+          type: "referral_backpay",
+          title: "Earlier sign-ups paid",
+          body: `The brand added budget to "${campaign ? campaign.name : "a campaign"}", so ${count} earlier sign-up${count === 1 ? "" : "s"} with your code now earn ₦${amount.toLocaleString()}. It's on hold for 7 days.`,
+        }))
+      );
+    }
+    return result;
+  } catch (error) {
+    console.error(`[Referral] Paying earlier conversions after a top-up on ${campaignId} failed:`, error.message);
+    return { paid: 0, unpaid: 0, byCreator: new Map(), error };
+  }
 }
 
 module.exports = {
