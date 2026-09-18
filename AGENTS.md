@@ -30,8 +30,8 @@ npm run dev --filter=@ep/web      # single app
 npm run build                     # turbo build web
 ```
 - **Lint**: `npm run lint` uses `next lint`, but there is **no ESLint config** in the repo — it prompts to create one and is unusable until configured. Don't depend on lint passing.
-- **Typecheck** (from `apps/web`): `npx tsc --noEmit`. It is **heavy (~1 min cold)** — it type-checks the whole graph including `@ep/ui` source via path aliases on a single thread.
-- `incremental` + `tsBuildInfoFile` (`node_modules/.cache/tsconfig.tsbuildinfo`) are configured. For iteration use a warm watcher: `npx tsc --noEmit --incremental -w`. **Do not run full `tsc`/`next build` after every small change**; smoke-test the dev server (route returns 200) and read the watcher log. Run `next build` as the authoritative gate only at milestones.
+- **Typecheck is the ONLY gate**: never run `next build`/`npm run build` as a check. Use `npx tsc --noEmit` from `apps/web` (plus `apps/admin` when admin changes) and, when a quick runtime sanity check is needed, smoke-test the dev server (route returns 200).
+- `incremental` + `tsBuildInfoFile` (`node_modules/.cache/tsconfig.tsbuildinfo`) are configured. For iteration use a warm watcher: `npx tsc --noEmit --incremental -w`; for a one-off check run `npx tsc --noEmit --incremental`.
 
 ### Backend (from `Backend/`)
 ```bash
