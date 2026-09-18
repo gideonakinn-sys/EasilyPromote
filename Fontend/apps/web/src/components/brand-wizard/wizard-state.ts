@@ -21,12 +21,11 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
   { step: 6, title: "Review and launch", short: "Launch" },
 ];
 
-// Only Content campaigns ask where the content goes (SPEC D31), so for every other type the
-// Destination step is skipped and the wizard shows five steps. Numeric ids are kept stable so
-// saved drafts and the backend's wizardStep 1-6 contract are unaffected.
-export function activeWizardSteps(data: Pick<WizardData, "objective">): (typeof WIZARD_STEPS)[number][] {
-  return asksContentDestination(data) ? WIZARD_STEPS : WIZARD_STEPS.filter(({ step }) => step !== 2);
-}
+// The wizard is always five steps: Campaign type > Audience and creators > Pay and budget >
+// Brief > Review and launch. Where content goes and usage rights live inside the Audience step
+// (step 3), so the old Destination step (2) never shows. Numeric ids are kept stable so saved
+// drafts and the backend's wizardStep 1-6 contract are unaffected.
+export const ACTIVE_WIZARD_STEPS = WIZARD_STEPS.filter(({ step }) => step !== 2);
 
 // The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
 // Hybrid is views and sign-ups together; Sign-ups alone is a referral budget with no views target
@@ -408,8 +407,6 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
         title: "Set up your campaign",
         body: "",
       };
-    case 2:
-      return { title: "Where should the content go?", body: "Choose where approved content ends up." };
     case 3:
       return {
         title: "Who do you want to reach?",
@@ -468,6 +465,8 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
     const engagement = data.minEngagementRate.trim();
     if (engagement && !(Number(engagement) >= 0 && Number(engagement) <= 100)) problems.push("Engagement rate must be from 0 to 100.");
+    // Content campaigns answer destination and usage rights here on the Audience step.
+    if (asksContentDestination(data)) problems.push(...usageRightsProblems(data));
   }
   if (step === 4) {
     if (data.objective === "content") {
@@ -498,13 +497,12 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.brief.soundUrl.trim() && !isUrl(data.brief.soundUrl.trim())) problems.push("The sound link must be a full web address.");
     if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference videos must be full web addresses.");
   }
-  if (step === 2 && asksContentDestination(data)) problems.push(...usageRightsProblems(data));
   return problems;
 }
 
 // Where a draft saved without a wizard step picks up: the first step that still needs something.
 export function resumeStep(data: WizardData): WizardStep {
-  for (const { step } of WIZARD_STEPS) {
+  for (const { step } of ACTIVE_WIZARD_STEPS) {
     if (step < 6 && stepProblems(data, step).length > 0) return step;
   }
   return 6;

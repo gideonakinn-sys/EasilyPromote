@@ -15,15 +15,14 @@ import type { CampaignObjective, CampaignQuote } from "./types";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
 import { ConfirmExitModal } from "./confirm-exit-modal";
 import { StepObjective } from "./brand-wizard/step-objective";
-import { StepDestination } from "./brand-wizard/step-destination";
 import { StepAudience } from "./brand-wizard/step-audience";
 import { StepPay } from "./brand-wizard/step-pay";
 import { StepBrief } from "./brand-wizard/step-brief";
 import { StepLaunch } from "./brand-wizard/step-launch";
 import {
   INITIAL_WIZARD_DATA,
+  ACTIVE_WIZARD_STEPS,
   WIZARD_STEPS,
-  activeWizardSteps,
   campaignPayload,
   isObjectiveAvailable,
   pricingPayload,
@@ -82,8 +81,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const connection = useReferralConnection(referral && step === LAST_STEP);
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];
-  // The steps a campaign actually shows: Destination drops out except for Content campaigns.
-  const steps = activeWizardSteps(data);
+  // The wizard is always five steps; the old Destination step lives inside Audience & creators.
+  const steps = ACTIVE_WIZARD_STEPS;
   // Step 1: Continue stays off until a type, name, cover image and industry are all set.
   const stepOneReady =
     step !== 1 ||
@@ -119,9 +118,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       .then((saved) => {
         const loaded = wizardDataFromCampaign(saved);
         let resume = savedWizardStep(saved) || resumeStep(loaded);
-        // A draft saved on the old Destination-and-access step 2 of a non-content campaign has no
-        // Destination step anymore; open it at the next step that still exists and needs something.
-        if (!activeWizardSteps(loaded).some(({ step: s }) => s === resume)) resume = resumeStep(loaded);
+        // A draft saved on an old Destination step (2) that no longer exists opens at the first
+        // step that still needs something.
+        if (!ACTIVE_WIZARD_STEPS.some(({ step: s }) => s === resume)) resume = resumeStep(loaded);
         setData(loaded);
         setSavedObjective(saved.campaignObjective || null);
         setStep(resume);
@@ -141,7 +140,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       const restored: WizardData = { ...INITIAL_WIZARD_DATA, ...parsed.data, brief: { ...INITIAL_WIZARD_DATA.brief, ...parsed.data.brief } };
       // A restored wizard already had its type picked.
       restored.typeChosen = parsed.data.typeChosen ?? true;
-      const restoredStep = parsed.step && activeWizardSteps(restored).some(({ step: s }) => s === parsed.step) ? parsed.step : 1;
+      const restoredStep = parsed.step && ACTIVE_WIZARD_STEPS.some(({ step: s }) => s === parsed.step) ? parsed.step : 1;
       setData(restored);
       setStep(restoredStep);
       setFurthestStep(restoredStep);
@@ -341,7 +340,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   ) : (
     <>
       {step === 1 && <StepObjective data={data} update={update} categoryOptions={categoryOptions} />}
-      {step === 2 && <StepDestination data={data} update={update} />}
       {step === 3 && <StepAudience data={data} update={update} />}
       {step === 4 && <StepPay data={data} update={update} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} />}
       {step === 5 && <StepBrief data={data} update={update} />}
