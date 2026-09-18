@@ -66,7 +66,7 @@ export function QuoteSummary({ variant, quote, loading, error }: QuoteSummaryPro
             { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
           ];
   return (
-    <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
+    <div className="bg-white border border-neutral-200 rounded-[18px] p-6 space-y-4 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
       {rows.map((row) => (
         <div key={row.label} className="flex justify-between gap-3">
           <span className="inline-flex items-center gap-1.5">
@@ -78,9 +78,9 @@ export function QuoteSummary({ variant, quote, loading, error }: QuoteSummaryPro
           </span>
         </div>
       ))}
-      <div className="flex justify-between gap-3 border-t border-neutral-100 pt-2">
-        <span className="font-medium text-neutral-900">Total to Pay</span>
-        <span className={cn("font-medium tabular-nums", loading ? "text-neutral-300" : "text-neutral-900")}>
+      <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-4">
+        <span className="font-semibold text-sm text-neutral-900">Total to Pay</span>
+        <span className={cn("text-xl font-semibold tabular-nums tracking-tight", loading ? "text-neutral-300" : "text-neutral-900")}>
           {quote ? formatNaira(quote.total) : "—"}
         </span>
       </div>
