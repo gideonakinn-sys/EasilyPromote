@@ -2,185 +2,129 @@
 
 ## Project Overview
 
-Two-sided marketplace connecting brands with content creators for view-based social media campaigns. Brands fund campaigns, creators produce content, views tracked → payouts via Paystack escrow.
+Two-sided marketplace connecting brands with content creators. Brands fund campaigns around an **objective** — Views (pay per view), Sign-ups (referral codes, no views target), Content (pay per approved deliverable), or Hybrid (views + sign-ups). Results (views, conversions, clicks) are tracked and paid out through **Paystack-escrowed** funds. Marketing site + creator/brand dashboards live in one Next.js app.
 
 ## Repository Structure
 
 ```
 Easily-promote/
-  Backend/              Express.js API server (CommonJS, standalone)
-  Fontend/              Turborepo monorepo (intentional typo in dir name)
+  Backend/   Express.js API (CommonJS, port 5000)
+  Fontend/   npm + turbo monorepo (the "Fontend" dir typo is intentional)
     apps/
-      brand/            @ep/brand  — Next.js 15, port 3002
-      creator/          @ep/creator — Next.js 15, port 3001
-      admin/            @ep/admin  — Next.js 15, port 3003
+      web/      @ep/web   — CANONICAL app (Next 15, port 3000)
+      admin/    @ep/admin — port 3003
+      brand/    @ep/brand  — superseded standalone app (not in the dev loop)
+      creator/  @ep/creator — superseded standalone app (not in the dev loop)
     packages/
-      ui/               @ep/ui — Shared components, hooks, assets, utils
+      ui/       @ep/ui — shared components, hooks, assets, utils
 ```
 
-## Build / Dev / Lint / TypeScript Commands
+`apps/web` hosts every user surface: role routing at `/` (brand → `/dashboard/brand`, creator → `/dashboard/creator`, admin → `:3003`).
 
-### Frontend (run from `Fontend/`)
+## Build / Dev / Lint / Typecheck Commands
+
+### Frontend (from `Fontend/`)
 ```bash
-npm run dev              # All apps via turborepo
-npm run dev --filter=@ep/creator   # Single app
-npm run build            # All apps
-npm run lint             # All apps (turbo run lint)
-npx turbo run lint --filter=@ep/creator  # Single app
-npx tsc --noEmit         # From Fontend/apps/* or Fontend/packages/ui
+npm run dev                       # turbo: web + admin
+npm run dev --filter=@ep/web      # single app
+npm run build                     # turbo build web
 ```
+- **Lint**: `npm run lint` uses `next lint`, but there is **no ESLint config** in the repo — it prompts to create one and is unusable until configured. Don't depend on lint passing.
+- **Typecheck** (from `apps/web`): `npx tsc --noEmit`. It is **heavy (~1 min cold)** — it type-checks the whole graph including `@ep/ui` source via path aliases on a single thread.
+- `incremental` + `tsBuildInfoFile` (`node_modules/.cache/tsconfig.tsbuildinfo`) are configured. For iteration use a warm watcher: `npx tsc --noEmit --incremental -w`. **Do not run full `tsc`/`next build` after every small change**; smoke-test the dev server (route returns 200) and read the watcher log. Run `next build` as the authoritative gate only at milestones.
 
-### Backend (run from `Backend/`)
+### Backend (from `Backend/`)
 ```bash
 npm run dev              # nodemon src/server.js (port 5000)
-npm run start            # node src/server.js (production)
+npm run start            # production
+npm test                 # unit then e2e
+npm run test:unit        # node --test test/unit/**
+npm run test:e2e         # node --test --test-concurrency=1 test/e2e/**
 ```
-
-### Testing
-Frontend: no test framework; run `npx tsc --noEmit` for type checking.
-
-Backend end-to-end tests (run from `Backend/`):
+**Run a single test:**
 ```bash
-npm test                 # unit then end-to-end
-npm run test:unit        # pure calculations (budget, eligibility), no database
-npm run test:e2e         # node:test against a throwaway local mongod, Paystack stubbed
+node --test test/unit/campaignBudget.test.js          # unit file
+node --test --test-concurrency=1 test/e2e/views-campaign.test.js   # e2e file
+node --test --test-name-pattern "ignores stale" test/e2e/views-campaign.test.js  # one test
 ```
-- Needs `mongod` installed locally (set `MONGOD_PATH` if it isn't found). Tests never read `Backend/.env` and clear outside-service keys (email, S3, Cloudinary, social APIs).
-- Tests live in `Backend/test/e2e/*.test.js` and drive the HTTP API through `test/e2e/harness.js` (`api`, `registerBrand`, `registerCreator`, `paystack.markPaid`).
-- `views-campaign.test.js` is the regression guard for live campaigns; keep it passing.
+- E2E needs a throwaway **local mongod** (set `MONGOD_PATH` if it isn't on PATH). The harness (`test/e2e/harness.js`) never reads `Backend/.env` and clears outside-service creds (Paystack, email, S3, Cloudinary, social APIs). Keep `views-campaign.test.js` green — it's the regression guard for live campaigns.
 
 ## Key Ports
 
 | Service     | Port |
 |-------------|------|
-| Creator app | 3001 |
-| Brand app   | 3002 |
+| Web app     | 3000 |
 | Admin app   | 3003 |
 | Backend API | 5000 |
 
 ## Tech Stack
 
-| Layer            | Technology |
-|------------------|------------|
-| Frontend         | Next.js 15 (App Router), React 19 |
-| Styling          | Tailwind CSS 3.4, CSS variables |
-| UI primitives    | shadcn/ui v4, Radix UI, Base UI, Vaul (drawer/bottom sheet) |
-| Animation        | GSAP 3.15 (`useReveal`), Lenis smooth scroll |
-| Icons            | HugeIcons (`@hugeicons/core-free-icons` + `@hugeicons/react`), Lucide backup |
-| Forms / State    | Manual `useState`/`onChange` only (no React Hook Form, Redux, Zustand) |
-| Real-time        | Socket.IO client 4.8 (`useSocket` hook) |
-| Backend          | Express 4.21 (CommonJS), Mongoose 8.9, MongoDB Atlas |
-| Auth             | Custom JWT (access + refresh tokens), localStorage on frontend |
-| Payments         | Paystack |
-| File upload      | Multer (memory) → Cloudinary |
-| Validation       | Zod (backend only) |
+Next.js 15 (App Router) + React 19 · Tailwind 3.4 + CSS variables · shadcn/ui v4, Radix UI, Base UI, Vaul (drawers) · GSAP (`useReveal`, `useStaggerReveal`) + Lenis · HugeIcons (+ Lucide fallback) · recharts + shadcn `Chart` (in `apps/web`) · Socket.IO client · Express 4 (CommonJS) + Mongoose + MongoDB Atlas · custom JWT (access + refresh, localStorage) · Paystack · Multer → Cloudinary · Zod (backend only).
 
 ## TypeScript & Config
 
-- **`strict: true`** in all tsconfig.json, `moduleResolution: "bundler"`
-- Path aliases: `@/*` → `./src/*`, `@ep/ui/*` → `../../packages/ui/src/*`
-- Next.js config rewrites `/api/*` → `http://localhost:5000/api/*` (dev proxy)
-- No eslint config file (uses `next lint` defaults), no frontend test framework (backend: `npm run test:e2e`)
-- UI package exports from `@ep/ui` map via `package.json` `"exports"` field: `./components/*`, `./lib/*`, `./assets/*`, `./hooks/*`
+- `strict: true` everywhere, `moduleResolution: "bundler"`, `skipLibCheck: true`, `incremental: true` (+ `tsBuildInfoFile`).
+- Path aliases: `@/*` → `./src/*`, `@ep/ui/*` → `../../packages/ui/src/*`.
+- `next.config` rewrites `/api/*` → `http://localhost:5000/api/*` (dev proxy); `transpilePackages: ["@ep/ui"]`.
+- `@ep/ui` exports are mapped in `packages/ui/package.json` `"exports"` (`./components/*`, `./lib/*`, `./assets/*`, `./hooks/*`).
 
 ## Code Style Guidelines
 
-### File Naming
-- **React components**: PascalCase (`CampaignWizard.tsx`)
-- **Hooks**: kebab-case `use-` (`use-reveal.ts`, `use-is-mobile.ts`)
-- **Lib/utils**: camelCase (`api.ts`, `auth.ts`, `socket.ts`)
-- **Backend routes**: camelCase (`campaigns.js`), **models**: PascalCase (`User.js`)
-- **Constants**: UPPER_SNAKE_CASE (`FILTER_OPTIONS`, `PRESET_VIEWS`)
+### Naming
+- Components: PascalCase (`CampaignWizard.tsx`); hooks: kebab `use-`; lib/utils: camelCase; backend routes camelCase, models PascalCase; constants UPPER_SNAKE.
+- Named exports for components; **default exports only for Next.js page files**. `"use client"` on any component using hooks/events/browser APIs.
 
-### Component Patterns
-- **Named exports** for components: `export function CampaignWizard(...)`. **Default exports** only for Next.js page files
-- **`"use client"`** directive required on any component using hooks, event handlers, or browser APIs
-- **`React.forwardRef`** for shared UI primitives (button, input) with `displayName` set
-- **Props interfaces** defined with `interface`, not `type` — prefixed with component name
-- **Destructure props** in function signature, not inside body
-- **`React` namespace import** (`import * as React from "react"`) preferred over named imports for types
+### Imports (order)
+1. React/Next (`import * as React from "react"`, `useRouter` from `next/navigation`)
+2. Third-party (`@hugeicons/react`)
+3. Shared UI (`@ep/ui/components/…`, `@ep/ui/lib/utils`)
+4. Local components
+5. Hooks/lib
+6. Assets
 
-### Import Ordering
-1. React / Next.js: `import * as React from "react"`, `import { useRouter } from "next/navigation"`
-2. Third-party: `import { HugeiconsIcon } from "@hugeicons/react"`
-3. Shared UI: `import { cn } from "@ep/ui/lib/utils"`
-4. Local components: `import { Skeleton } from "./ui/skeleton"`
-5. Hooks/lib: `import { useReveal } from "../hooks/use-reveal"`
-6. Assets: `import illustration3 from "@ep/ui/assets/illustrations/illustration3.svg"`
+### TypeScript
+- `interface` for props/data; `type` for unions/tuples; `as const` for enum-like constants; `Record<string, T>` for dictionaries; `unknown` in catch (never `any`); typed `apiRequest<T>(endpoint, options)`.
 
-### TypeScript Patterns
-- **`interface`** for data shapes and props; **`type`** for unions, aliases, tuples
-- **`as const`** for readonly tuples/enum-like constants
-- **`Record<string, T>`** for dictionaries (avoid index signatures)
-- **`unknown`** in catch blocks — never `any`
-- **Generic parameters** on `apiRequest<T>(endpoint, options)` for typed responses
-- **`React.ChangeEvent<HTMLInputElement>`** for event types
+### Styling (hard rules)
+- `cn()` (`clsx` + `tailwind-merge`) for ALL conditional classes.
+- **No `font-bold`**, no `shadow-*`, no hover effects on buttons.
+- `font-rethink` on all text; root font 13px (org `html { font-size: 13px }`).
+- `tracking-tight` only for headings > 16px; labels are **title case** (never uppercase/wider).
+- Mobile-first `md:`; pill buttons (`rounded-full`), textareas `rounded-xl`.
+- Shell bg is `#fcfcfc`; cards white with `border-stone-100`. Data figures use `tabular-nums`; accent color `#FEB604`, ink `#1C1917`.
+- Icons: `<HugeiconsIcon icon={XIcon} size={16} className="text-stone-500" />`; 12–14 inline, 16 standard, 20 mobile. Color always via `className`.
 
-### Styling Rules (Hard Design Rules)
-- **`cn()` utility** (`clsx` + `tailwind-merge`) for ALL conditional classes
-- **No `font-bold`** anywhere — `font-semibold` for buttons only, `font-medium` for all other text
-- **No hover effects** on buttons — hard rule
-- **No shadows** — hard rule (no `shadow-*` classes)
-- **`font-rethink`** class on all text (Rethink Sans primary font)
-- Root font: 13px desktop, 14px mobile (`html { font-size: 13px }`)
-- **`tracking-tight`** only for headings > 16px
-- **Labels** are title case — never uppercase, never `tracking-wider`
-- **Mobile-first**: `md:` breakpoint for desktop-up styles
-- **Responsive icons**: Two `HugeiconsIcon` elements with `md:hidden` / `hidden md:block` (Huge Icons `size` uses inline styles)
-- **Animation**: `data-reveal` / `data-reveal-left` attributes on elements for GSAP entrance animations
-- **Image**: Add `unoptimized` on `<Image>` for avatars and SVGs
-- **Button radius**: `rounded-full` (pill shape). Input radius: `rounded-full` text inputs, `rounded-xl` textareas
+### Data / feedback
+- `useToast()` → `toast("Message", "error" | "success")`; error state `const [error, setError] = useState("")` + inline render; `Skeleton` for loading; reveal animations via `data-reveal` (+ `useStaggerReveal(step)` for lists).
 
-### Error & Loading Patterns
-- **Toast**: `ToastProvider` + `useToast()` hook: `toast("Message", "error" | "success")` (auto-dismiss 4s)
-- **Error state**: `const [error, setError] = useState("")` + inline render
-- **Loading state**: `const [loading, setLoading] = useState(true)`
-- **Skeleton**: `<Skeleton className="h-8 w-48" />` for loading placeholders
+### API / Auth
+- `apiRequest<T>(endpoint, { method, body, token })` from `lib/api`; uploads use raw `fetch` + `FormData` to `POST /api/upload/image` (field `"file"`).
+- Auth: localStorage `"token"` + `"user"`; helpers `saveAuth/clearAuth/getToken/getUser/isAuthenticated`; logout = `clearAuth()` + `router.push("/login")`.
 
-### HugeIcons Usage
-```tsx
-import { HugeiconsIcon } from "@hugeicons/react";
-import { FilterIcon, Add01Icon } from "@hugeicons/core-free-icons";
-<HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-```
-- Icon size: 12–14 inline/badge, 16 standard, 20 mobile touch targets
-- Color always via `className`, never hardcoded fill
+### Backend
+- CommonJS; route `router.get("/", protect, authorizeRoles("business"), async (req, res, next) => …)`; roles `business | creator | admin | finance_admin | support | super_admin`; Zod in handlers; global error handler covers Cast/Validation/dup-key/JWT errors.
 
-### API Requests (Frontend)
-- **`apiRequest<T>(endpoint, options)`** from `lib/api.ts` — wraps `fetch`, auto-sets JSON Content-Type, attaches `Authorization: Bearer <token>` if `options.token` provided
-- **File uploads**: raw `fetch` with `FormData` (no Content-Type header — browser auto-sets `multipart/form-data`)
-- **Upload endpoint**: `POST /api/upload/image` (field: `"file"`, returns `{ url, publicId, width, height, format }`)
+## Brand Workspace (`apps/web`, /dashboard/brand)
 
-### Auth Pattern (Frontend)
-- JWT + user JSON in **localStorage** (keys: `"token"`, `"user"`)
-- Helpers: `saveAuth()`, `clearAuth()`, `getToken()`, `getUser()`, `isAuthenticated()`
-- Logout: `clearAuth()` + `router.push("/login")`
-- No refresh token rotation
+- SaaS shell (`components/brand/`): sidebar (Overview/Campaigns/Analytics/Billing & payments), topbar w/ notifications + New campaign, mobile drawer (`brand-nav-menu`), `useBrandGuard` for auth/roles.
+- Section pages: `/dashboard/brand`, `/campaigns`, `/analytics`, `/billing`, `/settings` (incl. `/settings/referral`); drawers: `/create-campaign`, `/campaign/[id]`.
+- **Stats**: `GET /businesses/me/stats` (aggregate) and `?month=YYYY-MM` (monthly KPIs, daily series, top campaigns, available months); `GET /businesses/me/transactions` (billing feed). Daily views tracked in `ViewSnapshot` (`services/viewSnapshots.js`), written on every view sync; one-time backfill: `node Backend/src/scripts/backfillViewSnapshots.js`.
 
-### Backend Patterns
-- **CommonJS** (`require`/`module.exports`) — NOT ES modules
-- Route handlers: `router.get("/", protect, authorizeRoles("business"), async (req, res, next) => { try { ... } catch (error) { next(error); } })`
-- Auth middleware: `protect` (JWT Bearer) + `authorizeRoles(...roles)` (RBAC)
-- Roles: `business`, `creator`, `admin`, `finance_admin`, `support`, `super_admin`
-- Validation: Zod schemas in route handlers
-- Global error handler handles `CastError`, `ValidationError`, duplicate key, `JsonWebTokenError`, `TokenExpiredError`
+## Campaign Wizard v2 (`/dashboard/brand/create-campaign`)
 
-### Shared UI Package (`@ep/ui`)
-- Components in `packages/ui/src/components/`, consumed via `@ep/ui/components/button`
-- Exports defined in `packages/ui/package.json` `"exports"` field
-- Next.js `transpilePackages: ["@ep/ui"]` in next.config handles runtime compilation
-- Assets (images/SVGs) in `packages/ui/src/assets/` — imported as URL strings
-- `MobileDrawer` returns `null` on non-mobile (768px breakpoint via `useIsMobile`)
-- `useIsMobile` hook available at `@ep/ui/hooks/use-is-mobile`
+Six steps (`WIZARD_STEPS` in `brand-wizard/wizard-state.ts`): 1 Campaign type, 2 Access/destination, 3 Audience, 4 Pay, 5 Brief, 6 Review/launch.
+- Step 1 = four single-select cards (Boost Visibility / Drive Sign-ups / Get Content Made / Boost & Convert); selection gated by `typeChosen` (Continue disabled until chosen) and drives fields in later steps via `CAMPAIGN_TYPES`/`applyCampaignType`.
+- Footer = `[Save as draft] [Continue]`; **Back** opens a save/discard `ConfirmExitModal`. Per-step headings come from `stepHeading(data, step)`.
+- Objective is immutable once a campaign leaves `draft`/`pending_payment` (API rejects edits after that).
 
-### Campaign Status Flow
+## Campaign Status Flow
+
 ```
 draft → pending_payment → under_review → live → completed
-                                  | → paused → live
-                                  → cancelled (with refund)
+                             | → paused → live
+                             → cancelled (refund)
 ```
 
-### Real-Time (Socket.IO)
-- Singleton socket in `lib/socket.ts`, connects once with auth token
-- `useSocket(callback)` hook listens for `"payment-success"` events
-- Backend Socket.IO emits campaign status updates after payment
+## Real-Time (Socket.IO)
+
+Singleton socket in `lib/socket.ts`; `useSocket(onPaymentSuccess, onCampaignStatus)` listens for status/payment events.
