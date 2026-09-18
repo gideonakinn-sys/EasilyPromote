@@ -32,7 +32,7 @@ export function BrandSidebar() {
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   return (
-    <aside className="hidden md:flex sticky top-0 h-dvh w-64 flex-shrink-0 flex-col border-r border-stone-100 bg-stone-50 px-4 py-6">
+    <aside className="hidden md:flex sticky top-0 h-dvh w-64 flex-shrink-0 flex-col border-r border-neutral-100 bg-neutral-50 px-4 py-6">
       <Link href="/dashboard/brand" className="flex items-center gap-2.5 px-2" aria-label="EasilyPromote brand dashboard">
         <Image src={logoPrimary} alt="EasilyPromote" width={32} height={32} priority />
       </Link>
@@ -46,13 +46,13 @@ export function BrandSidebar() {
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium",
-                active ? "bg-stone-900 text-white" : "text-stone-600"
+                active ? "bg-neutral-900 text-white" : "text-neutral-600"
               )}
             >
               <HugeiconsIcon
                 icon={item.icon}
                 size={18}
-                className={active ? "text-white" : "text-stone-400"}
+                className={active ? "text-white" : "text-neutral-400"}
               />
               {item.label}
             </Link>
@@ -62,7 +62,7 @@ export function BrandSidebar() {
 
       <button
         onClick={() => router.push("/dashboard/brand/settings")}
-        className="mt-auto flex w-full items-center gap-3 rounded-2xl border border-stone-100 bg-white px-3 py-2.5 text-left"
+        className="mt-auto flex w-full items-center gap-3 rounded-2xl border border-neutral-100 bg-white px-3 py-2.5 text-left"
       >
         <Image
           src={user?.avatar || user?.avatarUrl || avatarSvg}
@@ -73,8 +73,8 @@ export function BrandSidebar() {
           unoptimized
         />
         <span className="min-w-0">
-          <span className="block truncate text-xs font-semibold text-stone-900">{user?.name || "User"}</span>
-          <span className="block truncate text-[11px] font-medium text-stone-500">{user?.email || ""}</span>
+          <span className="block truncate text-xs font-semibold text-neutral-900">{user?.name || "User"}</span>
+          <span className="block truncate text-[11px] font-medium text-neutral-500">{user?.email || ""}</span>
         </span>
       </button>
     </aside>

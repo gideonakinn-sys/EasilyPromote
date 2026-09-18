@@ -25,23 +25,23 @@ function WithdrawModal({ application, busy, onCancel, onConfirm }: WithdrawModal
   if (!application) return null;
   return (
     <div
-      className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6"
+      className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="withdraw-application-title"
     >
       <div className="bg-white rounded-2xl p-6 w-full max-w-xs space-y-4">
-        <h3 id="withdraw-application-title" className="font-rethink font-medium text-base text-stone-900 text-center">
+        <h3 id="withdraw-application-title" className="font-rethink font-medium text-base text-neutral-900 text-center">
           Withdraw Your Application?
         </h3>
-        <p className="font-rethink text-xs text-stone-500 font-medium text-center">
+        <p className="font-rethink text-xs text-neutral-500 font-medium text-center">
           The brand won&apos;t see it for {application.campaignName}. You can apply again while places are left.
         </p>
         <div className="flex gap-3 pt-2">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full font-rethink"
+            className="flex-1 py-2.5 bg-neutral-100 text-neutral-900 font-semibold text-sm rounded-full font-rethink"
           >
             Keep It
           </button>
@@ -76,8 +76,8 @@ export function MyApplications({ applications, onWithdraw }: MyApplicationsProps
   return (
     <section className="mb-10 space-y-4 font-rethink">
       <div className="flex items-center gap-2">
-        <h2 className="font-medium text-lg text-stone-900">My Applications</h2>
-        <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[10px] font-medium">{applications.length}</span>
+        <h2 className="font-medium text-lg text-neutral-900">My Applications</h2>
+        <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-700 text-[10px] font-medium">{applications.length}</span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {applications.map((application) => (
@@ -86,27 +86,27 @@ export function MyApplications({ applications, onWithdraw }: MyApplicationsProps
               <div className="flex items-center gap-3 min-w-0">
                 {application.coverImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={application.coverImageUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-stone-200 shrink-0" />
+                  <img src={application.coverImageUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-neutral-200 shrink-0" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-stone-900 truncate">{application.campaignName}</p>
-                  {application.brandName && <p className="text-[11px] font-medium text-stone-500 truncate">{application.brandName}</p>}
+                  <p className="text-sm font-medium text-neutral-900 truncate">{application.campaignName}</p>
+                  {application.brandName && <p className="text-[11px] font-medium text-neutral-500 truncate">{application.brandName}</p>}
                 </div>
               </div>
               <ApplicationStatusBadge status={application.status} />
             </div>
 
-            {application.pay && <p className="text-sm font-medium text-stone-900">{formatPay(application.pay)}</p>}
+            {application.pay && <p className="text-sm font-medium text-neutral-900">{formatPay(application.pay)}</p>}
 
-            <p className={cn("text-[11px] font-medium leading-relaxed", application.status === "approved" ? "text-[#176448]" : "text-stone-500")}>
+            <p className={cn("text-[11px] font-medium leading-relaxed", application.status === "approved" ? "text-[#176448]" : "text-neutral-500")}>
               {applicationStatusLine(application)}
             </p>
 
             {application.status === "rejected" && application.rejectionReason && (
               <div className="bg-[#FAF5FF] border border-[#F3E8FF] rounded-2xl p-3">
-                <p className="text-[11px] leading-relaxed text-stone-600 font-medium">&quot;{application.rejectionReason}&quot;</p>
+                <p className="text-[11px] leading-relaxed text-neutral-600 font-medium">&quot;{application.rejectionReason}&quot;</p>
               </div>
             )}
 
@@ -114,7 +114,7 @@ export function MyApplications({ applications, onWithdraw }: MyApplicationsProps
               <button
                 type="button"
                 onClick={() => setConfirming(application)}
-                className="self-start px-4 py-2 rounded-full font-semibold text-xs bg-stone-100 text-stone-700"
+                className="self-start px-4 py-2 rounded-full font-semibold text-xs bg-neutral-100 text-neutral-700"
               >
                 Withdraw
               </button>

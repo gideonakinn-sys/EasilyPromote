@@ -56,7 +56,7 @@ export function CampaignFeed({
   return (
     <div className="w-full flex flex-col">
       <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-rethink font-medium text-[23px] leading-[28px] text-stone-900 m-0">
+        <h2 className="font-rethink font-medium text-[23px] leading-[28px] text-neutral-900 m-0">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
 
@@ -64,24 +64,24 @@ export function CampaignFeed({
           {/* Mobile filter trigger — opens bottom sheet */}
           <button
             onClick={() => setIsMobileFilterOpen(true)}
-            className="flex md:hidden items-center justify-center bg-white border border-stone-200 rounded-full p-3"
+            className="flex md:hidden items-center justify-center bg-white border border-neutral-200 rounded-full p-3"
           >
-            <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
+            <HugeiconsIcon icon={FilterIcon} size={20} className="text-neutral-500" />
           </button>
 
           {/* Desktop filter trigger — opens dropdown */}
           <div ref={filterRef} className="hidden md:relative md:block z-[100]">
             <button
               onClick={() => setIsDesktopFilterOpen(!isDesktopFilterOpen)}
-              className="hidden md:flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer"
+              className="hidden md:flex items-center justify-center gap-2 bg-white border border-neutral-200 rounded-full px-4 py-2.5 cursor-pointer"
             >
-              <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-              <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
-              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+              <HugeiconsIcon icon={FilterIcon} size={16} className="text-neutral-500" />
+              <span className="text-sm font-medium text-neutral-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
+              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
             </button>
 
             {isDesktopFilterOpen && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-neutral-200 rounded-xl py-1 z-50">
                 {FILTER_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
@@ -90,7 +90,7 @@ export function CampaignFeed({
                       setIsDesktopFilterOpen(false);
                     }}
                     className={`flex items-center w-full px-4 py-2.5 text-sm text-left ${
-                      filter === opt.value ? "font-semibold text-stone-900" : "font-medium text-stone-700"
+                      filter === opt.value ? "font-semibold text-neutral-900" : "font-medium text-neutral-700"
                     }`}
                   >
                     {opt.label}
@@ -114,8 +114,8 @@ export function CampaignFeed({
               }}
               className={`flex items-center w-full px-4 py-3 text-sm text-left rounded-lg ${
                 filter === opt.value
-                  ? "bg-stone-100 font-semibold text-stone-900"
-                  : "font-medium text-stone-700"
+                  ? "bg-neutral-100 font-semibold text-neutral-900"
+                  : "font-medium text-neutral-700"
               }`}
             >
               {opt.label}
@@ -137,22 +137,22 @@ export function CampaignFeed({
         {campaigns.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-6">
             <Image src={emptyHomeImg} alt="" width={184} height={175} className="mb-6" unoptimized />
-            <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">
+            <h3 className="font-rethink font-medium text-[22px] text-neutral-900 mb-2">
               No campaigns yet
             </h3>
-            <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
+            <p className="font-rethink text-xs text-neutral-500 font-medium max-w-xs leading-relaxed">
               You haven&apos;t joined any campaigns. Browse the marketplace to find campaigns matching your niches.
             </p>
           </div>
         )}
 
-        <div className="bg-stone-100 border border-stone-200 border-dashed rounded-3xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
+        <div className="bg-neutral-100 border border-neutral-200 border-dashed rounded-3xl p-4 flex flex-col justify-between text-center cursor-pointer" onClick={() => onBrowseCampaign?.()}>
           <div className="flex flex-col items-center justify-center">
             <Image src={browseCampaignIllus} alt="Browse campaigns" width={100} height={100} className="w-[100px] h-[100px]" unoptimized />
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onBrowseCampaign?.(); }}
-            className="w-full py-2.5 bg-white border border-stone-200 text-stone-900 rounded-full font-semibold text-xs font-rethink"
+            className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-900 rounded-full font-semibold text-xs font-rethink"
           >
             Browse campaign
           </button>

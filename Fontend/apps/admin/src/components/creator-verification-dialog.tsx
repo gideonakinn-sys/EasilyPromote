@@ -81,23 +81,23 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4 font-rethink"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4 font-rethink"
       onClick={() => !submitting && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="creator-verification-heading"
-        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-5"
+        className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-md w-full space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="space-y-3">
-          <h3 id="creator-verification-heading" className="font-medium text-lg text-stone-900">
+          <h3 id="creator-verification-heading" className="font-medium text-lg text-neutral-900">
             {verifying ? `Verify ${creatorName}?` : `Remove ${creatorName}'s Verification?`}
           </h3>
 
           <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-stone-500">Connected Social Accounts</p>
+            <p className="text-[11px] font-medium text-neutral-500">Connected Social Accounts</p>
             {connectedAccounts.length === 0 ? (
               <p className="text-xs font-medium text-red-700">
                 None. A creator needs a connected TikTok, Instagram or Facebook account before they can be verified.
@@ -107,7 +107,7 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
                 {connectedAccounts.map((account) => (
                   <li
                     key={`${account.platform}:${account.username || ""}`}
-                    className="px-2.5 py-1 rounded-full bg-stone-100 text-[11px] font-medium text-stone-700"
+                    className="px-2.5 py-1 rounded-full bg-neutral-100 text-[11px] font-medium text-neutral-700"
                   >
                     {PLATFORM_LABELS[account.platform] || account.platform}
                     {account.username ? ` · @${account.username}` : ""}
@@ -122,7 +122,7 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
             ))}
           </div>
 
-          <p className="text-xs text-stone-500 font-medium leading-relaxed">
+          <p className="text-xs text-neutral-500 font-medium leading-relaxed">
             {verifying
               ? "Only verify after checking the creator's identity. Campaigns that accept verified creators only will let them join, and the change is logged."
               : "The creator loses the Verified badge and can't join campaigns limited to verified creators. The change is logged."}
@@ -135,7 +135,7 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+            className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
           >
             Cancel
           </button>
@@ -145,7 +145,7 @@ export function CreatorVerificationDialog({ creatorId, creatorName, verifiedAt, 
             disabled={submitting || (verifying && !canVerify)}
             className={cn(
               "flex-1 py-2.5 rounded-full font-semibold text-xs text-white disabled:opacity-50",
-              verifying ? "bg-stone-900" : "bg-red-600"
+              verifying ? "bg-neutral-900" : "bg-red-600"
             )}
           >
             {submitting ? "Saving…" : verifying ? "Verify Creator" : "Remove Verification"}

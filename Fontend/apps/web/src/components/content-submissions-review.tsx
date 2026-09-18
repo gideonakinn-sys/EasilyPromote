@@ -78,8 +78,8 @@ export function ContentSubmissionsReview({ campaignId, isMobile }: ContentSubmis
   if (error || !data) {
     return (
       <div className="text-center py-12 space-y-4 flex flex-col items-center font-rethink">
-        <p className="text-xs text-stone-500 font-medium">{error || "Failed to load submissions"}</p>
-        <button onClick={load} className="px-6 py-2.5 bg-stone-900 text-white text-sm font-semibold rounded-full">
+        <p className="text-xs text-neutral-500 font-medium">{error || "Failed to load submissions"}</p>
+        <button onClick={load} className="px-6 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-full">
           Try Again
         </button>
       </div>
@@ -94,7 +94,7 @@ export function ContentSubmissionsReview({ campaignId, isMobile }: ContentSubmis
   return (
     <div className="space-y-4 font-rethink">
       {data.contentApproval && (
-        <p className="text-xs font-medium text-stone-500">
+        <p className="text-xs font-medium text-neutral-500">
           Approved content goes to the {DESTINATION_LABELS[data.contentApproval.destination]}. Content you don&apos;t review within 72
           hours is approved automatically.
         </p>
@@ -102,8 +102,8 @@ export function ContentSubmissionsReview({ campaignId, isMobile }: ContentSubmis
 
       {submissions.length === 0 ? (
         <div className="text-center py-12 space-y-2">
-          <h3 className="font-medium text-lg text-stone-900 tracking-tight">Nothing To Review Yet</h3>
-          <p className="text-xs text-stone-500 font-medium">Creators&apos; content shows up here when they submit it.</p>
+          <h3 className="font-medium text-lg text-neutral-900 tracking-tight">Nothing To Review Yet</h3>
+          <p className="text-xs text-neutral-500 font-medium">Creators&apos; content shows up here when they submit it.</p>
         </div>
       ) : (
         submissions.map((submission) => (
@@ -111,14 +111,14 @@ export function ContentSubmissionsReview({ campaignId, isMobile }: ContentSubmis
             key={submission.id}
             type="button"
             onClick={() => setSelectedId(submission.id)}
-            className="w-full text-left bg-white border border-stone-200 rounded-2xl p-4 space-y-2"
+            className="w-full text-left bg-white border border-neutral-200 rounded-2xl p-4 space-y-2"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-sm text-stone-900 truncate">@{submission.creatorHandle}</span>
+              <span className="font-medium text-sm text-neutral-900 truncate">@{submission.creatorHandle}</span>
               {submission.status && <ContentStatusBadge status={submission.status} />}
             </div>
-            {submission.caption && <p className="text-xs text-stone-500 font-medium line-clamp-2">{submission.caption}</p>}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium text-stone-400">
+            {submission.caption && <p className="text-xs text-neutral-500 font-medium line-clamp-2">{submission.caption}</p>}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium text-neutral-400">
               <span>Submitted {formatContentDate(submission.submittedAt)}</span>
               {submission.brandDueAt && (
                 <span>
@@ -246,8 +246,8 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
     <div className="space-y-6 font-rethink">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="font-medium tracking-tighter text-xl text-stone-900">@{submission.creatorHandle}</h2>
-          <p className="text-xs font-medium text-stone-500">Submitted {formatContentDate(submission.submittedAt)}</p>
+          <h2 className="font-medium tracking-tighter text-xl text-neutral-900">@{submission.creatorHandle}</h2>
+          <p className="text-xs font-medium text-neutral-500">Submitted {formatContentDate(submission.submittedAt)}</p>
         </div>
         {submission.status && <ContentStatusBadge status={submission.status} />}
       </div>
@@ -255,12 +255,12 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
       <div className={cn("grid gap-6", !isMobile && "md:grid-cols-2")}>
         {/* The content */}
         <div className="space-y-4">
-          <h4 className="text-xs font-medium text-stone-500">Content</h4>
+          <h4 className="text-xs font-medium text-neutral-500">Content</h4>
           {submission.videoUrl && isInlineVideo(submission.videoUrl) ? (
             <video src={submission.videoUrl} controls className="w-full max-h-[420px] rounded-2xl bg-black" />
           ) : (
-            <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-              <p className="text-sm font-medium text-stone-900 break-all">{submission.videoUrl || "No link"}</p>
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
+              <p className="text-sm font-medium text-neutral-900 break-all">{submission.videoUrl || "No link"}</p>
             </div>
           )}
           {submission.videoUrl && (
@@ -268,14 +268,14 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
               href={submission.videoUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex px-4 py-2 bg-white border border-stone-200 rounded-full text-sm font-semibold text-stone-900"
+              className="inline-flex px-4 py-2 bg-white border border-neutral-200 rounded-full text-sm font-semibold text-neutral-900"
             >
               Open Content
             </a>
           )}
           <div className="space-y-1.5">
-            <h4 className="text-xs font-medium text-stone-500">Caption</h4>
-            <p className="text-sm font-medium text-stone-900 leading-relaxed whitespace-pre-wrap">{submission.caption || "No caption"}</p>
+            <h4 className="text-xs font-medium text-neutral-500">Caption</h4>
+            <p className="text-sm font-medium text-neutral-900 leading-relaxed whitespace-pre-wrap">{submission.caption || "No caption"}</p>
             {captionMissing.length > 0 && (
               <p className="text-xs font-medium text-red-600">Missing from the caption: {captionMissing.join(", ")}</p>
             )}
@@ -283,22 +283,22 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
 
           {submission.changeRequests.length > 0 && (
             <div className="space-y-3">
-              <h4 className="text-xs font-medium text-stone-500">Feedback History</h4>
+              <h4 className="text-xs font-medium text-neutral-500">Feedback History</h4>
               {submission.changeRequests.map((request) => (
-                <div key={request.round} className="bg-stone-100 rounded-2xl p-3 space-y-1">
-                  <div className="flex justify-between text-xs font-medium text-stone-500">
+                <div key={request.round} className="bg-neutral-100 rounded-2xl p-3 space-y-1">
+                  <div className="flex justify-between text-xs font-medium text-neutral-500">
                     <span>
                       Round {request.round} of {submission.maxChangeRequests}
                     </span>
                     <span>{formatContentDate(request.requestedAt)}</span>
                   </div>
-                  <p className="text-sm font-medium text-stone-900">{request.notes}</p>
+                  <p className="text-sm font-medium text-neutral-900">{request.notes}</p>
                   {request.videoUrl && (
-                    <a href={request.videoUrl} target="_blank" rel="noopener noreferrer" className="block text-xs font-medium text-stone-500 underline truncate">
+                    <a href={request.videoUrl} target="_blank" rel="noopener noreferrer" className="block text-xs font-medium text-neutral-500 underline truncate">
                       Version reviewed
                     </a>
                   )}
-                  <p className="text-xs font-medium text-stone-500">
+                  <p className="text-xs font-medium text-neutral-500">
                     {request.resubmittedAt ? `Resubmitted ${formatContentDate(request.resubmittedAt)}` : "Waiting for the creator"}
                   </p>
                 </div>
@@ -309,8 +309,8 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
 
         {/* The brief's requirements */}
         <div className="space-y-4">
-          <h4 className="text-xs font-medium text-stone-500">Brief Requirements</h4>
-          <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <h4 className="text-xs font-medium text-neutral-500">Brief Requirements</h4>
+          <div className="bg-white border border-neutral-200 rounded-2xl p-4">
             <CampaignBriefDetails brief={brief} showSummary />
           </div>
         </div>
@@ -320,7 +320,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
       {submission.status === "new" && (
         <div className="space-y-3">
           {submission.brandDueAt && (
-            <p className="text-xs font-medium text-stone-500">
+            <p className="text-xs font-medium text-neutral-500">
               Review by {formatContentDate(submission.brandDueAt)} or it&apos;s approved automatically.
             </p>
           )}
@@ -328,7 +328,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
             <button
               type="button"
               onClick={() => openAction("approve")}
-              className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-stone-900 border border-stone-100"
+              className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-neutral-900 border border-neutral-100"
             >
               Approve
             </button>
@@ -336,7 +336,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
               type="button"
               onClick={() => openAction("request_changes")}
               disabled={roundsLeft <= 0}
-              className="flex-1 py-3 rounded-full font-semibold text-sm bg-white text-stone-900 border border-stone-200 disabled:opacity-50"
+              className="flex-1 py-3 rounded-full font-semibold text-sm bg-white text-neutral-900 border border-neutral-200 disabled:opacity-50"
             >
               Request Changes ({roundsLeft} Left)
             </button>
@@ -349,63 +349,63 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
             </button>
           </div>
           {roundsLeft <= 0 && (
-            <p className="text-xs font-medium text-stone-500">You&apos;ve used both change requests. Approve or reject this version.</p>
+            <p className="text-xs font-medium text-neutral-500">You&apos;ve used both change requests. Approve or reject this version.</p>
           )}
         </div>
       )}
 
       {submission.status === "changes_requested" && (
-        <p className="text-sm font-medium text-stone-500">Waiting for the creator to resubmit.</p>
+        <p className="text-sm font-medium text-neutral-500">Waiting for the creator to resubmit.</p>
       )}
       {submission.status === "rejected" && (
-        <p className="text-sm font-medium text-stone-500">Rejected: {submission.rejectionReason}</p>
+        <p className="text-sm font-medium text-neutral-500">Rejected: {submission.rejectionReason}</p>
       )}
       {submission.status === "appealed" && (
-        <p className="text-sm font-medium text-stone-500">
+        <p className="text-sm font-medium text-neutral-500">
           The creator appealed{submission.appealReason ? `: "${submission.appealReason}"` : ""}. EasilyPromote is reviewing it.
         </p>
       )}
       {submission.status === "awaiting_delivery" && (
-        <p className="text-sm font-medium text-stone-500">
+        <p className="text-sm font-medium text-neutral-500">
           {submission.autoApproved ? "Approved automatically. " : "Approved. "}Waiting for the creator&apos;s download link.
         </p>
       )}
       {submission.status === "awaiting_post" && (
-        <p className="text-sm font-medium text-stone-500">
+        <p className="text-sm font-medium text-neutral-500">
           {submission.autoApproved ? "Approved automatically. " : ""}Waiting for the creator to post and share the live link.
         </p>
       )}
 
       {submission.delivery && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-          <h4 className="text-xs font-medium text-stone-500">Delivered File</h4>
+        <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
+          <h4 className="text-xs font-medium text-neutral-500">Delivered File</h4>
           <a
             href={submission.delivery.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex px-4 py-2 bg-stone-900 text-white rounded-full text-sm font-semibold"
+            className="inline-flex px-4 py-2 bg-neutral-900 text-white rounded-full text-sm font-semibold"
           >
             Download Content
           </a>
           {submission.usageRights && (
-            <p className="text-xs font-medium text-stone-500 leading-relaxed">
+            <p className="text-xs font-medium text-neutral-500 leading-relaxed">
               Usage rights accepted {formatContentDate(submission.usageRights.acceptedAt)}: {submission.usageRights.licence}
             </p>
           )}
           {submission.delivery.confirmedAt ? (
-            <p className="text-xs font-medium text-stone-500">You confirmed receipt {formatContentDate(submission.delivery.confirmedAt)}.</p>
+            <p className="text-xs font-medium text-neutral-500">You confirmed receipt {formatContentDate(submission.delivery.confirmedAt)}.</p>
           ) : (
             submission.status === "awaiting_receipt" && (
               <>
               {submission.brandDueAt && (
-                <p className="text-xs font-medium text-stone-500">
+                <p className="text-xs font-medium text-neutral-500">
                   Confirm by {formatContentDate(submission.brandDueAt)} or it&apos;s confirmed automatically.
                 </p>
               )}
               <button
                 type="button"
                 onClick={() => openAction("confirm_receipt")}
-                className="w-full py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-stone-900 border border-stone-100"
+                className="w-full py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-neutral-900 border border-neutral-100"
               >
                 Confirm Receipt
               </button>
@@ -416,8 +416,8 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
       )}
 
       {(submission.status === "verifying" || submission.postVerifiedAt) && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
-          <h4 className="text-xs font-medium text-stone-500">Live Post</h4>
+        <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
+          <h4 className="text-xs font-medium text-neutral-500">Live Post</h4>
           {(submission.postedPlatforms || [])
             .filter((p) => p.postUrl)
             .map((p) => (
@@ -426,19 +426,19 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
                 href={p.postUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block text-sm font-medium text-stone-900 underline break-all"
+                className="block text-sm font-medium text-neutral-900 underline break-all"
               >
                 {p.platform}: {p.postUrl}
               </a>
             ))}
           {submission.postedCaption && (
-            <p className="text-xs font-medium text-stone-500 whitespace-pre-wrap">Posted caption: {submission.postedCaption}</p>
+            <p className="text-xs font-medium text-neutral-500 whitespace-pre-wrap">Posted caption: {submission.postedCaption}</p>
           )}
           {postedMissing.length > 0 && (
             <p className="text-xs font-medium text-red-600">Missing from the posted caption: {postedMissing.join(", ")}</p>
           )}
           {submission.status === "verifying" && submission.brandDueAt && (
-            <p className="text-xs font-medium text-stone-500">
+            <p className="text-xs font-medium text-neutral-500">
               Verify by {formatContentDate(submission.brandDueAt)} or it&apos;s confirmed automatically.
             </p>
           )}
@@ -447,14 +447,14 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
               <button
                 type="button"
                 onClick={() => openAction("confirm_post")}
-                className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-stone-900 border border-stone-100"
+                className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-neutral-900 border border-neutral-100"
               >
                 Confirm Post
               </button>
               <button
                 type="button"
                 onClick={() => openAction("dispute_post")}
-                className="flex-1 py-3 rounded-full font-semibold text-sm bg-white text-stone-900 border border-stone-200"
+                className="flex-1 py-3 rounded-full font-semibold text-sm bg-white text-neutral-900 border border-neutral-200"
               >
                 Can&apos;t Verify Post
               </button>
@@ -464,18 +464,18 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
       )}
 
       {submission.status === "completed" && (
-        <p className="text-sm font-medium text-stone-500">Completed {formatContentDate(submission.completedAt)}.</p>
+        <p className="text-sm font-medium text-neutral-500">Completed {formatContentDate(submission.completedAt)}.</p>
       )}
     </div>
   );
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {!isMobile && <div onClick={onClose} className="w-1/5 bg-stone-900/10 backdrop-blur-md cursor-pointer" />}
+      {!isMobile && <div onClick={onClose} className="w-1/5 bg-neutral-900/10 backdrop-blur-md cursor-pointer" />}
       <div
         className={cn(
-          "relative h-full bg-[#FAFAF9] overflow-y-auto",
-          isMobile ? "w-full px-5 pt-16 pb-10" : "w-4/5 rounded-l-[24px] border-l border-stone-200 pt-16 pb-12 px-10"
+          "relative h-full bg-[#fafafa] overflow-y-auto",
+          isMobile ? "w-full px-5 pt-16 pb-10" : "w-4/5 rounded-l-[24px] border-l border-neutral-200 pt-16 pb-12 px-10"
         )}
         data-lenis-prevent
       >
@@ -483,7 +483,7 @@ function ContentReviewDrawer({ submission, review, isMobile, onClose, onChanged 
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6L6 18M6 6l12 12" />

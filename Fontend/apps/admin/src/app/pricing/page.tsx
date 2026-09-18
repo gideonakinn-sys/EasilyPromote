@@ -172,13 +172,13 @@ export default function PriceTablePage() {
       : null;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6 space-y-1">
-          <h1 className="text-2xl font-medium text-stone-900 tracking-tight">Price Table</h1>
-          <p className="text-sm text-stone-500 font-medium max-w-3xl">
+        <header className="pb-6 border-b border-neutral-200 mb-6 space-y-1">
+          <h1 className="text-2xl font-medium text-neutral-900 tracking-tight">Price Table</h1>
+          <p className="text-sm text-neutral-500 font-medium max-w-3xl">
             What brands pay for views. Views campaigns are quoted from these tiers (prices between tiers are worked out along the line), and the first
             tier sets what a hybrid views bonus pays creators. A change prices new quotes only: paid campaigns keep the price they were bought at and
             hybrid campaigns keep the bonus rate saved when they were set up.
@@ -189,20 +189,20 @@ export default function PriceTablePage() {
         {message && <p className={`mb-4 text-xs font-medium ${message.failed ? "text-red-600" : "text-green-700"}`}>{message.text}</p>}
 
         {loading && !data ? (
-          <div className="bg-white border border-stone-200 rounded-2xl h-64 animate-pulse" />
+          <div className="bg-white border border-neutral-200 rounded-2xl h-64 animate-pulse" />
         ) : data ? (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <section className="xl:col-span-2 bg-white border border-stone-200 rounded-2xl overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-stone-200">
+            <section className="xl:col-span-2 bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-neutral-200">
                 <div>
-                  <h2 className="text-base font-medium text-stone-900">Per-View Tiers</h2>
-                  <p className="text-xs font-medium text-stone-500">
+                  <h2 className="text-base font-medium text-neutral-900">Per-View Tiers</h2>
+                  <p className="text-xs font-medium text-neutral-500">
                     {data.usingDefaults ? "The standard table (never changed)." : `Version ${data.version}${data.updatedAt ? `, saved ${formatDateTime(data.updatedAt)}` : ""}.`}
                   </p>
                 </div>
                 {!editing && (
                   <div className="flex items-center gap-3">
-                    {!canEdit && <span className="text-[11px] font-medium text-stone-400">Only finance admins and super admins can change prices.</span>}
+                    {!canEdit && <span className="text-[11px] font-medium text-neutral-400">Only finance admins and super admins can change prices.</span>}
                     <button
                       type="button"
                       disabled={!canEdit}
@@ -210,7 +210,7 @@ export default function PriceTablePage() {
                         setMessage(null);
                         setEditing(true);
                       }}
-                      className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white disabled:opacity-40"
+                      className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-900 text-white disabled:opacity-40"
                     >
                       Edit Prices
                     </button>
@@ -218,8 +218,8 @@ export default function PriceTablePage() {
                 )}
               </div>
 
-              <table className="w-full text-left text-xs text-stone-700">
-                <thead className="bg-stone-50 border-b border-stone-200 text-[11px] text-stone-500 font-medium">
+              <table className="w-full text-left text-xs text-neutral-700">
+                <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] text-neutral-500 font-medium">
                   <tr>
                     <th className="px-5 py-3 font-medium">Tier</th>
                     <th className="px-5 py-3 font-medium">Views</th>
@@ -228,14 +228,14 @@ export default function PriceTablePage() {
                     {editing && <th className="px-5 py-3 font-medium text-right">Remove</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-neutral-100">
                   {rows.map((row, i) => {
                     const views = Number(row.views);
                     const price = Number(row.price);
                     const perThousand = views > 0 && price > 0 ? Math.round((price / views) * 1000 * 100) / 100 : null;
                     return (
                       <tr key={row.key}>
-                        <td className="px-5 py-3 font-medium text-stone-500">{i + 1}</td>
+                        <td className="px-5 py-3 font-medium text-neutral-500">{i + 1}</td>
                         <td className="px-5 py-3">
                           {editing ? (
                             <input
@@ -243,7 +243,7 @@ export default function PriceTablePage() {
                               inputMode="numeric"
                               value={row.views}
                               onChange={(e) => updateRow(row.key, { views: digitsOnly(e.target.value) })}
-                              className="w-36 px-3 py-2 rounded-xl border border-stone-200 text-xs text-stone-900 tabular-nums"
+                              className="w-36 px-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900 tabular-nums"
                             />
                           ) : (
                             <span className="tabular-nums">{count(views)}</span>
@@ -252,17 +252,17 @@ export default function PriceTablePage() {
                         <td className="px-5 py-3">
                           {editing ? (
                             <div className="relative w-40">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">₦</span>
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">₦</span>
                               <input
                                 aria-label={`Tier ${i + 1} price`}
                                 inputMode="numeric"
                                 value={row.price}
                                 onChange={(e) => updateRow(row.key, { price: digitsOnly(e.target.value) })}
-                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-stone-200 text-xs text-stone-900 tabular-nums"
+                                className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900 tabular-nums"
                               />
                             </div>
                           ) : (
-                            <span className="tabular-nums font-medium text-stone-900">{naira(price)}</span>
+                            <span className="tabular-nums font-medium text-neutral-900">{naira(price)}</span>
                           )}
                         </td>
                         <td className="px-5 py-3 tabular-nums">{perThousand === null ? "—" : naira(perThousand)}</td>
@@ -272,7 +272,7 @@ export default function PriceTablePage() {
                               type="button"
                               disabled={rows.length <= data.limits.minTiers}
                               onClick={() => setRows((current) => current.filter((r) => r.key !== row.key))}
-                              className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-stone-200 text-stone-600 disabled:opacity-40"
+                              className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-neutral-200 text-neutral-600 disabled:opacity-40"
                             >
                               Remove
                             </button>
@@ -285,7 +285,7 @@ export default function PriceTablePage() {
               </table>
 
               {editing && (
-                <div className="px-5 py-4 border-t border-stone-200 space-y-4">
+                <div className="px-5 py-4 border-t border-neutral-200 space-y-4">
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -294,14 +294,14 @@ export default function PriceTablePage() {
                         const last = rows[rows.length - 1];
                         setRows((current) => [...current, { key: ++rowKey, views: last ? String(Number(last.views) * 2) : "100000", price: "" }]);
                       }}
-                      className="px-4 py-2 rounded-full text-xs font-semibold border border-stone-200 text-stone-700 disabled:opacity-40"
+                      className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 text-neutral-700 disabled:opacity-40"
                     >
                       Add Tier
                     </button>
                     <button
                       type="button"
                       onClick={() => setRows(toRows(data.defaults))}
-                      className="px-4 py-2 rounded-full text-xs font-semibold border border-stone-200 text-stone-700"
+                      className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 text-neutral-700"
                     >
                       Use Standard Table
                     </button>
@@ -316,26 +316,26 @@ export default function PriceTablePage() {
                   )}
 
                   <label className="block space-y-1">
-                    <span className="text-xs font-medium text-stone-700">Why are prices changing?</span>
+                    <span className="text-xs font-medium text-neutral-700">Why are prices changing?</span>
                     <textarea
                       value={note}
                       maxLength={500}
                       onChange={(e) => setNote(e.target.value)}
                       rows={2}
                       placeholder="Recorded in the activity log"
-                      className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs text-stone-900"
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-xs text-neutral-900"
                     />
                   </label>
 
                   <div className="flex gap-2">
-                    <button type="button" onClick={cancelEdit} className="px-4 py-2 rounded-full text-xs font-semibold border border-stone-200 text-stone-600">
+                    <button type="button" onClick={cancelEdit} className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 text-neutral-600">
                       Cancel
                     </button>
                     <button
                       type="button"
                       disabled={!changed || problems.length > 0 || !note.trim()}
                       onClick={() => setConfirming(true)}
-                      className="px-4 py-2 rounded-full text-xs font-semibold bg-[#FEB604] text-stone-950 disabled:opacity-40"
+                      className="px-4 py-2 rounded-full text-xs font-semibold bg-[#FEB604] text-neutral-950 disabled:opacity-40"
                     >
                       Save Prices
                     </button>
@@ -345,21 +345,21 @@ export default function PriceTablePage() {
             </section>
 
             <aside className="space-y-6">
-              <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
-                <h2 className="text-base font-medium text-stone-900">What This Changes</h2>
+              <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-3">
+                <h2 className="text-base font-medium text-neutral-900">What This Changes</h2>
                 <dl className="text-xs space-y-2">
                   <div className="flex justify-between gap-3">
-                    <dt className="text-stone-500 font-medium">Hybrid views bonus, per 1,000 views</dt>
-                    <dd className="text-stone-900 font-medium tabular-nums">{naira(data.bonusViewsRate)}</dd>
+                    <dt className="text-neutral-500 font-medium">Hybrid views bonus, per 1,000 views</dt>
+                    <dd className="text-neutral-900 font-medium tabular-nums">{naira(data.bonusViewsRate)}</dd>
                   </div>
                   {editing && previewBonusRate !== null && previewBonusRate !== data.bonusViewsRate && (
                     <div className="flex justify-between gap-3">
-                      <dt className="text-stone-500 font-medium">After saving</dt>
-                      <dd className="text-stone-900 font-medium tabular-nums">{naira(previewBonusRate)}</dd>
+                      <dt className="text-neutral-500 font-medium">After saving</dt>
+                      <dd className="text-neutral-900 font-medium tabular-nums">{naira(previewBonusRate)}</dd>
                     </div>
                   )}
                 </dl>
-                <p className="text-[11px] font-medium text-stone-500 leading-relaxed">
+                <p className="text-[11px] font-medium text-neutral-500 leading-relaxed">
                   The creator&apos;s share ({100 - data.platformFeePercent}%) of tier 1, for hybrid campaigns set up from now on. Industry rates on{" "}
                   <Link href="/industries" className="underline underline-offset-2">
                     Industries
@@ -368,20 +368,20 @@ export default function PriceTablePage() {
                 </p>
               </section>
 
-              <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-3">
-                <h2 className="text-base font-medium text-stone-900">Changes</h2>
+              <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-3">
+                <h2 className="text-base font-medium text-neutral-900">Changes</h2>
                 {data.history.length === 0 ? (
-                  <p className="text-xs font-medium text-stone-400">No changes yet.</p>
+                  <p className="text-xs font-medium text-neutral-400">No changes yet.</p>
                 ) : (
                   <ul className="space-y-3">
                     {data.history.map((entry) => (
-                      <li key={entry.id} className="text-xs border border-stone-100 rounded-xl p-3 space-y-1">
-                        <p className="font-medium text-stone-900">
+                      <li key={entry.id} className="text-xs border border-neutral-100 rounded-xl p-3 space-y-1">
+                        <p className="font-medium text-neutral-900">
                           Version {entry.version} · {entry.actor.name || "Admin"}
                         </p>
-                        <p className="text-[11px] text-stone-500 font-medium">{formatDateTime(entry.createdAt)}</p>
-                        {entry.note && <p className="text-stone-600">{entry.note}</p>}
-                        <p className="text-[11px] text-stone-500">
+                        <p className="text-[11px] text-neutral-500 font-medium">{formatDateTime(entry.createdAt)}</p>
+                        {entry.note && <p className="text-neutral-600">{entry.note}</p>}
+                        <p className="text-[11px] text-neutral-500">
                           Tier 1: {entry.before[0] ? naira(entry.before[0].price) : "—"} → {entry.after[0] ? naira(entry.after[0].price) : "—"} ·{" "}
                           {entry.after.length} tiers
                         </p>
@@ -396,42 +396,42 @@ export default function PriceTablePage() {
       </main>
 
       {confirming && data && (
-        <div className="fixed inset-0 z-[60] bg-stone-950/60 flex items-center justify-center p-4" onClick={() => !saving && setConfirming(false)}>
+        <div className="fixed inset-0 z-[60] bg-neutral-950/60 flex items-center justify-center p-4" onClick={() => !saving && setConfirming(false)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="save-prices-heading"
-            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-stone-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-neutral-200 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1">
-              <h3 id="save-prices-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+              <h3 id="save-prices-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                 Save New Prices?
               </h3>
-              <p className="text-xs font-medium text-stone-500 leading-relaxed">
+              <p className="text-xs font-medium text-neutral-500 leading-relaxed">
                 Every new views quote uses this table straight away, and so do unpaid drafts when their views change. Paid campaigns keep their price
                 and hybrid campaigns keep their saved bonus rate.
               </p>
             </div>
-            <dl className="bg-stone-50 rounded-xl p-4 space-y-2 text-xs">
+            <dl className="bg-neutral-50 rounded-xl p-4 space-y-2 text-xs">
               {rows.slice(0, 4).map((row, i) => (
                 <div key={row.key} className="flex justify-between gap-3">
-                  <dt className="font-medium text-stone-500">{count(Number(row.views))} views</dt>
-                  <dd className="font-medium text-stone-900 tabular-nums">
+                  <dt className="font-medium text-neutral-500">{count(Number(row.views))} views</dt>
+                  <dd className="font-medium text-neutral-900 tabular-nums">
                     {data.tiers[i] && data.tiers[i].views === Number(row.views) && data.tiers[i].price !== Number(row.price)
                       ? `${naira(data.tiers[i].price)} → ${naira(Number(row.price))}`
                       : naira(Number(row.price))}
                   </dd>
                 </div>
               ))}
-              {rows.length > 4 && <p className="text-[11px] text-stone-400 font-medium">and {rows.length - 4} more tiers</p>}
+              {rows.length > 4 && <p className="text-[11px] text-neutral-400 font-medium">and {rows.length - 4} more tiers</p>}
             </dl>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={saving}
-                className="flex-1 py-2.5 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -439,7 +439,7 @@ export default function PriceTablePage() {
                 type="button"
                 onClick={save}
                 disabled={saving}
-                className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save Prices"}
               </button>

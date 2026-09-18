@@ -708,12 +708,12 @@ function CreatorDashboardContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center">
         <div className="space-y-4 w-full max-w-7xl mx-auto px-6">
           <Skeleton className="h-8 w-48" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+              <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
                   <div className="space-y-2 flex-1">
@@ -768,7 +768,7 @@ function CreatorDashboardContent() {
   );
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F4] text-[#1C1917] flex flex-col font-rethink">
+    <div className="min-h-dvh bg-[#f5f5f5] text-[#171717] flex flex-col font-rethink">
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -823,27 +823,27 @@ function CreatorDashboardContent() {
                   />
                 </div>
                 {!campaignsUnlocked && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-[#F5F5F4]/50 backdrop-blur-[3px]">
-                    <div className="bg-white/95 border border-stone-200 rounded-3xl px-6 py-6 max-w-sm w-full mx-4 text-center space-y-3 font-rethink">
-                      <div className="w-12 h-12 mx-auto rounded-full bg-stone-100 flex items-center justify-center">
-                        <HugeiconsIcon icon={LockIcon} size={20} className="text-stone-500" />
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[24px] bg-[#f5f5f5]/50 backdrop-blur-[3px]">
+                    <div className="bg-white/95 border border-neutral-200 rounded-3xl px-6 py-6 max-w-sm w-full mx-4 text-center space-y-3 font-rethink">
+                      <div className="w-12 h-12 mx-auto rounded-full bg-neutral-100 flex items-center justify-center">
+                        <HugeiconsIcon icon={LockIcon} size={20} className="text-neutral-500" />
                       </div>
-                      <h4 className="font-semibold text-base text-stone-900 tracking-tight">
+                      <h4 className="font-semibold text-base text-neutral-900 tracking-tight">
                         Unlock campaigns to start earning
                       </h4>
-                      <p className="text-sm font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+                      <p className="text-sm font-medium text-neutral-500 leading-relaxed tracking-[-0.01em]">
                         {marketplaceMeta.lockReason || "Connect a social account and choose your niches to unlock campaigns."}
                       </p>
                       <div className="pt-2 flex flex-col gap-2">
                         <button
                           onClick={() => openProfile("social")}
-                          className="w-full py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100"
+                          className="w-full py-3 bg-[#FEB604] text-neutral-900 rounded-full font-semibold text-sm border border-neutral-100"
                         >
                           Connect social account
                         </button>
                         <button
                           onClick={() => openProfile("niches")}
-                          className="w-full py-3 bg-white text-stone-900 rounded-full font-semibold text-sm border border-stone-200"
+                          className="w-full py-3 bg-white text-neutral-900 rounded-full font-semibold text-sm border border-neutral-200"
                         >
                           Choose my niches
                         </button>
@@ -875,7 +875,7 @@ function CreatorDashboardContent() {
 
 export default function CreatorDashboard() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <CreatorDashboardContent />
     </Suspense>
   );

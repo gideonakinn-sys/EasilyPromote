@@ -40,7 +40,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+      className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M15 18l-6-6 6-6" />
@@ -107,53 +107,53 @@ function CampaignDrawerContent({
               )}
             </div>
             <div className="space-y-1.5">
-              <h2 className="font-rethink font-medium text-xl text-stone-900 leading-tight">
+              <h2 className="font-rethink font-medium text-xl text-neutral-900 leading-tight">
                 {campaign.title}
               </h2>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium text-[10px] font-rethink">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600 font-medium text-[10px] font-rethink">
                 {campaign.category}
               </span>
             </div>
           </div>
 
           {/* Description — matches brand */}
-          <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">
+          <p className="font-rethink text-xs text-neutral-500 font-medium leading-relaxed">
             {campaign.description}
           </p>
 
           {/* Details key-value list — matches brand's pattern */}
           <div className="space-y-4 pt-2">
             <div className="flex justify-between items-center font-rethink text-sm font-medium">
-              <span className="text-stone-500">Campaign by</span>
+              <span className="text-neutral-500">Campaign by</span>
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] font-medium text-stone-600 overflow-hidden shrink-0">
+                <div className="w-7 h-7 rounded-full bg-neutral-200 flex items-center justify-center text-[10px] font-medium text-neutral-600 overflow-hidden shrink-0">
                   {campaign.brandAvatar ? (
                     <Image src={campaign.brandAvatar} alt="" width={28} height={28} className="object-cover" unoptimized />
                   ) : (
                     campaign.brandName.charAt(0)
                   )}
                 </div>
-                <span className="text-stone-800 font-rethink">{campaign.brandName}</span>
+                <span className="text-neutral-800 font-rethink">{campaign.brandName}</span>
               </div>
             </div>
             <div className="flex justify-between items-center font-rethink text-sm font-medium">
-              <span className="text-stone-500">Target</span>
-              <span className="text-stone-800">{campaign.targetViews.toLocaleString()} views</span>
+              <span className="text-neutral-500">Target</span>
+              <span className="text-neutral-800">{campaign.targetViews.toLocaleString()} views</span>
             </div>
             <div className="flex justify-between items-center font-rethink text-sm font-medium">
-              <span className="text-stone-500">Reward</span>
-              <span className="text-stone-800">₦{rewardMin.toLocaleString()} - ₦{rewardMax.toLocaleString()}</span>
+              <span className="text-neutral-500">Reward</span>
+              <span className="text-neutral-800">₦{rewardMin.toLocaleString()} - ₦{rewardMax.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center font-rethink text-sm font-medium">
-              <span className="text-stone-500">Platform</span>
-              <span className="text-stone-800">{campaign.platforms.map((p) => platformLabels[p] || p).join(", ")}</span>
+              <span className="text-neutral-500">Platform</span>
+              <span className="text-neutral-800">{campaign.platforms.map((p) => platformLabels[p] || p).join(", ")}</span>
             </div>
           </div>
 
           {/* View selection — creator-specific section */}
           <div className="space-y-4">
-            <h3 className="font-rethink font-semibold text-base text-stone-900">Commit to deliver</h3>
-            <p className="text-xs font-medium text-stone-500">Select how many views you can deliver</p>
+            <h3 className="font-rethink font-semibold text-base text-neutral-900">Commit to deliver</h3>
+            <p className="text-xs font-medium text-neutral-500">Select how many views you can deliver</p>
 
             <div className="flex flex-wrap gap-2">
               {presets.map((views) => {
@@ -163,7 +163,7 @@ function CampaignDrawerContent({
                     key={views}
                     onClick={() => setSelectedViews(views)}
                     className={`px-4 py-2 rounded-full text-xs font-medium font-rethink ${
-                      isSelected ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
+                      isSelected ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"
                     }`}
                   >
                     {formatViews(views)}
@@ -174,10 +174,10 @@ function CampaignDrawerContent({
           </div>
 
           {/* Dynamic reward — matches brand's card styling */}
-          <div className="border border-stone-200 rounded-2xl p-4 space-y-2">
+          <div className="border border-neutral-200 rounded-2xl p-4 space-y-2">
             <div className="flex justify-between text-sm font-rethink">
-              <span className="text-stone-500 font-medium">Your reward</span>
-              <span className="font-medium text-stone-900">₦{reward.toLocaleString()}</span>
+              <span className="text-neutral-500 font-medium">Your reward</span>
+              <span className="font-medium text-neutral-900">₦{reward.toLocaleString()}</span>
             </div>
 
           </div>
@@ -188,15 +188,15 @@ function CampaignDrawerContent({
             disabled={isAtLimit}
             className={`w-full py-3 rounded-full font-semibold text-sm font-rethink ${
               isAtLimit
-                ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                : "bg-[#FEB604] text-[#1C1917] border border-stone-100"
+                ? "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+                : "bg-[#FEB604] text-[#171717] border border-neutral-100"
             }`}
           >
             {isAtLimit ? "At placement limit" : "Claim placement"}
           </button>
 
           {/* Info text */}
-          <p className="text-[10px] text-stone-400 font-medium font-rethink text-center leading-relaxed">
+          <p className="text-[10px] text-neutral-400 font-medium font-rethink text-center leading-relaxed">
             Full campaign details including content brief, key messaging, and brand guidelines will be revealed once you join.
           </p>
         </div>
@@ -230,9 +230,9 @@ export function MarketplaceDetailsDrawer({
     return (
       <DrawerPrimitive.Root open={open} onOpenChange={onOpenChange} direction="bottom">
         <DrawerPrimitive.Portal>
-          <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-[2px] transition-opacity duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-[2px] transition-opacity duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <DrawerPrimitive.Content className="fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white outline-none max-h-[90vh] overflow-hidden">
-            <div className="w-10 h-1 bg-stone-300 rounded-full mx-auto mt-3 mb-4 flex-shrink-0" />
+            <div className="w-10 h-1 bg-neutral-300 rounded-full mx-auto mt-3 mb-4 flex-shrink-0" />
             <div className="flex-1 overflow-hidden flex flex-col">
               {content}
             </div>

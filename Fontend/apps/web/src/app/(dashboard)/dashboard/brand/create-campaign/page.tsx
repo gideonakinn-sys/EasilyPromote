@@ -52,8 +52,8 @@ function CreateCampaignContent() {
 
   if (verifying) {
     return (
-      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center p-10">
-        <div className="w-full max-w-[520px] bg-white border border-stone-100 rounded-3xl p-8 space-y-6">
+      <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-10">
+        <div className="w-full max-w-[520px] bg-white border border-neutral-100 rounded-3xl p-8 space-y-6">
           <div className="space-y-3">
             <Skeleton className="h-7 w-1/2" />
             <Skeleton className="h-4 w-2/3" />
@@ -76,7 +76,7 @@ function CreateCampaignContent() {
 
   if (isMobile) {
     return (
-      <div className="h-screen bg-[#fcfcfc] text-stone-900 flex flex-col font-rethink">
+      <div className="h-screen bg-[#fafafa] text-neutral-900 flex flex-col font-rethink">
         <div className="flex-1 overflow-y-auto" data-lenis-prevent>
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} isMobile />
         </div>
@@ -85,7 +85,7 @@ function CreateCampaignContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] text-stone-900 flex flex-col font-rethink">
+    <div className="min-h-screen bg-[#fafafa] text-neutral-900 flex flex-col font-rethink">
       <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
     </div>
   );
@@ -93,7 +93,7 @@ function CreateCampaignContent() {
 
 export default function CreateCampaignPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#fafafa] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <CreateCampaignContent />
     </Suspense>
   );

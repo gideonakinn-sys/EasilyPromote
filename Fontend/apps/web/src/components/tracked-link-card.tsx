@@ -40,19 +40,19 @@ export function TrackedLinkCard({ campaignId, referralCode, destinationDomain, r
   };
 
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3 font-rethink">
-      <span className="text-[10px] font-medium text-stone-500 tracking-[-0.01em] block">Your tracked link</span>
+    <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3 font-rethink">
+      <span className="text-[10px] font-medium text-neutral-500 tracking-[-0.01em] block">Your tracked link</span>
 
       {link ? (
         <div className="flex items-center gap-2">
-          <code className="flex-1 min-w-0 font-mono text-xs font-medium text-stone-900 break-all select-all">{link}</code>
+          <code className="flex-1 min-w-0 font-mono text-xs font-medium text-neutral-900 break-all select-all">{link}</code>
           <button
             type="button"
             onClick={handleCopy}
             aria-label="Copy tracked link"
             className={cn(
               "h-9 px-3 flex-shrink-0 flex items-center gap-1.5 rounded-full text-xs font-medium",
-              copied === "copied" ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-700"
+              copied === "copied" ? "bg-[#CBF5E5] text-[#176448]" : "bg-neutral-100 text-neutral-700"
             )}
           >
             <HugeiconsIcon icon={copied === "copied" ? CheckIcon : Copy01Icon} size={14} />
@@ -60,28 +60,28 @@ export function TrackedLinkCard({ campaignId, referralCode, destinationDomain, r
           </button>
         </div>
       ) : (
-        <p className="text-sm font-medium text-stone-400 tracking-[-0.01em]">Your link is being set up. It will appear here.</p>
+        <p className="text-sm font-medium text-neutral-400 tracking-[-0.01em]">Your link is being set up. It will appear here.</p>
       )}
       {copied === "failed" && (
         <p className="text-[11px] font-medium text-red-700">Couldn&apos;t copy. Select the link and copy it manually.</p>
       )}
 
-      <p className="text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+      <p className="text-xs font-medium text-neutral-500 leading-relaxed tracking-[-0.01em]">
         Share this link. You&apos;re paid for each valid click, once per person per day.
       </p>
       {destinationDomain && (
-        <p className="text-xs font-medium text-stone-500 tracking-[-0.01em]">
-          Takes people to <span className="text-stone-900">{destinationDomain}</span>
+        <p className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">
+          Takes people to <span className="text-neutral-900">{destinationDomain}</span>
         </p>
       )}
 
       {referral && rate === 0 && (
-        <p className="text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+        <p className="text-xs font-medium text-neutral-500 leading-relaxed tracking-[-0.01em]">
           Easily Promote is setting your reward per click. Valid clicks already count and are paid once it&apos;s set.
         </p>
       )}
       {rate > 0 && (
-        <p className="text-xs font-medium text-stone-900 tracking-[-0.01em]">
+        <p className="text-xs font-medium text-neutral-900 tracking-[-0.01em]">
           You earn {formatNaira(rate)} per valid click.
           {referral?.paying === false && (
             <span className="block text-amber-700 mt-0.5">
@@ -93,10 +93,10 @@ export function TrackedLinkCard({ campaignId, referralCode, destinationDomain, r
 
       {referral && link && (
         <>
-          <div className="border-t border-stone-100" />
+          <div className="border-t border-neutral-100" />
           <div className="flex items-baseline justify-between">
-            <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Valid clicks</span>
-            <span className="text-sm font-medium text-stone-900 tabular-nums">{referral.conversions.toLocaleString()}</span>
+            <span className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">Valid clicks</span>
+            <span className="text-sm font-medium text-neutral-900 tabular-nums">{referral.conversions.toLocaleString()}</span>
           </div>
           {earnings && earnings.earned > 0 && (
             <div className="grid grid-cols-3 gap-2">
@@ -105,15 +105,15 @@ export function TrackedLinkCard({ campaignId, referralCode, destinationDomain, r
                 ["On hold", earnings.pending],
                 ["Withdrawable", earnings.availableToWithdraw],
               ].map(([label, value]) => (
-                <div key={label as string} className="bg-stone-50 rounded-xl px-3 py-2">
-                  <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
-                  <span className="text-sm font-medium text-stone-900 tabular-nums">{formatNaira(value as number)}</span>
+                <div key={label as string} className="bg-neutral-50 rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-medium text-neutral-500 block">{label}</span>
+                  <span className="text-sm font-medium text-neutral-900 tabular-nums">{formatNaira(value as number)}</span>
                 </div>
               ))}
             </div>
           )}
           {earnings && earnings.pending > 0 && (
-            <p className="text-[11px] font-medium text-stone-500 leading-relaxed">
+            <p className="text-[11px] font-medium text-neutral-500 leading-relaxed">
               Click earnings are held for 7 days, then you can withdraw them from your wallet.
             </p>
           )}

@@ -43,7 +43,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
     : "#1";
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-stone-100">
+    <header className="sticky top-0 z-40 w-full bg-neutral-100">
       <div className="max-w-7xl mx-auto px-6 h-16 grid grid-cols-3 items-center">
         {/* Logo — no text */}
         <div className="justify-self-start flex items-center gap-2.5">
@@ -51,13 +51,13 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         </div>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="justify-self-center hidden md:flex bg-stone-50 p-1 rounded-full gap-1 items-center">
+        <nav className="justify-self-center hidden md:flex bg-neutral-50 p-1 rounded-full gap-1 items-center">
           <button
             onClick={() => onTabChange("home")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "home"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500"
             }`}
           >
             <HugeiconsIcon icon={Home01Icon} size={14} />
@@ -71,8 +71,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             disabled={isOnboarding}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "campaign"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500"
             } disabled:opacity-40`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={14} />
@@ -86,8 +86,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             disabled={isOnboarding}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "wallet"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500 disabled:opacity-40"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500 disabled:opacity-40"
             }`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={14} />
@@ -98,7 +98,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         {/* Mobile Menu Button (same grid cell as nav) */}
         <button
           onClick={() => setIsMenuOpen(true)}
-          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-stone-700 bg-stone-50 border border-stone-200"
+          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-neutral-700 bg-neutral-50 border border-neutral-200"
         >
           <HugeiconsIcon icon={Menu01Icon} size={14} />
           <span>Menu</span>
@@ -107,7 +107,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         <div className="justify-self-end flex items-center gap-3">
           {/* Rank — desktop: full pill with rank + view count */}
           {!isOnboarding && (
-            <div className="hidden md:flex items-center gap-1.5 bg-stone-50 rounded-full pl-1 pr-3 py-1">
+            <div className="hidden md:flex items-center gap-1.5 bg-neutral-50 rounded-full pl-1 pr-3 py-1">
               <Image
                 src={rankIllustration}
                 alt="Rank"
@@ -116,7 +116,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               />
               <div className="flex flex-col gap-[2px]">
                 <span className="text-[11px] font-semibold text-[#6D28D9] leading-[1.2]">Rank {rankLabel}</span>
-                <span className="text-[9px] text-stone-500 font-medium leading-[1.1]">{scoreViews}</span>
+                <span className="text-[9px] text-neutral-500 font-medium leading-[1.1]">{scoreViews}</span>
               </div>
             </div>
           )}
@@ -136,7 +136,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-3 md:bg-stone-50 md:rounded-full md:pl-2 md:pr-4 md:py-1.5 cursor-pointer"
+              className="flex items-center gap-3 md:bg-neutral-50 md:rounded-full md:pl-2 md:pr-4 md:py-1.5 cursor-pointer"
             >
               <Image
                 src={profile.avatar || avatarSvg}
@@ -147,21 +147,21 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                 unoptimized
               />
               <div className="hidden sm:flex items-center gap-1.5">
-                <span className="text-sm font-medium text-stone-900">{profile.displayName}</span>
-                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                <span className="text-sm font-medium text-neutral-900">{profile.displayName}</span>
+                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
               </div>
             </button>
 
             {/* Desktop Dropdown */}
             <div className="hidden md:block">
               {isProfileOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
+                <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-neutral-200 rounded-xl py-1 z-50">
                   <button
                     onClick={() => {
                       setIsProfileOpen(false);
                       onOpenProfile?.();
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-stone-900"
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-900"
                   >
                     <HugeiconsIcon icon={UserIcon} size={16} />
                     <span className="font-medium">Profile</span>
@@ -172,7 +172,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                         setIsProfileOpen(false);
                         onLogout();
                       }}
-                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-stone-900"
+                      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-neutral-900"
                     >
                       <HugeiconsIcon icon={Logout01Icon} size={16} />
                       <span className="font-medium">Log out</span>
@@ -201,8 +201,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                     unoptimized
                   />
                   <div>
-                    <p className="text-sm font-medium text-stone-900">{profile.displayName}</p>
-                    <p className="text-xs text-stone-500">@{profile.username}</p>
+                    <p className="text-sm font-medium text-neutral-900">{profile.displayName}</p>
+                    <p className="text-xs text-neutral-500">@{profile.username}</p>
                   </div>
                 </button>
                 {onLogout && (
@@ -211,7 +211,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                       setIsProfileOpen(false);
                       onLogout();
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-neutral-900"
                   >
                     <HugeiconsIcon icon={Logout01Icon} size={16} />
                     <span className="font-medium">Log out</span>
@@ -232,7 +232,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               setIsMenuOpen(false);
             }}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "home" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "home" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             }`}
           >
             <HugeiconsIcon icon={Home01Icon} size={18} />
@@ -247,7 +247,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             }}
             disabled={isOnboarding}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "campaign" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "campaign" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             } disabled:opacity-40`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={18} />
@@ -262,7 +262,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             }}
             disabled={isOnboarding}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "wallet" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "wallet" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             } disabled:opacity-40`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={18} />

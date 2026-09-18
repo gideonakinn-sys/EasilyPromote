@@ -35,7 +35,7 @@ export default function BrandPaymentStatementPage() {
   }, [router]);
 
   return (
-    <div className="min-h-dvh bg-stone-50 text-stone-900 flex flex-col font-rethink">
+    <div className="min-h-dvh bg-neutral-50 text-neutral-900 flex flex-col font-rethink">
       <NavBar roleLabel="Brand" userName={userName} userEmail={userEmail} userAvatarUrl={userAvatarUrl} onLogout={handleLogout} helpHref="/help/brands" />
       {ready && <PaymentStatementView />}
     </div>

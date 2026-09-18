@@ -233,7 +233,7 @@ const SECTIONS: HelpSection[] = [
             <HelpText>
               Share a download link to the file that the brand can open, and accept the usage rights:
             </HelpText>
-            <HelpText className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-stone-900">
+            <HelpText className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 text-neutral-900">
               &ldquo;You grant the brand a perpetual, non-exclusive licence to use this content on its own organic and paid social
               channels.&rdquo;
             </HelpText>

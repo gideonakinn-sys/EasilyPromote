@@ -91,7 +91,7 @@ function UsageRightsLines({ usageRights }: { usageRights: CampaignUsageRights | 
     return (
       <>
         <SummaryRow label="Usage Rights" value="Standard licence" />
-        <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
+        <p className="text-[11px] text-neutral-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
       </>
     );
   }
@@ -106,7 +106,7 @@ function UsageRightsLines({ usageRights }: { usageRights: CampaignUsageRights | 
       <SummaryRow label="Paid Ads" value={terms.paidAdsAllowed === false ? "Not allowed" : "Allowed"} />
       <SummaryRow label="Where" value={isWorldwide(terms.territories) ? "Worldwide" : joined(terms.territories)} />
       <BriefText label="Additional Terms" text={terms.additionalTerms || undefined} />
-      <p className="text-[11px] text-stone-500 font-medium font-rethink leading-relaxed">
+      <p className="text-[11px] text-neutral-500 font-medium font-rethink leading-relaxed">
         Creators accept these terms before they join or apply. They can&apos;t change after launch.
       </p>
     </>
@@ -116,8 +116,8 @@ function UsageRightsLines({ usageRights }: { usageRights: CampaignUsageRights | 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h5 className="text-xs font-medium text-stone-500 font-rethink">{title}</h5>
-      <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-3">{children}</div>
+      <h5 className="text-xs font-medium text-neutral-500 font-rethink">{title}</h5>
+      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-3">{children}</div>
     </section>
   );
 }
@@ -126,10 +126,10 @@ function BriefList({ label, items }: { label: string; items: string[] | undefine
   if (!items || items.length === 0) return null;
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-stone-500 font-rethink">{label}</p>
+      <p className="text-xs font-medium text-neutral-500 font-rethink">{label}</p>
       <ul className="space-y-1">
         {items.map((item) => (
-          <li key={item} className="text-sm font-medium text-stone-900 font-rethink leading-relaxed break-words">
+          <li key={item} className="text-sm font-medium text-neutral-900 font-rethink leading-relaxed break-words">
             {item}
           </li>
         ))}
@@ -142,13 +142,13 @@ function BriefText({ label, text, link }: { label: string; text: string | undefi
   if (!text) return null;
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-stone-500 font-rethink">{label}</p>
+      <p className="text-xs font-medium text-neutral-500 font-rethink">{label}</p>
       {link ? (
-        <a href={text} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-stone-900 font-rethink underline underline-offset-2 break-all">
+        <a href={text} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
           {text}
         </a>
       ) : (
-        <p className="text-sm font-medium text-stone-900 font-rethink leading-relaxed whitespace-pre-line">{text}</p>
+        <p className="text-sm font-medium text-neutral-900 font-rethink leading-relaxed whitespace-pre-line">{text}</p>
       )}
     </div>
   );
@@ -272,9 +272,9 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         <BriefText label="Sound" text={brief.soundUrl} link />
         {brief.referenceVideos && brief.referenceVideos.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-stone-500 font-rethink">Reference Videos</p>
+            <p className="text-xs font-medium text-neutral-500 font-rethink">Reference Videos</p>
             {brief.referenceVideos.map((link) => (
-              <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-stone-900 font-rethink underline underline-offset-2 break-all">
+              <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
                 {link}
               </a>
             ))}
@@ -282,7 +282,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         )}
         <BriefText label="Product Info" text={brief.productInfo} />
         <BriefText label="Approval Requirements" text={brief.approvalRequirements} />
-        {!brief.summary && <p className="text-xs text-stone-400 font-medium font-rethink">No brief yet.</p>}
+        {!brief.summary && <p className="text-xs text-neutral-400 font-medium font-rethink">No brief yet.</p>}
       </Section>
     </div>
   );

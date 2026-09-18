@@ -114,11 +114,11 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
   };
 
   return (
-    <section className="bg-white border border-stone-200/90 rounded-2xl p-6 mb-8 font-rethink">
+    <section className="bg-white border border-neutral-200/90 rounded-2xl p-6 mb-8 font-rethink">
       <div className="flex items-center justify-between mb-4 gap-3">
         <div>
-          <h3 className="text-base font-medium text-stone-900">Needs Attention</h3>
-          <p className="text-xs text-stone-500 font-medium mt-0.5">Payouts, refunds, webhooks, deadlines and books checked every 15 minutes</p>
+          <h3 className="text-base font-medium text-neutral-900">Needs Attention</h3>
+          <p className="text-xs text-neutral-500 font-medium mt-0.5">Payouts, refunds, webhooks, deadlines and books checked every 15 minutes</p>
         </div>
         {!loading && !error && (
           <span
@@ -135,13 +135,13 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-stone-100 animate-pulse" />
+            <div key={i} className="h-16 rounded-xl bg-neutral-100 animate-pulse" />
           ))}
         </div>
       ) : error ? (
         <p className="text-xs text-red-600 font-medium">{error}</p>
       ) : alerts.length === 0 ? (
-        <p className="text-xs text-stone-500 font-medium">Nothing needs attention right now.</p>
+        <p className="text-xs text-neutral-500 font-medium">Nothing needs attention right now.</p>
       ) : (
         <ul className="space-y-2">
           {alerts.map((alert) => (
@@ -151,18 +151,18 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-stone-900">{alert.title}</span>
-                  <span className="text-[11px] text-stone-500 font-medium">First seen {timeSince(alert.firstSeenAt)}</span>
+                  <span className="text-sm font-medium text-neutral-900">{alert.title}</span>
+                  <span className="text-[11px] text-neutral-500 font-medium">First seen {timeSince(alert.firstSeenAt)}</span>
                   {alert.reopenedAt && <span className="text-[11px] text-red-700 font-medium">Reopened {timeSince(alert.reopenedAt)}</span>}
                   {!alert.active && <span className="text-[11px] text-green-700 font-medium">Condition cleared</span>}
                 </div>
-                <p className="text-xs text-stone-600 font-medium mt-1 break-words">{alert.message}</p>
+                <p className="text-xs text-neutral-600 font-medium mt-1 break-words">{alert.message}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {alert.link && (
                   <Link
                     href={alert.link}
-                    className="px-3.5 py-1.5 rounded-full border border-stone-200 bg-white text-xs font-semibold text-stone-700"
+                    className="px-3.5 py-1.5 rounded-full border border-neutral-200 bg-white text-xs font-semibold text-neutral-700"
                   >
                     {linkLabel(alert.link)}
                   </Link>
@@ -171,7 +171,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
                   <button
                     type="button"
                     onClick={() => openConfirm(alert)}
-                    className="px-3.5 py-1.5 rounded-full bg-stone-900 text-xs font-semibold text-white"
+                    className="px-3.5 py-1.5 rounded-full bg-neutral-900 text-xs font-semibold text-white"
                   >
                     Resolve
                   </button>
@@ -184,22 +184,22 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
 
       {confirming && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4"
           onClick={() => !resolving && setConfirming(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="resolve-alert-heading"
-            className="bg-white border border-stone-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
+            className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1.5">
-              <h3 id="resolve-alert-heading" className="font-medium text-lg text-stone-900">
+              <h3 id="resolve-alert-heading" className="font-medium text-lg text-neutral-900">
                 Resolve this alert?
               </h3>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">{confirming.message}</p>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">{confirming.message}</p>
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 If the problem is still there, the alert reopens when it changes or 24 hours from now. If it clears and comes back, you&apos;ll get a new alert.
               </p>
               {resolveError && <p className="text-xs text-red-600 font-medium">{resolveError}</p>}
@@ -209,7 +209,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
                 type="button"
                 onClick={() => setConfirming(null)}
                 disabled={resolving}
-                className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -217,7 +217,7 @@ export function NeedsAttention({ refreshKey = 0 }: NeedsAttentionProps) {
                 type="button"
                 onClick={resolve}
                 disabled={resolving}
-                className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-stone-900 disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-neutral-900 disabled:opacity-50"
               >
                 {resolving ? "Resolving…" : "Resolve"}
               </button>

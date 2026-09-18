@@ -21,11 +21,11 @@ export function BrandShell({ children }: { children: React.ReactNode }) {
   if (isFullScreen) return <>{children}</>;
 
   return (
-    <div className="min-h-dvh bg-[#fcfcfc] text-stone-900 font-rethink md:flex">
+    <div className="min-h-dvh bg-[#fafafa] text-neutral-900 font-rethink md:flex">
       <BrandSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <BrandTopbar />
-        <main className="mx-auto w-full max-w-6xl flex-1 bg-[#fcfcfc] px-5 py-8 md:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 bg-[#fafafa] px-5 py-8 md:px-8">{children}</main>
       </div>
     </div>
   );

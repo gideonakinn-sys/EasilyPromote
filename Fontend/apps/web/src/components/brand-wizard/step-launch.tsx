@@ -28,11 +28,11 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
     <div className="space-y-10">
       <div className="space-y-4">
         {data.coverImageUrl && (
-          <div className="w-[90px] h-[90px] rounded-2xl overflow-hidden border border-stone-200">
+          <div className="w-[90px] h-[90px] rounded-2xl overflow-hidden border border-neutral-200">
             <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
           </div>
         )}
-        <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-200 text-stone-600 text-[11px] font-medium font-rethink">
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-neutral-200 text-neutral-600 text-[11px] font-medium font-rethink">
           {data.category}
         </span>
       </div>
@@ -49,14 +49,14 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
         ) : (
           <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">
             <div className="space-y-1">
-              <h5 className="text-sm font-medium text-stone-900 font-rethink">Connect your app to launch</h5>
-              <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+              <h5 className="text-sm font-medium text-neutral-900 font-rethink">Connect your app to launch</h5>
+              <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
                 You can&apos;t pay for this campaign until your app is connected, so your budget never waits on setup. Save this draft and
                 finish setup; this checklist updates by itself.
               </p>
             </div>
             {connection.loading ? (
-              <p className="text-xs text-stone-500 font-medium font-rethink">Checking your app connection…</p>
+              <p className="text-xs text-neutral-500 font-medium font-rethink">Checking your app connection…</p>
             ) : (
               <ConnectAppChecklist status={connection.status} hasKey={connection.hasKey} />
             )}
@@ -64,7 +64,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
               href="/dashboard/brand/settings/referral"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink"
+              className="inline-block px-4 py-2 bg-neutral-900 text-white rounded-full text-xs font-semibold font-rethink"
             >
               Open setup guide
             </a>
@@ -75,7 +75,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
         <div className="flex-shrink-0">
           <Image src={launchCampaign} alt="" width={56} height={56} className="object-contain" />
         </div>
-        <p className="font-rethink text-xs text-stone-600 leading-normal">
+        <p className="font-rethink text-xs text-neutral-600 leading-normal">
           {hybrid
             ? "Creators are paid your base for each deliverable you approve, and a bonus from your pool as their results are verified. Unused base and bonus are refunded when the campaign ends."
             : isContent

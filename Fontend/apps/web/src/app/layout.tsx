@@ -43,7 +43,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${rethinkSans.variable} ${inter.variable} ${raleway.variable} ${motterdam.variable} min-h-screen antialiased bg-stone-50 text-stone-900 font-rethink`}>
+      <body className={`${rethinkSans.variable} ${inter.variable} ${raleway.variable} ${motterdam.variable} min-h-screen antialiased bg-neutral-50 text-neutral-900 font-rethink`}>
         <Providers><LenisProvider>{children}</LenisProvider></Providers>
       </body>
     </html>

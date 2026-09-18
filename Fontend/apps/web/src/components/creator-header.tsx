@@ -39,7 +39,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
     : "#1";
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-stone-50">
+    <header className="sticky top-0 z-40 w-full bg-neutral-50">
       <div className="max-w-7xl mx-auto px-6 h-16 grid grid-cols-3 items-center">
         {/* Logo + workspace label, so this never reads as the brand dashboard */}
         <div className="justify-self-start flex items-center gap-2.5">
@@ -50,13 +50,13 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         </div>
 
         {/* Desktop Navigation Tabs */}
-        <nav className="justify-self-center hidden md:flex bg-stone-100 p-1 rounded-full gap-1 items-center">
+        <nav className="justify-self-center hidden md:flex bg-neutral-100 p-1 rounded-full gap-1 items-center">
           <button
             onClick={() => onTabChange("home")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "home"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500"
             }`}
           >
             <HugeiconsIcon icon={Home01Icon} size={14} />
@@ -67,8 +67,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             onClick={() => onTabChange("campaign")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "campaign"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500"
             }`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={14} />
@@ -79,8 +79,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
             onClick={() => onTabChange("wallet")}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-semibold ${
               activeTab === "wallet"
-                ? "bg-white text-stone-950 border border-stone-200"
-                : "text-stone-500"
+                ? "bg-white text-neutral-950 border border-neutral-200"
+                : "text-neutral-500"
             }`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={14} />
@@ -91,7 +91,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         {/* Mobile Menu Button (same grid cell as nav) */}
         <button
           onClick={() => setIsMenuOpen(true)}
-          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-stone-700 bg-white"
+          className="justify-self-center md:hidden flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold text-neutral-700 bg-white"
         >
           <HugeiconsIcon icon={Menu01Icon} size={14} />
           <span>Menu</span>
@@ -100,9 +100,9 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
         <div className="justify-self-end flex items-center gap-3">
           <Link
             href="/help/creators"
-            className="hidden md:flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-stone-900"
+            className="hidden md:flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-neutral-900"
           >
-            <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-stone-500" />
+            <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-neutral-500" />
             <span>Help</span>
           </Link>
 
@@ -117,7 +117,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               />
               <div className="flex flex-col gap-[2px]">
                 <span className="text-[11px] font-semibold text-[#6D28D9] leading-[1.2]">Rank {rankLabel}</span>
-                <span className="text-[9px] text-stone-500 font-medium leading-[1.1]">{scoreViews}</span>
+                <span className="text-[9px] text-neutral-500 font-medium leading-[1.1]">{scoreViews}</span>
               </div>
             </div>
           )}
@@ -147,8 +147,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                     unoptimized
                   />
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-stone-900">{profile.displayName}</span>
-                    <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                    <span className="text-sm font-medium text-neutral-900">{profile.displayName}</span>
+                    <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
                   </div>
                 </button>
               </DropdownMenuTrigger>
@@ -203,8 +203,8 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                     unoptimized
                   />
                   <div>
-                    <p className="text-sm font-medium text-stone-900">{profile.displayName}</p>
-                    <p className="text-xs text-stone-500">@{profile.username}</p>
+                    <p className="text-sm font-medium text-neutral-900">{profile.displayName}</p>
+                    <p className="text-xs text-neutral-500">@{profile.username}</p>
                   </div>
                 </button>
                 {onLogout && (
@@ -213,7 +213,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
                       setIsProfileOpen(false);
                       onLogout();
                     }}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+                    className="flex items-center gap-3 w-full px-4 py-3 text-sm text-neutral-900"
                   >
                     <HugeiconsIcon icon={Logout01Icon} size={16} />
                     <span className="font-medium">Log out</span>
@@ -233,7 +233,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               setIsMenuOpen(false);
             }}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "home" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "home" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             }`}
           >
             <HugeiconsIcon icon={Home01Icon} size={18} />
@@ -245,7 +245,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               setIsMenuOpen(false);
             }}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "campaign" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "campaign" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             }`}
           >
             <HugeiconsIcon icon={ClipboardIcon} size={18} />
@@ -257,7 +257,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
               setIsMenuOpen(false);
             }}
             className={`flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl ${
-              activeTab === "wallet" ? "text-stone-900 bg-stone-100" : "text-stone-600"
+              activeTab === "wallet" ? "text-neutral-900 bg-neutral-100" : "text-neutral-600"
             }`}
           >
             <HugeiconsIcon icon={Wallet03Icon} size={18} />
@@ -266,7 +266,7 @@ export function CreatorHeader({ activeTab, onTabChange, profile, onLogout, onOpe
           <Link
             href="/help/creators"
             onClick={() => setIsMenuOpen(false)}
-            className="flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl text-stone-600"
+            className="flex items-center gap-3 w-full px-4 py-3 text-left text-sm font-medium rounded-xl text-neutral-600"
           >
             <HugeiconsIcon icon={HelpCircleIcon} size={18} />
             Help

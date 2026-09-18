@@ -120,11 +120,11 @@ export function ProfileView({
       <div className="space-y-2">
         <button
           onClick={() => onConnectMeta(provider)}
-          className="w-full py-2.5 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+          className="w-full py-2.5 bg-[#FEB604] text-neutral-950 rounded-full font-semibold text-xs font-rethink"
         >
           Connect {label}
         </button>
-        <p className="text-[11px] font-medium text-stone-500 tracking-[-0.01em]">{hint}</p>
+        <p className="text-[11px] font-medium text-neutral-500 tracking-[-0.01em]">{hint}</p>
       </div>
     );
   };
@@ -205,26 +205,26 @@ export function ProfileView({
       <div data-reveal className="flex items-center gap-4 mb-6">
         <button
           onClick={onClose}
-          className="w-9 h-9 rounded-full bg-white border border-stone-200 flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-white border border-neutral-200 flex items-center justify-center"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} className="text-stone-600" />
+          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} className="text-neutral-600" />
         </button>
-        <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Profile</h2>
+        <h2 className="font-rethink font-medium text-lg tracking-tighter text-neutral-900">Profile</h2>
         <button
           onClick={onSaveProfile}
-          className="ml-auto px-5 py-3 bg-[#FEB604] text-stone-950 font-semibold text-xs rounded-full font-rethink"
+          className="ml-auto px-5 py-3 bg-[#FEB604] text-neutral-950 font-semibold text-xs rounded-full font-rethink"
         >
           Save
         </button>
       </div>
 
       <div className="space-y-6">
-        <section data-reveal ref={detailsRef} className="scroll-mt-24 bg-stone-50 border border-stone-200 rounded-3xl p-6">
+        <section data-reveal ref={detailsRef} className="scroll-mt-24 bg-neutral-50 border border-neutral-200 rounded-3xl p-6">
           <div className="flex items-center gap-4 mb-5">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="relative w-16 h-16 rounded-full bg-stone-100 border border-stone-200 overflow-hidden flex-shrink-0"
+              className="relative w-16 h-16 rounded-full bg-neutral-100 border border-neutral-200 overflow-hidden flex-shrink-0"
             >
               {profileForm.avatarUrl ? (
                 <img src={profileForm.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -240,11 +240,11 @@ export function ProfileView({
               onChange={handleAvatarUpload}
             />
             <div className="space-y-1.5">
-              <span className="block text-xs font-medium text-stone-500">Profile photo</span>
+              <span className="block text-xs font-medium text-neutral-500">Profile photo</span>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-white border border-stone-200 text-stone-900 font-semibold text-xs rounded-full font-rethink"
+                className="px-4 py-2 bg-white border border-neutral-200 text-neutral-900 font-semibold text-xs rounded-full font-rethink"
               >
                 Upload
               </button>
@@ -253,49 +253,49 @@ export function ProfileView({
 
           <div className="space-y-3.5">
             <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Name</label>
+              <label className="block text-xs font-medium text-neutral-500 mb-1">Name</label>
               <input
                 type="text"
                 value={profileForm.name}
                 onChange={(e) => onProfileFormChange({ ...profileForm, name: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
+                className="w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Nickname / Alias</label>
+              <label className="block text-xs font-medium text-neutral-500 mb-1">Nickname / Alias</label>
               <input
                 type="text"
                 value={profileForm.nickname}
                 onChange={(e) => onProfileFormChange({ ...profileForm, nickname: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
+                className="w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Email address</label>
+              <label className="block text-xs font-medium text-neutral-500 mb-1">Email address</label>
               <input
                 type="email"
                 value={profileForm.email}
                 onChange={(e) => onProfileFormChange({ ...profileForm, email: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
+                className="w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-500 mb-1">Phone number</label>
+              <label className="block text-xs font-medium text-neutral-500 mb-1">Phone number</label>
               <input
                 type="tel"
                 value={profileForm.phone}
                 onChange={(e) => onProfileFormChange({ ...profileForm, phone: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
+                className="w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink"
               />
             </div>
           </div>
 
         </section>
 
-        <section data-reveal ref={nichesRef} className="scroll-mt-24 bg-stone-50 border border-stone-200 rounded-3xl p-6">
+        <section data-reveal ref={nichesRef} className="scroll-mt-24 bg-neutral-50 border border-neutral-200 rounded-3xl p-6">
           <div className="mb-5">
-            <h3 className="font-rethink font-medium text-base tracking-tighter text-stone-900">Niches</h3>
-            <p className="text-xs font-medium text-stone-500 mt-1 tracking-[-0.01em]">
+            <h3 className="font-rethink font-medium text-base tracking-tighter text-neutral-900">Niches</h3>
+            <p className="text-xs font-medium text-neutral-500 mt-1 tracking-[-0.01em]">
               Select categories that match the type of content you publish.
             </p>
           </div>
@@ -310,8 +310,8 @@ export function ProfileView({
                   className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-medium border font-rethink",
                     isSelected
-                      ? "bg-stone-950 text-white border-stone-950"
-                      : "bg-white text-stone-600 border-stone-200"
+                      ? "bg-neutral-950 text-white border-neutral-950"
+                      : "bg-white text-neutral-600 border-neutral-200"
                   )}
                 >
                   {niche}
@@ -329,21 +329,21 @@ export function ProfileView({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleAddCustomNiche();
               }}
-              className="flex-1 min-w-0 px-4 py-2 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink"
+              className="flex-1 min-w-0 px-4 py-2 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 placeholder-neutral-400 focus:outline-none focus:border-neutral-300 font-rethink"
             />
             <button
               onClick={handleAddCustomNiche}
-              className="px-4 py-2 bg-stone-950 text-white rounded-full font-semibold text-xs font-rethink flex-shrink-0"
+              className="px-4 py-2 bg-neutral-950 text-white rounded-full font-semibold text-xs font-rethink flex-shrink-0"
             >
               Add
             </button>
           </div>
         </section>
 
-        <section data-reveal ref={socialRef} className="scroll-mt-24 bg-stone-50 border border-stone-200 rounded-3xl p-6">
+        <section data-reveal ref={socialRef} className="scroll-mt-24 bg-neutral-50 border border-neutral-200 rounded-3xl p-6">
           <div className="mb-5">
-            <h3 className="font-rethink font-medium text-base tracking-tighter text-stone-900">Social accounts</h3>
-            <p className="text-xs font-medium text-stone-500 mt-1 tracking-[-0.01em]">
+            <h3 className="font-rethink font-medium text-base tracking-tighter text-neutral-900">Social accounts</h3>
+            <p className="text-xs font-medium text-neutral-500 mt-1 tracking-[-0.01em]">
               Link the platforms you create on so we can verify your views.
             </p>
           </div>
@@ -371,11 +371,11 @@ export function ProfileView({
               <div className="space-y-2">
                 <button
                   onClick={onConnectTikTok}
-                  className="w-full py-2.5 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+                  className="w-full py-2.5 bg-[#FEB604] text-neutral-950 rounded-full font-semibold text-xs font-rethink"
                 >
                   Connect with TikTok
                 </button>
-                <p className="text-[11px] font-medium text-stone-500 tracking-[-0.01em]">
+                <p className="text-[11px] font-medium text-neutral-500 tracking-[-0.01em]">
                   Opens TikTok to securely link your account and verify views.
                 </p>
               </div>
@@ -393,24 +393,24 @@ export function ProfileView({
               {profile.socialAccounts.map((acct) => {
                 const style = PLATFORM_STYLES[acct.platform] ?? DEFAULT_PLATFORM_STYLE;
                 return (
-                  <li key={acct.platform} className="flex items-center gap-3 bg-white border border-stone-200/60 rounded-2xl px-3 py-2.5">
+                  <li key={acct.platform} className="flex items-center gap-3 bg-white border border-neutral-200/60 rounded-2xl px-3 py-2.5">
                     <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center border flex-shrink-0", style.iconBg)}>
                       <HugeiconsIcon icon={style.icon} size={16} className={style.iconColor} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-stone-900 flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-neutral-900 flex items-center gap-1.5">
                         {platformLabels[acct.platform] ?? acct.platform}
                         {acct.verified && (
                           <HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} className="text-blue-600" />
                         )}
                       </p>
-                      <p className="text-xs font-medium text-stone-500">{acct.handle}</p>
+                      <p className="text-xs font-medium text-neutral-500">{acct.handle}</p>
                     </div>
                     <button
                       onClick={() => onRemoveSocial(acct.platform)}
                       className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                     >
-                      <HugeiconsIcon icon={Delete01Icon} size={16} className="text-stone-400" />
+                      <HugeiconsIcon icon={Delete01Icon} size={16} className="text-neutral-400" />
                     </button>
                   </li>
                 );

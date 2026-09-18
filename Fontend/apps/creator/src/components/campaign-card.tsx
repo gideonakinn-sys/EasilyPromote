@@ -74,11 +74,11 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
   return (
     <div
       onClick={onClick}
-      className="bg-stone-50 rounded-3xl border-[0.2px] border-stone-200 md:border md:border-stone-100 p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer"
+      className="bg-neutral-50 rounded-3xl border-[0.2px] border-neutral-200 md:border md:border-neutral-100 p-4 flex flex-col justify-between relative overflow-hidden cursor-pointer"
     >
       {/* Campaign cover image */}
       {camp.coverImageUrl && (
-        <div className="relative -mx-4 -mt-4 mb-4 h-32 md:h-36 bg-stone-100">
+        <div className="relative -mx-4 -mt-4 mb-4 h-32 md:h-36 bg-neutral-100">
           <Image
             src={camp.coverImageUrl}
             alt={camp.title}
@@ -97,7 +97,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
             <HugeiconsIcon icon={TiktokIcon} size={24} className="text-purple-600" />
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
+            <span className="px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-medium tracking-tight text-[10px] font-rethink">
               {camp.category}
             </span>
             <span className={`px-2 py-0.5 rounded-full font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1 ${badge.bg} ${badge.text}`}>
@@ -107,7 +107,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
         </div>
 
         {/* Campaign Title */}
-        <h3 className="font-rethink font-medium tracking-tighter text-[16px] text-stone-900 line-clamp-2 mb-4">
+        <h3 className="font-rethink font-medium tracking-tighter text-[16px] text-neutral-900 line-clamp-2 mb-4">
           {camp.title}
         </h3>
       </div>
@@ -117,15 +117,15 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
         {hasProgress ? (
           /* Live / Delivered — brand-style progress indicator */
           <div className="flex items-center gap-3">
-            <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+            <div className="w-24 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all bg-blue-600"
                 style={{ width: `${camp.progress}%` }}
               />
             </div>
-            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{formatProgress(camp.progress)}</span>
-            <span className="w-1 h-1 rounded-full bg-stone-300" />
-            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">
+            <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">{formatProgress(camp.progress)}</span>
+            <span className="w-1 h-1 rounded-full bg-neutral-300" />
+            <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">
               {camp.currentViews?.toLocaleString()} / {(camp.viewTarget || camp.targetViews)?.toLocaleString()} views
             </span>
           </div>
@@ -138,7 +138,7 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
                 <svg className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 0 1-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <p className="text-[11px] leading-relaxed text-stone-600 font-medium">
+                <p className="text-[11px] leading-relaxed text-neutral-600 font-medium">
                   &quot;{camp.comment}&quot;
                 </p>
               </div>
@@ -146,8 +146,8 @@ export function CampaignCard({ campaign, onClick }: CampaignCardProps) {
 
             {/* Target + Reward line */}
             <div className="flex items-center justify-between text-xs font-medium font-rethink">
-              <span className="text-stone-500">{targetLabel}</span>
-              <span className="text-stone-900 font-semibold">{rewardLabel}</span>
+              <span className="text-neutral-500">{targetLabel}</span>
+              <span className="text-neutral-900 font-semibold">{rewardLabel}</span>
             </div>
           </div>
         )}

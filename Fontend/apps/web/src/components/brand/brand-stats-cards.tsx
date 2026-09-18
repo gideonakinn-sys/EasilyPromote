@@ -15,13 +15,13 @@ interface StatCardProps {
 
 export function StatCard({ label, value, hint, accent }: StatCardProps) {
   return (
-    <Card data-reveal className="rounded-2xl border-stone-100 bg-white shadow-none">
+    <Card data-reveal className="rounded-2xl border-neutral-100 bg-white shadow-none">
       <CardContent className="p-5">
-        <p className="text-xs font-medium text-stone-500">{label}</p>
-        <p className={cn("mt-2 text-lg font-semibold tabular-nums text-stone-900 tracking-tight", accent && "text-[#B45309]")}>
+        <p className="text-xs font-medium text-neutral-500">{label}</p>
+        <p className={cn("mt-2 text-lg font-semibold tabular-nums text-neutral-900 tracking-tight", accent && "text-[#B45309]")}>
           {value}
         </p>
-        {hint && <p className="mt-1 text-xs font-medium text-stone-400">{hint}</p>}
+        {hint && <p className="mt-1 text-xs font-medium text-neutral-400">{hint}</p>}
       </CardContent>
     </Card>
   );

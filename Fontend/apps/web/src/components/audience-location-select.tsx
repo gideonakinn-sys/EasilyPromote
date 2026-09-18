@@ -25,8 +25,8 @@ export function AudienceLocationSelect({ id, value, onChange, placeholder = "Cho
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "appearance-none bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-medium font-rethink text-stone-950 focus:outline-none focus:border-stone-300 disabled:bg-stone-100",
-        !value && "text-stone-400",
+        "appearance-none bg-white border border-neutral-200 rounded-full px-4 py-2.5 text-sm font-medium font-rethink text-neutral-950 focus:outline-none focus:border-neutral-300 disabled:bg-neutral-100",
+        !value && "text-neutral-400",
         className
       )}
     >

@@ -46,8 +46,8 @@ export function CampaignCard({
       case "draft":
       case "pending_payment":
         return (
-          <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-stone-500" /> Draft
+          <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600 font-medium tracking-tight text-[10px] font-rethink flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-neutral-500" /> Draft
           </span>
         );
       case "under_review":
@@ -89,7 +89,7 @@ export function CampaignCard({
             <img
               src={imageSrc}
               alt={title}
-              className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
+              className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-neutral-200"
             />
           ) : (
             <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
@@ -100,7 +100,7 @@ export function CampaignCard({
           )}
           <div className="flex items-center gap-1.5">
             {status !== "draft" && category && (
-              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px] font-rethink">
+              <span className="px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-medium tracking-tight text-[10px] font-rethink">
                 {category}
               </span>
             )}
@@ -109,11 +109,11 @@ export function CampaignCard({
         </div>
 
         {/* Campaign Title */}
-        <h3 className="font-rethink font-medium tracking-tighter text-[16px] text-stone-900 line-clamp-2">
+        <h3 className="font-rethink font-medium tracking-tighter text-[16px] text-neutral-900 line-clamp-2">
           {title}
         </h3>
         {description && (
-          <p className="font-rethink text-xs text-stone-500 font-medium truncate mt-1 mb-5 tracking-[-0.01em]">{description}</p>
+          <p className="font-rethink text-xs text-neutral-500 font-medium truncate mt-1 mb-5 tracking-[-0.01em]">{description}</p>
         )}
         {notice && (
           <p className="inline-flex items-center gap-1.5 mb-4 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-medium font-rethink tracking-[-0.01em]">
@@ -130,7 +130,7 @@ export function CampaignCard({
             e.stopPropagation();
             if (onResume) onResume();
           }}
-          className="w-full py-3 bg-white border border-stone-200 text-stone-900 rounded-full font-rethink font-semibold tracking-[-0.01em] text-sm"
+          className="w-full py-3 bg-white border border-neutral-200 text-neutral-900 rounded-full font-rethink font-semibold tracking-[-0.01em] text-sm"
         >
           Resume
         </button>
@@ -138,7 +138,7 @@ export function CampaignCard({
         /* Progress for Active/Completed cards */
         <div className="mt-auto">
           <div className="flex items-center gap-3">
-            <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+            <div className="w-24 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
@@ -147,18 +147,18 @@ export function CampaignCard({
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{progress}%</span>
-            <span className="w-1 h-1 rounded-full bg-stone-300" />
-            <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{currentViews} / {targetViews} views</span>
+            <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">{progress}%</span>
+            <span className="w-1 h-1 rounded-full bg-neutral-300" />
+            <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">{currentViews} / {targetViews} views</span>
           </div>
           {referral && (
             <div className="flex items-center gap-3 mt-2">
-              <div className="w-24 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+              <div className="w-24 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
                 <div className="h-full rounded-full transition-all bg-[#176448]" style={{ width: `${referral.budgetUsedPercent}%` }} />
               </div>
-              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.budgetUsedPercent}%</span>
-              <span className="w-1 h-1 rounded-full bg-stone-300" />
-              <span className="text-xs text-stone-500 font-medium tracking-[-0.01em] font-rethink">{referral.label}</span>
+              <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">{referral.budgetUsedPercent}%</span>
+              <span className="w-1 h-1 rounded-full bg-neutral-300" />
+              <span className="text-xs text-neutral-500 font-medium tracking-[-0.01em] font-rethink">{referral.label}</span>
             </div>
           )}
         </div>

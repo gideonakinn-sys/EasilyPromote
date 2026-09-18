@@ -41,7 +41,7 @@ export function EmptyState({ onCreateCampaign, userName = "User" }: EmptyStatePr
         <button
           data-reveal
           onClick={onCreateCampaign}
-          className="w-full max-w-[300px] py-3 bg-[#FEB604] text-stone-900 font-rethink font-semibold text-sm rounded-full border border-stone-100"
+          className="w-full max-w-[300px] py-3 bg-[#FEB604] text-neutral-900 font-rethink font-semibold text-sm rounded-full border border-neutral-100"
         >
           Create Campaign
         </button>

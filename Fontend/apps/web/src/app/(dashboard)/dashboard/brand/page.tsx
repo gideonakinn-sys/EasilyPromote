@@ -116,7 +116,7 @@ function OverviewContent() {
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">
+        <h1 className="font-rethink font-semibold text-lg text-neutral-900 tracking-tight">
           Overview
         </h1>
         <MonthPicker
@@ -137,28 +137,28 @@ function OverviewContent() {
           <Skeleton className="h-64 rounded-2xl" />
         </div>
       ) : fetchError ? (
-        <div className="rounded-2xl border border-stone-100 bg-white p-8 text-center">
-          <p className="text-sm font-medium text-stone-900">Couldn&apos;t load your dashboard</p>
-          <p className="mt-1 text-xs font-medium text-stone-500">Please try again in a moment.</p>
+        <div className="rounded-2xl border border-neutral-100 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-neutral-900">Couldn&apos;t load your dashboard</p>
+          <p className="mt-1 text-xs font-medium text-neutral-500">Please try again in a moment.</p>
           <button
             onClick={() => {
               setLoading(true);
               doFetch(month);
             }}
-            className="mt-4 rounded-full bg-stone-900 px-6 py-2.5 text-sm font-medium text-white"
+            className="mt-4 rounded-full bg-neutral-900 px-6 py-2.5 text-sm font-medium text-white"
           >
             Try again
           </button>
         </div>
       ) : isEmpty ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-16 text-center">
-          <p className="text-sm font-semibold text-stone-900">No campaigns yet</p>
-          <p className="mt-1 max-w-sm text-xs font-medium text-stone-500">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center">
+          <p className="text-sm font-semibold text-neutral-900">No campaigns yet</p>
+          <p className="mt-1 max-w-sm text-xs font-medium text-neutral-500">
             Create your first campaign and your views and performance will show up here.
           </p>
           <button
             onClick={handleCreateCampaign}
-            className="mt-5 rounded-full bg-[#FEB604] px-6 py-2.5 text-sm font-semibold text-[#1C1917] border border-stone-100"
+            className="mt-5 rounded-full bg-[#FEB604] px-6 py-2.5 text-sm font-semibold text-[#171717] border border-neutral-100"
           >
             Create campaign
           </button>

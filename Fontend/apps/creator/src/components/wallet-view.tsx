@@ -177,17 +177,17 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
   };
 
   return (
-    <div data-reveal className="w-full max-w-lg bg-white border border-stone-200 rounded-3xl p-8 text-center">
-      <h2 className="font-rethink font-medium text-xl mb-3 text-stone-900">Earnings Wallet</h2>
-      <p className="text-sm text-stone-500 mb-6 font-medium">
+    <div data-reveal className="w-full max-w-lg bg-white border border-neutral-200 rounded-3xl p-8 text-center">
+      <h2 className="font-rethink font-medium text-xl mb-3 text-neutral-900">Earnings Wallet</h2>
+      <p className="text-sm text-neutral-500 mb-6 font-medium">
         Manage your payouts, bank withdrawal accounts, and view overall statistics.
       </p>
 
-      <div className="bg-[#FAFAF9] border border-stone-200 rounded-2xl p-6 mb-6">
-        <div className="text-xs font-medium text-stone-500 mb-1">
+      <div className="bg-[#fafafa] border border-neutral-200 rounded-2xl p-6 mb-6">
+        <div className="text-xs font-medium text-neutral-500 mb-1">
           Withdrawable Balance
         </div>
-        <div className="font-rethink text-3xl font-medium text-stone-900 mb-2">
+        <div className="font-rethink text-3xl font-medium text-neutral-900 mb-2">
           ₦{withdrawable.toLocaleString()}.00
         </div>
         <span className="text-[10px] font-medium px-2.5 py-1 bg-green-50 text-green-700 border border-green-100 rounded-full">
@@ -196,22 +196,22 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 text-left">
-          <span className="text-[10px] font-medium text-stone-500">Lifetime Earnings</span>
-          <p className="font-rethink text-lg font-medium mt-0.5 text-stone-900">₦{lifetimeEarnings.toLocaleString()}</p>
+        <div className="bg-neutral-50 border border-neutral-200/50 rounded-2xl p-4 text-left">
+          <span className="text-[10px] font-medium text-neutral-500">Lifetime Earnings</span>
+          <p className="font-rethink text-lg font-medium mt-0.5 text-neutral-900">₦{lifetimeEarnings.toLocaleString()}</p>
         </div>
-        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 text-left">
-          <span className="text-[10px] font-medium text-stone-500">Completion Rate</span>
-          <p className="font-rethink text-lg font-medium mt-0.5 text-stone-900">{completionRate}%</p>
+        <div className="bg-neutral-50 border border-neutral-200/50 rounded-2xl p-4 text-left">
+          <span className="text-[10px] font-medium text-neutral-500">Completion Rate</span>
+          <p className="font-rethink text-lg font-medium mt-0.5 text-neutral-900">{completionRate}%</p>
         </div>
       </div>
 
-      <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left">
+      <div className="bg-neutral-50 border border-neutral-200/50 rounded-2xl p-4 mb-6 text-left">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-medium text-stone-500">Bank Account</span>
+          <span className="text-[10px] font-medium text-neutral-500">Bank Account</span>
           {hasBankAccount && (
             <div className="flex items-center gap-3">
-              <button onClick={() => setShowBankForm(true)} className="text-[11px] font-medium text-stone-500 underline">
+              <button onClick={() => setShowBankForm(true)} className="text-[11px] font-medium text-neutral-500 underline">
                 Change
               </button>
               <button onClick={handleRemoveBank} className="text-[11px] font-medium text-red-500 underline">
@@ -222,8 +222,8 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         </div>
         {hasBankAccount ? (
           <div>
-            <p className="font-rethink text-sm font-medium text-stone-800">{bankAccountName}</p>
-            <p className="font-rethink text-xs text-stone-500">{bankDisplay}</p>
+            <p className="font-rethink text-sm font-medium text-neutral-800">{bankAccountName}</p>
+            <p className="font-rethink text-xs text-neutral-500">{bankDisplay}</p>
           </div>
         ) : showBankForm ? (
           <div className="space-y-3">
@@ -232,12 +232,12 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
               onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
               placeholder="Account number"
               inputMode="numeric"
-              className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-400"
+              className="w-full bg-white border border-neutral-200 rounded-full px-4 py-2.5 text-sm font-rethink text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400"
             />
             <select
               value={bankCode}
               onChange={(e) => setBankCode(e.target.value)}
-              className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 outline-none focus:border-stone-400"
+              className="w-full bg-white border border-neutral-200 rounded-full px-4 py-2.5 text-sm font-rethink text-neutral-900 outline-none focus:border-neutral-400"
             >
               <option value="">Select your bank</option>
               {banks.map((b) => (
@@ -250,13 +250,13 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
               <button
                 onClick={handleSaveBank}
                 disabled={savingBank}
-                className="flex-1 py-2.5 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink disabled:bg-stone-200 disabled:text-stone-400"
+                className="flex-1 py-2.5 bg-[#FEB604] text-neutral-950 font-semibold text-sm rounded-full font-rethink disabled:bg-neutral-200 disabled:text-neutral-400"
               >
                 {savingBank ? "Saving…" : "Save Account"}
               </button>
               <button
                 onClick={() => setShowBankForm(false)}
-                className="px-4 py-2.5 border border-stone-200 text-stone-600 font-semibold text-sm rounded-full font-rethink"
+                className="px-4 py-2.5 border border-neutral-200 text-neutral-600 font-semibold text-sm rounded-full font-rethink"
               >
                 Cancel
               </button>
@@ -265,7 +265,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
         ) : (
           <button
             onClick={() => setShowBankForm(true)}
-            className="mt-1 w-full py-2.5 border border-stone-300 text-stone-700 font-semibold text-sm rounded-full font-rethink"
+            className="mt-1 w-full py-2.5 border border-neutral-300 text-neutral-700 font-semibold text-sm rounded-full font-rethink"
           >
             Add Bank Account
           </button>
@@ -273,21 +273,21 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       </div>
 
       {pendingByCampaign.length > 0 && (
-        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
+        <div className="bg-neutral-50 border border-neutral-200/50 rounded-2xl p-4 mb-6 text-left space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium text-stone-500">Pending Balance (non-withdrawable)</span>
-            <span className="font-rethink text-sm font-medium text-stone-900">₦{pending.toLocaleString()}</span>
+            <span className="text-[10px] font-medium text-neutral-500">Pending Balance (non-withdrawable)</span>
+            <span className="font-rethink text-sm font-medium text-neutral-900">₦{pending.toLocaleString()}</span>
           </div>
           <div className="space-y-2.5">
             {pendingByCampaign.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-sm">
                 <div className="min-w-0">
-                  <p className="font-rethink font-medium text-stone-800 truncate">{c.title}</p>
-                  <p className="font-rethink text-xs text-stone-500">
+                  <p className="font-rethink font-medium text-neutral-800 truncate">{c.title}</p>
+                  <p className="font-rethink text-xs text-neutral-500">
                     {c.views.toLocaleString()} / {c.viewTarget.toLocaleString()} views
                   </p>
                 </div>
-                <span className="font-rethink font-medium text-stone-900">₦{c.earned.toLocaleString()}</span>
+                <span className="font-rethink font-medium text-neutral-900">₦{c.earned.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -295,39 +295,39 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       )}
 
       {totalReleased > 0 && (
-        <div className="bg-stone-50 border border-stone-200/50 rounded-2xl p-4 mb-6 text-left">
-          <span className="text-[10px] font-medium text-stone-500">Total Released</span>
-          <p className="font-rethink text-lg font-medium mt-0.5 text-stone-900">₦{totalReleased.toLocaleString()}</p>
+        <div className="bg-neutral-50 border border-neutral-200/50 rounded-2xl p-4 mb-6 text-left">
+          <span className="text-[10px] font-medium text-neutral-500">Total Released</span>
+          <p className="font-rethink text-lg font-medium mt-0.5 text-neutral-900">₦{totalReleased.toLocaleString()}</p>
         </div>
       )}
 
       <button
         onClick={() => setShowWithdraw(true)}
         disabled={!hasBankAccount || eligibleCampaigns.length === 0}
-        className="w-full py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink disabled:bg-stone-200 disabled:text-stone-400"
+        className="w-full py-3 bg-[#FEB604] text-neutral-950 font-semibold text-sm rounded-full font-rethink disabled:bg-neutral-200 disabled:text-neutral-400"
       >
         Withdraw Funds
       </button>
       {!hasBankAccount && (
-        <p className="text-[11px] text-stone-500 mt-2 font-medium">
+        <p className="text-[11px] text-neutral-500 mt-2 font-medium">
           Add your bank account above to withdraw earnings.
         </p>
       )}
       {hasBankAccount && eligibleCampaigns.length === 0 && (
-        <p className="text-[11px] text-stone-500 mt-2 font-medium">
+        <p className="text-[11px] text-neutral-500 mt-2 font-medium">
           You need earned views on a campaign before you can withdraw.
         </p>
       )}
 
       {withdrawals.length > 0 && (
         <div className="mt-6 text-left">
-          <span className="text-[10px] font-medium text-stone-500">Withdrawal History</span>
+          <span className="text-[10px] font-medium text-neutral-500">Withdrawal History</span>
           <div className="mt-2 space-y-2">
             {withdrawals.map((w) => (
-              <div key={w.id} className="bg-stone-50 border border-stone-200/50 rounded-xl p-3">
+              <div key={w.id} className="bg-neutral-50 border border-neutral-200/50 rounded-xl p-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-rethink font-medium text-stone-800 truncate">{w.campaignName}</span>
-                  <span className="font-rethink font-medium text-stone-900">₦{w.amount.toLocaleString()}</span>
+                  <span className="font-rethink font-medium text-neutral-800 truncate">{w.campaignName}</span>
+                  <span className="font-rethink font-medium text-neutral-900">₦{w.amount.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <span
@@ -341,11 +341,11 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                   >
                     {STATUS_LABEL[w.status] || w.status}
                   </span>
-                  <span className="text-[11px] text-stone-400 font-medium">
+                  <span className="text-[11px] text-neutral-400 font-medium">
                     {new Date(w.requestedAt).toLocaleDateString()}
                   </span>
                 </div>
-                {w.adminNotes && <p className="text-[11px] text-stone-500 mt-1 font-medium">{w.adminNotes}</p>}
+                {w.adminNotes && <p className="text-[11px] text-neutral-500 mt-1 font-medium">{w.adminNotes}</p>}
               </div>
             ))}
           </div>
@@ -353,10 +353,10 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
       )}
 
       {showWithdraw && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-stone-950/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-neutral-950/40 p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-left">
-            <h3 className="font-rethink font-medium text-lg text-stone-900 mb-4">Request Withdrawal</h3>
-            <label className="text-[11px] font-medium text-stone-500">Campaign</label>
+            <h3 className="font-rethink font-medium text-lg text-neutral-900 mb-4">Request Withdrawal</h3>
+            <label className="text-[11px] font-medium text-neutral-500">Campaign</label>
             <select
               value={withdrawCampaignId}
               onChange={(e) => {
@@ -364,7 +364,7 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
                 const c = pendingByCampaign.find((x) => x.id === e.target.value);
                 setWithdrawAmount(c ? String(c.earned) : "");
               }}
-              className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 outline-none focus:border-stone-400 mt-1 mb-3"
+              className="w-full bg-white border border-neutral-200 rounded-full px-4 py-2.5 text-sm font-rethink text-neutral-900 outline-none focus:border-neutral-400 mt-1 mb-3"
             >
               <option value="">Select campaign</option>
               {eligibleCampaigns.map((c) => (
@@ -374,32 +374,32 @@ export function WalletView({ profile, walletData }: WalletViewProps) {
               ))}
             </select>
             {selectedCampaign && (
-              <p className="text-[11px] text-stone-500 mb-3 font-medium">
+              <p className="text-[11px] text-neutral-500 mb-3 font-medium">
                 Earned: ₦{selectedCampaign.earned.toLocaleString()} · {selectedCampaign.views.toLocaleString()} /{" "}
                 {selectedCampaign.viewTarget.toLocaleString()} views
               </p>
             )}
-            <label className="text-[11px] font-medium text-stone-500">Amount (₦)</label>
+            <label className="text-[11px] font-medium text-neutral-500">Amount (₦)</label>
             <input
               value={withdrawAmount}
               onChange={(e) => setWithdrawAmount(e.target.value.replace(/\D/g, ""))}
               inputMode="numeric"
               placeholder="0"
-              className="w-full bg-white border border-stone-200 rounded-full px-4 py-2.5 text-sm font-rethink text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-400 mt-1 mb-3"
+              className="w-full bg-white border border-neutral-200 rounded-full px-4 py-2.5 text-sm font-rethink text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400 mt-1 mb-3"
             />
-            <p className="text-[11px] text-stone-500 mb-4 font-medium">
+            <p className="text-[11px] text-neutral-500 mb-4 font-medium">
               Withdrawals take up to 24 hours to process. Funds are sent to your saved bank account.
             </p>
             <button
               onClick={handleWithdraw}
               disabled={submitting}
-              className="w-full py-3 bg-[#FEB604] text-stone-950 font-semibold text-sm rounded-full font-rethink disabled:bg-stone-200 disabled:text-stone-400 mb-2"
+              className="w-full py-3 bg-[#FEB604] text-neutral-950 font-semibold text-sm rounded-full font-rethink disabled:bg-neutral-200 disabled:text-neutral-400 mb-2"
             >
               {submitting ? "Submitting…" : "Request Withdrawal"}
             </button>
             <button
               onClick={() => setShowWithdraw(false)}
-              className="w-full py-3 border border-stone-200 text-stone-600 font-semibold text-sm rounded-full font-rethink"
+              className="w-full py-3 border border-neutral-200 text-neutral-600 font-semibold text-sm rounded-full font-rethink"
             >
               Cancel
             </button>

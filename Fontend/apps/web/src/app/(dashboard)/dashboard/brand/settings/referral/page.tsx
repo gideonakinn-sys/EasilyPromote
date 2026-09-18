@@ -152,7 +152,7 @@ const DELIVERY_CHIPS: Record<WebhookDeliveryLog["result"], { label: string; clas
   test_ok: { label: "Test passed", className: "bg-[#EBF3FF] text-blue-800" },
   valid: { label: "Valid code", className: "bg-[#CBF5E5] text-[#176448]" },
   invalid: { label: "Invalid code", className: "bg-amber-50 text-amber-800" },
-  ignored: { label: "Duplicate", className: "bg-stone-100 text-stone-600" },
+  ignored: { label: "Duplicate", className: "bg-neutral-100 text-neutral-600" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700" },
 };
 
@@ -206,7 +206,7 @@ const KEY_STATUS_CHIPS: Record<WebhookKey["status"], string> = {
   active: "bg-[#CBF5E5] text-[#176448]",
   expiring: "bg-amber-50 text-amber-800",
   revoked: "bg-red-50 text-red-700",
-  expired: "bg-stone-100 text-stone-500",
+  expired: "bg-neutral-100 text-neutral-500",
 };
 
 function ReferralSettingsContent() {
@@ -452,22 +452,22 @@ function ReferralSettingsContent() {
   const verification = status?.verification;
 
   return (
-    <div className="min-h-dvh bg-stone-50 text-stone-900 font-rethink">
-      <header className="flex items-center gap-3 px-5 h-14 border-b border-stone-200 bg-stone-50">
+    <div className="min-h-dvh bg-neutral-50 text-neutral-900 font-rethink">
+      <header className="flex items-center gap-3 px-5 h-14 border-b border-neutral-200 bg-neutral-50">
         <Link
           href="/dashboard/brand"
           aria-label="Back to dashboard"
-          className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200 shrink-0"
+          className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200 shrink-0"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </Link>
-        <span className="font-medium text-sm text-stone-900">Referral tracking</span>
+        <span className="font-medium text-sm text-neutral-900">Referral tracking</span>
       </header>
 
       <main className="w-full max-w-[640px] mx-auto px-5 py-10 space-y-10">
         <div className="space-y-2">
-          <h1 className="font-semibold tracking-tighter text-2xl text-stone-900">Referral tracking</h1>
-          <p className="text-sm text-stone-500 font-medium leading-relaxed max-w-[60ch]">
+          <h1 className="font-semibold tracking-tighter text-2xl text-neutral-900">Referral tracking</h1>
+          <p className="text-sm text-neutral-500 font-medium leading-relaxed max-w-[60ch]">
             When someone converts with a creator&apos;s code, your server sends us one signed request. Set it up once
             and it works for every campaign. Send only the code, event and time — never names, emails or phone numbers.
           </p>
@@ -480,15 +480,15 @@ function ReferralSettingsContent() {
             <Skeleton className="h-64 rounded-2xl" />
           </div>
         ) : error ? (
-          <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-3 text-center">
-            <p className="font-medium text-sm text-stone-900">Referral settings didn&apos;t load</p>
-            <p className="text-xs text-stone-500 font-medium">{error}</p>
+          <div className="bg-white border border-neutral-200 rounded-2xl p-6 space-y-3 text-center">
+            <p className="font-medium text-sm text-neutral-900">Referral settings didn&apos;t load</p>
+            <p className="text-xs text-neutral-500 font-medium">{error}</p>
             <button
               onClick={() => {
                 setLoading(true);
                 load();
               }}
-              className="px-6 py-2.5 bg-stone-900 text-white text-sm font-medium rounded-full"
+              className="px-6 py-2.5 bg-neutral-900 text-white text-sm font-medium rounded-full"
             >
               Try again
             </button>
@@ -496,10 +496,10 @@ function ReferralSettingsContent() {
         ) : (
           <>
             {/* How it works */}
-            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="how-heading">
-              <h2 id="how-heading" className="font-semibold text-sm text-stone-900">How referral tracking works</h2>
+            <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4" aria-labelledby="how-heading">
+              <h2 id="how-heading" className="font-semibold text-sm text-neutral-900">How referral tracking works</h2>
               {status && (
-                <p className="bg-stone-50 rounded-xl px-3 py-2 text-xs text-stone-600 font-medium leading-relaxed">
+                <p className="bg-neutral-50 rounded-xl px-3 py-2 text-xs text-neutral-600 font-medium leading-relaxed">
                   {codeFormatText(status.codePrefix)}
                 </p>
               )}
@@ -507,28 +507,28 @@ function ReferralSettingsContent() {
                 {REFERRAL_HOW_IT_WORKS.map((item, index) => (
                   <li key={item.title} className="flex gap-3">
                     <span
-                      className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#1C1917] text-xs font-semibold flex items-center justify-center"
+                      className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#171717] text-xs font-semibold flex items-center justify-center"
                       aria-hidden="true"
                     >
                       {index + 1}
                     </span>
                     <div className="space-y-0.5">
-                      <p className="text-sm font-medium text-stone-900">{item.title}</p>
-                      <p className="text-xs text-stone-500 font-medium leading-relaxed">{item.body}</p>
+                      <p className="text-sm font-medium text-neutral-900">{item.title}</p>
+                      <p className="text-xs text-neutral-500 font-medium leading-relaxed">{item.body}</p>
                     </div>
                   </li>
                 ))}
               </ol>
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
-                  <p className="text-xs font-semibold text-stone-900">What you need</p>
-                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                <div className="bg-neutral-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-neutral-900">What you need</p>
+                  <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                     A developer adds two small requests to your app. &quot;Send to your developer&quot; below gives them everything.
                   </p>
                 </div>
-                <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
-                  <p className="text-xs font-semibold text-stone-900">What we never see</p>
-                  <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                <div className="bg-neutral-50 rounded-xl p-3 space-y-0.5">
+                  <p className="text-xs font-semibold text-neutral-900">What we never see</p>
+                  <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                     Names, emails or phone numbers. Only the code and what happened.
                   </p>
                 </div>
@@ -536,20 +536,20 @@ function ReferralSettingsContent() {
             </section>
 
             {/* Connection */}
-            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="connection-heading">
+            <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4" aria-labelledby="connection-heading">
               <div className="flex items-center justify-between gap-3">
-                <h2 id="connection-heading" className="font-semibold text-sm text-stone-900">Connect your app</h2>
+                <h2 id="connection-heading" className="font-semibold text-sm text-neutral-900">Connect your app</h2>
                 <span
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[11px] font-medium flex items-center gap-1.5",
-                    verified ? "bg-[#CBF5E5] text-[#176448]" : "bg-stone-100 text-stone-600"
+                    verified ? "bg-[#CBF5E5] text-[#176448]" : "bg-neutral-100 text-neutral-600"
                   )}
                 >
-                  <span className={cn("w-1.5 h-1.5 rounded-full", verified ? "bg-[#176448]" : "bg-stone-400")} />
+                  <span className={cn("w-1.5 h-1.5 rounded-full", verified ? "bg-[#176448]" : "bg-neutral-400")} />
                   {verified ? "Connected" : "Not connected yet"}
                 </span>
               </div>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 {verified
                   ? `Connected ${formatWhen(verification?.verifiedAt).toLowerCase()}. Last request ${formatWhen(status?.lastEventAt).toLowerCase()}.`
                   : 'Your app counts as connected once both requests below arrive from your server. The "Try a request" button on this page only checks your key.'}
@@ -561,25 +561,25 @@ function ReferralSettingsContent() {
                 <div className="space-y-1.5">
                   <button
                     onClick={() => copy(buildDeveloperMessage(status, sampleKeyId, sampleKey?.name), "Setup message")}
-                    className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold"
+                    className="px-4 py-2 bg-neutral-900 text-white rounded-full text-xs font-semibold"
                   >
                     Send to your developer
                   </button>
-                  <p className="text-[11px] text-stone-500 font-medium leading-relaxed">
+                  <p className="text-[11px] text-neutral-500 font-medium leading-relaxed">
                     Copies the steps, both URLs and your key ID. Share your secret with them privately.
                   </p>
                 </div>
               )}
 
               <div className="space-y-1.5">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Webhook URL</span>
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">Webhook URL</span>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 min-w-0 font-mono text-xs text-stone-900 bg-stone-100 px-3 py-2 rounded-lg break-all">
+                  <code className="flex-1 min-w-0 font-mono text-xs text-neutral-900 bg-neutral-100 px-3 py-2 rounded-lg break-all">
                     {webhookUrl}
                   </code>
                   <button
                     onClick={() => copy(webhookUrl, "Webhook URL")}
-                    className="shrink-0 px-3 py-2 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900"
+                    className="shrink-0 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900"
                   >
                     Copy
                   </button>
@@ -589,7 +589,7 @@ function ReferralSettingsContent() {
               <button
                 onClick={handleRefreshStatus}
                 disabled={refreshing}
-                className="text-xs font-semibold text-stone-900 underline underline-offset-2 disabled:opacity-50"
+                className="text-xs font-semibold text-neutral-900 underline underline-offset-2 disabled:opacity-50"
               >
                 {refreshing ? "Checking…" : "Check connection again"}
               </button>
@@ -599,40 +599,40 @@ function ReferralSettingsContent() {
             <section className="space-y-4" aria-labelledby="keys-heading">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <h2 id="keys-heading" className="font-semibold text-sm text-stone-900">Signing keys</h2>
-                  <p className="text-xs text-stone-500 font-medium">Up to {MAX_KEYS} at a time. Each request is signed with one.</p>
+                  <h2 id="keys-heading" className="font-semibold text-sm text-neutral-900">Signing keys</h2>
+                  <p className="text-xs text-neutral-500 font-medium">Up to {MAX_KEYS} at a time. Each request is signed with one.</p>
                 </div>
                 <button
                   onClick={() => openNameDialog({ mode: "create" })}
                   disabled={generating || keys.length >= MAX_KEYS}
-                  className="shrink-0 px-4 py-2 bg-[#FEB604] text-[#1C1917] rounded-full text-xs font-semibold border border-stone-100 disabled:bg-stone-200 disabled:text-stone-400"
+                  className="shrink-0 px-4 py-2 bg-[#FEB604] text-[#171717] rounded-full text-xs font-semibold border border-neutral-100 disabled:bg-neutral-200 disabled:text-neutral-400"
                 >
                   {generating ? "Generating…" : "Generate key"}
                 </button>
               </div>
 
               {keys.length === 0 ? (
-                <div className="border border-dashed border-stone-300 rounded-2xl p-6 text-center">
-                  <p className="text-sm font-medium text-stone-900">No keys yet</p>
-                  <p className="text-xs text-stone-500 font-medium mt-1">Generate one to start sending conversions.</p>
+                <div className="border border-dashed border-neutral-300 rounded-2xl p-6 text-center">
+                  <p className="text-sm font-medium text-neutral-900">No keys yet</p>
+                  <p className="text-xs text-neutral-500 font-medium mt-1">Generate one to start sending conversions.</p>
                 </div>
               ) : (
                 <ul className="space-y-3">
                   {keys.map((key) => (
-                    <li key={key.id} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+                    <li key={key.id} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-0.5">
-                          <p className={cn("text-sm font-medium break-words", key.name ? "text-stone-900" : "text-stone-400")}>
+                          <p className={cn("text-sm font-medium break-words", key.name ? "text-neutral-900" : "text-neutral-400")}>
                             {key.name || "Unnamed key"}
                           </p>
-                          <p className="font-mono text-xs text-stone-700 break-all">{key.keyId}</p>
-                          <p className="text-xs text-stone-500 font-medium">Secret ending …{key.last4}</p>
+                          <p className="font-mono text-xs text-neutral-700 break-all">{key.keyId}</p>
+                          <p className="text-xs text-neutral-500 font-medium">Secret ending …{key.last4}</p>
                         </div>
                         <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium capitalize", KEY_STATUS_CHIPS[key.status])}>
                           {key.status}
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-medium text-stone-500">
+                      <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-medium text-neutral-500">
                         <span>
                           Last used {formatWhen(key.lastUsedAt).toLowerCase()}
                           {key.status === "expiring" && key.expiresAt && ` · stops working ${formatWhen(key.expiresAt)}`}
@@ -641,7 +641,7 @@ function ReferralSettingsContent() {
                           <button
                             onClick={() => openNameDialog({ mode: "rename", key })}
                             disabled={busyKeyId === key.id}
-                            className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
+                            className="px-3 py-1.5 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 disabled:opacity-50"
                           >
                             Rename
                           </button>
@@ -649,7 +649,7 @@ function ReferralSettingsContent() {
                             <button
                               onClick={() => setConfirmAction({ type: "rotate", key })}
                               disabled={busyKeyId === key.id || keys.length >= MAX_KEYS}
-                              className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
+                              className="px-3 py-1.5 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 disabled:opacity-50"
                             >
                               Rotate
                             </button>
@@ -670,10 +670,10 @@ function ReferralSettingsContent() {
             </section>
 
             {/* Test sender */}
-            <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4" aria-labelledby="test-heading">
+            <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4" aria-labelledby="test-heading">
               <div className="space-y-1">
-                <h2 id="test-heading" className="font-semibold text-sm text-stone-900">Try a request</h2>
-                <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                <h2 id="test-heading" className="font-semibold text-sm text-neutral-900">Try a request</h2>
+                <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                   We sign a request with your newest key and run it through the real checks. Nothing is recorded, and it
                   doesn&apos;t connect your app: that needs requests from your own server.
                 </p>
@@ -694,14 +694,14 @@ function ReferralSettingsContent() {
                     }}
                     className={cn(
                       "px-4 py-1.5 rounded-full text-xs font-medium transition-colors",
-                      testType === value ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+                      testType === value ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"
                     )}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 {testType === "validate"
                   ? "What your sign-up flow calls when a user enters a code."
                   : "A signed conversion marked as a test. Add a code to see whether it would match."}
@@ -717,18 +717,18 @@ function ReferralSettingsContent() {
                   placeholder={testType === "validate" ? `Code to check, e.g. ${status?.codePrefix || "KUDA"}-TUNDE` : "Code to check (optional)"}
                   autoComplete="off"
                   spellCheck={false}
-                  className="flex-1 min-w-[180px] px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm font-mono text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
+                  className="flex-1 min-w-[180px] px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-sm font-mono text-neutral-900 placeholder-neutral-300 focus:outline-none focus:border-neutral-400"
                 />
                 <button
                   type="submit"
                   disabled={sendingTest || keys.length === 0 || (testType === "validate" && !testCode.trim())}
-                  className="px-5 py-2.5 bg-stone-900 text-white rounded-full text-xs font-semibold disabled:bg-stone-200 disabled:text-stone-400"
+                  className="px-5 py-2.5 bg-neutral-900 text-white rounded-full text-xs font-semibold disabled:bg-neutral-200 disabled:text-neutral-400"
                 >
                   {sendingTest ? "Sending…" : testType === "validate" ? "Check code" : "Send test event"}
                 </button>
               </form>
               {keys.length === 0 && (
-                <p className="text-xs text-stone-500 font-medium">Generate a key first — test events are signed with it.</p>
+                <p className="text-xs text-neutral-500 font-medium">Generate a key first — test events are signed with it.</p>
               )}
               {testResult && (() => {
                 const outcome = describeTestResult(testResult);
@@ -744,11 +744,11 @@ function ReferralSettingsContent() {
                       {outcome.message}
                     </p>
                     <details>
-                      <summary className="cursor-pointer text-xs font-semibold text-stone-900">
+                      <summary className="cursor-pointer text-xs font-semibold text-neutral-900">
                         Show the request and response
                       </summary>
-                      <div className="mt-2 overflow-x-auto bg-stone-900 rounded-2xl">
-                        <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{formatExchange(testResult)}</pre>
+                      <div className="mt-2 overflow-x-auto bg-neutral-900 rounded-2xl">
+                        <pre className="p-4 text-xs leading-relaxed text-neutral-100 font-mono">{formatExchange(testResult)}</pre>
                       </div>
                     </details>
                   </div>
@@ -760,27 +760,27 @@ function ReferralSettingsContent() {
             <section className="space-y-4" aria-labelledby="events-heading">
               <div className="flex items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <h2 id="events-heading" className="font-semibold text-sm text-stone-900">Recent requests</h2>
-                  <p className="text-xs text-stone-500 font-medium">Every signed request we received in the last 30 days.</p>
+                  <h2 id="events-heading" className="font-semibold text-sm text-neutral-900">Recent requests</h2>
+                  <p className="text-xs text-neutral-500 font-medium">Every signed request we received in the last 30 days.</p>
                 </div>
                 <button
                   onClick={handleRefreshEvents}
                   disabled={refreshingEvents}
-                  className="shrink-0 px-4 py-2 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900 disabled:opacity-50"
+                  className="shrink-0 px-4 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 disabled:opacity-50"
                 >
                   {refreshingEvents ? "Refreshing…" : "Refresh"}
                 </button>
               </div>
 
               {events.length === 0 ? (
-                <div className="border border-dashed border-stone-300 rounded-2xl p-6 text-center">
-                  <p className="text-sm font-medium text-stone-900">No requests yet</p>
-                  <p className="text-xs text-stone-500 font-medium mt-1">
+                <div className="border border-dashed border-neutral-300 rounded-2xl p-6 text-center">
+                  <p className="text-sm font-medium text-neutral-900">No requests yet</p>
+                  <p className="text-xs text-neutral-500 font-medium mt-1">
                     Test events and real conversions will appear here.
                   </p>
                 </div>
               ) : (
-                <ul className="bg-white border border-stone-200 rounded-2xl divide-y divide-stone-100">
+                <ul className="bg-white border border-neutral-200 rounded-2xl divide-y divide-neutral-100">
                   {events.map((event) => {
                     const chip = DELIVERY_CHIPS[event.result] || DELIVERY_CHIPS.rejected;
                     return (
@@ -790,11 +790,11 @@ function ReferralSettingsContent() {
                             <span className={cn("shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium", chip.className)}>
                               {event.statusCode} · {chip.label}
                             </span>
-                            {event.code && <code className="min-w-0 truncate font-mono text-xs text-stone-900">{event.code}</code>}
+                            {event.code && <code className="min-w-0 truncate font-mono text-xs text-neutral-900">{event.code}</code>}
                           </div>
-                          <span className="shrink-0 text-xs font-medium text-stone-500">{formatWhen(event.createdAt)}</span>
+                          <span className="shrink-0 text-xs font-medium text-neutral-500">{formatWhen(event.createdAt)}</span>
                         </div>
-                        <p className="text-xs font-medium text-stone-500 break-words">
+                        <p className="text-xs font-medium text-neutral-500 break-words">
                           {event.source === "dashboard_test"
                             ? "Dashboard test"
                             : event.source === "code_check"
@@ -817,8 +817,8 @@ function ReferralSettingsContent() {
             {/* Integration guide */}
             <section className="space-y-6" aria-labelledby="guide-heading">
               <div className="space-y-1">
-                <h2 id="guide-heading" className="font-semibold text-sm text-stone-900">Send a conversion</h2>
-                <p className="text-xs text-stone-500 font-medium leading-relaxed max-w-[60ch]">
+                <h2 id="guide-heading" className="font-semibold text-sm text-neutral-900">Send a conversion</h2>
+                <p className="text-xs text-neutral-500 font-medium leading-relaxed max-w-[60ch]">
                   Call this from your server whenever someone converts with a partner code. Store the key ID and secret
                   as environment variables, never in your app or website code.
                 </p>
@@ -826,32 +826,32 @@ function ReferralSettingsContent() {
                   href={DEVELOPER_DOCS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-block text-xs font-semibold text-stone-900 underline underline-offset-2"
+                  className="inline-block text-xs font-semibold text-neutral-900 underline underline-offset-2"
                 >
                   Read the full developer docs
                 </a>
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Request</span>
-                <div className="overflow-x-auto bg-stone-900 rounded-2xl">
-                  <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{sampleRequest}</pre>
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">Request</span>
+                <div className="overflow-x-auto bg-neutral-900 rounded-2xl">
+                  <pre className="p-4 text-xs leading-relaxed text-neutral-100 font-mono">{sampleRequest}</pre>
                 </div>
-                <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                  <code className="font-mono text-stone-900">event</code> is one of install, signup, lead, purchase, deposit or
-                  custom. <code className="font-mono text-stone-900">event_id</code> must be unique per conversion — resending
+                <p className="text-xs text-neutral-500 font-medium leading-relaxed">
+                  <code className="font-mono text-neutral-900">event</code> is one of install, signup, lead, purchase, deposit or
+                  custom. <code className="font-mono text-neutral-900">event_id</code> must be unique per conversion — resending
                   it is safe and never counts twice.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Check a code at sign-up</span>
-                <div className="overflow-x-auto bg-stone-900 rounded-2xl">
-                  <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{sampleValidate}</pre>
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">Check a code at sign-up</span>
+                <div className="overflow-x-auto bg-neutral-900 rounded-2xl">
+                  <pre className="p-4 text-xs leading-relaxed text-neutral-100 font-mono">{sampleValidate}</pre>
                 </div>
-                <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                   Call this when a user enters a referral code, signed the same way. Accept the code when the answer is{" "}
-                  <code className="font-mono text-stone-900">{'"valid": true'}</code>. There&apos;s nothing to load or
+                  <code className="font-mono text-neutral-900">{'"valid": true'}</code>. There&apos;s nothing to load or
                   sync — new creators&apos; codes work as soon as they join.
                 </p>
               </div>
@@ -866,7 +866,7 @@ function ReferralSettingsContent() {
                       onClick={() => setLanguage(lang)}
                       className={cn(
                         "px-4 py-1.5 rounded-full text-xs font-medium transition-colors",
-                        language === lang ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+                        language === lang ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"
                       )}
                     >
                       {SNIPPET_LABELS[lang]}
@@ -874,13 +874,13 @@ function ReferralSettingsContent() {
                   ))}
                   <button
                     onClick={() => copy(buildSnippet(language, webhookUrl), "Code")}
-                    className="ml-auto px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-stone-900 border border-stone-200"
+                    className="ml-auto px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-neutral-900 border border-neutral-200"
                   >
                     Copy code
                   </button>
                 </div>
-                <div className="overflow-x-auto bg-stone-900 rounded-2xl">
-                  <pre className="p-4 text-xs leading-relaxed text-stone-100 font-mono">{buildSnippet(language, webhookUrl)}</pre>
+                <div className="overflow-x-auto bg-neutral-900 rounded-2xl">
+                  <pre className="p-4 text-xs leading-relaxed text-neutral-100 font-mono">{buildSnippet(language, webhookUrl)}</pre>
                 </div>
               </div>
 
@@ -894,12 +894,12 @@ function ReferralSettingsContent() {
               </div>
 
               <div className="space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">Responses</span>
-                <div className="bg-white border border-stone-200 rounded-2xl divide-y divide-stone-100">
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">Responses</span>
+                <div className="bg-white border border-neutral-200 rounded-2xl divide-y divide-neutral-100">
                   {RESPONSES.map((row) => (
                     <div key={row.status} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-4 py-3">
-                      <code className="shrink-0 sm:w-28 font-mono text-xs text-stone-900">{row.status}</code>
-                      <span className="text-xs text-stone-500 font-medium leading-relaxed">{row.meaning}</span>
+                      <code className="shrink-0 sm:w-28 font-mono text-xs text-neutral-900">{row.status}</code>
+                      <span className="text-xs text-neutral-500 font-medium leading-relaxed">{row.meaning}</span>
                     </div>
                   ))}
                 </div>
@@ -911,7 +911,7 @@ function ReferralSettingsContent() {
 
       {nameDialog && (
         <div
-          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-5"
           onClick={() => !savingName && setNameDialog(null)}
         >
           <form
@@ -923,17 +923,17 @@ function ReferralSettingsContent() {
             onSubmit={handleNameSubmit}
           >
             <div className="space-y-1">
-              <h2 id="key-name-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+              <h2 id="key-name-heading" className="font-semibold text-base text-neutral-900 tracking-tight">
                 {nameDialog.mode === "create" ? "Name your key" : "Rename key"}
               </h2>
-              <p className={cn("text-xs text-stone-500 font-medium leading-relaxed", nameDialog.mode === "rename" && "font-mono break-all")}>
+              <p className={cn("text-xs text-neutral-500 font-medium leading-relaxed", nameDialog.mode === "rename" && "font-mono break-all")}>
                 {nameDialog.mode === "create"
                   ? "Optional. A name helps you tell keys apart, like Live app or Staging. Every key works for all your campaigns."
                   : nameDialog.key.keyId}
               </p>
             </div>
             <div className="space-y-1">
-              <label htmlFor="key-name" className="text-xs font-medium text-stone-500 block">
+              <label htmlFor="key-name" className="text-xs font-medium text-neutral-500 block">
                 Key name
               </label>
               <input
@@ -943,9 +943,9 @@ function ReferralSettingsContent() {
                 maxLength={MAX_KEY_NAME}
                 onChange={(e) => setNameInput(e.target.value)}
                 placeholder="Live app"
-                className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400"
+                className="w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:border-neutral-400"
               />
-              <p className="text-[11px] text-stone-400 font-medium text-right tabular-nums">
+              <p className="text-[11px] text-neutral-400 font-medium text-right tabular-nums">
                 {nameInput.length}/{MAX_KEY_NAME}
               </p>
             </div>
@@ -954,14 +954,14 @@ function ReferralSettingsContent() {
                 type="button"
                 onClick={() => setNameDialog(null)}
                 disabled={savingName}
-                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full disabled:opacity-50"
+                className="flex-1 py-3 bg-white border border-neutral-200 text-neutral-900 font-semibold text-sm rounded-full disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={savingName}
-                className="flex-1 py-3 bg-stone-900 text-white font-semibold text-sm rounded-full disabled:opacity-50"
+                className="flex-1 py-3 bg-neutral-900 text-white font-semibold text-sm rounded-full disabled:opacity-50"
               >
                 {nameDialog.mode === "create" ? "Generate key" : savingName ? "Saving…" : "Save name"}
               </button>
@@ -972,7 +972,7 @@ function ReferralSettingsContent() {
 
       {confirmAction && (
         <div
-          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-5"
           onClick={() => setConfirmAction(null)}
         >
           <div
@@ -984,22 +984,22 @@ function ReferralSettingsContent() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1">
-              <h2 id="confirm-key-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+              <h2 id="confirm-key-heading" className="font-semibold text-base text-neutral-900 tracking-tight">
                 {confirmAction.type === "rotate" ? "Rotate this key?" : "Revoke this key?"}
               </h2>
-              <p id="confirm-key-body" className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p id="confirm-key-body" className="text-xs text-neutral-500 font-medium leading-relaxed">
                 {confirmAction.type === "rotate"
                   ? "We'll create a new key and secret. The current key keeps working for 24 hours while you swap in the new one."
                   : "Requests signed with this key will be rejected immediately. This can't be undone."}
               </p>
             </div>
 
-            <div className="bg-stone-100 px-3 py-2 rounded-lg space-y-0.5">
-              {confirmAction.key.name && <p className="text-xs font-medium text-stone-900 break-words">{confirmAction.key.name}</p>}
-              <code className="block font-mono text-xs text-stone-900 break-all">{confirmAction.key.keyId}</code>
+            <div className="bg-neutral-100 px-3 py-2 rounded-lg space-y-0.5">
+              {confirmAction.key.name && <p className="text-xs font-medium text-neutral-900 break-words">{confirmAction.key.name}</p>}
+              <code className="block font-mono text-xs text-neutral-900 break-all">{confirmAction.key.keyId}</code>
             </div>
             {confirmAction.type === "rotate" && confirmAction.key.name && (
-              <p className="text-xs text-stone-500 font-medium">The new key keeps the name &ldquo;{confirmAction.key.name}&rdquo;.</p>
+              <p className="text-xs text-neutral-500 font-medium">The new key keeps the name &ldquo;{confirmAction.key.name}&rdquo;.</p>
             )}
 
             <div className="flex gap-2">
@@ -1007,7 +1007,7 @@ function ReferralSettingsContent() {
                 ref={cancelConfirmRef}
                 type="button"
                 onClick={() => setConfirmAction(null)}
-                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full"
+                className="flex-1 py-3 bg-white border border-neutral-200 text-neutral-900 font-semibold text-sm rounded-full"
               >
                 Cancel
               </button>
@@ -1016,7 +1016,7 @@ function ReferralSettingsContent() {
                 onClick={handleConfirmAction}
                 className={cn(
                   "flex-1 py-3 font-semibold text-sm rounded-full text-white",
-                  confirmAction.type === "rotate" ? "bg-stone-900" : "bg-red-600"
+                  confirmAction.type === "rotate" ? "bg-neutral-900" : "bg-red-600"
                 )}
               >
                 {confirmAction.type === "rotate" ? "Rotate key" : "Revoke key"}
@@ -1028,18 +1028,18 @@ function ReferralSettingsContent() {
 
       {revealed && (
         <div
-          className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-5"
+          className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="secret-heading"
         >
           <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4">
             <div className="space-y-1">
-              <h2 id="secret-heading" className="font-semibold text-base text-stone-900 tracking-tight">
+              <h2 id="secret-heading" className="font-semibold text-base text-neutral-900 tracking-tight">
                 Copy your secret key
               </h2>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
-                {revealed.name && <span className="block font-medium text-stone-900 mb-1">{revealed.name}</span>}
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
+                {revealed.name && <span className="block font-medium text-neutral-900 mb-1">{revealed.name}</span>}
                 This is the only time you&apos;ll see it. Store it in your server&apos;s environment variables.
                 {revealed.rotated && " Your previous key keeps working for 24 hours."}
               </p>
@@ -1047,28 +1047,28 @@ function ReferralSettingsContent() {
 
             <div className="space-y-3">
               <div className="space-y-1">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">EP_KEY_ID</span>
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">EP_KEY_ID</span>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 min-w-0 font-mono text-xs text-stone-900 bg-stone-100 px-3 py-2 rounded-lg break-all">
+                  <code className="flex-1 min-w-0 font-mono text-xs text-neutral-900 bg-neutral-100 px-3 py-2 rounded-lg break-all">
                     {revealed.keyId}
                   </code>
                   <button
                     onClick={() => copy(revealed.keyId, "Key ID")}
-                    className="shrink-0 px-3 py-2 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900"
+                    className="shrink-0 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900"
                   >
                     Copy
                   </button>
                 </div>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-medium text-stone-500 block uppercase tracking-wider">EP_WEBHOOK_SECRET</span>
+                <span className="text-[10px] font-medium text-neutral-500 block uppercase tracking-wider">EP_WEBHOOK_SECRET</span>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 min-w-0 font-mono text-xs text-stone-900 bg-stone-100 px-3 py-2 rounded-lg break-all">
+                  <code className="flex-1 min-w-0 font-mono text-xs text-neutral-900 bg-neutral-100 px-3 py-2 rounded-lg break-all">
                     {revealed.secret}
                   </code>
                   <button
                     onClick={() => copy(revealed.secret, "Secret")}
-                    className="shrink-0 px-3 py-2 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-900"
+                    className="shrink-0 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900"
                   >
                     Copy
                   </button>
@@ -1076,13 +1076,13 @@ function ReferralSettingsContent() {
               </div>
             </div>
 
-            <label htmlFor="secret-saved" className="flex items-center gap-2 text-xs font-medium text-stone-700">
+            <label htmlFor="secret-saved" className="flex items-center gap-2 text-xs font-medium text-neutral-700">
               <input
                 id="secret-saved"
                 type="checkbox"
                 checked={savedConfirmed}
                 onChange={(e) => setSavedConfirmed(e.target.checked)}
-                className="w-4 h-4 accent-stone-900"
+                className="w-4 h-4 accent-neutral-900"
               />
               I&apos;ve stored this secret somewhere safe
             </label>
@@ -1090,7 +1090,7 @@ function ReferralSettingsContent() {
             <button
               onClick={() => setRevealed(null)}
               disabled={!savedConfirmed}
-              className="w-full py-3 bg-stone-900 text-white font-semibold text-sm rounded-full disabled:bg-stone-200 disabled:text-stone-400"
+              className="w-full py-3 bg-neutral-900 text-white font-semibold text-sm rounded-full disabled:bg-neutral-200 disabled:text-neutral-400"
             >
               Done
             </button>

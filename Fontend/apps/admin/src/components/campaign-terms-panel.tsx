@@ -88,8 +88,8 @@ export function CampaignTermsPanel({
     <div className="space-y-4">
       {isClicks && (
         <div>
-          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Destination Link</h4>
-          <div className="p-4 bg-white border border-stone-200 rounded-xl">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Destination Link</h4>
+          <div className="p-4 bg-white border border-neutral-200 rounded-xl">
             {destinationUrl ? (
               <a href={destinationUrl} target="_blank" rel="noopener noreferrer nofollow" className="text-sm text-blue-600 hover:underline break-all">
                 {destinationUrl}
@@ -97,17 +97,17 @@ export function CampaignTermsPanel({
             ) : (
               <span className="text-sm text-amber-700">No destination link set</span>
             )}
-            <p className="text-[11px] text-stone-400 mt-1">Creators&apos; tracked links (/r/&lt;campaign&gt;/&lt;code&gt;) only redirect here.</p>
+            <p className="text-[11px] text-neutral-400 mt-1">Creators&apos; tracked links (/r/&lt;campaign&gt;/&lt;code&gt;) only redirect here.</p>
           </div>
         </div>
       )}
 
       {usageRights && (
         <div>
-          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">
             Usage Rights · {custom ? `Custom terms v${usageRights.version ?? 1}` : "Standard licence"}
           </h4>
-          <div className="p-4 bg-white border border-stone-200 rounded-xl space-y-3">
+          <div className="p-4 bg-white border border-neutral-200 rounded-xl space-y-3">
             {custom ? (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -118,28 +118,28 @@ export function CampaignTermsPanel({
                     ["Territories", terms.territories?.length ? terms.territories.join(", ") : "Worldwide"],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <span className="text-[10px] uppercase font-bold text-stone-400 block">{label}</span>
-                      <span className="text-sm font-semibold text-stone-900 break-words">{value}</span>
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">{label}</span>
+                      <span className="text-sm font-semibold text-neutral-900 break-words">{value}</span>
                     </div>
                   ))}
                 </div>
                 {terms.additionalTerms && (
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Additional Terms</span>
-                    <p className="text-xs text-stone-700 whitespace-pre-line break-words">{terms.additionalTerms}</p>
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block">Additional Terms</span>
+                    <p className="text-xs text-neutral-700 whitespace-pre-line break-words">{terms.additionalTerms}</p>
                   </div>
                 )}
-                <div className="pt-3 border-t border-stone-100">
-                  <span className="text-[10px] uppercase font-bold text-stone-400 block mb-1">Accepted By ({accepted.length})</span>
+                <div className="pt-3 border-t border-neutral-100">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">Accepted By ({accepted.length})</span>
                   {accepted.length === 0 ? (
-                    <p className="text-[11px] text-stone-400">No creator has accepted these terms yet.</p>
+                    <p className="text-[11px] text-neutral-400">No creator has accepted these terms yet.</p>
                   ) : (
                     <ul className="space-y-1">
                       {accepted.map((slot, index) => {
                         const creator = slot.creatorId && typeof slot.creatorId === "object" ? slot.creatorId : null;
                         return (
                           <li key={slot._id || index} className="flex items-center justify-between gap-3 text-xs">
-                            <span className="text-stone-800 font-semibold truncate">{creator?.name || creator?.email || "Creator"}</span>
+                            <span className="text-neutral-800 font-semibold truncate">{creator?.name || creator?.email || "Creator"}</span>
                             <TermsAcceptedText accepted={slot.usageRightsAccepted} />
                           </li>
                         );
@@ -149,7 +149,7 @@ export function CampaignTermsPanel({
                 </div>
               </>
             ) : (
-              <p className="text-xs text-stone-600">
+              <p className="text-xs text-neutral-600">
                 Perpetual, non-exclusive licence to use the content on the brand&apos;s own channels, organic and paid social. No
                 separate acceptance needed.
               </p>

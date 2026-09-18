@@ -146,10 +146,10 @@ export function StepBrief({ data, update }: StepBriefProps) {
       <Field label="Brief Document" hint="Optional. Attach a PDF if you have a longer brief.">
         <input ref={scriptInputRef} type="file" accept=".pdf" onChange={handleScriptUpload} className="hidden" />
         {data.scriptFileName ? (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-stone-100 rounded-full">
-            <HugeiconsIcon icon={File01Icon} size={14} className="text-stone-500" />
-            <span className="text-xs font-medium text-stone-600 font-rethink">{data.scriptFileName}</span>
-            <button type="button" onClick={() => update({ scriptUrl: "", scriptFileName: "" })} aria-label="Remove document" className="text-stone-400 ml-0.5">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-full">
+            <HugeiconsIcon icon={File01Icon} size={14} className="text-neutral-500" />
+            <span className="text-xs font-medium text-neutral-600 font-rethink">{data.scriptFileName}</span>
+            <button type="button" onClick={() => update({ scriptUrl: "", scriptFileName: "" })} aria-label="Remove document" className="text-neutral-400 ml-0.5">
               <HugeiconsIcon icon={Delete01Icon} size={12} />
             </button>
           </div>
@@ -158,9 +158,9 @@ export function StepBrief({ data, update }: StepBriefProps) {
             type="button"
             disabled={uploading}
             onClick={() => scriptInputRef.current?.click()}
-            className="w-full flex flex-col items-center justify-center gap-2 py-6 bg-white border-2 border-dashed border-stone-300 rounded-2xl text-sm font-medium text-stone-500 font-rethink disabled:opacity-60"
+            className="w-full flex flex-col items-center justify-center gap-2 py-6 bg-white border-2 border-dashed border-neutral-300 rounded-2xl text-sm font-medium text-neutral-500 font-rethink disabled:opacity-60"
           >
-            <HugeiconsIcon icon={CloudUploadIcon} size={24} className="text-stone-400" />
+            <HugeiconsIcon icon={CloudUploadIcon} size={24} className="text-neutral-400" />
             <span>{uploading ? "Uploading…" : "Attach PDF"}</span>
           </button>
         )}

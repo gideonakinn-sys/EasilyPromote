@@ -39,27 +39,27 @@ export function DeleteUserDialog({ userId, userName, role, onClose, onDeleted }:
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4 font-rethink"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4 font-rethink"
       onClick={() => !submitting && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-user-heading"
-        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-5"
+        className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-md w-full space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="space-y-2">
-          <h3 id="delete-user-heading" className="font-medium text-lg text-stone-900">
+          <h3 id="delete-user-heading" className="font-medium text-lg text-neutral-900">
             Delete &ldquo;{userName}&rdquo;?
           </h3>
-          <ul className="space-y-1.5 text-xs text-stone-600 font-medium leading-relaxed list-disc pl-4">
+          <ul className="space-y-1.5 text-xs text-neutral-600 font-medium leading-relaxed list-disc pl-4">
             <li>The account, profile and connected social accounts are removed.</li>
             <li>Payments, campaigns and content stay on record with personal details removed, so refunds, pay owed and the books aren&apos;t affected.</li>
             {role === "creator" && <li>Places with no delivered work are offered to other creators, and pending withdrawal requests are cancelled.</li>}
             {role === "business" && <li>A brand with active campaigns can&apos;t be deleted until they&apos;re completed or cancelled.</li>}
           </ul>
-          <p className="text-xs text-stone-500 font-medium">This can&apos;t be undone.</p>
+          <p className="text-xs text-neutral-500 font-medium">This can&apos;t be undone.</p>
           {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
         </div>
         <div className="flex gap-2">
@@ -67,7 +67,7 @@ export function DeleteUserDialog({ userId, userName, role, onClose, onDeleted }:
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-full border border-stone-200 bg-white px-4 py-2.5 text-xs font-semibold text-stone-700 disabled:opacity-50"
+            className="flex-1 rounded-full border border-neutral-200 bg-white px-4 py-2.5 text-xs font-semibold text-neutral-700 disabled:opacity-50"
           >
             Cancel
           </button>

@@ -33,9 +33,9 @@ const MAX_PORTFOLIO = 12;
 
 
 const inputClass =
-  "w-full px-4 py-2.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 placeholder-stone-400 focus:outline-none focus:border-stone-300 font-rethink";
-const primaryButton = "px-5 py-2.5 bg-[#FEB604] text-stone-950 font-semibold text-xs rounded-full font-rethink disabled:opacity-50";
-const secondaryButton = "px-4 py-2 bg-white border border-stone-200 text-stone-900 font-semibold text-xs rounded-full font-rethink disabled:opacity-50";
+  "w-full px-4 py-2.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 placeholder-neutral-400 focus:outline-none focus:border-neutral-300 font-rethink";
+const primaryButton = "px-5 py-2.5 bg-[#FEB604] text-neutral-950 font-semibold text-xs rounded-full font-rethink disabled:opacity-50";
+const secondaryButton = "px-4 py-2 bg-white border border-neutral-200 text-neutral-900 font-semibold text-xs rounded-full font-rethink disabled:opacity-50";
 
 interface SectionShellProps {
   title: string;
@@ -46,13 +46,13 @@ interface SectionShellProps {
 
 const SectionShell = React.forwardRef<HTMLElement, SectionShellProps>(function SectionShell({ title, hint, children, badge }, ref) {
   return (
-    <section ref={ref} data-reveal className="scroll-mt-24 bg-stone-50 border border-stone-200 rounded-3xl p-6 font-rethink">
+    <section ref={ref} data-reveal className="scroll-mt-24 bg-neutral-50 border border-neutral-200 rounded-3xl p-6 font-rethink">
       <div className="mb-5">
         <div className="flex items-center gap-2">
-          <h3 className="font-rethink font-medium text-base tracking-tighter text-stone-900">{title}</h3>
+          <h3 className="font-rethink font-medium text-base tracking-tighter text-neutral-900">{title}</h3>
           {badge}
         </div>
-        {hint && <p className="text-xs font-medium text-stone-500 mt-1 tracking-[-0.01em]">{hint}</p>}
+        {hint && <p className="text-xs font-medium text-neutral-500 mt-1 tracking-[-0.01em]">{hint}</p>}
       </div>
       {children}
     </section>
@@ -95,7 +95,7 @@ export function ProfileStandingSection({ profile }: ProfileStandingSectionProps)
       }
     >
       {!profile.verified && (
-        <p className="text-xs font-medium text-stone-500 mb-4 leading-relaxed">
+        <p className="text-xs font-medium text-neutral-500 mb-4 leading-relaxed">
           Not verified yet. Connect a social account and our team will check it&apos;s you.
         </p>
       )}
@@ -104,12 +104,12 @@ export function ProfileStandingSection({ profile }: ProfileStandingSectionProps)
       </div>
       <div className="flex flex-wrap gap-2 mb-5">
         {(profile.badges || []).length === 0 ? (
-          <span className="text-xs font-medium text-stone-400">
+          <span className="text-xs font-medium text-neutral-400">
             No badges yet. You earn them from finished campaigns, verified results and brand ratings.
           </span>
         ) : (
           (profile.badges || []).map((badge) => (
-            <span key={badge} className="px-3 py-1 rounded-full bg-white border border-stone-200 text-xs font-medium text-stone-700">
+            <span key={badge} className="px-3 py-1 rounded-full bg-white border border-neutral-200 text-xs font-medium text-neutral-700">
               {BADGE_LABELS[badge] || badge}
             </span>
           ))
@@ -117,9 +117,9 @@ export function ProfileStandingSection({ profile }: ProfileStandingSectionProps)
       </div>
       <div className="grid grid-cols-2 gap-3">
         {rows.map(([label, value]) => (
-          <div key={label} className="bg-white border border-stone-200 rounded-2xl px-4 py-3">
-            <p className="text-[11px] font-medium text-stone-500">{label}</p>
-            <p className="text-sm font-medium text-stone-900 mt-0.5">{value}</p>
+          <div key={label} className="bg-white border border-neutral-200 rounded-2xl px-4 py-3">
+            <p className="text-[11px] font-medium text-neutral-500">{label}</p>
+            <p className="text-sm font-medium text-neutral-900 mt-0.5">{value}</p>
           </div>
         ))}
       </div>
@@ -169,31 +169,31 @@ export function PublicDetailsSection({ profile, onUpdated }: ProfileSectionProps
     <SectionShell title="About you" hint="Shown to brands on your profile.">
       <div className="space-y-3.5">
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Bio</label>
+          <label className="block text-xs font-medium text-neutral-500 mb-1">Bio</label>
           <textarea
             value={bio}
             maxLength={300}
             rows={3}
             onChange={(e) => setBio(e.target.value)}
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink resize-none"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink resize-none"
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">City</label>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">City</label>
             <input value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">State</label>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">State</label>
             <input value={state} onChange={(e) => setState(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">Country</label>
+            <label className="block text-xs font-medium text-neutral-500 mb-1">Country</label>
             <input value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass} />
           </div>
         </div>
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-2">Categories</label>
+          <label className="block text-xs font-medium text-neutral-500 mb-2">Categories</label>
           <div className="flex flex-wrap gap-2">
             {CREATOR_CATEGORIES.map((category) => {
               const selected = categories.includes(category);
@@ -204,7 +204,7 @@ export function PublicDetailsSection({ profile, onUpdated }: ProfileSectionProps
                   onClick={() => toggleCategory(category)}
                   className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-medium border font-rethink",
-                    selected ? "bg-stone-950 text-white border-stone-950" : "bg-white text-stone-600 border-stone-200"
+                    selected ? "bg-neutral-950 text-white border-neutral-950" : "bg-white text-neutral-600 border-neutral-200"
                   )}
                 >
                   {category}
@@ -261,24 +261,24 @@ export function PrivateDetailsSection({ profile, onUpdated, email }: PrivateDeta
       title="Private details"
       hint="Only you and the EasilyPromote team see these. Brands never do."
       badge={
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 text-[10px] font-medium">
-          <HugeiconsIcon icon={SquareLock02Icon} size={12} className="text-stone-500" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600 text-[10px] font-medium">
+          <HugeiconsIcon icon={SquareLock02Icon} size={12} className="text-neutral-500" />
           Not shown to brands
         </span>
       }
     >
       <div className="space-y-3.5">
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Legal name</label>
+          <label className="block text-xs font-medium text-neutral-500 mb-1">Legal name</label>
           <input value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="As it appears on your ID" className={inputClass} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Phone number</label>
+          <label className="block text-xs font-medium text-neutral-500 mb-1">Phone number</label>
           <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Email address</label>
-          <input type="email" value={email} readOnly className={cn(inputClass, "bg-stone-100 text-stone-500")} />
+          <label className="block text-xs font-medium text-neutral-500 mb-1">Email address</label>
+          <input type="email" value={email} readOnly className={cn(inputClass, "bg-neutral-100 text-neutral-500")} />
         </div>
         <div className="flex justify-end">
           <button type="button" onClick={save} disabled={saving} className={primaryButton}>
@@ -347,14 +347,14 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
     <SectionShell title="Followers" hint="How many followers each account has. Some campaigns need a minimum.">
       <ul className="space-y-3">
         {accounts.map((account) => (
-          <li key={account.platform} className="flex items-center gap-3 bg-white border border-stone-200/60 rounded-2xl px-4 py-3">
+          <li key={account.platform} className="flex items-center gap-3 bg-white border border-neutral-200/60 rounded-2xl px-4 py-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-stone-900">{platformLabel(account.platform)}</p>
-              <p className="text-xs font-medium text-stone-500 truncate">{account.handle}</p>
+              <p className="text-sm font-medium text-neutral-900">{platformLabel(account.platform)}</p>
+              <p className="text-xs font-medium text-neutral-500 truncate">{account.handle}</p>
             </div>
             {account.fromApi ? (
               <div className="text-right">
-                <p className="text-sm font-medium text-stone-900">{(account.followers ?? 0).toLocaleString()}</p>
+                <p className="text-sm font-medium text-neutral-900">{(account.followers ?? 0).toLocaleString()}</p>
                 <p className="text-[11px] font-medium text-emerald-700">
                   From {platformLabel(account.platform)}
                   {account.syncedAt ? ` · updated ${new Date(account.syncedAt).toLocaleDateString()}` : ""}
@@ -367,7 +367,7 @@ export function FollowerCountsSection({ profile, onUpdated, connectedHandles }: 
               value={drafts[account.platform] ?? ""}
               onChange={(e) => setDrafts((prev) => ({ ...prev, [account.platform]: e.target.value }))}
               placeholder="Followers"
-              className="w-28 px-3 py-2 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink"
+              className="w-28 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink"
             />
             <button
               type="button"
@@ -467,7 +467,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
     }
   };
 
-  const percentInput = "w-20 px-3 py-2 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-950 focus:outline-none focus:border-stone-300 font-rethink";
+  const percentInput = "w-20 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-950 focus:outline-none focus:border-neutral-300 font-rethink";
 
   return (
     <SectionShell
@@ -476,7 +476,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
       hint="Where your followers are, not where you live. Campaigns are matched on this. Copy the numbers from your TikTok or Instagram analytics."
       badge={
         audience ? (
-          <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 text-[10px] font-medium">
+          <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600 text-[10px] font-medium">
             {audience.source === "api" ? "From your account" : "Self-reported"}
           </span>
         ) : null
@@ -484,7 +484,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
     >
       <div className="space-y-6">
         <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-700">Top locations</p>
+          <p className="text-xs font-medium text-neutral-700">Top locations</p>
           {locations.map((location, index) => (
             <div key={index} className="flex items-center gap-2">
               <AudienceLocationSelect
@@ -506,7 +506,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
                 className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                 aria-label="Remove location"
               >
-                <HugeiconsIcon icon={Delete01Icon} size={16} className="text-stone-400" />
+                <HugeiconsIcon icon={Delete01Icon} size={16} className="text-neutral-400" />
               </button>
             </div>
           ))}
@@ -518,17 +518,17 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-700">Age groups</p>
+          <p className="text-xs font-medium text-neutral-700">Age groups</p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {AGE_RANGES.map((range) => (
-              <label key={range} className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-full pl-4 pr-1 py-1">
-                <span className="text-xs font-medium text-stone-600">{range}</span>
+              <label key={range} className="flex items-center justify-between gap-2 bg-white border border-neutral-200 rounded-full pl-4 pr-1 py-1">
+                <span className="text-xs font-medium text-neutral-600">{range}</span>
                 <input
                   inputMode="decimal"
                   value={ages[range] ?? ""}
                   onChange={(e) => setAges((prev) => ({ ...prev, [range]: e.target.value }))}
                   placeholder="%"
-                  className="w-14 px-2 py-1.5 bg-stone-50 rounded-full text-xs font-medium text-stone-950 focus:outline-none font-rethink text-right"
+                  className="w-14 px-2 py-1.5 bg-neutral-50 rounded-full text-xs font-medium text-neutral-950 focus:outline-none font-rethink text-right"
                 />
               </label>
             ))}
@@ -536,17 +536,17 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-700">Gender split</p>
+          <p className="text-xs font-medium text-neutral-700">Gender split</p>
           <div className="grid grid-cols-3 gap-2">
             {(["female", "male", "other"] as const).map((key) => (
-              <label key={key} className="flex items-center justify-between gap-2 bg-white border border-stone-200 rounded-full pl-4 pr-1 py-1">
-                <span className="text-xs font-medium text-stone-600">{key === "female" ? "Women" : key === "male" ? "Men" : "Other"}</span>
+              <label key={key} className="flex items-center justify-between gap-2 bg-white border border-neutral-200 rounded-full pl-4 pr-1 py-1">
+                <span className="text-xs font-medium text-neutral-600">{key === "female" ? "Women" : key === "male" ? "Men" : "Other"}</span>
                 <input
                   inputMode="decimal"
                   value={genders[key]}
                   onChange={(e) => setGenders((prev) => ({ ...prev, [key]: e.target.value }))}
                   placeholder="%"
-                  className="w-14 px-2 py-1.5 bg-stone-50 rounded-full text-xs font-medium text-stone-950 focus:outline-none font-rethink text-right"
+                  className="w-14 px-2 py-1.5 bg-neutral-50 rounded-full text-xs font-medium text-neutral-950 focus:outline-none font-rethink text-right"
                 />
               </label>
             ))}
@@ -554,12 +554,12 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-700">Proof</p>
-          <p className="text-[11px] font-medium text-stone-500">A screenshot of your analytics showing these numbers. Our team may check it.</p>
+          <p className="text-xs font-medium text-neutral-700">Proof</p>
+          <p className="text-[11px] font-medium text-neutral-500">A screenshot of your analytics showing these numbers. Our team may check it.</p>
           <div className="flex items-center gap-3">
             {proofUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={proofUrl} alt="Analytics screenshot" className="w-14 h-14 rounded-xl object-cover border border-stone-200" />
+              <img src={proofUrl} alt="Analytics screenshot" className="w-14 h-14 rounded-xl object-cover border border-neutral-200" />
             )}
             <button type="button" onClick={() => proofInput.current?.click()} disabled={uploading} className={secondaryButton}>
               {uploading ? "Uploading…" : proofUrl ? "Replace screenshot" : "Upload screenshot"}
@@ -570,7 +570,7 @@ export const AudienceSection = React.forwardRef<HTMLElement, ProfileSectionProps
 
         {error && <p className="text-xs font-medium text-red-600">{error}</p>}
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] font-medium text-stone-400">
+          <span className="text-[11px] font-medium text-neutral-400">
             {audience?.updatedAt ? `Last updated ${new Date(audience.updatedAt).toLocaleDateString()}` : ""}
           </span>
           <button type="button" onClick={save} disabled={saving || uploading} className={primaryButton}>
@@ -622,8 +622,8 @@ export function AudienceDataPrompt({ profile, onAddAudience }: AudienceDataPromp
   return (
     <div data-reveal className="w-full mb-6 bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-[20px] p-4 flex flex-col md:flex-row md:items-center gap-3 font-rethink">
       <div className="flex-1">
-        <p className="text-sm font-medium text-stone-900">Tell brands where your audience is</p>
-        <p className="text-xs font-medium text-stone-500 mt-0.5 leading-relaxed">
+        <p className="text-sm font-medium text-neutral-900">Tell brands where your audience is</p>
+        <p className="text-xs font-medium text-neutral-500 mt-0.5 leading-relaxed">
           Add your top audience locations, ages and gender split so we can recommend campaigns that suit your followers. Some campaigns need it to join.
         </p>
       </div>
@@ -736,18 +736,18 @@ export const PortfolioSection = React.forwardRef<HTMLElement, ProfileSectionProp
       {items.length > 0 && (
         <ul className="space-y-3 mb-4">
           {items.map((item, index) => (
-            <li key={`${item.url}-${index}`} className="flex items-center gap-3 bg-white border border-stone-200/60 rounded-2xl px-3 py-2.5">
+            <li key={`${item.url}-${index}`} className="flex items-center gap-3 bg-white border border-neutral-200/60 rounded-2xl px-3 py-2.5">
               {item.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.thumbnailUrl} alt="" className="w-11 h-11 rounded-xl object-cover border border-stone-200 flex-shrink-0" />
+                <img src={item.thumbnailUrl} alt="" className="w-11 h-11 rounded-xl object-cover border border-neutral-200 flex-shrink-0" />
               ) : (
-                <div className="w-11 h-11 rounded-xl bg-stone-100 border border-stone-200 flex-shrink-0" />
+                <div className="w-11 h-11 rounded-xl bg-neutral-100 border border-neutral-200 flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <a href={item.url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-stone-900 truncate">
+                <a href={item.url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-neutral-900 truncate">
                   {item.title || item.url}
                 </a>
-                <p className="text-xs font-medium text-stone-500">
+                <p className="text-xs font-medium text-neutral-500">
                   {platformLabel(item.platform)}
                   {item.views ? ` · ${item.views.toLocaleString()} views` : ""}
                   {item.category ? ` · ${item.category}` : ""}
@@ -755,13 +755,13 @@ export const PortfolioSection = React.forwardRef<HTMLElement, ProfileSectionProp
               </div>
               <div className="flex items-center flex-shrink-0">
                 <button type="button" onClick={() => move(index, -1)} disabled={saving || index === 0} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" aria-label="Move up">
-                  <HugeiconsIcon icon={ArrowUp01Icon} size={16} className="text-stone-500" />
+                  <HugeiconsIcon icon={ArrowUp01Icon} size={16} className="text-neutral-500" />
                 </button>
                 <button type="button" onClick={() => move(index, 1)} disabled={saving || index === items.length - 1} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" aria-label="Move down">
-                  <HugeiconsIcon icon={ArrowDown01Icon} size={16} className="text-stone-500" />
+                  <HugeiconsIcon icon={ArrowDown01Icon} size={16} className="text-neutral-500" />
                 </button>
                 <button type="button" onClick={() => remove(index)} disabled={saving} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30" aria-label="Remove">
-                  <HugeiconsIcon icon={Delete01Icon} size={16} className="text-stone-400" />
+                  <HugeiconsIcon icon={Delete01Icon} size={16} className="text-neutral-400" />
                 </button>
               </div>
             </li>
@@ -770,7 +770,7 @@ export const PortfolioSection = React.forwardRef<HTMLElement, ProfileSectionProp
       )}
 
       {adding ? (
-        <div className="space-y-3 bg-white border border-stone-200 rounded-2xl p-4">
+        <div className="space-y-3 bg-white border border-neutral-200 rounded-2xl p-4">
           <input value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} placeholder="Link to the post" className={inputClass} />
           <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Title (optional)" className={inputClass} />
           <div className="grid grid-cols-2 gap-2">
@@ -790,7 +790,7 @@ export const PortfolioSection = React.forwardRef<HTMLElement, ProfileSectionProp
           <div className="flex items-center gap-3">
             {draft.thumbnailUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={draft.thumbnailUrl} alt="" className="w-11 h-11 rounded-xl object-cover border border-stone-200" />
+              <img src={draft.thumbnailUrl} alt="" className="w-11 h-11 rounded-xl object-cover border border-neutral-200" />
             )}
             <button type="button" onClick={() => thumbInput.current?.click()} disabled={uploading} className={secondaryButton}>
               {uploading ? "Uploading…" : draft.thumbnailUrl ? "Replace thumbnail" : "Add thumbnail"}

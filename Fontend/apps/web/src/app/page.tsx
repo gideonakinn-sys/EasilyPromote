@@ -30,8 +30,8 @@ export default function HomePage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-      <Spinner className="size-6 text-stone-400" aria-hidden="true" />
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+      <Spinner className="size-6 text-neutral-400" aria-hidden="true" />
     </div>
   );
 }

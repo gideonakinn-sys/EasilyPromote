@@ -17,11 +17,11 @@ export function DraftAlertBanner({ draftCount, onClose }: DraftAlertBannerProps)
           <Image src={illustration4} alt="Unfinished business" width={52} height={52} />
         </div>
         <div>
-          <h4 className="font-rethink font-medium text-sm text-stone-900">Unfinished business!</h4>
-          <p className="font-rethink text-xs text-stone-500 mt-0.5">You have {draftCount} draft campaign{draftCount !== 1 ? "s" : ""} waiting</p>
+          <h4 className="font-rethink font-medium text-sm text-neutral-900">Unfinished business!</h4>
+          <p className="font-rethink text-xs text-neutral-500 mt-0.5">You have {draftCount} draft campaign{draftCount !== 1 ? "s" : ""} waiting</p>
         </div>
       </div>
-      <button onClick={onClose} className="text-stone-400 p-1 absolute top-2 right-2">
+      <button onClick={onClose} className="text-neutral-400 p-1 absolute top-2 right-2">
         <HugeiconsIcon icon={Cancel01Icon} size={16} />
       </button>
     </div>

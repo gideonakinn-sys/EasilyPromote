@@ -100,9 +100,9 @@ export default function ForgotPasswordPage() {
   const actions = { setField: () => {}, goToStep: () => {} };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-stone-50">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-neutral-50">
       <LeftPanel />
-      <div className="col-span-1 md:col-span-7 h-screen overflow-y-auto bg-stone-50 p-10" data-lenis-prevent>
+      <div className="col-span-1 md:col-span-7 h-screen overflow-y-auto bg-neutral-50 p-10" data-lenis-prevent>
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}

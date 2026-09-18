@@ -50,7 +50,7 @@ export function CampaignFeed({
   return (
     <div className="w-full flex flex-col">
       <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-14">
-        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
+        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-neutral-900 m-0 tracking-tighter">
           Welcome, {profile.displayName.split(" ")[0]}
         </h2>
 
@@ -60,7 +60,7 @@ export function CampaignFeed({
             onClick={() => setIsMobileFilterOpen(true)}
             className="flex md:hidden items-center justify-center bg-white rounded-full p-3"
           >
-            <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
+            <HugeiconsIcon icon={FilterIcon} size={20} className="text-neutral-500" />
           </button>
 
           {/* Desktop filter trigger — opens dropdown */}
@@ -68,9 +68,9 @@ export function CampaignFeed({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center justify-center gap-2 bg-white rounded-full px-4 py-2.5 cursor-pointer">
-                  <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-                  <span className="text-sm font-medium text-stone-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
-                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                  <HugeiconsIcon icon={FilterIcon} size={16} className="text-neutral-500" />
+                  <span className="text-sm font-medium text-neutral-900">{FILTER_OPTIONS.find((o) => o.value === filter)?.label || "All Campaigns"}</span>
+                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -78,7 +78,7 @@ export function CampaignFeed({
                   <DropdownMenuItem
                     key={opt.value}
                     onSelect={() => onFilterChange(opt.value)}
-                    className={filter === opt.value ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                    className={filter === opt.value ? "font-semibold text-neutral-900" : "font-medium text-neutral-700"}
                   >
                     {opt.label}
                   </DropdownMenuItem>
@@ -101,8 +101,8 @@ export function CampaignFeed({
               }}
               className={`flex items-center w-full px-4 py-3 text-sm text-left rounded-lg ${
                 filter === opt.value
-                  ? "bg-stone-100 font-semibold text-stone-900"
-                  : "font-medium text-stone-700"
+                  ? "bg-neutral-100 font-semibold text-neutral-900"
+                  : "font-medium text-neutral-700"
               }`}
             >
               {opt.label}
@@ -127,12 +127,12 @@ export function CampaignFeed({
             <h3 className={`${TYPOGRAPHY.welcomeHeader} mb-2`}>
               No campaigns yet
             </h3>
-            <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed mb-8">
+            <p className="font-rethink text-xs text-neutral-500 font-medium max-w-xs leading-relaxed mb-8">
               You haven&apos;t joined any campaigns. Browse the marketplace to find campaigns matching your niches.
             </p>
             <button
               onClick={() => onBrowseCampaign?.()}
-              className="w-full max-w-[300px] py-3 bg-[#FEB604] text-stone-900 rounded-full font-semibold text-sm border border-stone-100 font-rethink"
+              className="w-full max-w-[300px] py-3 bg-[#FEB604] text-neutral-900 rounded-full font-semibold text-sm border border-neutral-100 font-rethink"
             >
               Browse Campaign
             </button>

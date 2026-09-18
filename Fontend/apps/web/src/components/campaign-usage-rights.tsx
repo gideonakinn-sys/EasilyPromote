@@ -75,36 +75,36 @@ export function UsageRightsCard({ usageRights }: { usageRights: CampaignUsageRig
   return (
     <section className="space-y-3 font-rethink">
       <div className="flex items-center justify-between gap-3">
-        <h5 className="text-xs font-medium text-stone-500">Usage rights</h5>
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-200 text-stone-700">
+        <h5 className="text-xs font-medium text-neutral-500">Usage rights</h5>
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-neutral-200 text-neutral-700">
           {custom ? `Custom terms${usageRights?.version ? ` · v${usageRights.version}` : ""}` : "Standard licence"}
         </span>
       </div>
-      <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-3">
+      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-3">
         {custom ? (
           <>
             <dl className="grid grid-cols-2 gap-3">
               {usageRightsRows(usageRights?.terms).map(([label, value]) => (
                 <div key={label} className="min-w-0">
-                  <dt className="text-[10px] font-medium text-stone-500">{label}</dt>
-                  <dd className="text-sm font-medium text-stone-900 break-words">{value}</dd>
+                  <dt className="text-[10px] font-medium text-neutral-500">{label}</dt>
+                  <dd className="text-sm font-medium text-neutral-900 break-words">{value}</dd>
                 </div>
               ))}
             </dl>
             {usageRights?.terms?.additionalTerms && (
-              <div className="border-t border-stone-100 pt-3">
-                <span className="text-[10px] font-medium text-stone-500 block">Additional terms</span>
-                <p className="text-xs font-medium text-stone-700 leading-relaxed whitespace-pre-line break-words">
+              <div className="border-t border-neutral-100 pt-3">
+                <span className="text-[10px] font-medium text-neutral-500 block">Additional terms</span>
+                <p className="text-xs font-medium text-neutral-700 leading-relaxed whitespace-pre-line break-words">
                   {usageRights.terms.additionalTerms}
                 </p>
               </div>
             )}
-            <p className="text-[11px] text-stone-500 font-medium leading-relaxed">
+            <p className="text-[11px] text-neutral-500 font-medium leading-relaxed">
               Creators accept these terms when they join or apply. They can&apos;t change now that the campaign is paid for.
             </p>
           </>
         ) : (
-          <p className="text-[11px] text-stone-500 font-medium leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
+          <p className="text-[11px] text-neutral-500 font-medium leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
         )}
       </div>
     </section>
@@ -143,7 +143,7 @@ export function CopyLinkButton({ value, label = "Copy" }: { value: string; label
           setFailed(true);
         }
       }}
-      className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-stone-200 rounded-full text-[11px] font-semibold text-stone-900 font-rethink"
+      className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-white border border-neutral-200 rounded-full text-[11px] font-semibold text-neutral-900 font-rethink"
     >
       <HugeiconsIcon icon={Copy01Icon} size={12} />
       {copied ? "Copied" : failed ? "Couldn't copy" : label}
@@ -154,25 +154,25 @@ export function CopyLinkButton({ value, label = "Copy" }: { value: string; label
 export function DestinationLinkCard({ url }: { url: string | null | undefined }) {
   return (
     <section className="space-y-3 font-rethink">
-      <h5 className="text-xs font-medium text-stone-500">Destination link</h5>
-      <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-2">
+      <h5 className="text-xs font-medium text-neutral-500">Destination link</h5>
+      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2">
         {url ? (
           <div className="flex items-center gap-3">
-            <HugeiconsIcon icon={Link01Icon} size={16} className="text-stone-500 shrink-0" />
+            <HugeiconsIcon icon={Link01Icon} size={16} className="text-neutral-500 shrink-0" />
             <a
               href={url}
               target="_blank"
               rel="noopener noreferrer nofollow"
-              className="flex-1 min-w-0 text-sm font-medium text-stone-900 underline underline-offset-2 break-all"
+              className="flex-1 min-w-0 text-sm font-medium text-neutral-900 underline underline-offset-2 break-all"
             >
               {url}
             </a>
             <CopyLinkButton value={url} />
           </div>
         ) : (
-          <p className="text-sm font-medium text-stone-500">No destination link set yet</p>
+          <p className="text-sm font-medium text-neutral-500">No destination link set yet</p>
         )}
-        <p className="text-[11px] text-stone-500 font-medium leading-relaxed">
+        <p className="text-[11px] text-neutral-500 font-medium leading-relaxed">
           Each creator shares their own tracked link. It only ever sends people here, and each person counts once a day per link.
         </p>
       </div>

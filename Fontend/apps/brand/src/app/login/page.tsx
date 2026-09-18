@@ -109,7 +109,7 @@ export default function LoginPage() {
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
       <LeftPanel />
 
-      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 overflow-y-auto h-screen bg-stone-100">
+      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 overflow-y-auto h-screen bg-neutral-100">
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md p-3 z-50">
             {error}

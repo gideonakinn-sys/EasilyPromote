@@ -54,7 +54,7 @@ export function NavBar({
   };
 
   return (
-    <header className={cn("w-full bg-stone-50 z-40", className)}>
+    <header className={cn("w-full bg-neutral-50 z-40", className)}>
       {/* Hidden file input for avatar upload — placed outside drawer to avoid Vaul interference */}
       <input
         ref={fileInputRef}
@@ -79,9 +79,9 @@ export function NavBar({
           {helpHref && (
             <Link
               href={helpHref}
-              className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-stone-900 font-rethink"
+              className="flex items-center gap-2 bg-white rounded-full px-4 py-2.5 text-sm font-medium text-neutral-900 font-rethink"
             >
-              <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-stone-500" />
+              <HugeiconsIcon icon={HelpCircleIcon} size={16} className="text-neutral-500" />
               <span>Help</span>
             </Link>
           )}
@@ -97,8 +97,8 @@ export function NavBar({
                   unoptimized
                 />
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-stone-900 font-rethink">{userName}</span>
-                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                  <span className="text-sm font-medium text-neutral-900 font-rethink">{userName}</span>
+                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
                 </div>
               </button>
             </DropdownMenuTrigger>
@@ -146,9 +146,9 @@ export function NavBar({
                 unoptimized
               />
               <div>
-                <p className="text-sm font-medium text-stone-900 font-rethink">{userName}</p>
+                <p className="text-sm font-medium text-neutral-900 font-rethink">{userName}</p>
                 {userEmail && (
-                  <p className="text-xs text-stone-500 font-rethink tracking-[-0.01em]">{userEmail}</p>
+                  <p className="text-xs text-neutral-500 font-rethink tracking-[-0.01em]">{userEmail}</p>
                 )}
               </div>
             </button>
@@ -156,7 +156,7 @@ export function NavBar({
               <Link
                 href={helpHref}
                 onClick={() => setIsProfileOpen(false)}
-                className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+                className="flex items-center gap-3 w-full px-4 py-3 text-sm text-neutral-900"
               >
                 <HugeiconsIcon icon={HelpCircleIcon} size={16} />
                 <span className="font-medium">Help</span>
@@ -168,7 +168,7 @@ export function NavBar({
                   setIsProfileOpen(false);
                   onLogout();
                 }}
-                className="flex items-center gap-3 w-full px-4 py-3 text-sm text-stone-900"
+                className="flex items-center gap-3 w-full px-4 py-3 text-sm text-neutral-900"
               >
                 <HugeiconsIcon icon={Logout01Icon} size={16} />
                 <span className="font-medium">Log out</span>

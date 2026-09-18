@@ -25,21 +25,21 @@ interface RatingSummaryProps {
 export function RatingSummary({ rating, className, showEmpty = false }: RatingSummaryProps) {
   const count = rating?.count ?? 0;
   if (count === 0) {
-    return showEmpty ? <span className={cn("text-xs font-medium text-stone-400", className)}>No brand ratings yet</span> : null;
+    return showEmpty ? <span className={cn("text-xs font-medium text-neutral-400", className)}>No brand ratings yet</span> : null;
   }
   const plural = count === 1 ? "rating" : "ratings";
   return (
-    <span className={cn("inline-flex items-center gap-1 text-xs font-medium text-stone-700", className)}>
+    <span className={cn("inline-flex items-center gap-1 text-xs font-medium text-neutral-700", className)}>
       <HugeiconsIcon icon={StarIcon} size={12} className="text-[#D97706] fill-[#FEB604] shrink-0" />
       {rating?.average !== null && rating?.average !== undefined ? (
         <>
-          <span className="text-stone-900">{rating.average.toFixed(1)}</span>
-          <span className="text-stone-500">
+          <span className="text-neutral-900">{rating.average.toFixed(1)}</span>
+          <span className="text-neutral-500">
             · {count} {plural}
           </span>
         </>
       ) : (
-        <span className="text-stone-500">
+        <span className="text-neutral-500">
           {count} {plural} · average shows from 3
         </span>
       )}
@@ -71,7 +71,7 @@ export function StarInput({ value, onChange, disabled }: StarInputProps) {
           <HugeiconsIcon
             icon={StarIcon}
             size={28}
-            className={cn(star <= value ? "text-[#D97706] fill-[#FEB604]" : "text-stone-300 fill-transparent")}
+            className={cn(star <= value ? "text-[#D97706] fill-[#FEB604]" : "text-neutral-300 fill-transparent")}
           />
         </button>
       ))}

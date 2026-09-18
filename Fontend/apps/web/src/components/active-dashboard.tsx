@@ -85,7 +85,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 z-10">
       {/* Header row: Welcome + filter + create campaign */}
       <div data-reveal className="relative z-40 grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
+        <h2 className="font-motterdam font-normal text-[23px] leading-[28px] text-neutral-900 m-0 tracking-tighter">
           Welcome, {userName.split(" ")[0]}
         </h2>
 
@@ -95,7 +95,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             onClick={() => setIsMobileFilterOpen(true)}
             className="flex md:hidden items-center justify-center bg-white rounded-full p-3"
           >
-            <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
+            <HugeiconsIcon icon={FilterIcon} size={20} className="text-neutral-500" />
           </button>
 
           {/* Desktop filter trigger — opens dropdown */}
@@ -103,9 +103,9 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center justify-center gap-2 bg-white rounded-full px-4 py-2.5 cursor-pointer">
-                  <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-                  <span className="text-sm font-medium text-stone-900">{selectedFilter}</span>
-                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                  <HugeiconsIcon icon={FilterIcon} size={16} className="text-neutral-500" />
+                  <span className="text-sm font-medium text-neutral-900">{selectedFilter}</span>
+                  <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -113,7 +113,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
                   <DropdownMenuItem
                     key={option}
                     onSelect={() => setSelectedFilter(option)}
-                    className={selectedFilter === option ? "font-semibold text-stone-900" : "font-medium text-stone-700"}
+                    className={selectedFilter === option ? "font-semibold text-neutral-900" : "font-medium text-neutral-700"}
                   >
                     {option}
                   </DropdownMenuItem>
@@ -129,9 +129,9 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             aria-label="Referral tracking"
             className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
           >
-            <HugeiconsIcon icon={Link01Icon} size={20} className="text-stone-500 md:hidden" />
-            <HugeiconsIcon icon={Link01Icon} size={16} className="text-stone-500 hidden md:block" />
-            <span className="hidden md:inline text-sm font-medium text-stone-900">Referral tracking</span>
+            <HugeiconsIcon icon={Link01Icon} size={20} className="text-neutral-500 md:hidden" />
+            <HugeiconsIcon icon={Link01Icon} size={16} className="text-neutral-500 hidden md:block" />
+            <span className="hidden md:inline text-sm font-medium text-neutral-900">Referral tracking</span>
           </button>
           )}
 
@@ -141,15 +141,15 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
             aria-label="Payment statement"
             className="flex items-center justify-center gap-2 bg-white rounded-full p-3 md:px-4 md:py-2.5"
           >
-            <HugeiconsIcon icon={Invoice01Icon} size={20} className="text-stone-500 md:hidden" />
-            <HugeiconsIcon icon={Invoice01Icon} size={16} className="text-stone-500 hidden md:block" />
-            <span className="hidden md:inline text-sm font-medium text-stone-900">Statement</span>
+            <HugeiconsIcon icon={Invoice01Icon} size={20} className="text-neutral-500 md:hidden" />
+            <HugeiconsIcon icon={Invoice01Icon} size={16} className="text-neutral-500 hidden md:block" />
+            <span className="hidden md:inline text-sm font-medium text-neutral-900">Statement</span>
           </button>
 
           {/* Create campaign button */}
           <button
             onClick={onCreateCampaign}
-            className="flex items-center justify-center p-3 md:px-6 md:py-3 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100"
+            className="flex items-center justify-center p-3 md:px-6 md:py-3 bg-[#FEB604] text-[#171717] font-rethink font-semibold text-sm rounded-full border border-neutral-100"
           >
             <HugeiconsIcon icon={Add01Icon} size={20} className="md:hidden" />
             <span className="hidden md:inline">Create Campaign</span>
@@ -170,8 +170,8 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               className={cn(
                 "flex items-center w-full px-4 py-3 text-sm text-left rounded-lg",
                 selectedFilter === option
-                  ? "bg-stone-100 font-semibold text-stone-900"
-                  : "font-medium text-stone-700"
+                  ? "bg-neutral-100 font-semibold text-neutral-900"
+                  : "font-medium text-neutral-700"
               )}
             >
               {option}
@@ -209,7 +209,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
 
         {filteredCampaigns.length === 0 && (
           <div className="col-span-full text-center py-12">
-            <p className="text-stone-500 text-sm font-medium tracking-[-0.01em]">No campaigns found.</p>
+            <p className="text-neutral-500 text-sm font-medium tracking-[-0.01em]">No campaigns found.</p>
           </div>
         )}
       </div>

@@ -42,18 +42,18 @@ export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
     { label: "Platform Fee", value: quote?.platformFee },
   ];
   return (
-    <div className="bg-white border border-stone-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
+    <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
       {rows.map((row) => (
         <div key={row.label} className="flex justify-between gap-3">
-          <span className="font-medium text-stone-500">{row.label}</span>
-          <span className={cn("font-medium tabular-nums", loading ? "text-stone-300" : "text-stone-900")}>
+          <span className="font-medium text-neutral-500">{row.label}</span>
+          <span className={cn("font-medium tabular-nums", loading ? "text-neutral-300" : "text-neutral-900")}>
             {quote ? formatNaira(row.value) : "—"}
           </span>
         </div>
       ))}
-      <div className="flex justify-between gap-3 border-t border-stone-100 pt-2">
-        <span className="font-medium text-stone-900">Total to Pay</span>
-        <span className={cn("font-medium tabular-nums", loading ? "text-stone-300" : "text-stone-900")}>
+      <div className="flex justify-between gap-3 border-t border-neutral-100 pt-2">
+        <span className="font-medium text-neutral-900">Total to Pay</span>
+        <span className={cn("font-medium tabular-nums", loading ? "text-neutral-300" : "text-neutral-900")}>
           {quote ? formatNaira(quote.total) : "—"}
         </span>
       </div>
@@ -98,7 +98,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
             onClick={() => onChange(preset)}
             className={cn(
               "flex-1 py-2 rounded-full text-xs font-medium font-rethink tabular-nums transition-colors",
-              views === preset ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
+              views === preset ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"
             )}
           >
             {formatCompact(preset)}
@@ -113,7 +113,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
 function NairaInput({ id, value, placeholder, onChange }: { id: string; value: string; placeholder: string; onChange: (digits: string) => void }) {
   return (
     <div className="relative">
-      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">₦</span>
       <input
         id={id}
         inputMode="numeric"
@@ -167,7 +167,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             hint="A deliverable is one piece of content, such as one video."
           >
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">₦</span>
               <input
                 id="rate-per-deliverable"
                 inputMode="numeric"
@@ -219,7 +219,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
           <Field label="Most One Creator Can Earn in Bonus" htmlFor="bonus-cap" hint="No more than the bonus pool.">
             <NairaInput id="bonus-cap" placeholder="10000" value={data.bonusCap} onChange={(bonusCap) => update({ bonusCap })} />
           </Field>
-          <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
+          <p className="bg-neutral-100 rounded-2xl px-4 py-3 text-xs text-neutral-600 font-medium font-rethink">
             {data.bonusMetric === "views"
               ? "The bonus per 1,000 views comes from our price table."
               : `Bonus per ${actionNoun(data.bonusMetric)} is set by our team. Your app needs to be connected before you pay.`}
@@ -232,7 +232,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
       {referral && (
         <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. ${views ? "Paid together with your views." : "This is what you pay; what isn't earned is refunded when the campaign ends."}`}>
           <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">₦</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">₦</span>
             <input
               id="referral-budget"
               inputMode="numeric"
@@ -242,7 +242,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
               className={cn(TEXT_INPUT_CLASS, "pl-8")}
             />
           </div>
-          <p className="bg-stone-100 rounded-2xl px-4 py-3 text-xs text-stone-600 font-medium font-rethink">
+          <p className="bg-neutral-100 rounded-2xl px-4 py-3 text-xs text-neutral-600 font-medium font-rethink">
             Reward per {unitNoun} is set by our team.
             {data.objective === "clicks" && " Only valid clicks are paid, and each person's click counts once a day per creator link."}
           </p>

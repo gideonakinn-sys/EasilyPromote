@@ -109,13 +109,13 @@ export default function AdminActivityPage() {
   }, [query]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto min-w-0">
-        <header className="pb-6 border-b border-stone-200 mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Activity Log</h1>
-          <p className="text-sm text-stone-500 mt-1">
+        <header className="pb-6 border-b border-neutral-200 mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Activity Log</h1>
+          <p className="text-sm text-neutral-500 mt-1">
             Every change admins make to campaigns, users, withdrawals, referral codes and signing keys — who did it, when and why.
           </p>
         </header>
@@ -126,7 +126,7 @@ export default function AdminActivityPage() {
               key={filter.value}
               onClick={() => setQuery((prev) => ({ ...prev, targetType: filter.value, page: 1 }))}
               className={`px-4 py-2 rounded-full text-xs font-semibold transition-colors ${
-                query.targetType === filter.value ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                query.targetType === filter.value ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
               }`}
             >
               {filter.label}
@@ -147,9 +147,9 @@ export default function AdminActivityPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search admin, target or note"
-              className="w-64 max-w-full border border-stone-200 rounded-full px-4 py-2 text-xs text-stone-700 outline-none focus:border-stone-400 bg-white"
+              className="w-64 max-w-full border border-neutral-200 rounded-full px-4 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 bg-white"
             />
-            <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white">
+            <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-900 text-white">
               Search
             </button>
           </form>
@@ -157,10 +157,10 @@ export default function AdminActivityPage() {
 
         {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
-        <div className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] text-left text-xs text-stone-700">
-              <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+            <table className="w-full min-w-[1040px] text-left text-xs text-neutral-700">
+              <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
                 <tr>
                   <th className="px-6 py-4">When</th>
                   <th className="px-6 py-4">Admin</th>
@@ -170,32 +170,32 @@ export default function AdminActivityPage() {
                   <th className="px-6 py-4">Note</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {loading || entries.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
+                    <td colSpan={6} className="px-6 py-12 text-center text-neutral-400">
                       {loading ? "Loading…" : "No admin activity recorded yet."}
                     </td>
                   </tr>
                 ) : (
                   entries.map((entry) => (
                     <tr key={entry.id} className="align-top">
-                      <td className="px-6 py-4 text-stone-500 whitespace-nowrap">{formatDateTime(entry.createdAt)}</td>
+                      <td className="px-6 py-4 text-neutral-500 whitespace-nowrap">{formatDateTime(entry.createdAt)}</td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-stone-800">{entry.actor.name || "Unknown admin"}</p>
-                        <p className="text-[10px] text-stone-400 font-mono">{entry.actor.role?.replace(/_/g, " ")}</p>
+                        <p className="font-semibold text-neutral-800">{entry.actor.name || "Unknown admin"}</p>
+                        <p className="text-[10px] text-neutral-400 font-mono">{entry.actor.role?.replace(/_/g, " ")}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono whitespace-nowrap ${ACTION_TONES[entry.action] || "bg-stone-100 text-stone-700"}`}>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono whitespace-nowrap ${ACTION_TONES[entry.action] || "bg-neutral-100 text-neutral-700"}`}>
                           {ACTION_LABELS[entry.action] || entry.action}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-stone-800 break-words min-w-[140px]">{entry.targetLabel || entry.targetId}</p>
-                        <p className="text-[10px] text-stone-400">{entry.targetType.replace(/_/g, " ")}</p>
+                        <p className="font-semibold text-neutral-800 break-words min-w-[140px]">{entry.targetLabel || entry.targetId}</p>
+                        <p className="text-[10px] text-neutral-400">{entry.targetType.replace(/_/g, " ")}</p>
                       </td>
-                      <td className="px-6 py-4 text-stone-600 whitespace-nowrap">{describeChange(entry.metadata) || "—"}</td>
-                      <td className="px-6 py-4 text-stone-600 min-w-[240px] max-w-sm break-words">{entry.note || "—"}</td>
+                      <td className="px-6 py-4 text-neutral-600 whitespace-nowrap">{describeChange(entry.metadata) || "—"}</td>
+                      <td className="px-6 py-4 text-neutral-600 min-w-[240px] max-w-sm break-words">{entry.note || "—"}</td>
                     </tr>
                   ))
                 )}
@@ -203,7 +203,7 @@ export default function AdminActivityPage() {
             </table>
           </div>
           {meta.pages > 1 && (
-            <div className="flex items-center justify-between px-6 py-3 border-t border-stone-200 text-xs text-stone-500">
+            <div className="flex items-center justify-between px-6 py-3 border-t border-neutral-200 text-xs text-neutral-500">
               <span>
                 Page {meta.page} of {meta.pages} · {meta.total.toLocaleString()} entries
               </span>
@@ -211,14 +211,14 @@ export default function AdminActivityPage() {
                 <button
                   onClick={() => setQuery((prev) => ({ ...prev, page: prev.page - 1 }))}
                   disabled={meta.page <= 1}
-                  className="px-3 py-1.5 rounded-full border border-stone-200 bg-white font-semibold disabled:opacity-40"
+                  className="px-3 py-1.5 rounded-full border border-neutral-200 bg-white font-semibold disabled:opacity-40"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setQuery((prev) => ({ ...prev, page: prev.page + 1 }))}
                   disabled={meta.page >= meta.pages}
-                  className="px-3 py-1.5 rounded-full border border-stone-200 bg-white font-semibold disabled:opacity-40"
+                  className="px-3 py-1.5 rounded-full border border-neutral-200 bg-white font-semibold disabled:opacity-40"
                 >
                   Next
                 </button>

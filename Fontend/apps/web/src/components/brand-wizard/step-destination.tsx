@@ -36,7 +36,7 @@ const TERRITORY_OPTIONS = [
 function CustomTermsForm({ data, update }: StepDestinationProps) {
   const termsLength = data.usageAdditionalTerms.length;
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-5">
+    <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-5">
       <Field label="How long you can use the content">
         <ChipGroup
           label="Usage duration"
@@ -47,7 +47,7 @@ function CustomTermsForm({ data, update }: StepDestinationProps) {
       </Field>
 
       <div className="space-y-2">
-        <p className="text-xs font-medium text-stone-500 font-rethink">Exclusivity</p>
+        <p className="text-xs font-medium text-neutral-500 font-rethink">Exclusivity</p>
         <div className="space-y-3" role="radiogroup" aria-label="Exclusivity">
           {USAGE_EXCLUSIVITY_OPTIONS.map((option) => (
             <OptionCard
@@ -108,11 +108,11 @@ function CustomTermsForm({ data, update }: StepDestinationProps) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor="usage-additional-terms" className="text-xs font-medium text-stone-500 font-rethink">
+          <label htmlFor="usage-additional-terms" className="text-xs font-medium text-neutral-500 font-rethink">
             Additional terms (optional)
           </label>
           <span
-            className={cn("text-[11px] font-medium font-rethink", termsLength >= MAX_ADDITIONAL_TERMS ? "text-amber-700" : "text-stone-400")}
+            className={cn("text-[11px] font-medium font-rethink", termsLength >= MAX_ADDITIONAL_TERMS ? "text-amber-700" : "text-neutral-400")}
             aria-live="polite"
           >
             {termsLength.toLocaleString()} / {MAX_ADDITIONAL_TERMS.toLocaleString()}
@@ -128,8 +128,8 @@ function CustomTermsForm({ data, update }: StepDestinationProps) {
         />
       </div>
 
-      <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5">
-        <p className="text-[11px] text-stone-600 font-medium font-rethink leading-relaxed">
+      <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5">
+        <p className="text-[11px] text-neutral-600 font-medium font-rethink leading-relaxed">
           Creators accept these terms before they join or apply. You can change them while the campaign is a draft, but not after it
           launches.
         </p>
@@ -176,8 +176,8 @@ export function StepDestination({ data, update }: StepDestinationProps) {
             ))}
           </div>
           {data.usageRightsType === "standard" ? (
-            <div className="bg-white border border-stone-200 rounded-2xl p-4">
-              <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
+            <div className="bg-white border border-neutral-200 rounded-2xl p-4">
+              <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">{USAGE_RIGHTS_TEXT}</p>
             </div>
           ) : (
             <CustomTermsForm data={data} update={update} />

@@ -164,7 +164,7 @@ function BrandDashboardContent() {
   }, []);
 
   return (
-    <div className="h-dvh bg-[#F5F5F4] text-stone-900 flex flex-col font-rethink">
+    <div className="h-dvh bg-[#f5f5f5] text-neutral-900 flex flex-col font-rethink">
       <NavBar
         userName={userName}
         userEmail={userEmail}
@@ -185,7 +185,7 @@ function BrandDashboardContent() {
               <Skeleton className="h-8 w-48" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+                  <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
                     <div className="flex items-center gap-3">
                       <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
                       <div className="space-y-2 flex-1">
@@ -205,17 +205,17 @@ function BrandDashboardContent() {
           </main>
         ) : fetchError ? (
           <main className="flex-1 flex flex-col items-center justify-center max-w-7xl w-full mx-auto px-6 py-12">
-            <div className="text-center max-w-sm bg-white border border-stone-200 rounded-2xl p-8 space-y-4">
+            <div className="text-center max-w-sm bg-white border border-neutral-200 rounded-2xl p-8 space-y-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-red-50 flex items-center justify-center">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
               </div>
-              <h2 className="font-rethink font-medium text-lg text-stone-900">Something went wrong</h2>
-              <p className="font-rethink text-xs text-stone-500 font-medium">{fetchError}</p>
+              <h2 className="font-rethink font-medium text-lg text-neutral-900">Something went wrong</h2>
+              <p className="font-rethink text-xs text-neutral-500 font-medium">{fetchError}</p>
               <button
                 onClick={() => fetchCampaigns()}
-                className="px-6 py-2.5 bg-stone-900 text-white text-sm font-medium font-rethink rounded-full"
+                className="px-6 py-2.5 bg-neutral-900 text-white text-sm font-medium font-rethink rounded-full"
               >
                 Try again
               </button>
@@ -238,7 +238,7 @@ function BrandDashboardContent() {
 
 export default function BrandDashboard() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#F5F5F4] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <BrandDashboardContent />
     </Suspense>
   );

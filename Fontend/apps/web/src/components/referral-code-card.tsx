@@ -20,7 +20,7 @@ const STATUS_COPY: Record<CampaignReferral["status"], { label: string; className
   },
   awaiting_code: {
     label: "Coming soon",
-    className: "bg-stone-100 text-stone-600",
+    className: "bg-neutral-100 text-neutral-600",
     hint: "The brand will assign your code shortly. It will appear here.",
   },
   disabled: {
@@ -47,9 +47,9 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
   };
 
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+    <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] font-medium text-stone-500 tracking-[-0.01em]">Your referral code</span>
+        <span className="text-[10px] font-medium text-neutral-500 tracking-[-0.01em]">Your referral code</span>
         <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink", copy.className)}>
           {copy.label}
         </span>
@@ -57,33 +57,33 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
 
       {referral.code ? (
         <div className="flex items-center gap-2">
-          <code className="flex-1 min-w-0 font-mono text-lg font-medium text-stone-900 tracking-wide break-all">
+          <code className="flex-1 min-w-0 font-mono text-lg font-medium text-neutral-900 tracking-wide break-all">
             {referral.code}
           </code>
           <button
             type="button"
             onClick={handleCopy}
             aria-label="Copy referral code"
-            className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-stone-100 text-stone-700 rounded-full"
+            className="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-neutral-100 text-neutral-700 rounded-full"
           >
             <HugeiconsIcon icon={Copy01Icon} size={16} />
           </button>
         </div>
       ) : (
-        <p className="font-rethink text-sm font-medium text-stone-400 tracking-[-0.01em]">No code yet</p>
+        <p className="font-rethink text-sm font-medium text-neutral-400 tracking-[-0.01em]">No code yet</p>
       )}
 
-      <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">{copy.hint}</p>
+      <p className="font-rethink text-xs font-medium text-neutral-500 leading-relaxed tracking-[-0.01em]">{copy.hint}</p>
 
       {rate === 0 && referral.code && (
-        <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed tracking-[-0.01em]">
+        <p className="font-rethink text-xs font-medium text-neutral-500 leading-relaxed tracking-[-0.01em]">
           Easily Promote is setting your reward per {conversionNounFor(referral.eventTypes || [referral.eventType], 1)}. Ones through your code already
           count and are paid once it&apos;s set.
         </p>
       )}
 
       {rate > 0 && (
-        <p className="font-rethink text-xs font-medium text-stone-900 tracking-[-0.01em]">
+        <p className="font-rethink text-xs font-medium text-neutral-900 tracking-[-0.01em]">
           You earn {formatNaira(rate)} per {conversionNounFor(referral.eventTypes || [referral.eventType], 1)} through your code.
           {referral.paying === false && (
             <span className="block text-amber-700 mt-0.5">
@@ -95,10 +95,10 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
 
       {referral.code && (
         <>
-          <div className="border-t border-stone-100" />
+          <div className="border-t border-neutral-100" />
           <div className="flex items-baseline justify-between font-rethink">
-            <span className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Tracked through your code</span>
-            <span className="text-sm font-medium text-stone-900 tabular-nums">
+            <span className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">Tracked through your code</span>
+            <span className="text-sm font-medium text-neutral-900 tabular-nums">
               {referral.conversions.toLocaleString()} {conversionNounFor(referral.eventTypes || [referral.eventType], referral.conversions)}
             </span>
           </div>
@@ -109,15 +109,15 @@ export function ReferralCodeCard({ referral }: { referral: CampaignReferral }) {
                 ["On hold", earnings.pending],
                 ["Withdrawable", earnings.availableToWithdraw],
               ].map(([label, value]) => (
-                <div key={label as string} className="bg-stone-50 rounded-xl px-3 py-2">
-                  <span className="text-[10px] font-medium text-stone-500 block">{label}</span>
-                  <span className="text-sm font-medium text-stone-900 tabular-nums">{formatNaira(value as number)}</span>
+                <div key={label as string} className="bg-neutral-50 rounded-xl px-3 py-2">
+                  <span className="text-[10px] font-medium text-neutral-500 block">{label}</span>
+                  <span className="text-sm font-medium text-neutral-900 tabular-nums">{formatNaira(value as number)}</span>
                 </div>
               ))}
             </div>
           )}
           {earnings && earnings.pending > 0 && (
-            <p className="font-rethink text-[11px] font-medium text-stone-500 leading-relaxed">
+            <p className="font-rethink text-[11px] font-medium text-neutral-500 leading-relaxed">
               Referral earnings are held for 7 days after each conversion, then you can withdraw them from your wallet.
             </p>
           )}

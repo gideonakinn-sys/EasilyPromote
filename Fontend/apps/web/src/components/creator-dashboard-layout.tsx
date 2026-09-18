@@ -55,7 +55,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-dvh bg-stone-50 text-[#1C1917] flex flex-col font-rethink">
+    <div className="min-h-dvh bg-neutral-50 text-[#171717] flex flex-col font-rethink">
       <CreatorHeader
         activeTab={activeTab}
         onTabChange={navigateTab}
@@ -78,7 +78,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
                 </p>
                 <button
                   onClick={r.onReconnect}
-                  className="self-start sm:self-auto px-4 py-2 bg-[#FEB604] text-stone-950 rounded-full font-semibold text-xs font-rethink"
+                  className="self-start sm:self-auto px-4 py-2 bg-[#FEB604] text-neutral-950 rounded-full font-semibold text-xs font-rethink"
                 >
                   Reconnect
                 </button>
@@ -91,7 +91,7 @@ function CreatorShell({ children }: { children: React.ReactNode }) {
             <Skeleton className="h-8 w-48" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+                <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <Skeleton className="w-12 h-12 rounded-xl flex-shrink-0" />
                     <div className="space-y-2 flex-1">

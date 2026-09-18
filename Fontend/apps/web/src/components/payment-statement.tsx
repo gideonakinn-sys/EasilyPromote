@@ -107,9 +107,9 @@ function DownloadButton({ campaignId, className }: { campaignId?: string; classN
           }
         }}
         disabled={downloading}
-        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-stone-200 rounded-full font-rethink font-medium text-sm text-stone-900 disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-neutral-200 rounded-full font-rethink font-medium text-sm text-neutral-900 disabled:opacity-50"
       >
-        <HugeiconsIcon icon={Download01Icon} size={16} className="text-stone-500" />
+        <HugeiconsIcon icon={Download01Icon} size={16} className="text-neutral-500" />
         {downloading ? "Downloading…" : "Download CSV"}
       </button>
       {error && <span className="font-rethink text-[11px] font-medium text-red-600">{error}</span>}
@@ -145,31 +145,31 @@ export function CampaignStatementCard({ campaignId }: { campaignId: string }) {
   if (!line) return null;
 
   return (
-    <section className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4 font-rethink">
+    <section className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4 font-rethink">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium text-base text-stone-900">Payment Statement</h3>
-          <p className="text-xs text-stone-500 font-medium">Where the {naira(line.paidIn)} you paid in went.</p>
+          <h3 className="font-medium text-base text-neutral-900">Payment Statement</h3>
+          <p className="text-xs text-neutral-500 font-medium">Where the {naira(line.paidIn)} you paid in went.</p>
         </div>
         <DownloadButton campaignId={campaignId} />
       </div>
       <dl className="space-y-2 text-sm">
         {breakdown(line).map((row) => (
           <div key={row.label} className="flex justify-between gap-3">
-            <dt className="text-stone-500 font-medium">
+            <dt className="text-neutral-500 font-medium">
               {row.label}
-              {row.hint && <span className="block text-[11px] text-stone-400">{row.hint}</span>}
+              {row.hint && <span className="block text-[11px] text-neutral-400">{row.hint}</span>}
             </dt>
-            <dd className="text-stone-900 font-medium tabular-nums">{naira(row.value)}</dd>
+            <dd className="text-neutral-900 font-medium tabular-nums">{naira(row.value)}</dd>
           </div>
         ))}
-        <div className="flex justify-between gap-3 border-t border-stone-200 pt-2">
-          <dt className="text-stone-900 font-medium">Paid In</dt>
-          <dd className="text-stone-900 font-medium tabular-nums">{naira(line.paidIn)}</dd>
+        <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2">
+          <dt className="text-neutral-900 font-medium">Paid In</dt>
+          <dd className="text-neutral-900 font-medium tabular-nums">{naira(line.paidIn)}</dd>
         </div>
       </dl>
       {line.owedToCreators > 0 && (
-        <p className="text-[11px] text-stone-500 font-medium">
+        <p className="text-[11px] text-neutral-500 font-medium">
           {naira(line.owedToCreators)} of what&apos;s paid to creators is earned and waiting for delivery, a hold or their weekly payout.
         </p>
       )}
@@ -209,11 +209,11 @@ export function PaymentStatementView() {
     <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-10 font-rethink">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div className="space-y-1">
-          <Link href="/dashboard/brand" className="text-xs font-medium text-stone-500">
+          <Link href="/dashboard/brand" className="text-xs font-medium text-neutral-500">
             ← Back To Campaigns
           </Link>
-          <h1 className="font-medium text-[23px] leading-[28px] tracking-tighter text-stone-900">Payment Statement</h1>
-          <p className="text-xs text-stone-500 font-medium max-w-xl">
+          <h1 className="font-medium text-[23px] leading-[28px] tracking-tighter text-neutral-900">Payment Statement</h1>
+          <p className="text-xs text-neutral-500 font-medium max-w-xl">
             Everything you paid in, and where it went: creators, our platform fee, refunds to you, and what&apos;s still in your campaigns.
             Refunds don&apos;t have Paystack fees taken off.
           </p>
@@ -222,9 +222,9 @@ export function PaymentStatementView() {
       </div>
 
       {error && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-3 text-center">
-          <p className="text-sm text-stone-600 font-medium">{error}</p>
-          <button type="button" onClick={load} className="px-5 py-2.5 bg-stone-900 text-white rounded-full text-sm font-medium">
+        <div className="bg-white border border-neutral-200 rounded-2xl p-6 space-y-3 text-center">
+          <p className="text-sm text-neutral-600 font-medium">{error}</p>
+          <button type="button" onClick={load} className="px-5 py-2.5 bg-neutral-900 text-white rounded-full text-sm font-medium">
             Try Again
           </button>
         </div>
@@ -239,9 +239,9 @@ export function PaymentStatementView() {
       )}
 
       {statement && statement.campaigns.length === 0 && (
-        <div className="bg-white border border-stone-200 rounded-2xl p-10 text-center space-y-1">
-          <h2 className="font-medium text-lg text-stone-900">Nothing paid yet</h2>
-          <p className="text-xs text-stone-500 font-medium">Your statement fills in once you pay for a campaign.</p>
+        <div className="bg-white border border-neutral-200 rounded-2xl p-10 text-center space-y-1">
+          <h2 className="font-medium text-lg text-neutral-900">Nothing paid yet</h2>
+          <p className="text-xs text-neutral-500 font-medium">Your statement fills in once you pay for a campaign.</p>
         </div>
       )}
 
@@ -249,17 +249,17 @@ export function PaymentStatementView() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
             {cards.map((card) => (
-              <div key={card.label} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-1">
-                <span className="text-[11px] font-medium text-stone-500 block">{card.label}</span>
-                <span className="font-medium text-lg md:text-xl text-stone-900 block tabular-nums">{naira(card.value)}</span>
-                {card.detail && <span className="text-[11px] font-medium text-stone-400 block">{card.detail}</span>}
+              <div key={card.label} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-1">
+                <span className="text-[11px] font-medium text-neutral-500 block">{card.label}</span>
+                <span className="font-medium text-lg md:text-xl text-neutral-900 block tabular-nums">{naira(card.value)}</span>
+                {card.detail && <span className="text-[11px] font-medium text-neutral-400 block">{card.detail}</span>}
               </div>
             ))}
           </div>
 
-          <div className="bg-white border border-stone-200 rounded-2xl overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-xs text-stone-700">
-              <thead className="border-b border-stone-200 text-[11px] text-stone-500">
+          <div className="bg-white border border-neutral-200 rounded-2xl overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left text-xs text-neutral-700">
+              <thead className="border-b border-neutral-200 text-[11px] text-neutral-500">
                 <tr>
                   <th className="px-4 py-3 font-medium">Campaign</th>
                   <th className="px-4 py-3 font-medium text-right">Paid In</th>
@@ -271,16 +271,16 @@ export function PaymentStatementView() {
                   <th className="px-4 py-3 font-medium text-right">Remaining</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {statement.campaigns.map((line) => (
                   <tr key={line.campaignId}>
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/brand/campaign/${line.campaignId}`} className="font-medium text-stone-900">
+                      <Link href={`/dashboard/brand/campaign/${line.campaignId}`} className="font-medium text-neutral-900">
                         {line.name}
                       </Link>
-                      <span className="block text-[11px] font-medium text-stone-400">{STATUS_LABEL[line.status] || line.status}</span>
+                      <span className="block text-[11px] font-medium text-neutral-400">{STATUS_LABEL[line.status] || line.status}</span>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(line.paidIn)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(line.paidIn)}</td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">{naira(line.deliverables)}</td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">{naira(line.performance)}</td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">{naira(line.platformFee)}</td>
@@ -290,16 +290,16 @@ export function PaymentStatementView() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="border-t border-stone-200">
+              <tfoot className="border-t border-neutral-200">
                 <tr>
-                  <td className="px-4 py-3 font-medium text-stone-900">Total ({totals.campaigns})</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.paidIn)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.deliverables)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.performance)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.platformFee)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.refundsIssued)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.refundsPending)}</td>
-                  <td className="px-4 py-3 text-right font-medium text-stone-900 tabular-nums">{naira(totals.remaining)}</td>
+                  <td className="px-4 py-3 font-medium text-neutral-900">Total ({totals.campaigns})</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.paidIn)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.deliverables)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.performance)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.platformFee)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.refundsIssued)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.refundsPending)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-neutral-900 tabular-nums">{naira(totals.remaining)}</td>
                 </tr>
               </tfoot>
             </table>

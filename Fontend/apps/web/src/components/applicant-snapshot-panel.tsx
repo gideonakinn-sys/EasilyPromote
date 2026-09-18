@@ -46,9 +46,9 @@ interface StatProps {
 
 function Stat({ label, value }: StatProps) {
   return (
-    <div className="bg-stone-50 rounded-xl p-3 space-y-0.5">
-      <p className="text-[10px] font-medium text-stone-500">{label}</p>
-      <p className="text-sm font-medium text-stone-900">{value}</p>
+    <div className="bg-neutral-50 rounded-xl p-3 space-y-0.5">
+      <p className="text-[10px] font-medium text-neutral-500">{label}</p>
+      <p className="text-sm font-medium text-neutral-900">{value}</p>
     </div>
   );
 }
@@ -66,16 +66,16 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
         <div className="space-y-2">
           {section.data.accounts.map((a) => (
             <div key={a.platform + (a.handle || "")} className="flex justify-between text-xs font-medium">
-              <span className="text-stone-700">
+              <span className="text-neutral-700">
                 {platformLabel(a.platform)}
-                {a.handle ? <span className="text-stone-400"> · {a.handle}</span> : null}
+                {a.handle ? <span className="text-neutral-400"> · {a.handle}</span> : null}
               </span>
-              <span className="text-stone-900">{a.followers === null ? "Not added" : `${compactNumber(a.followers)} followers`}</span>
+              <span className="text-neutral-900">{a.followers === null ? "Not added" : `${compactNumber(a.followers)} followers`}</span>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs font-medium text-stone-400">No platforms added</p>
+        <p className="text-xs font-medium text-neutral-400">No platforms added</p>
       );
       break;
     case "categories":
@@ -86,7 +86,7 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
               key={c}
               className={cn(
                 "px-2 py-0.5 rounded-full text-[10px] font-medium",
-                section.data.matching.includes(c) ? "bg-[#DBEAFE] text-[#1E40AF]" : "bg-stone-100 text-stone-600"
+                section.data.matching.includes(c) ? "bg-[#DBEAFE] text-[#1E40AF]" : "bg-neutral-100 text-neutral-600"
               )}
             >
               {c}
@@ -94,7 +94,7 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
           ))}
         </div>
       ) : (
-        <p className="text-xs font-medium text-stone-400">No categories added</p>
+        <p className="text-xs font-medium text-neutral-400">No categories added</p>
       );
       break;
     case "audience": {
@@ -116,10 +116,10 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
               value={d.genders ? `${d.genders.female}% F · ${d.genders.male}% M · ${d.genders.other}% Other` : "—"}
             />
           </div>
-          {d.source === "self_reported" && <p className="text-[10px] font-medium text-stone-400">Self-reported</p>}
+          {d.source === "self_reported" && <p className="text-[10px] font-medium text-neutral-400">Self-reported</p>}
         </div>
       ) : (
-        <p className="text-xs font-medium text-stone-400">No audience data added</p>
+        <p className="text-xs font-medium text-neutral-400">No audience data added</p>
       );
       break;
     }
@@ -145,20 +145,20 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "block rounded-xl overflow-hidden border aspect-[3/4] bg-stone-100 relative",
-                item.matchesCampaign ? "border-[#2563EB]" : "border-stone-200"
+                "block rounded-xl overflow-hidden border aspect-[3/4] bg-neutral-100 relative",
+                item.matchesCampaign ? "border-[#2563EB]" : "border-neutral-200"
               )}
             >
               {item.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
               ) : (
-                <span className="absolute inset-0 flex items-center justify-center p-2 text-[10px] font-medium text-stone-500 text-center">
+                <span className="absolute inset-0 flex items-center justify-center p-2 text-[10px] font-medium text-neutral-500 text-center">
                   {item.title || platformLabel(item.platform)}
                 </span>
               )}
               {item.category && (
-                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-full bg-white/90 text-[9px] font-medium text-stone-700">
+                <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-full bg-white/90 text-[9px] font-medium text-neutral-700">
                   {item.category}
                 </span>
               )}
@@ -166,7 +166,7 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
           ))}
         </div>
       ) : (
-        <p className="text-xs font-medium text-stone-400">No portfolio items yet</p>
+        <p className="text-xs font-medium text-neutral-400">No portfolio items yet</p>
       );
       break;
     case "badges":
@@ -180,7 +180,7 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
                 </span>
               ))
             ) : (
-              <span className="text-xs font-medium text-stone-400">No badges yet</span>
+              <span className="text-xs font-medium text-neutral-400">No badges yet</span>
             )}
           </div>
           <RatingSummary rating={section.data.rating} showEmpty />
@@ -191,9 +191,9 @@ function SnapshotSection({ section }: SnapshotSectionProps) {
   }
 
   return (
-    <div className={cn("rounded-2xl border p-4 space-y-3", section.emphasis ? "border-[#BFDBFE]" : "border-stone-200")}>
+    <div className={cn("rounded-2xl border p-4 space-y-3", section.emphasis ? "border-[#BFDBFE]" : "border-neutral-200")}>
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-medium text-stone-900">{SECTION_TITLES[section.key]}</h4>
+        <h4 className="text-sm font-medium text-neutral-900">{SECTION_TITLES[section.key]}</h4>
         {section.emphasis && (
           <span className="px-2 py-0.5 rounded-full bg-[#DBEAFE] text-[#1E40AF] text-[10px] font-medium">Key For This Campaign</span>
         )}
@@ -219,17 +219,17 @@ function RejectApplicationModal({ open, name, busy, onCancel, onConfirm }: Rejec
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6 font-rethink"
+      className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-6 font-rethink"
       role="dialog"
       aria-modal="true"
       aria-labelledby="reject-application-title"
     >
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4">
-        <h3 id="reject-application-title" className="font-medium text-base text-stone-900 text-center">
+        <h3 id="reject-application-title" className="font-medium text-base text-neutral-900 text-center">
           Reject {name}?
         </h3>
         <div className="space-y-2">
-          <label htmlFor="reject-reason" className="text-xs font-medium text-stone-500 block">
+          <label htmlFor="reject-reason" className="text-xs font-medium text-neutral-500 block">
             Reason For The Creator (Optional)
           </label>
           <textarea
@@ -238,11 +238,11 @@ function RejectApplicationModal({ open, name, busy, onCancel, onConfirm }: Rejec
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setReason(e.target.value.slice(0, 500))}
             rows={3}
             placeholder="e.g. We're looking for more fashion content"
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 resize-none"
           />
         </div>
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full">
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 bg-neutral-100 text-neutral-900 font-semibold text-sm rounded-full">
             Cancel
           </button>
           <button
@@ -341,16 +341,16 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
 
   return (
     <>
-      <div className="fixed inset-0 z-[70] bg-stone-900/40" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 z-[70] bg-neutral-900/40" onClick={onClose} aria-hidden="true" />
       <div
-        className="fixed inset-y-0 right-0 z-[80] w-full md:w-[460px] bg-white md:border-l md:border-stone-200 md:rounded-l-[24px] flex flex-col font-rethink"
+        className="fixed inset-y-0 right-0 z-[80] w-full md:w-[460px] bg-white md:border-l md:border-neutral-200 md:rounded-l-[24px] flex flex-col font-rethink"
         role="dialog"
         aria-modal="true"
         aria-label="Applicant"
       >
-        <div className="flex items-center justify-between px-5 md:px-8 h-16 border-b border-stone-100 flex-shrink-0">
-          <h3 className="text-base font-medium text-stone-900">Applicant</h3>
-          <button onClick={onClose} aria-label="Close applicant" className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200">
+        <div className="flex items-center justify-between px-5 md:px-8 h-16 border-b border-neutral-100 flex-shrink-0">
+          <h3 className="text-base font-medium text-neutral-900">Applicant</h3>
+          <button onClick={onClose} aria-label="Close applicant" className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -359,12 +359,12 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
 
         <div className="flex-1 overflow-y-auto px-5 md:px-8 py-6 space-y-5" data-lenis-prevent>
           {loadError && <p className="text-xs font-medium text-red-600">{loadError}</p>}
-          {!detail && !loadError && <p className="text-xs font-medium text-stone-400">Loading applicant…</p>}
+          {!detail && !loadError && <p className="text-xs font-medium text-neutral-400">Loading applicant…</p>}
 
           {detail && applicant && (
             <>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-stone-200 overflow-hidden flex items-center justify-center text-lg font-medium text-stone-600 shrink-0">
+                <div className="w-16 h-16 rounded-full bg-neutral-200 overflow-hidden flex items-center justify-center text-lg font-medium text-neutral-600 shrink-0">
                   {applicant.photo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={applicant.photo} alt={applicant.name} className="w-full h-full object-cover" />
@@ -373,7 +373,7 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
                   )}
                 </div>
                 <div className="min-w-0 space-y-1">
-                  <p className="text-lg font-medium text-stone-900 truncate">{applicant.name}</p>
+                  <p className="text-lg font-medium text-neutral-900 truncate">{applicant.name}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {applicant.verified && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#176448]">
@@ -381,18 +381,18 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
                       </span>
                     )}
                     <ApplicationStatusBadge status={detail.status} audience="brand" />
-                    <span className="text-[11px] font-medium text-stone-500">{detail.matchScore}% match</span>
+                    <span className="text-[11px] font-medium text-neutral-500">{detail.matchScore}% match</span>
                   </div>
                   {locationLabel(applicant.location) && (
-                    <p className="text-xs font-medium text-stone-500 truncate">{locationLabel(applicant.location)}</p>
+                    <p className="text-xs font-medium text-neutral-500 truncate">{locationLabel(applicant.location)}</p>
                   )}
                 </div>
               </div>
 
               {detail.pitch && (
-                <div className="bg-stone-50 rounded-2xl p-4 space-y-1">
-                  <p className="text-[10px] font-medium text-stone-500">Pitch</p>
-                  <p className="text-xs font-medium text-stone-800 leading-relaxed">{detail.pitch}</p>
+                <div className="bg-neutral-50 rounded-2xl p-4 space-y-1">
+                  <p className="text-[10px] font-medium text-neutral-500">Pitch</p>
+                  <p className="text-xs font-medium text-neutral-800 leading-relaxed">{detail.pitch}</p>
                 </div>
               )}
 
@@ -401,21 +401,21 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
               ))}
 
               {detail.status === "rejected" && detail.rejectionReason && (
-                <p className="text-xs font-medium text-stone-500">Reason given: &quot;{detail.rejectionReason}&quot;</p>
+                <p className="text-xs font-medium text-neutral-500">Reason given: &quot;{detail.rejectionReason}&quot;</p>
               )}
             </>
           )}
         </div>
 
         {detail && detail.status === "pending" && (
-          <div className="border-t border-stone-100 px-5 md:px-8 py-4 space-y-3 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="border-t border-neutral-100 px-5 md:px-8 py-4 space-y-3 flex-shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {actionError && <p className="text-xs font-medium text-red-600">{actionError}</p>}
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setShowReject(true)}
                 disabled={approving || rejecting}
-                className="flex-1 py-3 rounded-full font-semibold text-sm bg-stone-100 text-stone-900 disabled:opacity-50"
+                className="flex-1 py-3 rounded-full font-semibold text-sm bg-neutral-100 text-neutral-900 disabled:opacity-50"
               >
                 Reject
               </button>
@@ -423,7 +423,7 @@ export function ApplicantSnapshotPanel({ campaignId, applicationId, onClose, onD
                 type="button"
                 onClick={approve}
                 disabled={approving || rejecting}
-                className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-[#1C1917] border border-stone-100 disabled:opacity-50"
+                className="flex-1 py-3 rounded-full font-semibold text-sm bg-[#FEB604] text-[#171717] border border-neutral-100 disabled:opacity-50"
               >
                 {approving ? "Approving…" : "Approve"}
               </button>

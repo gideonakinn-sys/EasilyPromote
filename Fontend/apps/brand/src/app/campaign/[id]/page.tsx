@@ -32,7 +32,7 @@ export default function CampaignDetailsPage() {
 
   if (!campaignId) {
     return (
-      <div className="h-screen bg-stone-100 flex items-center justify-center font-rethink text-stone-500">
+      <div className="h-screen bg-neutral-100 flex items-center justify-center font-rethink text-neutral-500">
         Invalid campaign
       </div>
     );
@@ -40,14 +40,14 @@ export default function CampaignDetailsPage() {
 
   if (isMobile) {
     return (
-      <div className="h-screen bg-stone-100 text-stone-900 flex flex-col font-rethink">
+      <div className="h-screen bg-neutral-100 text-neutral-900 flex flex-col font-rethink">
         <CampaignDetails campaignId={campaignId} onClose={handleClose} isMobile />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-900 flex flex-col font-rethink">
+    <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col font-rethink">
       <Drawer open={true} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DrawerContent className="overflow-hidden">
           <CampaignDetails campaignId={campaignId} onClose={handleClose} />

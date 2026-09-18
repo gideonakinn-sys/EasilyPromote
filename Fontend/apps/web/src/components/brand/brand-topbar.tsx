@@ -24,21 +24,21 @@ export function BrandTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 border-b border-stone-100 bg-[#fcfcfc]">
+    <header className="sticky top-0 z-40 h-16 border-b border-neutral-100 bg-[#fafafa]">
       <div className="flex h-full items-center justify-between gap-3 px-5 md:px-8">
         {/* Mobile: hamburger */}
         <div className="flex items-center gap-2 md:hidden">
           <button
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-stone-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white border border-neutral-100"
           >
-            <HugeiconsIcon icon={Menu01Icon} size={18} className="text-stone-700" />
+            <HugeiconsIcon icon={Menu01Icon} size={18} className="text-neutral-700" />
           </button>
         </div>
 
         {/* Welcome */}
-        <p className="hidden md:block text-sm font-semibold text-stone-900">
+        <p className="hidden md:block text-sm font-semibold text-neutral-900">
           Welcome, {firstName}
         </p>
 
@@ -47,7 +47,7 @@ export function BrandTopbar() {
 
           <button
             onClick={createCampaign}
-            className="hidden md:inline-flex items-center gap-2 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full px-5 py-2.5 border border-stone-100"
+            className="hidden md:inline-flex items-center gap-2 bg-[#FEB604] text-[#171717] font-rethink font-semibold text-sm rounded-full px-5 py-2.5 border border-neutral-100"
           >
             <HugeiconsIcon icon={Add01Icon} size={16} />
             New campaign
@@ -57,7 +57,7 @@ export function BrandTopbar() {
           <button
             onClick={() => router.push("/dashboard/brand/settings")}
             aria-label="Open profile"
-            className="md:hidden h-9 w-9 overflow-hidden rounded-full border border-stone-100"
+            className="md:hidden h-9 w-9 overflow-hidden rounded-full border border-neutral-100"
           >
             <Image
               src={user?.avatar || user?.avatarUrl || avatarSvg}

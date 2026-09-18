@@ -56,18 +56,18 @@ export default function AdminWaitlistPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-stone-200 mb-6 gap-4">
+        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Waitlist</h1>
-            <p className="text-sm text-stone-500 mt-1">Browse everyone who has signed up for early access</p>
+            <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Waitlist</h1>
+            <p className="text-sm text-neutral-500 mt-1">Browse everyone who has signed up for early access</p>
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs font-semibold text-stone-600">
+            <span className="px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600">
               {entries.length} total
             </span>
             <input
@@ -75,14 +75,14 @@ export default function AdminWaitlistPage() {
               placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900 w-64"
+              className="px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900 w-64"
             />
           </div>
         </header>
 
-        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs text-stone-700">
-            <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl shadow-sm overflow-hidden">
+          <table className="w-full text-left text-xs text-neutral-700">
+            <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
               <tr>
                 <th className="px-6 py-4">Name</th>
                 <th className="px-6 py-4">Email</th>
@@ -91,28 +91,28 @@ export default function AdminWaitlistPage() {
                 <th className="px-6 py-4">Joined</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-36" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-48" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-20" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-36" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-48" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-20" /></td>
                   </tr>
                 ))
               ) : entries.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-stone-400">
+                  <td colSpan={5} className="px-6 py-12 text-center text-neutral-400">
                     No waitlist signups found.
                   </td>
                 </tr>
               ) : (
                 entries.map((e) => (
-                  <tr key={e.id} className="hover:bg-stone-50/80 transition-colors">
-                    <td className="px-6 py-4 font-bold text-stone-900">{e.name}</td>
-                    <td className="px-6 py-4 text-stone-600">{e.email}</td>
+                  <tr key={e.id} className="hover:bg-neutral-50/80 transition-colors">
+                    <td className="px-6 py-4 font-bold text-neutral-900">{e.name}</td>
+                    <td className="px-6 py-4 text-neutral-600">{e.email}</td>
                     <td className="px-6 py-4">
                       <span
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${
@@ -129,13 +129,13 @@ export default function AdminWaitlistPage() {
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase font-mono ${
                           e.emailSent
                             ? "bg-green-100 text-green-800"
-                            : "bg-stone-200 text-stone-700"
+                            : "bg-neutral-200 text-neutral-700"
                         }`}
                       >
                         {e.emailSent ? "Sent" : "No"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-stone-600">{formatDate(e.createdAt)}</td>
+                    <td className="px-6 py-4 text-neutral-600">{formatDate(e.createdAt)}</td>
                   </tr>
                 ))
               )}

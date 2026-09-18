@@ -130,7 +130,7 @@ export default function CreateAccountPage() {
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-white">
       <LeftPanel />
 
-      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 h-screen overflow-y-auto bg-stone-100">
+      <div className="col-span-1 md:col-span-7 flex items-center justify-center p-10 h-screen overflow-y-auto bg-neutral-100">
         {error && (
           <div className="fixed top-4 right-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 z-50">
             {error}
@@ -165,9 +165,9 @@ export default function CreateAccountPage() {
 
         {step !== "otp" && (
           <div className="absolute bottom-8 left-0 right-0 text-center md:hidden">
-            <span className="text-sm font-semibold text-stone-400 font-rethink">
+            <span className="text-sm font-semibold text-neutral-400 font-rethink">
               Already have an account?{" "}
-              <Link href="/login" className="text-stone-900 font-medium">
+              <Link href="/login" className="text-neutral-900 font-medium">
                 Sign in
               </Link>
             </span>

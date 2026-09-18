@@ -7,9 +7,9 @@ import { cn } from "@ep/ui/lib/utils";
 import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 
 export const TEXT_INPUT_CLASS =
-  "w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0";
+  "w-full px-4 py-3 bg-white border border-neutral-200 rounded-full text-sm font-rethink font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0";
 export const TEXTAREA_CLASS =
-  "w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[88px]";
+  "w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-rethink font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 resize-none min-h-[88px]";
 
 interface FieldProps {
   label: string;
@@ -23,13 +23,13 @@ export function Field({ label, htmlFor, hint, tooltip, children }: FieldProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
-        <label htmlFor={htmlFor} className="text-xs font-medium text-stone-500 font-rethink">
+        <label htmlFor={htmlFor} className="text-xs font-medium text-neutral-500 font-rethink">
           {label}
         </label>
         {tooltip && <InfoTooltip text={tooltip} />}
       </div>
       {children}
-      {hint && <p className="text-xs text-stone-400 font-medium font-rethink leading-relaxed">{hint}</p>}
+      {hint && <p className="text-xs text-neutral-400 font-medium font-rethink leading-relaxed">{hint}</p>}
     </div>
   );
 }
@@ -42,8 +42,8 @@ interface StepHeadingProps {
 export function StepHeading({ title, body }: StepHeadingProps) {
   return (
     <div className="space-y-1">
-      <h4 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">{title}</h4>
-      <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{body}</p>
+      <h4 className="font-rethink font-semibold text-lg text-neutral-900 tracking-tight">{title}</h4>
+      <p className="font-rethink text-xs text-neutral-500 font-medium leading-relaxed">{body}</p>
     </div>
   );
 }
@@ -69,24 +69,24 @@ export function OptionCard({ title, body, selected, disabled, badge, onSelect }:
       onClick={onSelect}
       className={cn(
         "w-full text-left px-4 py-3.5 rounded-2xl border bg-white transition-colors",
-        selected ? "border-stone-900" : "border-stone-200",
-        disabled && "bg-stone-50 cursor-not-allowed"
+        selected ? "border-neutral-900" : "border-neutral-200",
+        disabled && "bg-neutral-50 cursor-not-allowed"
       )}
     >
       <span className="flex items-center justify-between gap-3">
-        <span className={cn("text-sm font-medium font-rethink", disabled ? "text-stone-400" : "text-stone-900")}>{title}</span>
+        <span className={cn("text-sm font-medium font-rethink", disabled ? "text-neutral-400" : "text-neutral-900")}>{title}</span>
         {badge ? (
-          <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-500 text-[10px] font-medium font-rethink shrink-0">{badge}</span>
+          <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500 text-[10px] font-medium font-rethink shrink-0">{badge}</span>
         ) : (
           <span
-            className={cn("w-4 h-4 rounded-full border flex items-center justify-center shrink-0", selected ? "border-stone-900" : "border-stone-300")}
+            className={cn("w-4 h-4 rounded-full border flex items-center justify-center shrink-0", selected ? "border-neutral-900" : "border-neutral-300")}
             aria-hidden="true"
           >
-            {selected && <span className="w-2 h-2 rounded-full bg-stone-900" />}
+            {selected && <span className="w-2 h-2 rounded-full bg-neutral-900" />}
           </span>
         )}
       </span>
-      <span className={cn("block text-xs font-medium font-rethink mt-1 leading-relaxed", disabled ? "text-stone-400" : "text-stone-500")}>{body}</span>
+      <span className={cn("block text-xs font-medium font-rethink mt-1 leading-relaxed", disabled ? "text-neutral-400" : "text-neutral-500")}>{body}</span>
     </button>
   );
 }
@@ -111,7 +111,7 @@ export function ChipGroup({ options, selected, onToggle, label }: ChipGroupProps
             onClick={() => onToggle(option.value)}
             className={cn(
               "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors",
-              isSelected ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+              isSelected ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"
             )}
           >
             {option.label}
@@ -163,7 +163,7 @@ export function ListInput({ id, items, onChange, placeholder, maxItems, maxLengt
               add();
             }
           }}
-          className={cn(TEXT_INPUT_CLASS, "flex-1 disabled:bg-stone-100")}
+          className={cn(TEXT_INPUT_CLASS, "flex-1 disabled:bg-neutral-100")}
         />
         <button
           type="button"
@@ -171,7 +171,7 @@ export function ListInput({ id, items, onChange, placeholder, maxItems, maxLengt
           disabled={!value.trim() || full}
           className={cn(
             "shrink-0 px-5 py-3 rounded-full text-sm font-semibold font-rethink transition-colors",
-            value.trim() && !full ? "bg-[#FEB604] text-[#1C1917]" : "bg-stone-200 text-stone-400 cursor-not-allowed"
+            value.trim() && !full ? "bg-[#FEB604] text-[#171717]" : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
           )}
         >
           Add
@@ -185,7 +185,7 @@ export function ListInput({ id, items, onChange, placeholder, maxItems, maxLengt
                 type="button"
                 onClick={() => onChange(items.filter((existing) => existing !== item))}
                 aria-label={`Remove ${item}`}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-medium font-rethink max-w-full"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-neutral-900 text-white text-xs font-medium font-rethink max-w-full"
               >
                 <span className="truncate">{item}</span>
                 <HugeiconsIcon icon={Cancel01Icon} size={12} />
@@ -205,8 +205,8 @@ export function toggleValue(list: string[], value: string): string[] {
 export function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between items-start gap-4 text-xs font-rethink">
-      <span className="font-medium text-stone-500 shrink-0">{label}</span>
-      <span className="font-medium text-stone-800 text-right tabular-nums">{value}</span>
+      <span className="font-medium text-neutral-500 shrink-0">{label}</span>
+      <span className="font-medium text-neutral-800 text-right tabular-nums">{value}</span>
     </div>
   );
 }

@@ -16,17 +16,17 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-1.5">
-        <h1 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
+        <h1 data-reveal className="text-2xl font-medium font-rethink text-neutral-900 tracking-tighter">
           Create your creator account
         </h1>
-        <p data-reveal className="text-xs text-stone-400 font-medium font-rethink tracking-[-0.01em]">
+        <p data-reveal className="text-xs text-neutral-400 font-medium font-rethink tracking-[-0.01em]">
           Claim placements and get paid for real views.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6">
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
+          <label className="text-xs font-medium text-neutral-500 block font-rethink tracking-[-0.01em]">
             Full name
           </label>
           <div className="flex gap-2">
@@ -36,7 +36,7 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
               placeholder="First name"
               value={form.firstName}
               onChange={(e) => actions.setField("firstName", e.target.value)}
-              className="w-1/2 px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+              className="w-1/2 px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
             />
             <input
               type="text"
@@ -44,13 +44,13 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
               placeholder="Last name"
               value={form.lastName}
               onChange={(e) => actions.setField("lastName", e.target.value)}
-              className="w-1/2 px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+              className="w-1/2 px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
             />
           </div>
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
+          <label className="text-xs font-medium text-neutral-500 block font-rethink tracking-[-0.01em]">
             Nickname / Alias
           </label>
           <input
@@ -59,12 +59,12 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
             placeholder="Enter your nickname or alias"
             value={form.nickname}
             onChange={(e) => actions.setField("nickname", e.target.value)}
-            className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+            className="w-full px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
           />
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
+          <label className="text-xs font-medium text-neutral-500 block font-rethink tracking-[-0.01em]">
             Email address
           </label>
           <input
@@ -73,22 +73,22 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
             placeholder="Enter Email address"
             value={form.email}
             onChange={(e) => actions.setField("email", e.target.value)}
-            className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+            className="w-full px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
           />
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
+          <label className="text-xs font-medium text-neutral-500 block font-rethink tracking-[-0.01em]">
             Phone number
           </label>
           <div className="flex gap-2">
             <div className="relative flex-shrink-0">
-              <select className="px-4 py-3 border border-stone-200 rounded-full text-sm font-medium text-stone-800 appearance-none focus:outline-none focus:border-stone-400 focus:ring-0 bg-white cursor-pointer transition-colors font-rethink">
+              <select className="px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium text-neutral-800 appearance-none focus:outline-none focus:border-neutral-400 focus:ring-0 bg-white cursor-pointer transition-colors font-rethink">
                 <option value="+234">+234</option>
                 <option value="+1">+1</option>
                 <option value="+44">+44</option>
               </select>
-              <HugeiconsIcon icon={ChevronDownIcon} size={14} className="text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <HugeiconsIcon icon={ChevronDownIcon} size={14} className="text-neutral-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
             <input
               type="tel"
@@ -96,13 +96,13 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
               placeholder="Enter Phone number"
               value={form.phone}
               onChange={(e) => actions.setField("phone", e.target.value)}
-              className="flex-1 px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+              className="flex-1 px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
             />
           </div>
         </div>
 
         <div data-reveal className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-500 block font-rethink tracking-[-0.01em]">
+          <label className="text-xs font-medium text-neutral-500 block font-rethink tracking-[-0.01em]">
             Password
           </label>
           <div className="relative">
@@ -112,17 +112,17 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
               placeholder="Enter password"
               value={form.password}
               onChange={(e) => actions.setField("password", e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-full text-sm font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 transition-colors font-rethink"
+              className="w-full px-4 py-3 border border-neutral-200 rounded-full text-sm font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 transition-colors font-rethink"
             />
             <button
               type="button"
               onClick={() => actions.setField("showPassword", !form.showPassword)}
-              className="text-stone-400 absolute right-4 top-1/2 -translate-y-1/2"
+              className="text-neutral-400 absolute right-4 top-1/2 -translate-y-1/2"
             >
               {form.showPassword ? <HugeiconsIcon icon={EyeOffIcon} size={16} /> : <HugeiconsIcon icon={EyeIcon} size={16} />}
             </button>
           </div>
-          <span className="text-xs font-medium text-stone-400 block font-rethink tracking-[-0.01em]">
+          <span className="text-xs font-medium text-neutral-400 block font-rethink tracking-[-0.01em]">
             Use at least 8 characters, with a number.
           </span>
         </div>
@@ -135,13 +135,13 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
               className={cn(
                 "w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0",
                 form.agreed
-                  ? "bg-stone-950 border-stone-950 text-white"
-                  : "border-stone-300 bg-white"
+                  ? "bg-neutral-950 border-neutral-950 text-white"
+                  : "border-neutral-300 bg-white"
               )}
             >
               {form.agreed && <HugeiconsIcon icon={CheckIcon} size={12} />}
             </button>
-            <span className="text-xs font-medium text-stone-500 font-rethink">
+            <span className="text-xs font-medium text-neutral-500 font-rethink">
               I agree to the Terms of Service and Privacy Policy
             </span>
           </div>
@@ -149,14 +149,14 @@ export function CreatorRegisterStep({ form, actions, onSubmit, loading }: Creato
           <button
             type="submit"
             disabled={!form.agreed || loading}
-            className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 text-stone-900 disabled:text-stone-400 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
+            className="w-full py-3 bg-[#FEB604] disabled:bg-neutral-200 text-neutral-900 disabled:text-neutral-400 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
           >
             {loading ? <Spinner /> : "Continue"}
           </button>
 
-          <p className="text-center text-sm font-medium text-stone-500 font-rethink tracking-[-0.01em]">
+          <p className="text-center text-sm font-medium text-neutral-500 font-rethink tracking-[-0.01em]">
             Already have an account?{" "}
-            <Link href="/login" className="text-stone-900 font-semibold">
+            <Link href="/login" className="text-neutral-900 font-semibold">
               Login
             </Link>
           </p>

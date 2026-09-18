@@ -50,21 +50,21 @@ export function CompleteCampaignDialog({ campaignId, campaignName, isContent, no
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4 font-rethink"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4 font-rethink"
       onClick={() => !submitting && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="complete-campaign-heading"
-        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-5"
+        className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-md w-full space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="space-y-2">
-          <h3 id="complete-campaign-heading" className="font-medium text-lg text-stone-900">
+          <h3 id="complete-campaign-heading" className="font-medium text-lg text-neutral-900">
             Complete &ldquo;{campaignName}&rdquo;?
           </h3>
-          <ul className="space-y-1.5 text-xs text-stone-600 font-medium leading-relaxed list-disc pl-4">
+          <ul className="space-y-1.5 text-xs text-neutral-600 font-medium leading-relaxed list-disc pl-4">
             <li>Places nobody has taken close. The campaign leaves the marketplace, and new joins and applications are refused.</li>
             <li>Creators who already have a place keep it and can finish their work.</li>
             <li>The brand is told the campaign is completed{note.trim() ? ", with your note" : ""}.</li>
@@ -74,7 +74,7 @@ export function CompleteCampaignDialog({ campaignId, campaignName, isContent, no
               <li>Completing doesn&apos;t refund anything. Creators can still withdraw what they earned.</li>
             )}
           </ul>
-          <p className="text-xs text-stone-500 font-medium">This can&apos;t be undone.</p>
+          <p className="text-xs text-neutral-500 font-medium">This can&apos;t be undone.</p>
           {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
         </div>
         <div className="flex gap-2">
@@ -82,7 +82,7 @@ export function CompleteCampaignDialog({ campaignId, campaignName, isContent, no
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+            className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
           >
             Cancel
           </button>
@@ -90,7 +90,7 @@ export function CompleteCampaignDialog({ campaignId, campaignName, isContent, no
             type="button"
             onClick={complete}
             disabled={submitting}
-            className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-stone-900 disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-neutral-900 disabled:opacity-50"
           >
             {submitting ? "Completing…" : "Complete Campaign"}
           </button>

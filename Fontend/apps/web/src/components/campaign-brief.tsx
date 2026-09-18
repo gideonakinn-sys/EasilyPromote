@@ -18,10 +18,10 @@ function BriefList({ title, items }: BriefListProps) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-1.5">
-      <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">{title}</h5>
+      <h5 className="text-xs font-medium text-neutral-500 font-rethink tracking-[-0.01em]">{title}</h5>
       <ul className="space-y-1">
         {items.map((item) => (
-          <li key={item} className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">
+          <li key={item} className="font-rethink text-sm text-neutral-900 font-medium leading-relaxed tracking-[-0.01em]">
             {item}
           </li>
         ))}
@@ -39,8 +39,8 @@ function BriefText({ title, text }: BriefTextProps) {
   if (!text) return null;
   return (
     <div className="space-y-1.5">
-      <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">{title}</h5>
-      <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">{text}</p>
+      <h5 className="text-xs font-medium text-neutral-500 font-rethink tracking-[-0.01em]">{title}</h5>
+      <p className="font-rethink text-sm text-neutral-900 font-medium leading-relaxed tracking-[-0.01em]">{text}</p>
     </div>
   );
 }
@@ -73,10 +73,10 @@ export function CampaignBriefDetails({ brief, showSummary = false }: CampaignBri
       <BriefText title="Product info" text={brief.productInfo} />
       {brief.hashtags.length > 0 && (
         <div className="space-y-1.5">
-          <h5 className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Hashtags</h5>
+          <h5 className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">Hashtags</h5>
           <div className="flex flex-wrap gap-1.5">
             {brief.hashtags.map((tag) => (
-              <span key={tag} className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-medium">
+              <span key={tag} className="px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-700 text-xs font-medium">
                 {tag}
               </span>
             ))}
@@ -85,7 +85,7 @@ export function CampaignBriefDetails({ brief, showSummary = false }: CampaignBri
       )}
       {brief.soundUrl && (
         <div className="space-y-1.5">
-          <h5 className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Sound</h5>
+          <h5 className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">Sound</h5>
           <a href={brief.soundUrl} target="_blank" rel="noreferrer" className="block text-sm font-medium text-blue-700 break-all">
             {brief.soundUrl}
           </a>
@@ -93,7 +93,7 @@ export function CampaignBriefDetails({ brief, showSummary = false }: CampaignBri
       )}
       {brief.referenceVideos.length > 0 && (
         <div className="space-y-1.5">
-          <h5 className="text-xs font-medium text-stone-500 tracking-[-0.01em]">Reference videos</h5>
+          <h5 className="text-xs font-medium text-neutral-500 tracking-[-0.01em]">Reference videos</h5>
           <ul className="space-y-1">
             {brief.referenceVideos.map((url) => (
               <li key={url}>

@@ -46,10 +46,10 @@ export function OtpStep({ email, otpValues, onOtpChange, onSubmit, onResend, loa
   return (
     <div className="w-[350px] space-y-8">
       <div className="space-y-2 text-center">
-        <h2 data-reveal className="text-2xl font-medium font-rethink text-stone-900 tracking-tighter">
+        <h2 data-reveal className="text-2xl font-medium font-rethink text-neutral-900 tracking-tighter">
           Check your inbox
         </h2>
-        <p data-reveal className="text-xs text-stone-500 font-medium font-rethink tracking-[-0.01em]">
+        <p data-reveal className="text-xs text-neutral-500 font-medium font-rethink tracking-[-0.01em]">
           Enter the code we sent to {email || "name@business.com"}
         </p>
       </div>
@@ -65,18 +65,18 @@ export function OtpStep({ email, otpValues, onOtpChange, onSubmit, onResend, loa
               value={val}
               onChange={(e) => handleChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
-              className="w-12 h-14 border border-stone-200 rounded-xl text-center text-lg font-medium text-stone-900 focus:outline-none focus:border-stone-400 focus:ring-0 bg-[#FBFBFA] font-rethink"
+              className="w-12 h-14 border border-neutral-200 rounded-xl text-center text-lg font-medium text-neutral-900 focus:outline-none focus:border-neutral-400 focus:ring-0 bg-[#FBFBFA] font-rethink"
             />
           ))}
         </div>
 
         <div data-reveal className="text-center">
-          <span className="text-sm font-semibold text-stone-400 font-rethink">
+          <span className="text-sm font-semibold text-neutral-400 font-rethink">
             Didn&apos;t get it?{" "}
             {secondsLeft > 0 ? (
-              <span className="text-stone-900">Resend code ({mm}:{ss})</span>
+              <span className="text-neutral-900">Resend code ({mm}:{ss})</span>
             ) : (
-              <button type="button" onClick={handleResend} className="text-stone-900 underline">
+              <button type="button" onClick={handleResend} className="text-neutral-900 underline">
                 Resend code
               </button>
             )}
@@ -87,7 +87,7 @@ export function OtpStep({ email, otpValues, onOtpChange, onSubmit, onResend, loa
           data-reveal
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-[#FEB604] disabled:bg-stone-200 disabled:text-stone-400 text-stone-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
+          className="w-full py-3 bg-[#FEB604] disabled:bg-neutral-200 disabled:text-neutral-400 text-neutral-900 font-semibold text-sm rounded-full disabled:cursor-not-allowed font-rethink flex items-center justify-center"
         >
           {loading ? <Spinner /> : "Verify"}
         </button>

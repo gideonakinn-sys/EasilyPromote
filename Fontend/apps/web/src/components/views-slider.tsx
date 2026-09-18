@@ -77,7 +77,7 @@ export function ViewsSlider({
     <div className={cn("relative select-none", className)} data-vaul-no-drag>
       {/* Value bubble */}
       <div className="flex justify-center mb-3">
-        <div className="bg-stone-900 text-white text-sm font-medium font-rethink px-3 py-1 rounded-full">
+        <div className="bg-neutral-900 text-white text-sm font-medium font-rethink px-3 py-1 rounded-full">
           {formatFullNumber(value)} views
         </div>
       </div>
@@ -85,7 +85,7 @@ export function ViewsSlider({
       {/* Track */}
       <div
         ref={trackRef}
-        className="relative h-[30px] bg-stone-200 rounded-full cursor-pointer overflow-hidden"
+        className="relative h-[30px] bg-neutral-200 rounded-full cursor-pointer overflow-hidden"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -98,7 +98,7 @@ export function ViewsSlider({
       >
         {/* Fill */}
         <div
-          className="absolute top-0 left-0 h-full bg-stone-900 rounded-full transition-[width] duration-75"
+          className="absolute top-0 left-0 h-full bg-neutral-900 rounded-full transition-[width] duration-75"
           style={{ width: `${fillPercent}%` }}
         />
 
@@ -115,7 +115,7 @@ export function ViewsSlider({
               <div
                 className={cn(
                   "w-1.5 h-1.5 rounded-full",
-                  isPassed ? "bg-white/70" : "bg-stone-300"
+                  isPassed ? "bg-white/70" : "bg-neutral-300"
                 )}
               />
             </div>
@@ -124,7 +124,7 @@ export function ViewsSlider({
 
         {/* Thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-5 h-5 bg-white rounded-full border border-stone-200 transition-[left] duration-75"
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-5 h-5 bg-white rounded-full border border-neutral-200 transition-[left] duration-75"
           style={{ left: `${fillPercent}%` }}
         />
       </div>
@@ -142,7 +142,7 @@ export function ViewsSlider({
               onClick={() => onChange(step)}
               className={cn(
                 "text-[10px] font-medium font-rethink tracking-[-0.01em]",
-                isClosest ? "text-stone-900" : "text-stone-400"
+                isClosest ? "text-neutral-900" : "text-neutral-400"
               )}
               style={{ width: `${100 / steps.length}%` }}
             >

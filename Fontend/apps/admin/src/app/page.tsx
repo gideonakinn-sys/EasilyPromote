@@ -72,21 +72,21 @@ export default function AdminOverviewPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-stone-200 mb-8 gap-4">
+        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 mb-8 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Marketplace Overview</h1>
-            <p className="text-sm text-stone-500 mt-1">Real-time stats, escrow status, and system operations</p>
+            <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Marketplace Overview</h1>
+            <p className="text-sm text-neutral-500 mt-1">Real-time stats, escrow status, and system operations</p>
           </div>
           <button
             onClick={() => {
               fetchStats();
               setAlertsRefreshKey((key) => key + 1);
             }}
-            className="self-start md:self-auto px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all"
+            className="self-start md:self-auto px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="23 4 23 10 17 10" />
@@ -117,137 +117,137 @@ export default function AdminOverviewPage() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white border border-stone-200 rounded-2xl p-6 animate-pulse h-32" />
+              <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-6 animate-pulse h-32" />
             ))}
           </div>
         ) : stats ? (
           <>
             {/* Top Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between text-stone-500 mb-2">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between text-neutral-500 mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">Active Escrow</span>
                   <span className="p-2 rounded-xl bg-amber-50 text-[#FEB604]">💰</span>
                 </div>
-                <div className="text-2xl font-bold text-stone-900">{formatCurrency(stats.totalEscrowed)}</div>
-                <div className="mt-2 text-xs text-stone-500">Live & under-review campaigns</div>
+                <div className="text-2xl font-bold text-neutral-900">{formatCurrency(stats.totalEscrowed)}</div>
+                <div className="mt-2 text-xs text-neutral-500">Live & under-review campaigns</div>
               </div>
 
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between text-stone-500 mb-2">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between text-neutral-500 mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">Live Campaigns</span>
                   <span className="p-2 rounded-xl bg-green-50 text-green-600">🚀</span>
                 </div>
-                <div className="text-2xl font-bold text-stone-900">{stats.campaigns.live}</div>
-                <div className="mt-2 text-xs text-stone-500">{stats.campaigns.total} total campaigns created</div>
+                <div className="text-2xl font-bold text-neutral-900">{stats.campaigns.live}</div>
+                <div className="mt-2 text-xs text-neutral-500">{stats.campaigns.total} total campaigns created</div>
               </div>
 
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between text-stone-500 mb-2">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between text-neutral-500 mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">Pending Verifications</span>
                   <span className="p-2 rounded-xl bg-blue-50 text-blue-600">🔍</span>
                 </div>
-                <div className="text-2xl font-bold text-stone-900">{stats.pendingVerifications}</div>
-                <div className="mt-2 text-xs text-stone-500">{stats.openAppeals} open creator appeals</div>
+                <div className="text-2xl font-bold text-neutral-900">{stats.pendingVerifications}</div>
+                <div className="mt-2 text-xs text-neutral-500">{stats.openAppeals} open creator appeals</div>
               </div>
 
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between text-stone-500 mb-2">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between text-neutral-500 mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">Registered Users</span>
                   <span className="p-2 rounded-xl bg-purple-50 text-purple-600">👥</span>
                 </div>
-                <div className="text-2xl font-bold text-stone-900">{stats.brands + stats.creators}</div>
-                <div className="mt-2 text-xs text-stone-500">{stats.brands} Brands · {stats.creators} Creators</div>
+                <div className="text-2xl font-bold text-neutral-900">{stats.brands + stats.creators}</div>
+                <div className="mt-2 text-xs text-neutral-500">{stats.brands} Brands · {stats.creators} Creators</div>
               </div>
             </div>
 
             {/* Middle Grid: Campaign Breakdown & Urgent Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Campaign Lifecycle Card */}
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-bold text-stone-900 mb-4 flex items-center justify-between">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-base font-bold text-neutral-900 mb-4 flex items-center justify-between">
                   <span>Campaign Lifecycle</span>
                   <Link href="/campaigns" className="text-xs text-[#FEB604] hover:underline font-semibold">View All →</Link>
                 </h3>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50/50 border border-amber-100">
-                    <span className="text-xs font-semibold text-stone-700">Under Review</span>
+                    <span className="text-xs font-semibold text-neutral-700">Under Review</span>
                     <span className="px-2.5 py-1 text-xs font-bold bg-amber-100 text-amber-800 rounded-full">{stats.campaigns.under_review}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-xl bg-green-50/50 border border-green-100">
-                    <span className="text-xs font-semibold text-stone-700">Live & Running</span>
+                    <span className="text-xs font-semibold text-neutral-700">Live & Running</span>
                     <span className="px-2.5 py-1 text-xs font-bold bg-green-100 text-green-800 rounded-full">{stats.campaigns.live}</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 border border-stone-200">
-                    <span className="text-xs font-semibold text-stone-700">Draft / Unfunded</span>
-                    <span className="px-2.5 py-1 text-xs font-bold bg-stone-200 text-stone-700 rounded-full">{stats.campaigns.draft + stats.campaigns.pending_payment}</span>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+                    <span className="text-xs font-semibold text-neutral-700">Draft / Unfunded</span>
+                    <span className="px-2.5 py-1 text-xs font-bold bg-neutral-200 text-neutral-700 rounded-full">{stats.campaigns.draft + stats.campaigns.pending_payment}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                    <span className="text-xs font-semibold text-stone-700">Completed</span>
+                    <span className="text-xs font-semibold text-neutral-700">Completed</span>
                     <span className="px-2.5 py-1 text-xs font-bold bg-blue-100 text-blue-800 rounded-full">{stats.campaigns.completed}</span>
                   </div>
                 </div>
               </div>
 
               {/* Action Quick Links */}
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-stone-900 mb-2">Required Actions</h3>
-                  <p className="text-xs text-stone-500 mb-4">Queued tasks requiring admin moderation</p>
+                  <h3 className="text-base font-bold text-neutral-900 mb-2">Required Actions</h3>
+                  <p className="text-xs text-neutral-500 mb-4">Queued tasks requiring admin moderation</p>
                   
                   <div className="space-y-3">
                     <Link
                       href="/verifications"
-                      className="block p-3.5 rounded-xl border border-stone-200 hover:border-stone-900 transition-all hover:shadow-sm"
+                      className="block p-3.5 rounded-xl border border-neutral-200 hover:border-neutral-900 transition-all hover:shadow-sm"
                     >
-                      <div className="flex items-center justify-between font-semibold text-sm text-stone-900">
+                      <div className="flex items-center justify-between font-semibold text-sm text-neutral-900">
                         <span>Review Submissions</span>
                         <span className="text-xs font-bold text-amber-600">{stats.pendingVerifications} Pending</span>
                       </div>
-                      <p className="text-xs text-stone-500 mt-1">Verify submitted videos & engagement metrics</p>
+                      <p className="text-xs text-neutral-500 mt-1">Verify submitted videos & engagement metrics</p>
                     </Link>
 
                     <Link
                       href="/verifications?tab=appeals"
-                      className="block p-3.5 rounded-xl border border-stone-200 hover:border-stone-900 transition-all hover:shadow-sm"
+                      className="block p-3.5 rounded-xl border border-neutral-200 hover:border-neutral-900 transition-all hover:shadow-sm"
                     >
-                      <div className="flex items-center justify-between font-semibold text-sm text-stone-900">
+                      <div className="flex items-center justify-between font-semibold text-sm text-neutral-900">
                         <span>Creator Appeals</span>
                         <span className="text-xs font-bold text-red-600">{stats.openAppeals} Open</span>
                       </div>
-                      <p className="text-xs text-stone-500 mt-1">Resolve creator disputes on rejected posts</p>
+                      <p className="text-xs text-neutral-500 mt-1">Resolve creator disputes on rejected posts</p>
                     </Link>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500 font-mono">
+                <div className="mt-6 pt-4 border-t border-neutral-100 flex items-center justify-between text-xs text-neutral-500 font-mono">
                   <span>Platform Fee Engine: 30%</span>
                   <span>Released: {formatCurrency(stats.totalReleased)}</span>
                 </div>
               </div>
 
               {/* Recent Registrations */}
-              <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-bold text-stone-900 mb-4 flex items-center justify-between">
+              <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm">
+                <h3 className="text-base font-bold text-neutral-900 mb-4 flex items-center justify-between">
                   <span>Recent User Registrations</span>
                   <Link href="/users" className="text-xs text-[#FEB604] hover:underline font-semibold">Manage Users →</Link>
                 </h3>
                 <div className="space-y-3">
                   {stats.recentUsers.length === 0 ? (
-                    <p className="text-xs text-stone-400">No users registered yet.</p>
+                    <p className="text-xs text-neutral-400">No users registered yet.</p>
                   ) : (
                     stats.recentUsers.map((u) => (
-                      <div key={u._id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-stone-50 transition-colors border border-stone-100">
+                      <div key={u._id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-neutral-50 transition-colors border border-neutral-100">
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-stone-900 truncate">{u.name}</p>
-                          <p className="text-[11px] text-stone-500 truncate">{u.email}</p>
+                          <p className="text-xs font-bold text-neutral-900 truncate">{u.name}</p>
+                          <p className="text-[11px] text-neutral-500 truncate">{u.email}</p>
                         </div>
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase font-mono ${
                           u.role === "business"
                             ? "bg-amber-100 text-amber-800"
                             : u.role === "creator"
                             ? "bg-purple-100 text-purple-800"
-                            : "bg-stone-200 text-stone-800"
+                            : "bg-neutral-200 text-neutral-800"
                         }`}>
                           {u.role}
                         </span>

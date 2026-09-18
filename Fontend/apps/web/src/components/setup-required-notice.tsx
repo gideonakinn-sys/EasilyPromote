@@ -42,13 +42,13 @@ export function SetupRequiredNotice({
   const nextStep = steps.find((s) => !s.completed);
 
   return (
-    <div className="w-full bg-stone-50 border border-stone-200 border-dashed rounded-[32px] px-5 py-5 mb-6">
+    <div className="w-full bg-neutral-50 border border-neutral-200 border-dashed rounded-[32px] px-5 py-5 mb-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h3 className="font-rethink font-medium text-sm text-stone-900 leading-none">
+          <h3 className="font-rethink font-medium text-sm text-neutral-900 leading-none">
             Finish setting up to claim campaigns
           </h3>
-          <p className="text-xs text-stone-500 font-medium leading-normal mt-1.5">
+          <p className="text-xs text-neutral-500 font-medium leading-normal mt-1.5">
             {completedCount} of {steps.length} complete — you can look around, but claiming stays locked until
             these are done.
           </p>
@@ -57,7 +57,7 @@ export function SetupRequiredNotice({
         {nextStep && (
           <button
             onClick={nextStep.onAction}
-            className="shrink-0 px-5 py-2 bg-stone-950 text-white font-semibold text-xs rounded-full font-rethink"
+            className="shrink-0 px-5 py-2 bg-neutral-950 text-white font-semibold text-xs rounded-full font-rethink"
           >
             {nextStep.actionLabel}
           </button>
@@ -72,12 +72,12 @@ export function SetupRequiredNotice({
             disabled={step.completed}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold font-rethink border ${
               step.completed
-                ? "bg-white text-stone-400 border-stone-200"
-                : "bg-white text-stone-900 border-stone-300"
+                ? "bg-white text-neutral-400 border-neutral-200"
+                : "bg-white text-neutral-900 border-neutral-300"
             }`}
           >
             {step.completed ? (
-              <span className="w-4 h-4 rounded-full bg-stone-950 flex items-center justify-center">
+              <span className="w-4 h-4 rounded-full bg-neutral-950 flex items-center justify-center">
                 <svg
                   className="w-2.5 h-2.5 text-white"
                   fill="none"
@@ -89,7 +89,7 @@ export function SetupRequiredNotice({
                 </svg>
               </span>
             ) : (
-              <span className="w-4 h-4 rounded-full border-2 border-stone-300" />
+              <span className="w-4 h-4 rounded-full border-2 border-neutral-300" />
             )}
             <span className={step.completed ? "line-through" : ""}>{step.label}</span>
           </button>

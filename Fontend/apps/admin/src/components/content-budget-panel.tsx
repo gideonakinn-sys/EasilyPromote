@@ -237,27 +237,27 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
   const openRefund = budget ? budget.refunds.some((r) => r.retryable) : false;
 
   return (
-    <div className="pt-4 border-t border-stone-200 space-y-3 font-rethink">
+    <div className="pt-4 border-t border-neutral-200 space-y-3 font-rethink">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-medium text-stone-500">{budget?.bonus ? "Deliverables And Base Pay" : "Deliverables And Fixed Pay"}</h4>
+        <h4 className="text-xs font-medium text-neutral-500">{budget?.bonus ? "Deliverables And Base Pay" : "Deliverables And Fixed Pay"}</h4>
         {budget && (
-          <span className="text-[11px] font-medium text-stone-400">{naira(budget.ratePerDeliverable)} per deliverable</span>
+          <span className="text-[11px] font-medium text-neutral-400">{naira(budget.ratePerDeliverable)} per deliverable</span>
         )}
       </div>
 
-      {!budget && !error && <p className="text-[11px] font-medium text-stone-400">Loading deliverables...</p>}
+      {!budget && !error && <p className="text-[11px] font-medium text-neutral-400">Loading deliverables...</p>}
 
       {budget && (
         <>
           <div className="grid grid-cols-3 gap-2">
             {stats.map((stat) => (
-              <div key={stat.label} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-medium text-stone-400 block">{stat.label}</span>
-                <span className="text-sm font-medium text-stone-900 tabular-nums">{stat.value}</span>
+              <div key={stat.label} className="bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                <span className="text-[10px] font-medium text-neutral-400 block">{stat.label}</span>
+                <span className="text-sm font-medium text-neutral-900 tabular-nums">{stat.value}</span>
               </div>
             ))}
           </div>
-          <p className="text-[11px] font-medium text-stone-500">
+          <p className="text-[11px] font-medium text-neutral-500">
             Credited {naira(budget.creditedAmount)} · Paid out {naira(budget.paidOut)} · Owed {naira(budget.owedAmount)}
           </p>
           {budget.reconciliation && !budget.reconciliation.ok && (
@@ -273,14 +273,14 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
 
           {budget.refunds.length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-medium text-stone-400 block">Refunds</span>
+              <span className="text-[10px] font-medium text-neutral-400 block">Refunds</span>
               {budget.refunds.map((refund) => (
-                <div key={refund.id} className="flex items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                <div key={refund.id} className="flex items-center justify-between gap-3 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-stone-900">
+                    <p className="text-xs font-medium text-neutral-900">
                       {naira(refund.amount)} · {refund.deliverables} deliverable{refund.deliverables === 1 ? "" : "s"} · {shortDate(refund.createdAt)}
                     </p>
-                    <p className={refund.state === "failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-stone-500"}>
+                    <p className={refund.state === "failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-neutral-500"}>
                       {REFUND_STATE_LABEL[refund.state]}
                       {refund.error && `: ${refund.error}`}
                     </p>
@@ -290,7 +290,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                       type="button"
                       onClick={() => setPending({ kind: "retry", refund })}
                       disabled={working || !canMoveMoney}
-                      className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
+                      className="shrink-0 px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                     >
                       Retry Refund
                     </button>
@@ -302,10 +302,10 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
 
           {budget.undelivered.length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[10px] font-medium text-stone-400 block">Approved, Not Delivered</span>
+              <span className="text-[10px] font-medium text-neutral-400 block">Approved, Not Delivered</span>
               {budget.undelivered.map((item) => (
-                <div key={item.submissionId} className="flex items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-                  <p className="text-[11px] font-medium text-stone-600 min-w-0">
+                <div key={item.submissionId} className="flex items-center justify-between gap-3 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                  <p className="text-[11px] font-medium text-neutral-600 min-w-0">
                     @{item.creatorHandle || "creator"}
                     {item.approvedAt && ` · approved ${shortDate(item.approvedAt)}`}
                     {!item.voidable && ` · can be voided from ${shortDate(item.voidableFrom)}`}
@@ -314,7 +314,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                     type="button"
                     onClick={() => setPending({ kind: "void", item })}
                     disabled={!item.voidable || working || !canMoveMoney}
-                    className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
+                    className="shrink-0 px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                   >
                     Void Undelivered Pay
                   </button>
@@ -324,7 +324,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
           )}
 
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] font-medium text-stone-500">
+            <p className="text-[11px] font-medium text-neutral-500">
               {!budget.refundAllowed
                 ? "Unused budget can be refunded once the campaign is completed or cancelled."
                 : openRefund
@@ -337,16 +337,16 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
               type="button"
               onClick={() => setPending({ kind: "refund" })}
               disabled={!budget.refundAllowed || openRefund || budget.refundable.amount <= 0 || working || !canMoveMoney}
-              className="shrink-0 px-4 py-2 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
+              className="shrink-0 px-4 py-2 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
             >
               Refund Unused Budget
             </button>
           </div>
           {budget.bonus && (
-            <div className="pt-3 border-t border-stone-200 space-y-2">
+            <div className="pt-3 border-t border-neutral-200 space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-medium text-stone-500">Bonus Pool</h4>
-                <span className="text-[11px] font-medium text-stone-400">
+                <h4 className="text-xs font-medium text-neutral-500">Bonus Pool</h4>
+                <span className="text-[11px] font-medium text-neutral-400">
                   {BONUS_METRIC_LABEL[budget.bonus.metric]} ·{" "}
                   {budget.bonus.metric === "views"
                     ? `${naira(budget.bonus.ratePerThousandViews ?? 0)} per 1,000 views`
@@ -365,19 +365,19 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                   { label: "Owed", value: budget.bonus.owedAmount },
                   { label: "Left In Pool", value: budget.bonus.poolRemaining },
                 ].map((stat) => (
-                  <div key={stat.label} className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
-                    <span className="text-[10px] font-medium text-stone-400 block">{stat.label}</span>
-                    <span className="text-sm font-medium text-stone-900 tabular-nums">{naira(stat.value)}</span>
+                  <div key={stat.label} className="bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
+                    <span className="text-[10px] font-medium text-neutral-400 block">{stat.label}</span>
+                    <span className="text-sm font-medium text-neutral-900 tabular-nums">{naira(stat.value)}</span>
                   </div>
                 ))}
               </div>
               {budget.bonus.refunds.map((refund) => (
-                <div key={refund.id} className="flex items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+                <div key={refund.id} className="flex items-center justify-between gap-3 bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-stone-900">
+                    <p className="text-xs font-medium text-neutral-900">
                       {naira(refund.amount)} unused bonus · {shortDate(refund.createdAt)}
                     </p>
-                    <p className={refund.state === "failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-stone-500"}>
+                    <p className={refund.state === "failed" ? "text-[11px] font-medium text-red-600" : "text-[11px] font-medium text-neutral-500"}>
                       {REFUND_STATE_LABEL[refund.state]}
                       {refund.error && `: ${refund.error}`}
                     </p>
@@ -387,7 +387,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                       type="button"
                       onClick={() => setPending({ kind: "retryBonus", refund })}
                       disabled={working || !canMoveMoney}
-                      className="shrink-0 px-3 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
+                      className="shrink-0 px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                     >
                       Retry Refund
                     </button>
@@ -395,7 +395,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 </div>
               ))}
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-medium text-stone-500">
+                <p className="text-[11px] font-medium text-neutral-500">
                   {!budget.bonus.refundAllowed
                     ? budget.bonus.refundableFrom
                       ? `The unused bonus can be refunded from ${shortDate(budget.bonus.refundableFrom)}, once conversions stop counting.`
@@ -408,7 +408,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                   type="button"
                   onClick={() => setPending({ kind: "refundBonus" })}
                   disabled={!budget.bonus.refundAllowed || budget.bonus.refundable.amount <= 0 || working || !canMoveMoney}
-                  className="shrink-0 px-4 py-2 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
+                  className="shrink-0 px-4 py-2 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
                 >
                   Refund Unused Bonus
                 </button>
@@ -416,7 +416,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
             </div>
           )}
           {!canMoveMoney && (
-            <p className="text-[11px] font-medium text-stone-400">Only finance admins and super admins can refund, retry refunds or void pay.</p>
+            <p className="text-[11px] font-medium text-neutral-400">Only finance admins and super admins can refund, retry refunds or void pay.</p>
           )}
         </>
       )}
@@ -427,46 +427,46 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
       {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
 
       {pending && budget && (
-        <div className="fixed inset-0 z-[60] bg-stone-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
+        <div className="fixed inset-0 z-[60] bg-neutral-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="content-budget-action-heading"
-            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-stone-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-neutral-200 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             {pending.kind === "refundBonus" && budget.bonus ? (
               <>
                 <div className="space-y-1">
-                  <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+                  <h3 id="content-budget-action-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                     Refund {naira(budget.bonus.refundable.amount)} Of Unused Bonus?
                   </h3>
-                  <p className="text-xs font-medium text-stone-500 leading-relaxed">
+                  <p className="text-xs font-medium text-neutral-500 leading-relaxed">
                     Sent back to the brand&apos;s Paystack payment for &quot;{campaignName}&quot;. No more bonus can be earned from what&apos;s refunded;
                     bonus already credited stays owed to creators. Paystack fees aren&apos;t deducted.
                   </p>
                 </div>
-                <dl className="bg-stone-50 rounded-xl p-4 space-y-2 text-xs">
+                <dl className="bg-neutral-50 rounded-xl p-4 space-y-2 text-xs">
                   <div className="flex justify-between gap-3">
-                    <dt className="font-medium text-stone-500">Unused Pool</dt>
-                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.pool)}</dd>
+                    <dt className="font-medium text-neutral-500">Unused Pool</dt>
+                    <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.bonus.refundable.pool)}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="font-medium text-stone-500">Platform Fee On It</dt>
-                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.platformFee)}</dd>
+                    <dt className="font-medium text-neutral-500">Platform Fee On It</dt>
+                    <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.bonus.refundable.platformFee)}</dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-t border-stone-200 pt-2">
-                    <dt className="font-medium text-stone-900">Refund</dt>
-                    <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.bonus.refundable.amount)}</dd>
+                  <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2">
+                    <dt className="font-medium text-neutral-900">Refund</dt>
+                    <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.bonus.refundable.amount)}</dd>
                   </div>
                 </dl>
               </>
             ) : pending.kind === "void" ? (
               <div className="space-y-1">
-                <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+                <h3 id="content-budget-action-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                   Void Undelivered Pay?
                 </h3>
-                <p className="text-xs font-medium text-stone-500 leading-relaxed">
+                <p className="text-xs font-medium text-neutral-500 leading-relaxed">
                   @{pending.item.creatorHandle || "creator"}&apos;s approved content for &quot;{campaignName}&quot; was never delivered. Their fixed pay
                   goes back to the campaign, and they&apos;re told. They can appeal within 7 days; after that (or once an appeal is denied) the
                   deliverable becomes refundable.
@@ -475,31 +475,31 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
             ) : (
               <>
                 <div className="space-y-1">
-                  <h3 id="content-budget-action-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+                  <h3 id="content-budget-action-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                     {pending.kind === "retry" || pending.kind === "retryBonus" ? `Retry ${naira(pending.refund.amount)} Refund?` : `Refund ${naira(budget.refundable.amount)}?`}
                   </h3>
-                  <p className="text-xs font-medium text-stone-500 leading-relaxed">
+                  <p className="text-xs font-medium text-neutral-500 leading-relaxed">
                     Sent back to the brand&apos;s Paystack payment for &quot;{campaignName}&quot;. Money owed to creators stays in the campaign. Paystack
                     fees aren&apos;t deducted.
                   </p>
                 </div>
                 {pending.kind === "refund" && (
-                  <dl className="bg-stone-50 rounded-xl p-4 space-y-2 text-xs">
+                  <dl className="bg-neutral-50 rounded-xl p-4 space-y-2 text-xs">
                     <div className="flex justify-between gap-3">
-                      <dt className="font-medium text-stone-500">Unused Deliverables</dt>
-                      <dd className="font-medium text-stone-900 tabular-nums">{budget.refundable.deliverables}</dd>
+                      <dt className="font-medium text-neutral-500">Unused Deliverables</dt>
+                      <dd className="font-medium text-neutral-900 tabular-nums">{budget.refundable.deliverables}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <dt className="font-medium text-stone-500">Creator Budget</dt>
-                      <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.refundable.creatorBudget)}</dd>
+                      <dt className="font-medium text-neutral-500">Creator Budget</dt>
+                      <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.refundable.creatorBudget)}</dd>
                     </div>
                     <div className="flex justify-between gap-3">
-                      <dt className="font-medium text-stone-500">Platform Fee On Them</dt>
-                      <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.refundable.platformFee)}</dd>
+                      <dt className="font-medium text-neutral-500">Platform Fee On Them</dt>
+                      <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.refundable.platformFee)}</dd>
                     </div>
-                    <div className="flex justify-between gap-3 border-t border-stone-200 pt-2">
-                      <dt className="font-medium text-stone-900">Refund</dt>
-                      <dd className="font-medium text-stone-900 tabular-nums">{naira(budget.refundable.amount)}</dd>
+                    <div className="flex justify-between gap-3 border-t border-neutral-200 pt-2">
+                      <dt className="font-medium text-neutral-900">Refund</dt>
+                      <dd className="font-medium text-neutral-900 tabular-nums">{naira(budget.refundable.amount)}</dd>
                     </div>
                   </dl>
                 )}
@@ -510,7 +510,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 type="button"
                 onClick={() => setPending(null)}
                 disabled={working}
-                className="flex-1 py-2.5 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -518,7 +518,7 @@ export function ContentBudgetPanel({ campaignId, campaignName }: ContentBudgetPa
                 type="button"
                 onClick={runAction}
                 disabled={working}
-                className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 {working ? "Working..." : pending.kind === "void" ? "Void Pay" : pending.kind === "retry" || pending.kind === "retryBonus" ? "Retry Refund" : "Confirm Refund"}
               </button>

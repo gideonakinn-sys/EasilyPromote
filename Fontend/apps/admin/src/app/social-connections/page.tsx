@@ -49,7 +49,7 @@ interface ConnectionsResponse {
 const PLATFORM_LABEL: Record<Platform, string> = { tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook" };
 
 const PLATFORM_STYLE: Record<Platform, string> = {
-  tiktok: "bg-stone-900 text-white border-stone-900",
+  tiktok: "bg-neutral-900 text-white border-neutral-900",
   instagram: "bg-pink-50 text-pink-700 border-pink-200",
   facebook: "bg-blue-50 text-blue-700 border-blue-200",
 };
@@ -132,13 +132,13 @@ export default function SocialConnectionsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6 space-y-1">
-          <h1 className="text-2xl font-medium text-stone-900 tracking-tight">Social Connections</h1>
-          <p className="text-sm text-stone-500 font-medium">
+        <header className="pb-6 border-b border-neutral-200 mb-6 space-y-1">
+          <h1 className="text-2xl font-medium text-neutral-900 tracking-tight">Social Connections</h1>
+          <p className="text-sm text-neutral-500 font-medium">
             Every TikTok, Instagram and Facebook account creators have connected. A connection the platform stopped accepting needs the creator to
             reconnect before its views sync again.
           </p>
@@ -151,11 +151,11 @@ export default function SocialConnectionsPage() {
               type="button"
               onClick={card.onClick}
               disabled={!card.onClick}
-              className="text-left bg-white border border-stone-200 rounded-2xl p-4 enabled:hover:border-stone-300 transition-colors"
+              className="text-left bg-white border border-neutral-200 rounded-2xl p-4 enabled:hover:border-neutral-300 transition-colors"
             >
-              <p className="text-[11px] font-medium text-stone-500">{card.label}</p>
-              <p className={`mt-1 text-2xl font-medium tabular-nums ${card.tone || "text-stone-900"}`}>
-                {card.value === undefined ? <span className="inline-block h-6 w-10 bg-stone-200 rounded animate-pulse" /> : card.value}
+              <p className="text-[11px] font-medium text-neutral-500">{card.label}</p>
+              <p className={`mt-1 text-2xl font-medium tabular-nums ${card.tone || "text-neutral-900"}`}>
+                {card.value === undefined ? <span className="inline-block h-6 w-10 bg-neutral-200 rounded animate-pulse" /> : card.value}
               </p>
             </button>
           ))}
@@ -168,7 +168,7 @@ export default function SocialConnectionsPage() {
               type="button"
               onClick={() => { setPlatform(f.value); setPage(1); }}
               className={`px-4 py-2 rounded-full text-xs font-semibold border ${
-                platform === f.value ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"
+                platform === f.value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200"
               }`}
             >
               {f.label}
@@ -177,7 +177,7 @@ export default function SocialConnectionsPage() {
           <select
             value={status}
             onChange={(e) => { setStatus(e.target.value as StatusFilter); setPage(1); }}
-            className="px-4 py-2 rounded-full text-xs font-semibold border border-stone-200 bg-white text-stone-600 focus:outline-none"
+            className="px-4 py-2 rounded-full text-xs font-semibold border border-neutral-200 bg-white text-neutral-600 focus:outline-none"
           >
             {STATUS_FILTERS.map((f) => (
               <option key={f.value} value={f.value}>{f.label}</option>
@@ -188,7 +188,7 @@ export default function SocialConnectionsPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search name, email or handle"
-            className="ml-auto w-full sm:w-72 px-4 py-2 rounded-full text-xs font-medium border border-stone-200 bg-white text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-stone-400"
+            className="ml-auto w-full sm:w-72 px-4 py-2 rounded-full text-xs font-medium border border-neutral-200 bg-white text-neutral-700 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-400"
           />
         </div>
 
@@ -201,9 +201,9 @@ export default function SocialConnectionsPage() {
           </div>
         )}
 
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
-            <thead className="bg-stone-50 border-b border-stone-200 text-[11px] text-stone-500 font-medium">
+        <div className="bg-white border border-neutral-200 rounded-2xl overflow-x-auto">
+          <table className="w-full text-left text-xs text-neutral-700">
+            <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] text-neutral-500 font-medium">
               <tr>
                 <th className="px-5 py-3 font-medium">Creator</th>
                 <th className="px-5 py-3 font-medium">Platform</th>
@@ -215,20 +215,20 @@ export default function SocialConnectionsPage() {
                 <th className="px-5 py-3 font-medium text-right">Creator</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 8 }).map((__, j) => (
                       <td key={j} className="px-5 py-4">
-                        <div className="h-4 bg-stone-200 rounded w-20" />
+                        <div className="h-4 bg-neutral-200 rounded w-20" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-stone-400 font-medium">
+                  <td colSpan={8} className="px-5 py-12 text-center text-neutral-400 font-medium">
                     {query || platform !== "all" || status !== "all"
                       ? "No connected accounts match these filters."
                       : "No creator has connected a social account yet."}
@@ -244,14 +244,14 @@ export default function SocialConnectionsPage() {
                         <div className="flex items-center gap-3 min-w-0">
                           {avatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-stone-200 flex-shrink-0" />
+                            <img src={avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-neutral-200 flex-shrink-0" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-[#FEB604]/20 text-stone-800 border border-[#FEB604]/30 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-[#FEB604]/20 text-neutral-800 border border-[#FEB604]/30 flex items-center justify-center text-xs font-bold flex-shrink-0">
                               {(row.creator.name || "?").substring(0, 1).toUpperCase()}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="font-medium text-stone-900 truncate flex items-center gap-1">
+                            <p className="font-medium text-neutral-900 truncate flex items-center gap-1">
                               {row.creator.name}
                               {row.creator.verified && (
                                 <span title="Verified creator" className="text-green-600 flex-shrink-0">
@@ -261,7 +261,7 @@ export default function SocialConnectionsPage() {
                                 </span>
                               )}
                             </p>
-                            <p className="text-[11px] text-stone-400 font-medium truncate">{row.creator.email}</p>
+                            <p className="text-[11px] text-neutral-400 font-medium truncate">{row.creator.email}</p>
                           </div>
                         </div>
                       </td>
@@ -271,25 +271,25 @@ export default function SocialConnectionsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <p className="font-medium text-stone-900">{handle ? `@${handle.replace(/^@/, "")}` : "—"}</p>
+                        <p className="font-medium text-neutral-900">{handle ? `@${handle.replace(/^@/, "")}` : "—"}</p>
                         {row.displayName && row.displayName !== handle && (
-                          <p className="text-[11px] text-stone-400 font-medium">{row.displayName}</p>
+                          <p className="text-[11px] text-neutral-400 font-medium">{row.displayName}</p>
                         )}
                       </td>
                       <td className="px-5 py-4">
                         {row.followers === null ? (
-                          <span className="text-stone-400">—</span>
+                          <span className="text-neutral-400">—</span>
                         ) : (
                           <>
-                            <p className="font-medium text-stone-900 tabular-nums">{compact(row.followers)}</p>
-                            <p className="text-[11px] text-stone-400 font-medium">
+                            <p className="font-medium text-neutral-900 tabular-nums">{compact(row.followers)}</p>
+                            <p className="text-[11px] text-neutral-400 font-medium">
                               {row.followersSource === "api" ? `From ${PLATFORM_LABEL[row.platform]}` : "Self-reported"}
                             </p>
                           </>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-stone-500 font-medium whitespace-nowrap">{shortDate(row.connectedAt)}</td>
-                      <td className="px-5 py-4 text-stone-500 font-medium whitespace-nowrap">{shortDate(row.lastSyncedAt)}</td>
+                      <td className="px-5 py-4 text-neutral-500 font-medium whitespace-nowrap">{shortDate(row.connectedAt)}</td>
+                      <td className="px-5 py-4 text-neutral-500 font-medium whitespace-nowrap">{shortDate(row.lastSyncedAt)}</td>
                       <td className="px-5 py-4 max-w-xs">
                         {row.needsReconnect ? (
                           <>
@@ -300,7 +300,7 @@ export default function SocialConnectionsPage() {
                               Needs Reconnecting{row.needsReconnectAt ? ` since ${shortDate(row.needsReconnectAt)}` : ""}
                             </span>
                             {row.needsReconnectReason && (
-                              <p className="mt-1.5 text-[11px] font-medium text-stone-500">{row.needsReconnectReason}</p>
+                              <p className="mt-1.5 text-[11px] font-medium text-neutral-500">{row.needsReconnectReason}</p>
                             )}
                           </>
                         ) : (
@@ -313,7 +313,7 @@ export default function SocialConnectionsPage() {
                         <Link
                           href="/users"
                           title={`Find ${row.creator.email} in Users & Creators`}
-                          className="inline-block px-3.5 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] whitespace-nowrap"
+                          className="inline-block px-3.5 py-1.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-[11px] whitespace-nowrap"
                         >
                           Open In Users
                         </Link>
@@ -327,7 +327,7 @@ export default function SocialConnectionsPage() {
         </div>
 
         {data && data.pages > 1 && (
-          <div className="flex items-center justify-between mt-4 text-xs font-medium text-stone-500">
+          <div className="flex items-center justify-between mt-4 text-xs font-medium text-neutral-500">
             <span>
               Page {data.page} of {data.pages} · {data.total} accounts
             </span>
@@ -336,7 +336,7 @@ export default function SocialConnectionsPage() {
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={loading || data.page <= 1}
-                className="px-3.5 py-1.5 border border-stone-200 bg-white rounded-full font-semibold text-[11px] disabled:opacity-40"
+                className="px-3.5 py-1.5 border border-neutral-200 bg-white rounded-full font-semibold text-[11px] disabled:opacity-40"
               >
                 Previous
               </button>
@@ -344,7 +344,7 @@ export default function SocialConnectionsPage() {
                 type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={loading || data.page >= data.pages}
-                className="px-3.5 py-1.5 border border-stone-200 bg-white rounded-full font-semibold text-[11px] disabled:opacity-40"
+                className="px-3.5 py-1.5 border border-neutral-200 bg-white rounded-full font-semibold text-[11px] disabled:opacity-40"
               >
                 Next
               </button>

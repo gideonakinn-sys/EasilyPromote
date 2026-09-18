@@ -145,14 +145,14 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-stone-200 mb-6 gap-4">
+        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight">User & Creator Roster</h1>
-            <p className="text-sm text-stone-500 mt-1">Manage brand and creator accounts, ranks, and access control</p>
+            <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">User & Creator Roster</h1>
+            <p className="text-sm text-neutral-500 mt-1">Manage brand and creator accounts, ranks, and access control</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -161,7 +161,7 @@ export default function AdminUsersPage() {
               placeholder="Search user by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900 w-64"
+              className="px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900 w-64"
             />
           </div>
         </header>
@@ -199,8 +199,8 @@ export default function AdminUsersPage() {
               onClick={() => setSelectedRole(roleTab.key)}
               className={`px-4 py-2 rounded-xl text-xs font-semibold capitalize transition-all ${
                 selectedRole === roleTab.key
-                  ? "bg-stone-900 text-white shadow-sm"
-                  : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                  ? "bg-neutral-900 text-white shadow-sm"
+                  : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
               }`}
             >
               {roleTab.label}
@@ -209,9 +209,9 @@ export default function AdminUsersPage() {
         </div>
 
         {/* Users Table */}
-        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs text-stone-700">
-            <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl shadow-sm overflow-hidden">
+          <table className="w-full text-left text-xs text-neutral-700">
+            <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
               <tr>
                 <th className="px-6 py-4">User</th>
                 <th className="px-6 py-4">Role</th>
@@ -221,30 +221,30 @@ export default function AdminUsersPage() {
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-36" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-20" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-24" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-28 ml-auto" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-36" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-20" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-28 ml-auto" /></td>
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
+                  <td colSpan={6} className="px-6 py-12 text-center text-neutral-400">
                     No users found matching query.
                   </td>
                 </tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="hover:bg-stone-50/80 transition-colors">
+                  <tr key={u.id} className="hover:bg-neutral-50/80 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="font-bold text-stone-900">{u.name}</p>
-                      <p className="text-[11px] text-stone-400">{u.email}</p>
+                      <p className="font-bold text-neutral-900">{u.name}</p>
+                      <p className="text-[11px] text-neutral-400">{u.email}</p>
                     </td>
 
                     <td className="px-6 py-4">
@@ -253,7 +253,7 @@ export default function AdminUsersPage() {
                           ? "bg-amber-100 text-amber-800"
                           : u.role === "creator"
                           ? "bg-purple-100 text-purple-800"
-                          : "bg-stone-200 text-stone-800"
+                          : "bg-neutral-200 text-neutral-800"
                       }`}>
                         {u.role}
                       </span>
@@ -262,12 +262,12 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4">
                       {u.role === "creator" ? (
                         <div>
-                          <span className="font-bold uppercase text-stone-900 font-mono text-[11px]">
+                          <span className="font-bold uppercase text-neutral-900 font-mono text-[11px]">
                             {u.creatorProfile?.rank || "rank1"}
                           </span>
-                          <span className="text-[11px] text-stone-400 block">Score: {u.creatorProfile?.creatorScore || 0}/100</span>
+                          <span className="text-[11px] text-neutral-400 block">Score: {u.creatorProfile?.creatorScore || 0}/100</span>
                           {(u.creatorProfile?.brandRating?.count ?? 0) > 0 && (
-                            <span className="text-[11px] text-stone-500 block">
+                            <span className="text-[11px] text-neutral-500 block">
                               Rating: {u.creatorProfile?.brandRating?.average?.toFixed(2) ?? "–"} ({u.creatorProfile?.brandRating?.count})
                             </span>
                           )}
@@ -283,7 +283,7 @@ export default function AdminUsersPage() {
                           {u.creatorProfile?.verifiedAt ? (
                             <span className="mt-1 inline-block px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-medium text-blue-700">Verified</span>
                           ) : (
-                            <span className="mt-1 block text-[10px] font-medium text-stone-400">
+                            <span className="mt-1 block text-[10px] font-medium text-neutral-400">
                               {(u.creatorProfile?.connectedAccounts || []).length > 0 ? "Not Verified" : "No Connected Account"}
                             </span>
                           )}
@@ -294,11 +294,11 @@ export default function AdminUsersPage() {
                           ))}
                         </div>
                       ) : (
-                        <span className="text-stone-400">N/A</span>
+                        <span className="text-neutral-400">N/A</span>
                       )}
                     </td>
 
-                    <td className="px-6 py-4 text-stone-600 font-medium">
+                    <td className="px-6 py-4 text-neutral-600 font-medium">
                       {u.role === "business" ? (
                         <span>{u.campaignCount} Campaigns</span>
                       ) : u.role === "creator" ? (
@@ -321,7 +321,7 @@ export default function AdminUsersPage() {
                         {u.role === "creator" && (
                           <button
                             onClick={() => openRankModal(u)}
-                            className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-semibold transition-all"
+                            className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-xs font-semibold transition-all"
                           >
                             Edit Rank
                           </button>
@@ -330,7 +330,7 @@ export default function AdminUsersPage() {
                           <button
                             onClick={() => setBadgesFor({ id: u.id, name: u.name })}
                             className={`px-3 py-1.5 border rounded-full text-xs font-semibold ${
-                              u.creatorProfile.badgesNeedReview ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-white border-stone-200 text-stone-800"
+                              u.creatorProfile.badgesNeedReview ? "bg-amber-50 border-amber-200 text-amber-900" : "bg-white border-neutral-200 text-neutral-800"
                             }`}
                           >
                             Badges &amp; Ratings
@@ -339,7 +339,7 @@ export default function AdminUsersPage() {
                         {u.role === "creator" && u.creatorProfile && (
                           <button
                             onClick={() => setVerifyingUser(u)}
-                            className="px-3 py-1.5 bg-white border border-stone-200 text-stone-800 rounded-full text-xs font-semibold"
+                            className="px-3 py-1.5 bg-white border border-neutral-200 text-neutral-800 rounded-full text-xs font-semibold"
                           >
                             {u.creatorProfile.verifiedAt ? "Remove Verification" : "Verify Creator"}
                           </button>
@@ -375,18 +375,18 @@ export default function AdminUsersPage() {
 
         {/* Edit Rank Modal */}
         {selectedUser && (
-          <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink">
-            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200">
-              <h3 className="text-xl font-bold text-stone-900 mb-2">Update Creator Rank & Score</h3>
-              <p className="text-xs text-stone-500 mb-4">Editing profile for: {selectedUser.name}</p>
+          <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
+              <h3 className="text-xl font-bold text-neutral-900 mb-2">Update Creator Rank & Score</h3>
+              <p className="text-xs text-neutral-500 mb-4">Editing profile for: {selectedUser.name}</p>
 
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="font-bold text-stone-700 block mb-1">Rank Tier</label>
+                  <label className="font-bold text-neutral-700 block mb-1">Rank Tier</label>
                   <select
                     value={rankInput}
                     onChange={(e) => setRankInput(e.target.value)}
-                    className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white font-mono"
+                    className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-white font-mono"
                   >
                     <option value="rank1">Rank 1 (1K - 5K views target)</option>
                     <option value="rank2">Rank 2 (5K - 10K views target)</option>
@@ -398,28 +398,28 @@ export default function AdminUsersPage() {
                 </div>
 
                 <div>
-                  <label className="font-bold text-stone-700 block mb-1">Creator Score (0 - 100)</label>
+                  <label className="font-bold text-neutral-700 block mb-1">Creator Score (0 - 100)</label>
                   <input
                     type="number"
                     min="0"
                     max="100"
                     value={scoreInput}
                     onChange={(e) => setScoreInput(Number(e.target.value))}
-                    className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900"
+                    className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
 
-                <div className="pt-4 border-t border-stone-200 flex justify-end gap-3">
+                <div className="pt-4 border-t border-neutral-200 flex justify-end gap-3">
                   <button
                     onClick={() => setSelectedUser(null)}
-                    className="px-4 py-2 text-stone-600 font-semibold"
+                    className="px-4 py-2 text-neutral-600 font-semibold"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveRank}
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
+                    className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all"
                   >
                     Save Changes
                   </button>

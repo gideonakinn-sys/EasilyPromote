@@ -65,7 +65,7 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
           <img
             src={campaign.coverImageUrl}
             alt={campaign.title}
-            className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-stone-200"
+            className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl object-cover border border-neutral-200"
           />
         ) : (
           <div className="w-[45px] h-[45px] md:w-[50px] md:h-[50px] rounded-2xl bg-purple-100 flex items-center justify-center border border-purple-200">
@@ -76,10 +76,10 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
       </div>
 
       {/* Pay leads every card */}
-      <p className="font-rethink font-medium text-[20px] tracking-tight text-stone-900 leading-tight">
+      <p className="font-rethink font-medium text-[20px] tracking-tight text-neutral-900 leading-tight">
         {formatPay(campaign.pay, campaign.reward)}
       </p>
-      <h3 className="font-rethink font-medium text-sm text-stone-600 line-clamp-2 mt-1 mb-3">
+      <h3 className="font-rethink font-medium text-sm text-neutral-600 line-clamp-2 mt-1 mb-3">
         {campaign.title} · {campaign.brandName}
       </h3>
 
@@ -97,18 +97,18 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
 
       {/* Trending recent creator count (D27) */}
       {campaign.trending && typeof campaign.recentCreators === "number" && campaign.recentCreators > 0 && (
-        <p className="text-[11px] font-medium text-stone-500 -mt-1 mb-3">
+        <p className="text-[11px] font-medium text-neutral-500 -mt-1 mb-3">
           {campaign.recentCreators} {campaign.recentCreators === 1 ? "creator" : "creators"} joined or applied in the last 3 days
         </p>
       )}
 
       <div className="flex flex-wrap gap-1.5 mb-4">
         {platforms.map((platform) => (
-          <span key={platform} className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px]">
+          <span key={platform} className="px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-medium tracking-tight text-[10px]">
             {platformLabel(platform)}
           </span>
         ))}
-        <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium tracking-tight text-[10px]">
+        <span className="px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-medium tracking-tight text-[10px]">
           {targetLocationLabel(campaign)}
         </span>
       </div>
@@ -120,8 +120,8 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
         </p>
       )}
 
-      <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center gap-3">
-        <span className="text-xs text-stone-400 font-medium">
+      <div className="mt-auto border-t border-neutral-100 pt-4 flex justify-between items-center gap-3">
+        <span className="text-xs text-neutral-400 font-medium">
           {places} {places === 1 ? "place" : "places"} left
         </span>
         <button
@@ -132,7 +132,7 @@ function MarketplaceCard({ campaign, onOpen, applied }: MarketplaceCardProps) {
           }}
           className={cn(
             "px-4 py-2 rounded-full font-semibold text-xs font-rethink",
-            reasons.length === 0 && !applied ? "bg-[#FEB604] text-stone-950" : "bg-stone-100 text-stone-600"
+            reasons.length === 0 && !applied ? "bg-[#FEB604] text-neutral-950" : "bg-neutral-100 text-neutral-600"
           )}
         >
           {openCall ? "Join Campaign" : applied ? "Applied" : "Apply"}
@@ -480,7 +480,7 @@ export function CampaignMarketplace({
               onClick={() => setTab(option.value)}
               className={cn(
                 "px-4 py-2 rounded-full text-xs font-medium font-rethink",
-                tab === option.value ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-500"
+                tab === option.value ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-500"
               )}
             >
               {option.label}
@@ -499,7 +499,7 @@ export function CampaignMarketplace({
           <button
             type="button"
             onClick={() => fetchTab(tab, true)}
-            className="px-4 py-2 rounded-full bg-stone-900 text-white font-semibold text-xs font-rethink"
+            className="px-4 py-2 rounded-full bg-neutral-900 text-white font-semibold text-xs font-rethink"
           >
             Try Again
           </button>
@@ -521,7 +521,7 @@ export function CampaignMarketplace({
                 <Skeleton className="h-4 w-16 rounded-full" />
                 <Skeleton className="h-4 w-20 rounded-full" />
               </div>
-              <div className="mt-auto border-t border-stone-100 pt-4 flex justify-between items-center">
+              <div className="mt-auto border-t border-neutral-100 pt-4 flex justify-between items-center">
                 <Skeleton className="h-4 w-20" />
                 <Skeleton className="h-8 w-24 rounded-full" />
               </div>
@@ -532,8 +532,8 @@ export function CampaignMarketplace({
         /* Overall empty state */
         <div className="flex flex-col items-center justify-center text-center py-20 px-6">
           <Image src={emptyCampaignImg} alt="" width={200} height={200} className="mb-6" unoptimized />
-          <h3 className="font-rethink font-medium text-[22px] text-stone-900 mb-2">Nothing right now</h3>
-          <p className="font-rethink text-xs text-stone-500 font-medium max-w-xs leading-relaxed">
+          <h3 className="font-rethink font-medium text-[22px] text-neutral-900 mb-2">Nothing right now</h3>
+          <p className="font-rethink text-xs text-neutral-500 font-medium max-w-xs leading-relaxed">
             New campaigns are added often. Check back soon.
           </p>
         </div>
@@ -544,8 +544,8 @@ export function CampaignMarketplace({
           {currentTab.recommended.items.length > 0 && (
             <section className="space-y-4">
               <div>
-                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Recommended for You</h2>
-                <p className="text-xs font-medium text-stone-500">Campaigns you can join that suit where your audience is.</p>
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-neutral-900">Recommended for You</h2>
+                <p className="text-xs font-medium text-neutral-500">Campaigns you can join that suit where your audience is.</p>
               </div>
               <CardGrid campaigns={currentTab.recommended.items} onOpen={open} appliedIds={appliedIds} />
               {currentTab.recommended.nextCursor && (
@@ -554,7 +554,7 @@ export function CampaignMarketplace({
                     type="button"
                     disabled={currentTab.recommended.loadingMore}
                     onClick={() => loadMore("recommended")}
-                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full bg-neutral-100 text-neutral-700 font-semibold text-xs font-rethink disabled:opacity-50"
                   >
                     {currentTab.recommended.loadingMore ? "Loading..." : "Show more"}
                   </button>
@@ -567,8 +567,8 @@ export function CampaignMarketplace({
           {currentTab.trending.items.length > 0 && (
             <section className="space-y-4">
               <div>
-                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">Trending</h2>
-                <p className="text-xs font-medium text-stone-500">
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-neutral-900">Trending</h2>
+                <p className="text-xs font-medium text-neutral-500">
                   Campaigns the most creators joined or applied to in the last 3 days.
                 </p>
               </div>
@@ -579,7 +579,7 @@ export function CampaignMarketplace({
                     type="button"
                     disabled={currentTab.trending.loadingMore}
                     onClick={() => loadMore("trending")}
-                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full bg-neutral-100 text-neutral-700 font-semibold text-xs font-rethink disabled:opacity-50"
                   >
                     {currentTab.trending.loadingMore ? "Loading..." : "Show more"}
                   </button>
@@ -592,8 +592,8 @@ export function CampaignMarketplace({
           {currentTab.new.items.length > 0 && (
             <section className="space-y-4">
               <div>
-                <h2 className="font-rethink font-medium text-lg tracking-tighter text-stone-900">New</h2>
-                <p className="text-xs font-medium text-stone-500">Latest campaigns added to the platform.</p>
+                <h2 className="font-rethink font-medium text-lg tracking-tighter text-neutral-900">New</h2>
+                <p className="text-xs font-medium text-neutral-500">Latest campaigns added to the platform.</p>
               </div>
               <CardGrid campaigns={currentTab.new.items} onOpen={open} appliedIds={appliedIds} />
               {currentTab.new.nextCursor && (
@@ -602,7 +602,7 @@ export function CampaignMarketplace({
                     type="button"
                     disabled={currentTab.new.loadingMore}
                     onClick={() => loadMore("new")}
-                    className="px-5 py-2.5 rounded-full bg-stone-100 text-stone-700 font-semibold text-xs font-rethink disabled:opacity-50"
+                    className="px-5 py-2.5 rounded-full bg-neutral-100 text-neutral-700 font-semibold text-xs font-rethink disabled:opacity-50"
                   >
                     {currentTab.new.loadingMore ? "Loading..." : "Show more"}
                   </button>
@@ -619,14 +619,14 @@ export function CampaignMarketplace({
           <div className="bg-[#EBF3FF]/40 border border-[#BFDBFE] border-dashed rounded-[20px] p-2 flex items-center justify-between gap-3 text-left relative overflow-hidden">
             <div className="flex gap-3 items-center">
               <Image src={slotLimitImg} alt="" width={36} height={36} className="w-9 h-9 shrink-0" unoptimized />
-              <h4 className="font-rethink text-xs font-medium text-stone-900 leading-snug">
+              <h4 className="font-rethink text-xs font-medium text-neutral-900 leading-snug">
                 You&apos;re at your active placement limit ({meta.activeSlots}/{meta.maxSlots}). Finish a placement to join something new.
               </h4>
             </div>
             <button
               type="button"
               onClick={() => setShowLimitBanner(false)}
-              className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center shrink-0 text-stone-400"
+              className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center shrink-0 text-neutral-400"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6L6 18M6 6l12 12" />

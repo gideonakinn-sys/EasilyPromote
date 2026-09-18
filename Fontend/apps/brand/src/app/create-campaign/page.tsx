@@ -54,7 +54,7 @@ function CreateCampaignContent() {
   // Verifying payment status after Paystack return
   if (verifying) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center font-rethink text-stone-500">
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center font-rethink text-neutral-500">
         Verifying payment...
       </div>
     );
@@ -73,7 +73,7 @@ function CreateCampaignContent() {
 
   if (isMobile) {
     return (
-      <div className="h-screen bg-stone-100 text-stone-900 flex flex-col font-rethink">
+      <div className="h-screen bg-neutral-100 text-neutral-900 flex flex-col font-rethink">
         <div className="flex-1 overflow-y-auto">
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} isMobile />
         </div>
@@ -82,9 +82,9 @@ function CreateCampaignContent() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col font-rethink">
       <Drawer open={true} onOpenChange={(open) => { if (!open) handleClose(); }}>
-        <DrawerContent className="overflow-hidden bg-stone-100">
+        <DrawerContent className="overflow-hidden bg-neutral-100">
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
         </DrawerContent>
       </Drawer>
@@ -94,7 +94,7 @@ function CreateCampaignContent() {
 
 export default function CreateCampaignPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center font-rethink text-stone-500">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-neutral-50 flex items-center justify-center font-rethink text-neutral-500">Loading...</div>}>
       <CreateCampaignContent />
     </Suspense>
   );

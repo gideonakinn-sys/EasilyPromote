@@ -52,7 +52,7 @@ const SUBJECT_LABEL: Record<AppealRow["subjectType"], string> = {
 const STATUS_STYLE: Record<AppealRow["status"], string> = {
   open: "bg-amber-50 text-amber-700 border-amber-200",
   granted: "bg-green-50 text-green-700 border-green-200",
-  denied: "bg-stone-100 text-stone-600 border-stone-200",
+  denied: "bg-neutral-100 text-neutral-600 border-neutral-200",
 };
 
 const naira = (value: number) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 2 }).format(value);
@@ -166,13 +166,13 @@ function AppealsInbox() {
   const grantBlocked = (appeal: AppealRow) => appeal.moneyMoving && !canMoveMoney;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6 space-y-1">
-          <h1 className="text-2xl font-medium text-stone-900 tracking-tight">Appeals Inbox</h1>
-          <p className="text-sm text-stone-500 font-medium">
+        <header className="pb-6 border-b border-neutral-200 mb-6 space-y-1">
+          <h1 className="text-2xl font-medium text-neutral-900 tracking-tight">Appeals Inbox</h1>
+          <p className="text-sm text-neutral-500 font-medium">
             Content appeals and payout appeals in one place. {data.counts.content} content and {data.counts.payout} payout appeal
             {data.counts.payout === 1 ? "" : "s"} open.
           </p>
@@ -184,18 +184,18 @@ function AppealsInbox() {
               key={value}
               type="button"
               onClick={() => setKind(value)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold border ${kind === value ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"}`}
+              className={`px-4 py-2 rounded-full text-xs font-semibold border ${kind === value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200"}`}
             >
               {value === "all" ? "All Appeals" : value === "content" ? "Content" : "Payouts"}
             </button>
           ))}
-          <span className="w-px h-6 bg-stone-200 mx-1" />
+          <span className="w-px h-6 bg-neutral-200 mx-1" />
           {(["open", "resolved", "all"] as Status[]).map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => setStatus(value)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold border ${status === value ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"}`}
+              className={`px-4 py-2 rounded-full text-xs font-semibold border ${status === value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200"}`}
             >
               {value === "open" ? "Open" : value === "resolved" ? "Resolved" : "Any Status"}
             </button>
@@ -205,14 +205,14 @@ function AppealsInbox() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search creator, campaign or reason"
-            className="ml-auto w-72 px-4 py-2 rounded-full border border-stone-200 bg-white text-xs font-medium text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-400"
+            className="ml-auto w-72 px-4 py-2 rounded-full border border-neutral-200 bg-white text-xs font-medium text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-neutral-400"
           />
         </div>
 
         {campaignFilter && (
-          <div className="mb-4 flex items-center gap-2 text-xs font-medium text-stone-600">
+          <div className="mb-4 flex items-center gap-2 text-xs font-medium text-neutral-600">
             <span>Showing one campaign&apos;s appeals.</span>
-            <Link href="/appeals" className="underline underline-offset-2 text-stone-900">
+            <Link href="/appeals" className="underline underline-offset-2 text-neutral-900">
               Show All Campaigns
             </Link>
           </div>
@@ -221,9 +221,9 @@ function AppealsInbox() {
         {error && <p className="mb-4 text-xs font-medium text-red-600">{error}</p>}
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5 items-start">
-          <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-            <table className="w-full text-left text-xs text-stone-700">
-              <thead className="bg-stone-50 border-b border-stone-200 text-[11px] text-stone-500">
+          <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+            <table className="w-full text-left text-xs text-neutral-700">
+              <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] text-neutral-500">
                 <tr>
                   <th className="px-5 py-3 font-medium">Appeal</th>
                   <th className="px-5 py-3 font-medium">Creator</th>
@@ -233,20 +233,20 @@ function AppealsInbox() {
                   <th className="px-5 py-3 font-medium">Appealed</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
                       {Array.from({ length: 6 }).map((__, j) => (
                         <td key={j} className="px-5 py-4">
-                          <div className="h-4 bg-stone-200 rounded w-24" />
+                          <div className="h-4 bg-neutral-200 rounded w-24" />
                         </td>
                       ))}
                     </tr>
                   ))
                 ) : data.appeals.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-12 text-center text-stone-400 font-medium">
+                    <td colSpan={6} className="px-5 py-12 text-center text-neutral-400 font-medium">
                       {status === "open" ? "No open appeals." : "No appeals match."}
                     </td>
                   </tr>
@@ -255,12 +255,12 @@ function AppealsInbox() {
                     <tr
                       key={appeal.key}
                       onClick={() => setSelected(appeal)}
-                      className={`cursor-pointer ${selected?.key === appeal.key ? "bg-stone-50" : ""}`}
+                      className={`cursor-pointer ${selected?.key === appeal.key ? "bg-neutral-50" : ""}`}
                     >
-                      <td className="px-5 py-4 font-medium text-stone-900">{SUBJECT_LABEL[appeal.subjectType]}</td>
+                      <td className="px-5 py-4 font-medium text-neutral-900">{SUBJECT_LABEL[appeal.subjectType]}</td>
                       <td className="px-5 py-4 font-medium">
                         {appeal.creatorName}
-                        {appeal.creatorHandle && <span className="block text-[11px] text-stone-400">@{appeal.creatorHandle}</span>}
+                        {appeal.creatorHandle && <span className="block text-[11px] text-neutral-400">@{appeal.creatorHandle}</span>}
                       </td>
                       <td className="px-5 py-4 font-medium">{appeal.campaignName}</td>
                       <td className="px-5 py-4 font-medium tabular-nums">{appeal.amount === null ? "—" : naira(appeal.amount)}</td>
@@ -269,7 +269,7 @@ function AppealsInbox() {
                           {appeal.resolving ? "Being Granted" : appeal.status === "open" ? "Open" : appeal.status === "granted" ? "Granted" : "Denied"}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-stone-500 font-medium">{shortDate(appeal.createdAt)}</td>
+                      <td className="px-5 py-4 text-neutral-500 font-medium">{shortDate(appeal.createdAt)}</td>
                     </tr>
                   ))
                 )}
@@ -277,44 +277,44 @@ function AppealsInbox() {
             </table>
           </div>
 
-          <aside className="bg-white border border-stone-200 rounded-2xl p-5 space-y-4">
+          <aside className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4">
             {!selected ? (
-              <p className="text-xs font-medium text-stone-400">Choose an appeal to read it and decide.</p>
+              <p className="text-xs font-medium text-neutral-400">Choose an appeal to read it and decide.</p>
             ) : (
               <>
                 <div className="space-y-1">
-                  <span className="text-[11px] font-medium text-stone-400">{SUBJECT_LABEL[selected.subjectType]}</span>
-                  <h2 className="text-lg font-medium text-stone-900 tracking-tight">{selected.campaignName}</h2>
-                  <p className="text-xs font-medium text-stone-500">
+                  <span className="text-[11px] font-medium text-neutral-400">{SUBJECT_LABEL[selected.subjectType]}</span>
+                  <h2 className="text-lg font-medium text-neutral-900 tracking-tight">{selected.campaignName}</h2>
+                  <p className="text-xs font-medium text-neutral-500">
                     {selected.creatorName}
                     {selected.amount !== null && ` · ${naira(selected.amount)}`} · appealed {shortDate(selected.createdAt)}
                   </p>
-                  <Link href={`/campaigns?open=${selected.campaignId}`} className="text-[11px] font-medium text-stone-900 underline underline-offset-2">
+                  <Link href={`/campaigns?open=${selected.campaignId}`} className="text-[11px] font-medium text-neutral-900 underline underline-offset-2">
                     Open Campaign
                   </Link>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[11px] font-medium text-stone-400 block">{selected.kind === "content" ? "Brand's Rejection" : "Decision Appealed"}</span>
-                  <p className="text-xs font-medium text-stone-700 bg-stone-50 border border-stone-200 rounded-xl p-3">{selected.decisionReason || "No reason given"}</p>
+                  <span className="text-[11px] font-medium text-neutral-400 block">{selected.kind === "content" ? "Brand's Rejection" : "Decision Appealed"}</span>
+                  <p className="text-xs font-medium text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-xl p-3">{selected.decisionReason || "No reason given"}</p>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-[11px] font-medium text-stone-400 block">Creator&apos;s Appeal</span>
-                  <p className="text-xs font-medium text-stone-700 bg-stone-50 border border-stone-200 rounded-xl p-3">{selected.reason || "No reason given"}</p>
+                  <span className="text-[11px] font-medium text-neutral-400 block">Creator&apos;s Appeal</span>
+                  <p className="text-xs font-medium text-neutral-700 bg-neutral-50 border border-neutral-200 rounded-xl p-3">{selected.reason || "No reason given"}</p>
                 </div>
                 {selected.videoUrl && (
-                  <a href={selected.videoUrl} target="_blank" rel="noreferrer" className="inline-block text-xs font-medium text-stone-900 underline underline-offset-2">
+                  <a href={selected.videoUrl} target="_blank" rel="noreferrer" className="inline-block text-xs font-medium text-neutral-900 underline underline-offset-2">
                     Watch The Content
                   </a>
                 )}
                 {selected.status !== "open" ? (
                   <div className="space-y-1">
-                    <span className="text-[11px] font-medium text-stone-400 block">Resolution</span>
-                    <p className="text-xs font-medium text-stone-700">
+                    <span className="text-[11px] font-medium text-neutral-400 block">Resolution</span>
+                    <p className="text-xs font-medium text-neutral-700">
                       {selected.status === "granted" ? "Granted" : "Denied"}
                       {selected.resolvedByName && ` by ${selected.resolvedByName}`}
                       {selected.resolvedAt && ` on ${shortDate(selected.resolvedAt)}`}
                     </p>
-                    {selected.resolutionNote && <p className="text-xs font-medium text-stone-500">{selected.resolutionNote}</p>}
+                    {selected.resolutionNote && <p className="text-xs font-medium text-neutral-500">{selected.resolutionNote}</p>}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -328,7 +328,7 @@ function AppealsInbox() {
                         type="button"
                         onClick={() => openDecision({ appeal: selected, decision: "deny" })}
                         disabled={selected.resolving}
-                        className="flex-1 py-2.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-xs disabled:opacity-40"
+                        className="flex-1 py-2.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-xs disabled:opacity-40"
                       >
                         {selected.kind === "content" ? "Uphold Rejection" : "Deny Appeal"}
                       </button>
@@ -336,13 +336,13 @@ function AppealsInbox() {
                         type="button"
                         onClick={() => openDecision({ appeal: selected, decision: "grant" })}
                         disabled={grantBlocked(selected)}
-                        className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
+                        className="flex-1 py-2.5 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-40"
                       >
                         {selected.kind === "content" ? "Approve Appeal" : "Grant Appeal"}
                       </button>
                     </div>
                     {grantBlocked(selected) && (
-                      <p className="text-[11px] font-medium text-stone-400">Granting a payout appeal moves money: finance admins and super admins only.</p>
+                      <p className="text-[11px] font-medium text-neutral-400">Granting a payout appeal moves money: finance admins and super admins only.</p>
                     )}
                   </div>
                 )}
@@ -353,28 +353,28 @@ function AppealsInbox() {
       </main>
 
       {pending && (
-        <div className="fixed inset-0 z-[60] bg-stone-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
+        <div className="fixed inset-0 z-[60] bg-neutral-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="appeal-decision-heading"
-            className="bg-white rounded-2xl max-w-md w-full p-6 border border-stone-200 space-y-4"
+            className="bg-white rounded-2xl max-w-md w-full p-6 border border-neutral-200 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1">
-              <h3 id="appeal-decision-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+              <h3 id="appeal-decision-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                 {pending.decision === "grant" ? "Grant" : "Deny"} {pending.appeal.creatorName}&apos;s Appeal?
               </h3>
-              <p className="text-xs font-medium text-stone-500 leading-relaxed">{effectOf(pending)}</p>
+              <p className="text-xs font-medium text-neutral-500 leading-relaxed">{effectOf(pending)}</p>
             </div>
             <label className="block space-y-1">
-              <span className="text-[11px] font-medium text-stone-500">{pending.decision === "deny" ? "Note For The Creator (Required)" : "Note For The Creator"}</span>
+              <span className="text-[11px] font-medium text-neutral-500">{pending.decision === "deny" ? "Note For The Creator (Required)" : "Note For The Creator"}</span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={3}
                 maxLength={1000}
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs font-medium text-stone-900 outline-none focus:border-stone-400"
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-900 outline-none focus:border-neutral-400"
               />
             </label>
             {decisionError && <p className="text-xs font-medium text-red-600">{decisionError}</p>}
@@ -383,7 +383,7 @@ function AppealsInbox() {
                 type="button"
                 onClick={() => setPending(null)}
                 disabled={working}
-                className="flex-1 py-2.5 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -391,7 +391,7 @@ function AppealsInbox() {
                 type="button"
                 onClick={decide}
                 disabled={working}
-                className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 {working ? "Saving…" : pending.decision === "grant" ? "Grant Appeal" : "Deny Appeal"}
               </button>

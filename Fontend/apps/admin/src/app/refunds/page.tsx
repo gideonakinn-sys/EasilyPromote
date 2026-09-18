@@ -55,7 +55,7 @@ const STATE_LABEL: Record<RefundState, string> = {
 
 const STATE_STYLE: Record<RefundState, string> = {
   refunded: "bg-green-50 text-green-700 border-green-200",
-  sent: "bg-stone-50 text-stone-600 border-stone-200",
+  sent: "bg-neutral-50 text-neutral-600 border-neutral-200",
   not_sent: "bg-amber-50 text-amber-700 border-amber-200",
   failed: "bg-red-50 text-red-700 border-red-200",
 };
@@ -131,13 +131,13 @@ export default function RefundsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6 space-y-1">
-          <h1 className="text-2xl font-medium text-stone-900 tracking-tight">Refunds</h1>
-          <p className="text-sm text-stone-500 font-medium">
+        <header className="pb-6 border-b border-neutral-200 mb-6 space-y-1">
+          <h1 className="text-2xl font-medium text-neutral-900 tracking-tight">Refunds</h1>
+          <p className="text-sm text-neutral-500 font-medium">
             Unused budget sent back to brands, automatically or by hand. A refund that failed or never reached Paystack is retried from the same
             refund, so it&apos;s never sent twice.
           </p>
@@ -160,21 +160,21 @@ export default function RefundsPage() {
               type="button"
               onClick={() => setFilter(f.value)}
               className={`px-4 py-2 rounded-full text-xs font-semibold border ${
-                filter === f.value ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"
+                filter === f.value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200"
               }`}
             >
               {f.label}
             </button>
           ))}
-          {!canMoveMoney && <span className="text-[11px] font-medium text-stone-400 ml-2">Only finance admins and super admins can retry refunds.</span>}
+          {!canMoveMoney && <span className="text-[11px] font-medium text-neutral-400 ml-2">Only finance admins and super admins can retry refunds.</span>}
         </div>
 
         {message && <p className={`mb-4 text-xs font-medium ${message.failed ? "text-red-600" : "text-green-700"}`}>{message.text}</p>}
         {error && <p className="mb-4 text-xs font-medium text-red-600">{error}</p>}
 
-        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
-          <table className="w-full text-left text-xs text-stone-700">
-            <thead className="bg-stone-50 border-b border-stone-200 text-[11px] text-stone-500 font-medium">
+        <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+          <table className="w-full text-left text-xs text-neutral-700">
+            <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] text-neutral-500 font-medium">
               <tr>
                 <th className="px-5 py-3 font-medium">Campaign</th>
                 <th className="px-5 py-3 font-medium">Budget</th>
@@ -184,20 +184,20 @@ export default function RefundsPage() {
                 <th className="px-5 py-3 font-medium text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 6 }).map((__, j) => (
                       <td key={j} className="px-5 py-4">
-                        <div className="h-4 bg-stone-200 rounded w-24" />
+                        <div className="h-4 bg-neutral-200 rounded w-24" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : refunds.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-stone-400 font-medium">
+                  <td colSpan={6} className="px-5 py-12 text-center text-neutral-400 font-medium">
                     {filter === "attention" ? "No refunds need attention." : "No refunds here."}
                   </td>
                 </tr>
@@ -206,28 +206,28 @@ export default function RefundsPage() {
                   <tr key={refund.id} className="align-top">
                     <td className="px-5 py-4">
                       {refund.campaignId ? (
-                        <Link href={`/campaigns?open=${refund.campaignId}`} className="font-medium text-stone-900 underline-offset-2 underline">
+                        <Link href={`/campaigns?open=${refund.campaignId}`} className="font-medium text-neutral-900 underline-offset-2 underline">
                           {refund.campaignName}
                         </Link>
                       ) : (
-                        <span className="font-medium text-stone-900">{refund.campaignName}</span>
+                        <span className="font-medium text-neutral-900">{refund.campaignName}</span>
                       )}
-                      {refund.campaignStatus && <span className="block text-[11px] text-stone-400 font-medium capitalize">{refund.campaignStatus}</span>}
+                      {refund.campaignStatus && <span className="block text-[11px] text-neutral-400 font-medium capitalize">{refund.campaignStatus}</span>}
                     </td>
                     <td className="px-5 py-4 font-medium">{refund.potLabel}</td>
-                    <td className="px-5 py-4 font-medium text-stone-900 tabular-nums">{naira(refund.amount)}</td>
+                    <td className="px-5 py-4 font-medium text-neutral-900 tabular-nums">{naira(refund.amount)}</td>
                     <td className="px-5 py-4 max-w-sm">
                       <span className={`inline-block px-2.5 py-1 rounded-full border text-[11px] font-medium ${STATE_STYLE[refund.state]}`}>
                         {STATE_LABEL[refund.state]}
                       </span>
-                      {refund.error && <p className="mt-1.5 text-[11px] font-medium text-stone-500">{refund.error}</p>}
+                      {refund.error && <p className="mt-1.5 text-[11px] font-medium text-neutral-500">{refund.error}</p>}
                       {refund.byHand > 0 && (
                         <p className="mt-1 text-[11px] font-medium text-red-600">
                           {naira(refund.byHand)} has no Paystack payment to refund against: refund it by hand in the Paystack dashboard.
                         </p>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-stone-500 font-medium">{shortDate(refund.createdAt)}</td>
+                    <td className="px-5 py-4 text-neutral-500 font-medium">{shortDate(refund.createdAt)}</td>
                     <td className="px-5 py-4 text-right">
                       {refund.retryable && (
                         <button
@@ -235,7 +235,7 @@ export default function RefundsPage() {
                           onClick={() => setPending(refund)}
                           disabled={!canMoveMoney || refund.sending || working}
                           title={refund.sending ? "Being sent right now" : undefined}
-                          className="px-3.5 py-1.5 border border-stone-300 text-stone-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
+                          className="px-3.5 py-1.5 border border-neutral-300 text-neutral-700 rounded-full font-semibold text-[11px] disabled:opacity-40"
                         >
                           {refund.sending ? "Sending…" : "Retry Refund"}
                         </button>
@@ -250,28 +250,28 @@ export default function RefundsPage() {
       </main>
 
       {pending && (
-        <div className="fixed inset-0 z-[60] bg-stone-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
+        <div className="fixed inset-0 z-[60] bg-neutral-950/60 flex items-center justify-center p-4" onClick={() => !working && setPending(null)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="retry-refund-heading"
-            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-stone-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-6 border border-neutral-200 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1">
-              <h3 id="retry-refund-heading" className="text-lg font-medium text-stone-900 tracking-tight">
+              <h3 id="retry-refund-heading" className="text-lg font-medium text-neutral-900 tracking-tight">
                 Retry {naira(pending.amount)} Refund?
               </h3>
-              <p className="text-xs font-medium text-stone-500 leading-relaxed">
+              <p className="text-xs font-medium text-neutral-500 leading-relaxed">
                 The {pending.potLabel.toLowerCase()} refund for &quot;{pending.campaignName}&quot; is sent again to the brand&apos;s Paystack payment. Parts
                 Paystack already has are recognised and not sent twice.
               </p>
             </div>
-            <dl className="bg-stone-50 rounded-xl p-4 space-y-2 text-xs">
+            <dl className="bg-neutral-50 rounded-xl p-4 space-y-2 text-xs">
               {pending.parts.map((part, i) => (
                 <div key={`${part.chargeReference}-${i}`} className="flex justify-between gap-3">
-                  <dt className="font-medium text-stone-500 truncate">{part.chargeReference || "No payment on record"}</dt>
-                  <dd className="font-medium text-stone-900 tabular-nums">
+                  <dt className="font-medium text-neutral-500 truncate">{part.chargeReference || "No payment on record"}</dt>
+                  <dd className="font-medium text-neutral-900 tabular-nums">
                     {naira(part.amount)} · {part.status === "processed" ? "Refunded" : part.status === "failed" ? "Failed" : part.sent ? "Sent" : "Not Sent"}
                   </dd>
                 </div>
@@ -282,7 +282,7 @@ export default function RefundsPage() {
                 type="button"
                 onClick={() => setPending(null)}
                 disabled={working}
-                className="flex-1 py-2.5 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -290,7 +290,7 @@ export default function RefundsPage() {
                 type="button"
                 onClick={retry}
                 disabled={working}
-                className="flex-1 py-2.5 bg-stone-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-900 text-white rounded-full font-semibold text-xs disabled:opacity-50"
               >
                 {working ? "Retrying…" : "Retry Refund"}
               </button>

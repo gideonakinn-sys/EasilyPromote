@@ -37,7 +37,7 @@ export function ConnectAppChecklist({ status, hasKey }: { status: ReferralStatus
           <span
             className={cn(
               "mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center",
-              item.done ? "bg-[#176448] text-white" : "border border-stone-300"
+              item.done ? "bg-[#176448] text-white" : "border border-neutral-300"
             )}
             aria-hidden="true"
           >
@@ -46,11 +46,11 @@ export function ConnectAppChecklist({ status, hasKey }: { status: ReferralStatus
             )}
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-stone-900 font-rethink">
+            <p className="text-sm font-medium text-neutral-900 font-rethink">
               {item.label}
               <span className="sr-only">{item.done ? " (done)" : " (not done yet)"}</span>
             </p>
-            <p className="text-xs text-stone-500 font-medium font-rethink">{item.detail}</p>
+            <p className="text-xs text-neutral-500 font-medium font-rethink">{item.detail}</p>
           </div>
         </li>
       ))}

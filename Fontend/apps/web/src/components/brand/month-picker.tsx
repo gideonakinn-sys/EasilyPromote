@@ -27,20 +27,20 @@ export function MonthPicker({ months, value, onChange, refreshing }: MonthPicker
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Select month"
-          className="flex items-center gap-2 rounded-full border border-stone-100 bg-white px-4 py-2 text-sm font-medium text-stone-900"
+          className="flex items-center gap-2 rounded-full border border-neutral-100 bg-white px-4 py-2 text-sm font-medium text-neutral-900"
         >
           {monthLabel(value)}
           {refreshing ? (
-            <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-stone-200 border-t-stone-500" />
+            <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-500" />
           ) : (
-            <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+            <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
           )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-[60vh] w-52 overflow-y-auto">
         {options.map((m) => (
           <DropdownMenuItem key={m} onSelect={() => onChange(m)}>
-            <span className={m === value ? "font-semibold text-stone-900" : "font-medium text-stone-700"}>
+            <span className={m === value ? "font-semibold text-neutral-900" : "font-medium text-neutral-700"}>
               {monthLabel(m)}
             </span>
           </DropdownMenuItem>

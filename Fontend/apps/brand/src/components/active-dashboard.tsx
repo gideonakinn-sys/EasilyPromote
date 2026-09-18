@@ -80,7 +80,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 z-10">
       {/* Header row: Welcome + filter + create campaign */}
       <div data-reveal className="grid grid-cols-[1fr_auto] items-center gap-4 mb-8 md:mb-16">
-        <h2 className="font-rethink font-semibold text-[23px] leading-[28px] text-stone-900 m-0 tracking-tighter">
+        <h2 className="font-rethink font-semibold text-[23px] leading-[28px] text-neutral-900 m-0 tracking-tighter">
           Welcome, {userName.split(" ")[0]}
         </h2>
 
@@ -88,24 +88,24 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           {/* Mobile filter trigger — opens bottom sheet */}
           <button
             onClick={() => setIsMobileFilterOpen(true)}
-            className="flex md:hidden items-center justify-center bg-white border border-stone-200 rounded-full p-3"
+            className="flex md:hidden items-center justify-center bg-white border border-neutral-200 rounded-full p-3"
           >
-            <HugeiconsIcon icon={FilterIcon} size={20} className="text-stone-500" />
+            <HugeiconsIcon icon={FilterIcon} size={20} className="text-neutral-500" />
           </button>
 
           {/* Desktop filter trigger — opens dropdown */}
           <div ref={filterRef} className="hidden md:relative md:block z-[100]">
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="hidden md:flex items-center justify-center gap-2 bg-white border border-stone-200 rounded-full px-4 py-2.5 cursor-pointer"
+              className="hidden md:flex items-center justify-center gap-2 bg-white border border-neutral-200 rounded-full px-4 py-2.5 cursor-pointer"
             >
-              <HugeiconsIcon icon={FilterIcon} size={16} className="text-stone-500" />
-              <span className="text-sm font-medium text-stone-900">{selectedFilter}</span>
-              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+              <HugeiconsIcon icon={FilterIcon} size={16} className="text-neutral-500" />
+              <span className="text-sm font-medium text-neutral-900">{selectedFilter}</span>
+              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
             </button>
 
             {isFilterOpen && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl py-1 z-50">
+              <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-neutral-200 rounded-xl py-1 z-50">
                 {FILTER_OPTIONS.map((option) => (
                   <button
                     key={option}
@@ -115,7 +115,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
                     }}
                     className={cn(
                       "flex items-center w-full px-4 py-2.5 text-sm text-left",
-                      selectedFilter === option ? "font-semibold text-stone-900" : "font-medium text-stone-700"
+                      selectedFilter === option ? "font-semibold text-neutral-900" : "font-medium text-neutral-700"
                     )}
                   >
                     {option}
@@ -128,7 +128,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
           {/* Create campaign button */}
           <button
             onClick={onCreateCampaign}
-            className="flex items-center justify-center p-3 md:px-6 md:py-2.5 bg-[#FEB604] text-[#1C1917] font-rethink font-semibold text-sm rounded-full border border-stone-100"
+            className="flex items-center justify-center p-3 md:px-6 md:py-2.5 bg-[#FEB604] text-[#171717] font-rethink font-semibold text-sm rounded-full border border-neutral-100"
           >
             <HugeiconsIcon icon={Add01Icon} size={20} className="md:hidden" />
             <span className="hidden md:inline">Create Campaign</span>
@@ -149,8 +149,8 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
               className={cn(
                 "flex items-center w-full px-4 py-3 text-sm text-left rounded-lg",
                 selectedFilter === option
-                  ? "bg-stone-100 font-semibold text-stone-900"
-                  : "font-medium text-stone-700"
+                  ? "bg-neutral-100 font-semibold text-neutral-900"
+                  : "font-medium text-neutral-700"
               )}
             >
               {option}
@@ -179,7 +179,7 @@ export function ActiveDashboard({ campaigns, onCreateCampaign, userName, onLogou
 
         {filteredCampaigns.length === 0 && (
           <div className="col-span-full text-center py-12">
-            <p className="text-stone-500 text-sm font-medium">No campaigns found.</p>
+            <p className="text-neutral-500 text-sm font-medium">No campaigns found.</p>
           </div>
         )}
       </div>

@@ -91,8 +91,8 @@ Next.js 15 (App Router) + React 19 · Tailwind 3.4 + CSS variables · shadcn/ui 
 - `font-rethink` on all text; root font 13px (org `html { font-size: 13px }`).
 - `tracking-tight` only for headings > 16px; labels are **title case** (never uppercase/wider).
 - Mobile-first `md:`; pill buttons (`rounded-full`), textareas `rounded-xl`.
-- Shell bg is `#fcfcfc`; cards white with `border-stone-100`. Data figures use `tabular-nums`; accent color `#FEB604`, ink `#1C1917`.
-- Icons: `<HugeiconsIcon icon={XIcon} size={16} className="text-stone-500" />`; 12–14 inline, 16 standard, 20 mobile. Color always via `className`.
+- Shell bg is `neutral-50` (`#fafafa`); cards white with `border-neutral-100`. Data figures use `tabular-nums`; accent color `#FEB604`, ink `#171717` (neutral-900).
+- Icons: `<HugeiconsIcon icon={XIcon} size={16} className="text-neutral-500" />`; 12–14 inline, 16 standard, 20 mobile. Color always via `className`.
 
 ### Data / feedback
 - `useToast()` → `toast("Message", "error" | "success")`; error state `const [error, setError] = useState("")` + inline render; `Skeleton` for loading; reveal animations via `data-reveal` (+ `useStaggerReveal(step)` for lists).

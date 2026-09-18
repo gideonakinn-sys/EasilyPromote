@@ -62,13 +62,13 @@ function LiveMatchCount({ data }: { data: WizardData }) {
   const text = failed ? "We couldn't count matching creators right now." : result ? `${result.label}.` : "Counting matching creators…";
   return (
     <div
-      className="sticky top-0 z-10 bg-stone-50 border border-stone-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+      className="sticky top-0 z-10 bg-neutral-50 border border-neutral-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
       aria-live="polite"
     >
-      <p className={cn("text-sm font-medium font-rethink", result && result.count === 0 && !failed ? "text-amber-800" : "text-stone-900")}>
+      <p className={cn("text-sm font-medium font-rethink", result && result.count === 0 && !failed ? "text-amber-800" : "text-neutral-900")}>
         {text}
       </p>
-      {loading && <span className="text-[11px] font-medium text-stone-400 font-rethink shrink-0">Updating</span>}
+      {loading && <span className="text-[11px] font-medium text-neutral-400 font-rethink shrink-0">Updating</span>}
     </div>
   );
 }
@@ -89,13 +89,13 @@ interface HardFilterProps {
 // of a creator's audience that has to match.
 function HardFilter({ id, label, body, on, share, showShare, shareHint, onToggle, onShareChange }: HardFilterProps) {
   return (
-    <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-4">
+    <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <span className="space-y-0.5">
-          <span id={`${id}-label`} className="block text-sm font-medium text-stone-900 font-rethink">
+          <span id={`${id}-label`} className="block text-sm font-medium text-neutral-900 font-rethink">
             {label}
           </span>
-          <span className="block text-xs text-stone-500 font-medium font-rethink leading-relaxed">{body}</span>
+          <span className="block text-xs text-neutral-500 font-medium font-rethink leading-relaxed">{body}</span>
         </span>
         <button
           type="button"
@@ -103,7 +103,7 @@ function HardFilter({ id, label, body, on, share, showShare, shareHint, onToggle
           aria-checked={on}
           aria-labelledby={`${id}-label`}
           onClick={() => onToggle(!on)}
-          className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-stone-900" : "bg-stone-200")}
+          className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-neutral-900" : "bg-neutral-200")}
         >
           <span
             aria-hidden="true"
@@ -122,7 +122,7 @@ function HardFilter({ id, label, body, on, share, showShare, shareHint, onToggle
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => onShareChange(digitsOnly(e.target.value).slice(0, 3))}
               className={cn(TEXT_INPUT_CLASS, "pr-10")}
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">%</span>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">%</span>
           </div>
         </Field>
       )}
@@ -173,7 +173,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
                       type="button"
                       onClick={() => update({ locations: data.locations.filter((existing) => existing !== item) })}
                       aria-label={`Remove ${item}`}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-stone-900 text-white text-xs font-medium font-rethink"
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-neutral-900 text-white text-xs font-medium font-rethink"
                     >
                       {canonicalAudienceLocation(item) === "Abuja" ? "Abuja (FCT)" : item} ×
                     </button>
@@ -199,7 +199,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ minLocationShare: digitsOnly(e.target.value).slice(0, 3) })}
                 className={cn(TEXT_INPUT_CLASS, "pr-10")}
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">%</span>
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">%</span>
             </div>
           </Field>
         )}
@@ -285,7 +285,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ minEngagementRate: e.target.value.replace(/[^\d.]/g, "") })}
               className={cn(TEXT_INPUT_CLASS, "pr-10")}
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-stone-400 font-rethink" aria-hidden="true">%</span>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">%</span>
           </div>
         </Field>
 
@@ -316,16 +316,16 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           />
         </Field>
 
-        <label className="flex items-start gap-3 bg-white border border-stone-200 rounded-2xl p-4 cursor-pointer">
+        <label className="flex items-start gap-3 bg-white border border-neutral-200 rounded-2xl p-4 cursor-pointer">
           <input
             type="checkbox"
             checked={data.verifiedOnly}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ verifiedOnly: e.target.checked })}
-            className="mt-0.5 h-4 w-4 accent-stone-900"
+            className="mt-0.5 h-4 w-4 accent-neutral-900"
           />
           <span className="space-y-0.5">
-            <span className="block text-sm font-medium text-stone-900 font-rethink">Verified Creators Only</span>
-            <span className="block text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+            <span className="block text-sm font-medium text-neutral-900 font-rethink">Verified Creators Only</span>
+            <span className="block text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
               Only creators with a connected social account whose identity our team has checked.
             </span>
           </span>

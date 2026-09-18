@@ -13,7 +13,7 @@ import { formatCompactViews } from "../../lib/brand";
 import type { MonthPoint } from "../../lib/brand";
 
 const chartConfig = {
-  views: { label: "Views", color: "#1C1917" },
+  views: { label: "Views", color: "#171717" },
 } satisfies ChartConfig;
 
 interface DeliveryChartProps {
@@ -28,7 +28,7 @@ export function DeliveryChart({ series }: DeliveryChartProps) {
   const data = (series || []).map((d) => ({ ...d, date: monthDay(d.date) }));
 
   return (
-    <Card data-reveal className="delivery-chart rounded-2xl border-stone-100 bg-white shadow-none">
+    <Card data-reveal className="delivery-chart rounded-2xl border-neutral-100 bg-white shadow-none">
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           .delivery-chart .recharts-area-curve {
@@ -49,10 +49,10 @@ export function DeliveryChart({ series }: DeliveryChartProps) {
         }
       `}</style>
       <CardHeader className="p-5 pb-2">
-        <CardTitle className="text-sm font-semibold text-stone-900 tracking-tight">
+        <CardTitle className="text-sm font-semibold text-neutral-900 tracking-tight">
           Views delivered
         </CardTitle>
-        <CardDescription className="text-xs font-medium text-stone-500">
+        <CardDescription className="text-xs font-medium text-neutral-500">
           Daily view count across the selected month.
         </CardDescription>
       </CardHeader>
@@ -61,18 +61,18 @@ export function DeliveryChart({ series }: DeliveryChartProps) {
           <AreaChart data={data} accessibilityLayer>
             <defs>
               <linearGradient id="viewsFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#1C1917" stopOpacity={0.12} />
-                <stop offset="100%" stopColor="#1C1917" stopOpacity={0} />
+                <stop offset="0%" stopColor="#171717" stopOpacity={0.12} />
+                <stop offset="100%" stopColor="#171717" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="#E7E5E4" />
+            <CartesianGrid vertical={false} stroke="#e5e5e5" />
             <XAxis
               dataKey="date"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
               interval={Math.max(0, Math.ceil(data.length / 7) - 1)}
-              tick={{ fontSize: 10, fill: "#A8A29E", fontWeight: 500 }}
+              tick={{ fontSize: 10, fill: "#a3a3a3", fontWeight: 500 }}
             />
             <YAxis
               tickLine={false}
@@ -80,10 +80,10 @@ export function DeliveryChart({ series }: DeliveryChartProps) {
               width={38}
               tickMargin={8}
               tickFormatter={(value: number) => formatCompactViews(value)}
-              tick={{ fontSize: 10, fill: "#A8A29E", fontWeight: 500 }}
+              tick={{ fontSize: 10, fill: "#a3a3a3", fontWeight: 500 }}
             />
             <ChartTooltip
-              cursor={{ stroke: "#D6D3D1", strokeDasharray: "4 4" }}
+              cursor={{ stroke: "#d4d4d4", strokeDasharray: "4 4" }}
               content={
                 <ChartTooltipContent
                   indicator="line"
@@ -94,12 +94,12 @@ export function DeliveryChart({ series }: DeliveryChartProps) {
             <Area
               dataKey="views"
               type="monotone"
-              stroke="#1C1917"
+              stroke="#171717"
               strokeWidth={2}
               fill="url(#viewsFill)"
               dot={false}
               isAnimationActive={false}
-              activeDot={{ r: 4, fill: "#1C1917", stroke: "#FFFFFF", strokeWidth: 2 }}
+              activeDot={{ r: 4, fill: "#171717", stroke: "#FFFFFF", strokeWidth: 2 }}
             />
           </AreaChart>
         </ChartContainer>

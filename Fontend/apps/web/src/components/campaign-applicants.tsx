@@ -70,21 +70,21 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
   });
 
   return (
-    <div className="border border-stone-200 rounded-2xl p-4 space-y-4 font-rethink">
+    <div className="border border-neutral-200 rounded-2xl p-4 space-y-4 font-rethink">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-stone-900">Applicants</h3>
+          <h3 className="text-sm font-medium text-neutral-900">Applicants</h3>
           <span
             className={cn(
               "px-2 py-0.5 rounded-full text-[10px] font-medium",
-              counts.pending > 0 ? "bg-[#FEB604] text-stone-950" : "bg-stone-200 text-stone-700"
+              counts.pending > 0 ? "bg-[#FEB604] text-neutral-950" : "bg-neutral-200 text-neutral-700"
             )}
             aria-label={`${counts.pending} pending applicants`}
           >
             {counts.pending > 0 ? `${counts.pending} Pending` : counts.all}
           </span>
         </div>
-        <div className="flex rounded-full bg-stone-100 p-0.5">
+        <div className="flex rounded-full bg-neutral-100 p-0.5">
           {(["match", "newest"] as const).map((value) => (
             <button
               key={value}
@@ -92,7 +92,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
               onClick={() => setSort(value)}
               className={cn(
                 "px-3 py-1 rounded-full text-[11px] font-medium",
-                sort === value ? "bg-white text-stone-900" : "text-stone-500"
+                sort === value ? "bg-white text-neutral-900" : "text-neutral-500"
               )}
             >
               {value === "match" ? "Best Match" : "Recently Applied"}
@@ -109,7 +109,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
             onClick={() => setFilter(value)}
             className={cn(
               "px-3 py-1.5 rounded-full text-xs font-medium",
-              filter === value ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
+              filter === value ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"
             )}
           >
             {label} {counts[value]}
@@ -118,14 +118,14 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
       </div>
 
       {error && <p className="text-xs font-medium text-red-600">{error}</p>}
-      {loading && rows.length === 0 && <p className="text-xs font-medium text-stone-400">Loading applicants…</p>}
+      {loading && rows.length === 0 && <p className="text-xs font-medium text-neutral-400">Loading applicants…</p>}
       {!loading && !error && rows.length === 0 && (
-        <p className="text-xs font-medium text-stone-500">
+        <p className="text-xs font-medium text-neutral-500">
           {filter === "all" ? "No applications yet. Eligible creators can apply from the marketplace." : `No ${filter} applications.`}
         </p>
       )}
 
-      <div className={cn("divide-y divide-stone-100 transition-opacity", loading && "opacity-50")} aria-busy={loading}>
+      <div className={cn("divide-y divide-neutral-100 transition-opacity", loading && "opacity-50")} aria-busy={loading}>
         {rows.map((row) => (
           <button
             key={row.id}
@@ -133,7 +133,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
             onClick={() => setOpenId(row.id)}
             className="w-full flex items-center gap-3 py-3 text-left"
           >
-            <div className="w-10 h-10 rounded-full bg-stone-200 overflow-hidden flex items-center justify-center text-xs font-medium text-stone-600 shrink-0">
+            <div className="w-10 h-10 rounded-full bg-neutral-200 overflow-hidden flex items-center justify-center text-xs font-medium text-neutral-600 shrink-0">
               {row.creator.photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={row.creator.photo} alt="" className="w-full h-full object-cover" />
@@ -142,11 +142,11 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-stone-900 truncate flex items-center gap-1">
+              <p className="text-sm font-medium text-neutral-900 truncate flex items-center gap-1">
                 {row.creator.name}
                 {row.creator.verified && <HugeiconsIcon icon={CheckmarkBadge01Icon} size={12} className="text-[#176448] shrink-0" />}
               </p>
-              <p className="text-[11px] font-medium text-stone-500 truncate">
+              <p className="text-[11px] font-medium text-neutral-500 truncate">
                 {[
                   locationLabel(row.creator.location),
                   row.creator.topPlatform
@@ -169,7 +169,7 @@ export function CampaignApplicants({ campaignId }: CampaignApplicantsProps) {
               <TermsAcceptedNote accepted={(row as ApplicationRow & WithTermsAccepted).usageRightsAccepted} />
             </div>
             <div className="flex flex-col items-end gap-1 shrink-0">
-              <span className="text-xs font-medium text-stone-900">{row.matchScore}% match</span>
+              <span className="text-xs font-medium text-neutral-900">{row.matchScore}% match</span>
               <ApplicationStatusBadge status={row.status} audience="brand" />
             </div>
           </button>

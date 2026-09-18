@@ -96,16 +96,16 @@ export function CampaignApplyPanel({
           </p>
         </div>
         {application.pitch && (
-          <div className="border border-stone-200 rounded-2xl p-4 space-y-1">
-            <p className="text-xs font-medium text-stone-500">Your Pitch</p>
-            <p className="text-xs font-medium text-stone-800 leading-relaxed">{application.pitch}</p>
+          <div className="border border-neutral-200 rounded-2xl p-4 space-y-1">
+            <p className="text-xs font-medium text-neutral-500">Your Pitch</p>
+            <p className="text-xs font-medium text-neutral-800 leading-relaxed">{application.pitch}</p>
           </div>
         )}
         <button
           type="button"
           onClick={withdraw}
           disabled={withdrawing}
-          className="w-full py-3 rounded-full font-semibold text-sm font-rethink bg-stone-100 text-stone-900 disabled:opacity-50"
+          className="w-full py-3 rounded-full font-semibold text-sm font-rethink bg-neutral-100 text-neutral-900 disabled:opacity-50"
         >
           {withdrawing ? "Withdrawing…" : "Withdraw Application"}
         </button>
@@ -115,13 +115,13 @@ export function CampaignApplyPanel({
 
   if (application && !canReapply) {
     return (
-      <div className="border border-stone-200 rounded-2xl p-4 space-y-2 font-rethink">
+      <div className="border border-neutral-200 rounded-2xl p-4 space-y-2 font-rethink">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-medium text-stone-500">Your Application</p>
+          <p className="text-xs font-medium text-neutral-500">Your Application</p>
           <ApplicationStatusBadge status={application.status} />
         </div>
         {application.status === "rejected" && application.rejectionReason && (
-          <p className="text-xs font-medium text-stone-700 leading-relaxed">&quot;{application.rejectionReason}&quot;</p>
+          <p className="text-xs font-medium text-neutral-700 leading-relaxed">&quot;{application.rejectionReason}&quot;</p>
         )}
       </div>
     );
@@ -144,7 +144,7 @@ export function CampaignApplyPanel({
 
       {allReasons.length === 0 && places > 0 && (
         <div className="space-y-2">
-          <label htmlFor="application-pitch" className="text-xs font-medium text-stone-500 block">
+          <label htmlFor="application-pitch" className="text-xs font-medium text-neutral-500 block">
             Why You? (Optional)
           </label>
           <textarea
@@ -153,9 +153,9 @@ export function CampaignApplyPanel({
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPitch(e.target.value.slice(0, MAX_PITCH))}
             rows={3}
             placeholder="A line or two on why you're a good fit"
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-rethink font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 resize-none"
           />
-          <p className="text-[10px] font-medium text-stone-400 text-right">
+          <p className="text-[10px] font-medium text-neutral-400 text-right">
             {pitch.length}/{MAX_PITCH}
           </p>
         </div>
@@ -196,12 +196,12 @@ export function CampaignApplyPanel({
           disabled={!canApply}
           className={cn(
             "w-full py-3 rounded-full font-semibold text-sm font-rethink",
-            canApply ? "bg-[#FEB604] text-[#1C1917] border border-stone-100" : "bg-stone-200 text-stone-400 cursor-not-allowed"
+            canApply ? "bg-[#FEB604] text-[#171717] border border-neutral-100" : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
           )}
         >
           {sending ? "Sending…" : places === 0 ? "Campaign Full" : "Apply"}
         </button>
-        <p className="text-[11px] text-stone-500 font-medium text-center">
+        <p className="text-[11px] text-neutral-500 font-medium text-center">
           The brand picks who takes part. Applying doesn&apos;t reserve a place.
         </p>
       </div>

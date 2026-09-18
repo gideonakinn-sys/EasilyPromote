@@ -22,7 +22,7 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
           if (!isMobile) setOpen(true);
         }}
         onMouseLeave={() => setOpen(false)}
-        className="inline-flex items-center justify-center w-4 h-4 text-stone-400 hover:text-stone-600 focus:outline-none cursor-pointer"
+        className="inline-flex items-center justify-center w-4 h-4 text-neutral-400 hover:text-neutral-600 focus:outline-none cursor-pointer"
       >
         <Info className="w-3.5 h-3.5" />
       </button>
@@ -30,7 +30,7 @@ export function InfoTooltip({ text }: InfoTooltipProps) {
       {open && (
         <span
           role="tooltip"
-          className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 w-52 bg-stone-900 text-white text-xs font-medium leading-relaxed rounded-lg px-3 py-2 font-rethink tracking-[-0.01em]"
+          className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 w-52 bg-neutral-900 text-white text-xs font-medium leading-relaxed rounded-lg px-3 py-2 font-rethink tracking-[-0.01em]"
         >
           {text}
         </span>

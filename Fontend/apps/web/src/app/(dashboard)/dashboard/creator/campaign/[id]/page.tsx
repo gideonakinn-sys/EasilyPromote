@@ -236,7 +236,7 @@ function CampaignDetailsContent() {
 
   if (!campaignId) {
     return (
-      <div className="h-dvh bg-stone-100 flex items-center justify-center font-rethink text-stone-500">
+      <div className="h-dvh bg-neutral-100 flex items-center justify-center font-rethink text-neutral-500">
         Invalid campaign
       </div>
     );
@@ -244,7 +244,7 @@ function CampaignDetailsContent() {
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-[#F5F5F4] flex items-center justify-center">
+      <div className="min-h-dvh bg-[#f5f5f5] flex items-center justify-center">
         <div className="space-y-4 w-full max-w-md mx-auto px-6">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-24 w-full rounded-2xl" />
@@ -256,14 +256,14 @@ function CampaignDetailsContent() {
 
   if (!campaign) {
     return (
-      <div className="h-dvh bg-stone-100 flex items-center justify-center font-rethink text-stone-500">
+      <div className="h-dvh bg-neutral-100 flex items-center justify-center font-rethink text-neutral-500">
         Campaign not found
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh bg-[#F5F5F4] font-rethink">
+    <div className="min-h-dvh bg-[#f5f5f5] font-rethink">
       <CampaignDetailsDrawer
         campaign={campaign}
         isMobile={isMobile}

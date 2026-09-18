@@ -77,11 +77,11 @@ function IncreaseViewsContent({
 }: IncreaseViewsContentProps) {
   return (
     <div className="space-y-4">
-      <h3 className="font-rethink font-semibold text-base text-stone-900">Increase views</h3>
+      <h3 className="font-rethink font-semibold text-base text-neutral-900">Increase views</h3>
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-xs font-medium text-stone-500 block">How many additional views do you want?</label>
+          <label className="text-xs font-medium text-neutral-500 block">How many additional views do you want?</label>
           <input
             type="text"
             inputMode="numeric"
@@ -90,7 +90,7 @@ function IncreaseViewsContent({
             onBlur={onViewsInputBlur}
             placeholder="100,000"
             disabled={paying}
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-full text-sm font-rethink font-medium placeholder-neutral-300 focus:outline-none focus:border-neutral-400 focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <div className="flex gap-2">
             {PRESET_VIEWS.map((preset) => (
@@ -102,27 +102,27 @@ function IncreaseViewsContent({
                 className={cn(
                   "flex-1 py-2 rounded-full text-xs font-medium font-rethink transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                   additionalViews === preset
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 text-stone-600"
+                    ? "bg-neutral-900 text-white"
+                    : "bg-neutral-100 text-neutral-600"
                 )}
               >
                 {formatCompact(preset)}
               </button>
             ))}
           </div>
-          <span className="text-[10px] text-stone-400 font-medium">
+          <span className="text-[10px] text-neutral-400 font-medium">
             ₦{rate.toFixed(3)} per view
           </span>
         </div>
 
-        <div className="border-t border-stone-100 pt-4 space-y-2">
+        <div className="border-t border-neutral-100 pt-4 space-y-2">
           <div className="flex justify-between text-sm font-rethink">
-            <span className="text-stone-500 font-medium">Additional views</span>
-            <span className="font-medium text-stone-900">{additionalViews.toLocaleString()}</span>
+            <span className="text-neutral-500 font-medium">Additional views</span>
+            <span className="font-medium text-neutral-900">{additionalViews.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm font-rethink">
-            <span className="text-stone-500 font-medium">Cost</span>
-            <span className="font-medium text-stone-900">₦{additionalCost.toLocaleString()}</span>
+            <span className="text-neutral-500 font-medium">Cost</span>
+            <span className="font-medium text-neutral-900">₦{additionalCost.toLocaleString()}</span>
           </div>
         </div>
 
@@ -132,8 +132,8 @@ function IncreaseViewsContent({
           className={cn(
             "w-full py-3 rounded-full text-sm font-semibold font-rethink border transition-colors",
             additionalViews > 0
-              ? "bg-[#FEB604] text-[#1C1917] border-stone-100"
-              : "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed"
+              ? "bg-[#FEB604] text-[#171717] border-neutral-100"
+              : "bg-neutral-200 text-neutral-400 border-neutral-200 cursor-not-allowed"
           )}
         >
           {paying ? "Redirecting..." : `Pay ₦${additionalCost.toLocaleString()}`}
@@ -227,7 +227,7 @@ interface CampaignDetailsProps {
 
 function CreatorAvatar({ seed }: { seed: string }) {
   return (
-    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-200 to-[#FEB604] border border-white flex items-center justify-center text-[10px] font-medium font-rethink text-stone-950 flex-shrink-0">
+    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-200 to-[#FEB604] border border-white flex items-center justify-center text-[10px] font-medium font-rethink text-neutral-950 flex-shrink-0">
       {seed.substring(0, 2).toUpperCase()}
     </div>
   );
@@ -448,10 +448,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
   if (loading) {
     return (
-      <div className={cn("flex h-full bg-stone-100", isMobile && "flex-col")}>
+      <div className={cn("flex h-full bg-neutral-100", isMobile && "flex-col")}>
         {isMobile ? (
           <>
-            <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 flex-shrink-0">
+            <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-neutral-200 flex-shrink-0">
               <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
               <Skeleton className="h-5 w-40 rounded-lg" />
             </div>
@@ -492,9 +492,9 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   if (error || !campaign) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <span className="text-stone-500 font-rethink text-sm tracking-[-0.01em]">{error || "Campaign not found"}</span>
+        <span className="text-neutral-500 font-rethink text-sm tracking-[-0.01em]">{error || "Campaign not found"}</span>
         {onClose && (
-          <button onClick={onClose} className="text-sm font-medium text-stone-900 underline">
+          <button onClick={onClose} className="text-sm font-medium text-neutral-900 underline">
             Go back
           </button>
         )}
@@ -534,12 +534,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
   const creatorsOnCampaign = campaign.creatorCount ?? uniqueCreatorCount;
 
   return (
-    <div className={cn("h-full bg-stone-100", isMobile ? "flex flex-col" : "flex relative")}>
+    <div className={cn("h-full bg-neutral-100", isMobile ? "flex flex-col" : "flex relative")}>
       {!isMobile && onClose && (
         <button
           onClick={onClose}
           aria-label="Close campaign details"
-          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+          className="absolute top-6 right-6 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -548,17 +548,17 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
       )}
       {/* Mobile Header */}
       {isMobile && (
-        <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-100 flex-shrink-0">
-          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200">
+        <div className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-neutral-200 bg-neutral-100 flex-shrink-0">
+          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
-          <h3 className="font-rethink font-semibold text-base text-stone-900 truncate flex-1">{campaign.name}</h3>
+          <h3 className="font-rethink font-semibold text-base text-neutral-900 truncate flex-1">{campaign.name}</h3>
         </div>
       )}
 
       {/* Mobile Horizontal Tabs */}
       {isMobile && (
-        <div className="flex gap-3 px-5 py-3 bg-stone-100 border-b border-stone-200 flex-shrink-0 overflow-x-auto">
+        <div className="flex gap-3 px-5 py-3 bg-neutral-100 border-b border-neutral-200 flex-shrink-0 overflow-x-auto">
           {([
             { label: "Overview",    value: "Overview"   as TabType },
             { label: "Submissions", value: "Submission" as TabType },
@@ -573,8 +573,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 className={cn(
                   "px-4 py-2 rounded-full text-sm font-medium font-rethink whitespace-nowrap flex-shrink-0",
                   isActive
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 text-stone-500"
+                    ? "bg-neutral-900 text-white"
+                    : "bg-neutral-100 text-neutral-500"
                 )}
               >
                 {label}
@@ -586,7 +586,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
       {/* Desktop Left Sidebar – tabs */}
       {!isMobile && (
-        <div className="w-56 flex flex-col pt-28 gap-8 flex-shrink-0 bg-stone-100">
+        <div className="w-56 flex flex-col pt-28 gap-8 flex-shrink-0 bg-neutral-100">
           <div className="flex flex-col gap-1 pl-16 pr-4">
             {([
               { label: "Overview",    value: "Overview"   as TabType },
@@ -602,8 +602,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   className={cn(
                     "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium font-rethink transition-all duration-150 text-left",
                     isActive
-                      ? "bg-stone-100 text-stone-900"
-                      : "text-stone-400"
+                      ? "bg-neutral-100 text-neutral-900"
+                      : "text-neutral-400"
                   )}
                 >
                   {value === "Overview" && (
@@ -642,10 +642,10 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 )}
               </div>
               <div className="space-y-1.5">
-                <h2 className="font-rethink font-medium tracking-tighter text-xl text-stone-900 leading-tight">
+                <h2 className="font-rethink font-medium tracking-tighter text-xl text-neutral-900 leading-tight">
                   {campaign.name}
                 </h2>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-stone-200 text-stone-600 font-medium text-[10px] font-rethink">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-600 font-medium text-[10px] font-rethink">
                   {campaign.category}
                 </span>
               </div>
@@ -660,7 +660,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               ) : !hasViews ? null : (
                 <button
                   onClick={() => setShowIncreaseViews(!showIncreaseViews)}
-                  className="w-full py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink"
+                  className="w-full py-3 bg-[#FEB604] text-[#171717] font-semibold text-sm rounded-full border border-neutral-100 font-rethink"
                 >
                   Increase views
                 </button>
@@ -669,20 +669,20 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Campaign Description */}
             {campaign.contentBrief && (
-              <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{campaign.contentBrief}</p>
+              <p className="font-rethink text-xs text-neutral-500 font-medium leading-relaxed">{campaign.contentBrief}</p>
             )}
 
             {campaign.keyMessageCta && (
               <div className="space-y-1.5">
-                <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">Key message</h5>
-                <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.keyMessageCta}</p>
+                <h5 className="text-xs font-medium text-neutral-500 font-rethink tracking-[-0.01em]">Key message</h5>
+                <p className="font-rethink text-sm text-neutral-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.keyMessageCta}</p>
               </div>
             )}
 
             {campaign.whatToAvoid && (
               <div className="space-y-1.5">
-                <h5 className="text-xs font-medium text-stone-500 font-rethink tracking-[-0.01em]">What to avoid</h5>
-                <p className="font-rethink text-sm text-stone-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.whatToAvoid}</p>
+                <h5 className="text-xs font-medium text-neutral-500 font-rethink tracking-[-0.01em]">What to avoid</h5>
+                <p className="font-rethink text-sm text-neutral-900 font-medium leading-relaxed tracking-[-0.01em]">{campaign.whatToAvoid}</p>
               </div>
             )}
 
@@ -690,62 +690,62 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             <div className="space-y-4 pt-2">
               {hasViews && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500">Target Views</span>
-                  <span className="text-stone-800">{formattedTarget}</span>
+                  <span className="text-neutral-500">Target Views</span>
+                  <span className="text-neutral-800">{formattedTarget}</span>
                 </div>
               )}
               <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                <span className="text-stone-500">Budget</span>
-                <span className="text-stone-800">{formattedBudget}</span>
+                <span className="text-neutral-500">Budget</span>
+                <span className="text-neutral-800">{formattedBudget}</span>
               </div>
               {campaign.platforms && campaign.platforms.length > 0 && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500">Platforms</span>
-                  <span className="text-stone-800">{campaign.platforms.join(", ")}</span>
+                  <span className="text-neutral-500">Platforms</span>
+                  <span className="text-neutral-800">{campaign.platforms.join(", ")}</span>
                 </div>
               )}
               {campaign.contentStyle && campaign.contentStyle.length > 0 && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500">Content style</span>
-                  <span className="text-stone-800">{Array.isArray(campaign.contentStyle) ? campaign.contentStyle.join(", ") : campaign.contentStyle}</span>
+                  <span className="text-neutral-500">Content style</span>
+                  <span className="text-neutral-800">{Array.isArray(campaign.contentStyle) ? campaign.contentStyle.join(", ") : campaign.contentStyle}</span>
                 </div>
               )}
               {campaign.goal && (
                 <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500 shrink-0 mr-4">Campaign goal</span>
-                  <span className="text-stone-800 text-right">{campaign.goal}</span>
+                  <span className="text-neutral-500 shrink-0 mr-4">Campaign goal</span>
+                  <span className="text-neutral-800 text-right">{campaign.goal}</span>
                 </div>
               )}
               {campaign.competitors && (
                 <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500 shrink-0 mr-4">Competitors</span>
-                  <span className="text-stone-800 text-right">{campaign.competitors}</span>
+                  <span className="text-neutral-500 shrink-0 mr-4">Competitors</span>
+                  <span className="text-neutral-800 text-right">{campaign.competitors}</span>
                 </div>
               )}
               {campaign.uniqueSellingPoint && (
                 <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500 shrink-0 mr-4">Unique selling point</span>
-                  <span className="text-stone-800 text-right">{campaign.uniqueSellingPoint}</span>
+                  <span className="text-neutral-500 shrink-0 mr-4">Unique selling point</span>
+                  <span className="text-neutral-800 text-right">{campaign.uniqueSellingPoint}</span>
                 </div>
               )}
               {campaign.funFact && (
                 <div className="flex justify-between items-start font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500 shrink-0 mr-4">Fun fact</span>
-                  <span className="text-stone-800 text-right">{campaign.funFact}</span>
+                  <span className="text-neutral-500 shrink-0 mr-4">Fun fact</span>
+                  <span className="text-neutral-800 text-right">{campaign.funFact}</span>
                 </div>
               )}
               {campaign.scriptUrl && (
                 <div className="flex justify-between items-center font-rethink text-sm font-medium tracking-[-0.01em]">
-                  <span className="text-stone-500">Script</span>
+                  <span className="text-neutral-500">Script</span>
                   <a
                     href={campaign.scriptUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-stone-200 rounded-full"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-200 rounded-full"
                   >
-                    <HugeiconsIcon icon={File01Icon} size={14} className="text-stone-900 shrink-0" />
-                    <span className="text-sm font-medium text-stone-900">{campaign.scriptFileName || "Download brief"}</span>
-                    <HugeiconsIcon icon={Download01Icon} size={14} className="text-stone-900 shrink-0" />
+                    <HugeiconsIcon icon={File01Icon} size={14} className="text-neutral-900 shrink-0" />
+                    <span className="text-sm font-medium text-neutral-900">{campaign.scriptFileName || "Download brief"}</span>
+                    <HugeiconsIcon icon={Download01Icon} size={14} className="text-neutral-900 shrink-0" />
                   </a>
                 </div>
               )}
@@ -753,7 +753,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {/* Desktop inline expansion */}
             {showIncreaseViews && !isMobile && (
-              <div className="border border-stone-200 rounded-2xl p-5 space-y-4">
+              <div className="border border-neutral-200 rounded-2xl p-5 space-y-4">
                 <IncreaseViewsContent
                   viewsInput={viewsInput}
                   additionalViews={additionalViews}
@@ -767,7 +767,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 />
                 <button
                   onClick={() => setShowIncreaseViews(false)}
-                  className="w-full py-2 text-xs font-medium text-stone-500 font-rethink"
+                  className="w-full py-2 text-xs font-medium text-neutral-500 font-rethink"
                 >
                   Cancel
                 </button>
@@ -802,7 +802,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   {currentStatus === "completed" && (
                     <>
                       <h4 className="font-rethink font-medium text-sm text-green-800">Completed</h4>
-                      <p className="font-rethink text-xs text-stone-600 font-medium leading-normal">
+                      <p className="font-rethink text-xs text-neutral-600 font-medium leading-normal">
                         Target reached. All funds have been released.
                       </p>
                     </>
@@ -810,7 +810,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   {currentStatus === "paused" && (
                     <>
                       <h4 className="font-rethink font-medium text-sm text-[#92400E]">Paused</h4>
-                      <p className="font-rethink text-xs text-stone-600 font-medium leading-normal">
+                      <p className="font-rethink text-xs text-neutral-600 font-medium leading-normal">
                         This campaign is paused. Resume it when you&apos;re ready.
                       </p>
                     </>
@@ -818,7 +818,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                   {currentStatus === "cancelled" && (
                     <>
                       <h4 className="font-rethink font-medium text-sm text-red-800">Cancelled</h4>
-                      <p className="font-rethink text-xs text-stone-600 font-medium leading-normal">
+                      <p className="font-rethink text-xs text-neutral-600 font-medium leading-normal">
                         This campaign was cancelled. Unspent budget has been refunded.
                       </p>
                     </>
@@ -856,21 +856,21 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
             {showsUsageRights && <UsageRightsCard usageRights={campaign.usageRights} />}
 
-            <div className="border border-dashed border-stone-200 rounded-2xl p-4 space-y-4">
+            <div className="border border-dashed border-neutral-200 rounded-2xl p-4 space-y-4">
               {/* Campaign Progress (views campaigns) */}
               {hasViews && (<>
               <div className="space-y-2">
-                <span className="text-xs font-medium text-stone-500 block">Campaign progress</span>
+                <span className="text-xs font-medium text-neutral-500 block">Campaign progress</span>
                 <div className="flex items-center gap-3">
-                  <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-600 rounded-full transition-all"
                       style={{ width: `${campaign.progressPercent}%` }}
                     />
                   </div>
-                  <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.progressPercent}%</span>
+                  <span className="text-xs font-medium text-neutral-500 font-rethink">{campaign.progressPercent}%</span>
                 </div>
-                <span className="text-xs text-stone-500 font-medium font-rethink">
+                <span className="text-xs text-neutral-500 font-medium font-rethink">
                   {campaign.viewsDelivered.toLocaleString()} / {(campaign.targetViews || 0).toLocaleString()} views
                 </span>
               </div>
@@ -878,19 +878,19 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
 
               {campaign.referral?.enabled && (
                 <>
-                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="border-t border-dashed border-neutral-200" />
                   <div className="space-y-2">
-                    <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Click progress" : "Referral progress"}</span>
+                    <span className="text-xs font-medium text-neutral-500 block">{isClicks ? "Click progress" : "Referral progress"}</span>
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                      <div className="flex-1 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-[#176448] rounded-full transition-all"
                           style={{ width: `${campaign.referral.budgetUsedPercent ?? 0}%` }}
                         />
                       </div>
-                      <span className="text-xs font-medium text-stone-500 font-rethink">{campaign.referral.budgetUsedPercent ?? 0}%</span>
+                      <span className="text-xs font-medium text-neutral-500 font-rethink">{campaign.referral.budgetUsedPercent ?? 0}%</span>
                     </div>
-                    <span className="text-xs text-stone-500 font-medium font-rethink">
+                    <span className="text-xs text-neutral-500 font-medium font-rethink">
                       {campaign.referral.conversions.toLocaleString()}{" "}
                       {isClicks
                         ? `valid click${campaign.referral.conversions === 1 ? "" : "s"} through creators' links`
@@ -900,14 +900,14 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     </span>
                   </div>
 
-                  <div className="border-t border-dashed border-stone-200" />
+                  <div className="border-t border-dashed border-neutral-200" />
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-medium text-stone-500 block">{isClicks ? "Creators' links" : "Referral codes"}</span>
+                      <span className="text-xs font-medium text-neutral-500 block">{isClicks ? "Creators' links" : "Referral codes"}</span>
                       {referralCodes && referralCodes.length > 0 && (
                         <button
                           onClick={() => setActiveTab("Referrals")}
-                          className="text-xs font-semibold text-stone-900 underline underline-offset-2"
+                          className="text-xs font-semibold text-neutral-900 underline underline-offset-2"
                         >
                           View all
                         </button>
@@ -916,7 +916,7 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     {referralCodes === null ? (
                       <Skeleton className="h-8 rounded-xl" />
                     ) : referralCodes.length === 0 ? (
-                      <p className="text-xs text-stone-500 font-medium font-rethink leading-relaxed">
+                      <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
                         {isClicks ? "Each creator gets a tracked link when they join." : codeFormatText(codePrefix)} No creators have joined yet.
                       </p>
                     ) : (
@@ -924,12 +924,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                         {referralCodes.slice(0, 5).map((row) => (
                           <li key={row.slotId} className="flex items-center justify-between gap-3 text-xs font-rethink">
                             <span className="min-w-0 flex flex-col">
-                              <span className="text-stone-500 font-medium truncate">
+                              <span className="text-neutral-500 font-medium truncate">
                                 {row.creatorUsername ? `@${row.creatorUsername}` : row.creatorName || "Creator"}
                               </span>
                               <TermsAcceptedNote accepted={(row as ReferralCodeRow & WithTermsAccepted).usageRightsAccepted} />
                             </span>
-                            <span className="font-mono text-stone-900 shrink-0">
+                            <span className="font-mono text-neutral-900 shrink-0">
                               {isClicks
                                 ? `${row.conversions.toLocaleString()} click${row.conversions === 1 ? "" : "s"}`
                                 : row.code || "Code pending"}
@@ -942,12 +942,12 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                 </>
               )}
 
-              {!isContent && <div className="border-t border-dashed border-stone-200" />}
+              {!isContent && <div className="border-t border-dashed border-neutral-200" />}
 
               {/* Creators on Campaign */}
               <div className="space-y-1">
-                <span className="text-xs font-medium text-stone-500 block">Creators on campaign</span>
-                <span className="text-base font-medium text-stone-900 block font-rethink">
+                <span className="text-xs font-medium text-neutral-500 block">Creators on campaign</span>
+                <span className="text-base font-medium text-neutral-900 block font-rethink">
                   {creatorsOnCampaign} creator{creatorsOnCampaign !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -968,11 +968,11 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                   </svg>
                 </div>
-                <h3 className="font-rethink font-medium text-lg text-stone-900">Failed to load</h3>
-                <p className="font-rethink text-xs text-stone-500 font-medium">{submissionsError}</p>
+                <h3 className="font-rethink font-medium text-lg text-neutral-900">Failed to load</h3>
+                <p className="font-rethink text-xs text-neutral-500 font-medium">{submissionsError}</p>
                 <button
                   onClick={() => fetchSubmissions()}
-                  className="px-6 py-2.5 bg-stone-900 text-white text-sm font-medium font-rethink rounded-full"
+                  className="px-6 py-2.5 bg-neutral-900 text-white text-sm font-medium font-rethink rounded-full"
                 >
                   Try again
                 </button>
@@ -980,16 +980,16 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             ) : submissions.filter(s => s.status === "posted").length > 0 ? (
               <div className="space-y-4">
                 {submissions.filter(s => s.status === "posted").map((sub) => (
-                  <div key={sub.id} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
+                  <div key={sub.id} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-rethink font-medium text-sm text-stone-900">@{sub.creatorHandle}</span>
+                      <span className="font-rethink font-medium text-sm text-neutral-900">@{sub.creatorHandle}</span>
                       <CreatorAvatar seed={sub.creatorHandle} />
                     </div>
-                    {sub.caption && <p className="font-rethink text-xs text-stone-500 font-medium">{sub.caption}</p>}
+                    {sub.caption && <p className="font-rethink text-xs text-neutral-500 font-medium">{sub.caption}</p>}
                     {sub.postedPlatforms && sub.postedPlatforms.length > 0 && (
-                      <div className="flex gap-2 text-[10px] text-stone-400">
+                      <div className="flex gap-2 text-[10px] text-neutral-400">
                         {sub.postedPlatforms.map((p, i) => (
-                          <span key={i} className="font-rethink px-2 py-0.5 bg-stone-100 rounded-full">{p.platform}: {p.views.toLocaleString()} views</span>
+                          <span key={i} className="font-rethink px-2 py-0.5 bg-neutral-100 rounded-full">{p.platform}: {p.views.toLocaleString()} views</span>
                         ))}
                       </div>
                     )}
@@ -999,8 +999,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             ) : (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <Image src={submissionsEmpty} alt="Nothing yet" width={120} height={120} />
-                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-stone-900">Nothing waiting on you</h3>
-                <p className="font-rethink text-xs text-stone-500 font-medium">New content will show up here as creators upload on their platforms</p>
+                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-neutral-900">Nothing waiting on you</h3>
+                <p className="font-rethink text-xs text-neutral-500 font-medium">New content will show up here as creators upload on their platforms</p>
               </div>
             )}
           </div>
@@ -1020,13 +1020,13 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
                     value: contentPayouts?.refundable ?? 0,
                   },
                 ].map((item) => (
-                  <div key={item.label} className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                    <span className="text-[10px] font-medium text-stone-500 block">{item.label}</span>
-                    <span className="font-rethink font-medium text-xl text-stone-900 block">₦{item.value.toLocaleString()}</span>
+                  <div key={item.label} className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
+                    <span className="text-[10px] font-medium text-neutral-500 block">{item.label}</span>
+                    <span className="font-rethink font-medium text-xl text-neutral-900 block">₦{item.value.toLocaleString()}</span>
                   </div>
                 ))}
                 {contentPayouts && contentPayouts.refunded + contentPayouts.refundPending > 0 && (
-                  <p className="sm:col-span-3 font-rethink text-xs text-stone-500 font-medium">
+                  <p className="sm:col-span-3 font-rethink text-xs text-neutral-500 font-medium">
                     ₦{(contentPayouts.refunded + contentPayouts.refundPending).toLocaleString()} of unused budget refunded to you
                     {contentPayouts.refundPending > 0 && " (on its way)"}.
                   </p>
@@ -1034,17 +1034,17 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
               </div>
             ) : !hasViews ? null : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block">Total escrowed</span>
-                <span className="font-rethink font-medium text-xl text-stone-900 block">₦{totalEscrowed.toLocaleString()}</span>
+              <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
+                <span className="text-[10px] font-medium text-neutral-500 block">Total escrowed</span>
+                <span className="font-rethink font-medium text-xl text-neutral-900 block">₦{totalEscrowed.toLocaleString()}</span>
               </div>
-              <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block">Paid</span>
-                <span className="font-rethink font-medium text-xl text-stone-900 block">₦{releasedTotal.toLocaleString()}</span>
+              <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
+                <span className="text-[10px] font-medium text-neutral-500 block">Paid</span>
+                <span className="font-rethink font-medium text-xl text-neutral-900 block">₦{releasedTotal.toLocaleString()}</span>
               </div>
-              <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-2">
-                <span className="text-[10px] font-medium text-stone-500 block">Pending in escrow</span>
-                <span className="font-rethink font-medium text-xl text-stone-900 block">₦{pendingEscrow.toLocaleString()}</span>
+              <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-2">
+                <span className="text-[10px] font-medium text-neutral-500 block">Pending in escrow</span>
+                <span className="font-rethink font-medium text-xl text-neutral-900 block">₦{pendingEscrow.toLocaleString()}</span>
               </div>
             </div>
             )}
@@ -1052,8 +1052,8 @@ export function CampaignDetails({ campaignId, onClose, isMobile }: CampaignDetai
             {submissions.filter(s => s.payoutStatus).length === 0 && (
               <div className="text-center py-12 space-y-4 flex flex-col items-center">
                 <Image src={payoutsEmpty} alt="Nothing yet" width={120} height={120} />
-                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-stone-900">Nothing to show yet</h3>
-                <p className="font-rethink text-xs text-stone-500 font-medium">Your first transaction will appear here once placements start delivering.</p>
+                <h3 className="font-rethink font-semibold tracking-tighter md:text-2xl text-xl text-neutral-900">Nothing to show yet</h3>
+                <p className="font-rethink text-xs text-neutral-500 font-medium">Your first transaction will appear here once placements start delivering.</p>
               </div>
             )}
           </div>

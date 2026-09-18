@@ -77,10 +77,10 @@ export function BillingView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">
+        <h2 className="font-rethink font-semibold text-lg text-neutral-900 tracking-tight">
           Billing & payments
         </h2>
-        <p className="mt-1 text-xs font-medium text-stone-500">Money in, money out, and what&apos;s held in escrow.</p>
+        <p className="mt-1 text-xs font-medium text-neutral-500">Money in, money out, and what&apos;s held in escrow.</p>
       </div>
 
       {loading && !stats ? (
@@ -93,18 +93,18 @@ export function BillingView() {
           <Skeleton className="h-72 rounded-2xl" />
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-stone-100 bg-white p-8 text-center">
-          <p className="text-sm font-medium text-stone-900">Billing didn&apos;t load</p>
-          <p className="mt-1 text-xs font-medium text-stone-500">{error}</p>
+        <div className="rounded-2xl border border-neutral-100 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-neutral-900">Billing didn&apos;t load</p>
+          <p className="mt-1 text-xs font-medium text-neutral-500">{error}</p>
         </div>
       ) : (
         <>
           {moneyCards.length > 0 && (
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               {moneyCards.map((card) => (
-                <div key={card.label} className="rounded-2xl border border-stone-100 bg-white p-5">
-                  <p className="text-xs font-medium text-stone-500">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-stone-900 tracking-tight">{card.value}</p>
+                <div key={card.label} className="rounded-2xl border border-neutral-100 bg-white p-5">
+                  <p className="text-xs font-medium text-neutral-500">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-neutral-900 tracking-tight">{card.value}</p>
                 </div>
               ))}
             </div>
@@ -117,7 +117,7 @@ export function BillingView() {
                 onClick={() => setFilter(f)}
                 className={cn(
                   "rounded-full px-4 py-2 text-xs font-medium capitalize",
-                  filter === f ? "bg-stone-900 text-white" : "bg-white text-stone-600 border border-stone-200"
+                  filter === f ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"
                 )}
               >
                 {f === "all" ? "All" : TRANSACTION_LABELS[f]}
@@ -126,23 +126,23 @@ export function BillingView() {
           </div>
 
           {visible.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
-              <p className="text-sm font-medium text-stone-900">No transactions yet</p>
-              <p className="mt-1 text-xs font-medium text-stone-500">Payments and payouts will appear here.</p>
+            <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-12 text-center">
+              <p className="text-sm font-medium text-neutral-900">No transactions yet</p>
+              <p className="mt-1 text-xs font-medium text-neutral-500">Payments and payouts will appear here.</p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-stone-100 bg-white">
-              <ul className="divide-y divide-stone-100">
+            <div className="overflow-hidden rounded-2xl border border-neutral-100 bg-white">
+              <ul className="divide-y divide-neutral-100">
                 {visible.map((t) => (
                   <li key={t.id} className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-stone-900">
+                      <p className="text-sm font-semibold text-neutral-900">
                         {TRANSACTION_LABELS[t.type] || t.type.replace(/_/g, " ")}
-                        <span className="ml-2 text-[11px] font-medium text-stone-400">
+                        <span className="ml-2 text-[11px] font-medium text-neutral-400">
                           {new Date(t.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                       </p>
-                      <p className="mt-0.5 truncate text-xs font-medium text-stone-500">
+                      <p className="mt-0.5 truncate text-xs font-medium text-neutral-500">
                         {t.campaignName || "No campaign"}
                         {t.bucket === "referral" && " · Referral"}
                         {t.views ? ` · ${t.views.toLocaleString()} views` : ""}
@@ -152,7 +152,7 @@ export function BillingView() {
                       <span
                         className={cn(
                           "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                          STATUS_STYLES[t.status] || "bg-stone-100 text-stone-600"
+                          STATUS_STYLES[t.status] || "bg-neutral-100 text-neutral-600"
                         )}
                       >
                         {statusLabel(t.status)}

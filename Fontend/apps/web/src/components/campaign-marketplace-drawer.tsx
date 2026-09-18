@@ -52,7 +52,7 @@ interface CloseButtonProps {
 
 function CloseButton({ onClick }: CloseButtonProps) {
   return (
-    <button onClick={onClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200">
+    <button onClick={onClick} className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M15 18l-6-6 6-6" />
       </svg>
@@ -68,8 +68,8 @@ interface DetailRowProps {
 function DetailRow({ label, children }: DetailRowProps) {
   return (
     <div className="flex justify-between items-center gap-4 font-rethink text-sm font-medium">
-      <span className="text-stone-500">{label}</span>
-      <span className="text-stone-800 text-right">{children}</span>
+      <span className="text-neutral-500">{label}</span>
+      <span className="text-neutral-800 text-right">{children}</span>
     </div>
   );
 }
@@ -186,18 +186,18 @@ function CampaignDrawerContent({
               )}
             </div>
             <div className="space-y-1.5">
-              <h2 className="font-rethink font-medium text-xl text-stone-900 leading-tight">{campaign.title}</h2>
+              <h2 className="font-rethink font-medium text-xl text-neutral-900 leading-tight">{campaign.title}</h2>
               <AccessBadge campaign={campaign} />
             </div>
           </div>
 
           <div className="space-y-1">
-            <p className="font-rethink font-medium text-2xl tracking-tight text-stone-900">
+            <p className="font-rethink font-medium text-2xl tracking-tight text-neutral-900">
               {formatPay(campaign.pay, campaign.reward)}
             </p>
             {/* Hybrid pay (ticket 10): base per approved deliverable, and what the bonus pays for. */}
             {campaign.pay?.bonus && (
-              <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed">
+              <p className="font-rethink text-xs font-medium text-neutral-500 leading-relaxed">
                 {formatPay({ amount: campaign.pay.amount, unit: campaign.pay.unit })} base. {formatBonus(campaign.pay)}.
               </p>
             )}
@@ -214,16 +214,16 @@ function CampaignDrawerContent({
               {isClicksCampaign(campaign) ? (
                 <TrackedLinkCard campaignId={campaign.id} referralCode={joined.referralCode} destinationDomain={campaign.destinationDomain} />
               ) : joined.referralCode && (
-                <div className="border border-stone-200 rounded-2xl p-4 space-y-1">
-                  <p className="text-xs font-medium text-stone-500">Your referral code</p>
-                  <p className="font-rethink font-medium text-lg text-stone-900 tracking-tight">{joined.referralCode}</p>
-                  <p className="text-[11px] font-medium text-stone-500">Ask your audience to use it when they sign up.</p>
+                <div className="border border-neutral-200 rounded-2xl p-4 space-y-1">
+                  <p className="text-xs font-medium text-neutral-500">Your referral code</p>
+                  <p className="font-rethink font-medium text-lg text-neutral-900 tracking-tight">{joined.referralCode}</p>
+                  <p className="text-[11px] font-medium text-neutral-500">Ask your audience to use it when they sign up.</p>
                 </div>
               )}
               <CampaignBriefDetails brief={joined.brief} showSummary />
               <button
                 onClick={onViewMyCampaigns}
-                className="w-full py-3 rounded-full font-semibold text-sm font-rethink bg-[#FEB604] text-[#1C1917] border border-stone-100"
+                className="w-full py-3 rounded-full font-semibold text-sm font-rethink bg-[#FEB604] text-[#171717] border border-neutral-100"
               >
                 Go to my campaigns
               </button>
@@ -231,13 +231,13 @@ function CampaignDrawerContent({
           ) : (
             <>
               {campaign.briefSummary && (
-                <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{campaign.briefSummary}</p>
+                <p className="font-rethink text-xs text-neutral-500 font-medium leading-relaxed">{campaign.briefSummary}</p>
               )}
 
               <div className="space-y-4 pt-2">
                 <DetailRow label="Campaign by">
                   <span className="inline-flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] font-medium text-stone-600 overflow-hidden shrink-0">
+                    <span className="w-7 h-7 rounded-full bg-neutral-200 flex items-center justify-center text-[10px] font-medium text-neutral-600 overflow-hidden shrink-0">
                       {campaign.brandAvatar ? (
                         <Image src={campaign.brandAvatar} alt="" width={28} height={28} className="object-cover" unoptimized />
                       ) : (
@@ -258,7 +258,7 @@ function CampaignDrawerContent({
               </div>
 
               {isClicksCampaign(campaign) && (
-                <p className="font-rethink text-xs font-medium text-stone-500 leading-relaxed">
+                <p className="font-rethink text-xs font-medium text-neutral-500 leading-relaxed">
                   {openCall ? "Join to get your tracked link." : "You get your tracked link once the brand selects you."} You&apos;re paid
                   for each valid click, once per person per day.
                 </p>
@@ -266,8 +266,8 @@ function CampaignDrawerContent({
 
               {commitsViews && openCall && (
                 <div className="space-y-4">
-                  <h3 className="font-rethink font-medium text-base text-stone-900">Commit to deliver</h3>
-                  <p className="text-xs font-medium text-stone-500">Choose how many views you can deliver</p>
+                  <h3 className="font-rethink font-medium text-base text-neutral-900">Commit to deliver</h3>
+                  <p className="text-xs font-medium text-neutral-500">Choose how many views you can deliver</p>
                   <div className="flex flex-wrap gap-2">
                     {presets.map((views) => (
                       <button
@@ -275,16 +275,16 @@ function CampaignDrawerContent({
                         onClick={() => setSelectedViews(views)}
                         className={cn(
                           "px-4 py-2 rounded-full text-xs font-medium font-rethink",
-                          selectedViews === views ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
+                          selectedViews === views ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"
                         )}
                       >
                         {formatViews(views)}
                       </button>
                     ))}
                   </div>
-                  <div className="border border-stone-200 rounded-2xl p-4 flex justify-between text-sm font-rethink">
-                    <span className="text-stone-500 font-medium">Your reward</span>
-                    <span className="font-medium text-stone-900">₦{viewsReward.toLocaleString()}</span>
+                  <div className="border border-neutral-200 rounded-2xl p-4 flex justify-between text-sm font-rethink">
+                    <span className="text-neutral-500 font-medium">Your reward</span>
+                    <span className="font-medium text-neutral-900">₦{viewsReward.toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -327,7 +327,7 @@ function CampaignDrawerContent({
                   disabled={!canJoin}
                   className={cn(
                     "w-full py-3 rounded-full font-semibold text-sm font-rethink",
-                    canJoin ? "bg-[#FEB604] text-[#1C1917] border border-stone-100" : "bg-stone-200 text-stone-400 cursor-not-allowed"
+                    canJoin ? "bg-[#FEB604] text-[#171717] border border-neutral-100" : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
                   )}
                 >
                   {joining ? "Joining…" : places === 0 ? "Campaign full" : "Join Campaign"}
@@ -345,7 +345,7 @@ function CampaignDrawerContent({
                 />
               )}
 
-              <p className="text-[10px] text-stone-400 font-medium font-rethink text-center leading-relaxed">
+              <p className="text-[10px] text-neutral-400 font-medium font-rethink text-center leading-relaxed">
                 The full brief, with do&apos;s and don&apos;ts, hashtags, sound and reference videos, unlocks once you {openCall ? "join" : "are selected"}.
               </p>
             </>
@@ -385,9 +385,9 @@ export function MarketplaceDetailsDrawer({
     return (
       <DrawerPrimitive.Root open={open} onOpenChange={onOpenChange} direction="bottom">
         <DrawerPrimitive.Portal>
-          <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-[2px] transition-opacity duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DrawerPrimitive.Overlay className="fixed inset-0 z-50 bg-neutral-900/40 backdrop-blur-[2px] transition-opacity duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <DrawerPrimitive.Content className="fixed bottom-0 left-0 right-0 z-50 flex flex-col rounded-t-2xl bg-white outline-none max-h-[90vh] overflow-hidden">
-            <div className="w-10 h-1 bg-stone-300 rounded-full mx-auto mt-3 mb-4 flex-shrink-0" />
+            <div className="w-10 h-1 bg-neutral-300 rounded-full mx-auto mt-3 mb-4 flex-shrink-0" />
             <div className="flex-1 overflow-hidden flex flex-col">{content}</div>
           </DrawerPrimitive.Content>
         </DrawerPrimitive.Portal>

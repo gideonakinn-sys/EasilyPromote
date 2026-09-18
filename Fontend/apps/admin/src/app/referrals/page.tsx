@@ -197,7 +197,7 @@ const TONE_CLASSES: Record<Tone, string> = {
   amber: "bg-amber-100 text-amber-800",
   red: "bg-red-100 text-red-800",
   blue: "bg-blue-100 text-blue-800",
-  stone: "bg-stone-100 text-stone-600",
+  stone: "bg-neutral-100 text-neutral-600",
 };
 
 const numberFormat = new Intl.NumberFormat("en-NG");
@@ -222,10 +222,10 @@ function StatusBadge({ status }: { status: string }) {
 
 function StatCard({ label, value, hint, tone }: { label: string; value: number | string; hint?: string; tone?: "warn" }) {
   return (
-    <div className="bg-white border border-stone-200/90 rounded-2xl p-5">
-      <span className="text-xs font-semibold text-stone-500 block mb-1">{label}</span>
-      <span className={`text-2xl font-bold ${tone === "warn" ? "text-amber-600" : "text-stone-900"}`}>{value}</span>
-      {hint && <span className="text-[11px] text-stone-400 block mt-1">{hint}</span>}
+    <div className="bg-white border border-neutral-200/90 rounded-2xl p-5">
+      <span className="text-xs font-semibold text-neutral-500 block mb-1">{label}</span>
+      <span className={`text-2xl font-bold ${tone === "warn" ? "text-amber-600" : "text-neutral-900"}`}>{value}</span>
+      {hint && <span className="text-[11px] text-neutral-400 block mt-1">{hint}</span>}
     </div>
   );
 }
@@ -233,7 +233,7 @@ function StatCard({ label, value, hint, tone }: { label: string; value: number |
 function Pager({ meta, onChange }: { meta: PageMeta; onChange: (page: number) => void }) {
   if (meta.pages <= 1) return null;
   return (
-    <div className="flex items-center justify-between px-6 py-3 border-t border-stone-200 text-xs text-stone-500">
+    <div className="flex items-center justify-between px-6 py-3 border-t border-neutral-200 text-xs text-neutral-500">
       <span>
         Page {meta.page} of {meta.pages} · {numberFormat.format(meta.total)} total
       </span>
@@ -241,14 +241,14 @@ function Pager({ meta, onChange }: { meta: PageMeta; onChange: (page: number) =>
         <button
           onClick={() => onChange(meta.page - 1)}
           disabled={meta.page <= 1}
-          className="px-3 py-1.5 rounded-full border border-stone-200 bg-white font-semibold disabled:opacity-40"
+          className="px-3 py-1.5 rounded-full border border-neutral-200 bg-white font-semibold disabled:opacity-40"
         >
           Previous
         </button>
         <button
           onClick={() => onChange(meta.page + 1)}
           disabled={meta.page >= meta.pages}
-          className="px-3 py-1.5 rounded-full border border-stone-200 bg-white font-semibold disabled:opacity-40"
+          className="px-3 py-1.5 rounded-full border border-neutral-200 bg-white font-semibold disabled:opacity-40"
         >
           Next
         </button>
@@ -259,9 +259,9 @@ function Pager({ meta, onChange }: { meta: PageMeta; onChange: (page: number) =>
 
 function Panel({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden">
-      <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between gap-3">
-        <h3 className="font-bold text-sm text-stone-900">{title}</h3>
+    <div className="bg-white border border-neutral-200/90 rounded-2xl overflow-hidden">
+      <div className="p-4 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between gap-3">
+        <h3 className="font-bold text-sm text-neutral-900">{title}</h3>
         {action}
       </div>
       {children}
@@ -271,7 +271,7 @@ function Panel({ title, children, action }: { title: string; children: ReactNode
 
 function TableHead({ columns }: { columns: string[] }) {
   return (
-    <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+    <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
       <tr>
         {columns.map((column) => (
           <th key={column} className="px-6 py-4 whitespace-nowrap">
@@ -286,7 +286,7 @@ function TableHead({ columns }: { columns: string[] }) {
 function EmptyRow({ colSpan, loading, message }: { colSpan: number; loading: boolean; message: string }) {
   return (
     <tr>
-      <td colSpan={colSpan} className="px-6 py-12 text-center text-stone-400">
+      <td colSpan={colSpan} className="px-6 py-12 text-center text-neutral-400">
         {loading ? "Loading…" : message}
       </td>
     </tr>
@@ -301,14 +301,14 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-sm flex items-start justify-center p-6 overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="bg-[#FAFAF9] border border-stone-200 rounded-3xl w-full max-w-5xl my-8">
-        <div className="flex items-start justify-between gap-4 p-6 border-b border-stone-200">
+    <div className="fixed inset-0 z-50 bg-neutral-950/40 backdrop-blur-sm flex items-start justify-center p-6 overflow-y-auto" role="dialog" aria-modal="true">
+      <div className="bg-[#fafafa] border border-neutral-200 rounded-3xl w-full max-w-5xl my-8">
+        <div className="flex items-start justify-between gap-4 p-6 border-b border-neutral-200">
           <div>
-            <h2 className="text-lg font-bold text-stone-900 tracking-tight">{title}</h2>
-            {subtitle && <p className="text-xs text-stone-500 mt-1">{subtitle}</p>}
+            <h2 className="text-lg font-bold text-neutral-900 tracking-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-neutral-500 mt-1">{subtitle}</p>}
           </div>
-          <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600">
+          <button onClick={onClose} aria-label="Close" className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-600">
             ✕
           </button>
         </div>
@@ -359,14 +359,14 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4" role="dialog" aria-modal="true">
-      <form onSubmit={submit} className="bg-white border border-stone-200 rounded-3xl p-8 max-w-sm w-full space-y-5">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4" role="dialog" aria-modal="true">
+      <form onSubmit={submit} className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-sm w-full space-y-5">
         <div className="space-y-1.5">
-          <h3 className="font-medium text-lg text-stone-900">{copy.title}</h3>
-          <p className="text-xs text-stone-500 font-medium leading-relaxed">{copy.body} The brand is notified and your note is saved in the activity log.</p>
+          <h3 className="font-medium text-lg text-neutral-900">{copy.title}</h3>
+          <p className="text-xs text-neutral-500 font-medium leading-relaxed">{copy.body} The brand is notified and your note is saved in the activity log.</p>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="admin-action-note" className="text-xs font-medium text-stone-500">
+          <label htmlFor="admin-action-note" className="text-xs font-medium text-neutral-500">
             Note (required)
           </label>
           <textarea
@@ -375,19 +375,19 @@ function ActionDialog({ action, onClose }: { action: PendingAction; onClose: () 
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             maxLength={1000}
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:border-stone-400 resize-none"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-900 focus:outline-none focus:border-neutral-400 resize-none"
             placeholder="e.g. Code shared on a coupon site"
           />
           {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-medium text-xs">
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-medium text-xs">
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className={`flex-1 py-2.5 rounded-full font-semibold text-xs text-white disabled:opacity-50 ${action.kind === "enable_code" ? "bg-stone-950" : "bg-red-600"}`}
+            className={`flex-1 py-2.5 rounded-full font-semibold text-xs text-white disabled:opacity-50 ${action.kind === "enable_code" ? "bg-neutral-950" : "bg-red-600"}`}
           >
             {submitting ? "Working…" : copy.button}
           </button>
@@ -449,20 +449,20 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4" onClick={() => !submitting && onClose()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4" onClick={() => !submitting && onClose()}>
       <form
         role="dialog"
         aria-modal="true"
         aria-labelledby="reward-heading"
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-5"
+        className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-md w-full space-y-5"
       >
         <div className="space-y-1.5">
-          <h3 id="reward-heading" className="font-medium text-lg text-stone-900">
+          <h3 id="reward-heading" className="font-medium text-lg text-neutral-900">
             {firstReward ? "Set" : "Change"} the reward for {campaign.name}
           </h3>
-          <p className="text-xs text-stone-500 font-medium leading-relaxed">
+          <p className="text-xs text-neutral-500 font-medium leading-relaxed">
             What each creator earns per {singular}, paid from the brand&apos;s referral budget. Creators and the brand are notified.
           </p>
         </div>
@@ -473,15 +473,15 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
             ["Creator pool", campaign.pool],
             ["Left", campaign.poolRemaining],
           ].map(([label, value]) => (
-            <div key={label as string} className="bg-stone-50 rounded-xl px-3 py-2">
-              <span className="text-[10px] font-semibold text-stone-500 block">{label}</span>
-              <span className="font-mono text-stone-900">₦{numberFormat.format(value as number)}</span>
+            <div key={label as string} className="bg-neutral-50 rounded-xl px-3 py-2">
+              <span className="text-[10px] font-semibold text-neutral-500 block">{label}</span>
+              <span className="font-mono text-neutral-900">₦{numberFormat.format(value as number)}</span>
             </div>
           ))}
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="reward-amount" className="text-xs font-medium text-stone-500">
+          <label htmlFor="reward-amount" className="text-xs font-medium text-neutral-500">
             Reward per {singular} (₦)
           </label>
           <input
@@ -490,9 +490,9 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
             value={amount}
             onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
             placeholder="500"
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 font-mono focus:outline-none focus:border-stone-400"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-900 font-mono focus:outline-none focus:border-neutral-400"
           />
-          <p className="text-[11px] text-stone-500">
+          <p className="text-[11px] text-neutral-500">
             {reward > 0
               ? `The ₦${numberFormat.format(campaign.poolRemaining)} left covers about ${numberFormat.format(covered)} ${covered === 1 ? singular : plural}.`
               : "Enter an amount to see how many the budget covers."}
@@ -503,7 +503,7 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="reward-note" className="text-xs font-medium text-stone-500">
+          <label htmlFor="reward-note" className="text-xs font-medium text-neutral-500">
             Note (optional)
           </label>
           <textarea
@@ -512,7 +512,7 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             maxLength={1000}
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:border-stone-400 resize-none"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-900 focus:outline-none focus:border-neutral-400 resize-none"
             placeholder="Saved in the activity log"
           />
         </div>
@@ -526,11 +526,11 @@ function RewardDialog({ campaign, onClose, onDone }: { campaign: CampaignRow; on
         )}
 
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-medium text-xs disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={submitting} className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-medium text-xs disabled:opacity-50">
             {done ? "Close" : "Cancel"}
           </button>
           {!done && (
-            <button type="submit" disabled={submitting} className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-stone-950 disabled:opacity-50">
+            <button type="submit" disabled={submitting} className="flex-1 py-2.5 rounded-full font-semibold text-xs text-white bg-neutral-950 disabled:opacity-50">
               {submitting ? "Saving…" : firstReward ? "Set reward" : "Change reward"}
             </button>
           )}
@@ -579,31 +579,31 @@ function CodesPanel({
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Panel title={`Codes (${codes.length})`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
+          <table className="w-full text-left text-xs text-neutral-700">
             <TableHead columns={["Code", "Creator", "Status", "Conversions", "Earned", "Last conversion", "Actions"]} />
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading || codes.length === 0 ? (
                 <EmptyRow colSpan={7} loading={loading} message="No creators have codes on this campaign yet." />
               ) : (
                 codes.map((code) => (
                   <tr key={code.id} className="align-top">
-                    <td className="px-6 py-4 font-mono font-semibold text-stone-900">{code.code}</td>
+                    <td className="px-6 py-4 font-mono font-semibold text-neutral-900">{code.code}</td>
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-stone-800">{code.creator.name || "—"}</p>
-                      {code.creator.username && <p className="text-[11px] text-stone-400">@{code.creator.username}</p>}
+                      <p className="font-semibold text-neutral-800">{code.creator.name || "—"}</p>
+                      {code.creator.username && <p className="text-[11px] text-neutral-400">@{code.creator.username}</p>}
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={code.status} />
                     </td>
                     <td className="px-6 py-4 font-mono">{numberFormat.format(code.conversions)}</td>
                     <td className="px-6 py-4 font-mono">₦{numberFormat.format(code.earned)}</td>
-                    <td className="px-6 py-4 text-stone-500">{formatDateTime(code.lastConversionAt)}</td>
+                    <td className="px-6 py-4 text-neutral-500">{formatDateTime(code.lastConversionAt)}</td>
                     <td className="px-6 py-4">
                       {canAct ? (
                         code.status === "disabled" ? (
                           <button
                             onClick={() => onAction({ kind: "enable_code", id: code.id, label: code.code, onDone: load })}
-                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-stone-900 text-white"
+                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-neutral-900 text-white"
                           >
                             Re-enable
                           </button>
@@ -616,7 +616,7 @@ function CodesPanel({
                           </button>
                         )
                       ) : (
-                        <span className="text-[11px] text-stone-400">View only</span>
+                        <span className="text-[11px] text-neutral-400">View only</span>
                       )}
                     </td>
                   </tr>
@@ -668,29 +668,29 @@ function BrandPanel({
     >
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!detail ? (
-        <p className="text-sm text-stone-400">Loading…</p>
+        <p className="text-sm text-neutral-400">Loading…</p>
       ) : (
         <>
           <Panel title={`Signing keys (${detail.keys.length})`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-stone-700">
+              <table className="w-full text-left text-xs text-neutral-700">
                 <TableHead columns={["Key", "Status", "Created", "Last used", "Actions"]} />
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-neutral-100">
                   {detail.keys.length === 0 ? (
                     <EmptyRow colSpan={5} loading={false} message="This brand hasn't generated a key." />
                   ) : (
                     detail.keys.map((key) => (
                       <tr key={key.id}>
                         <td className="px-6 py-4">
-                          {key.name && <p className="font-semibold text-stone-900">{key.name}</p>}
-                          <p className={key.name ? "font-mono text-stone-600" : "font-mono font-semibold text-stone-900"}>{key.keyId}</p>
-                          <p className="text-[11px] text-stone-400">Secret ending …{key.last4}</p>
+                          {key.name && <p className="font-semibold text-neutral-900">{key.name}</p>}
+                          <p className={key.name ? "font-mono text-neutral-600" : "font-mono font-semibold text-neutral-900"}>{key.keyId}</p>
+                          <p className="text-[11px] text-neutral-400">Secret ending …{key.last4}</p>
                         </td>
                         <td className="px-6 py-4">
                           <StatusBadge status={key.status} />
                         </td>
-                        <td className="px-6 py-4 text-stone-500">{formatDateTime(key.createdAt)}</td>
-                        <td className="px-6 py-4 text-stone-500">{formatDateTime(key.lastUsedAt)}</td>
+                        <td className="px-6 py-4 text-neutral-500">{formatDateTime(key.createdAt)}</td>
+                        <td className="px-6 py-4 text-neutral-500">{formatDateTime(key.lastUsedAt)}</td>
                         <td className="px-6 py-4">
                           {canAct && (key.status === "active" || key.status === "expiring") ? (
                             <button
@@ -700,7 +700,7 @@ function BrandPanel({
                               Revoke
                             </button>
                           ) : (
-                            <span className="text-[11px] text-stone-400">{canAct ? "—" : "View only"}</span>
+                            <span className="text-[11px] text-neutral-400">{canAct ? "—" : "View only"}</span>
                           )}
                         </td>
                       </tr>
@@ -713,15 +713,15 @@ function BrandPanel({
 
           <Panel title={`Campaigns tracking referrals (${detail.campaigns.length})`}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-stone-700">
+              <table className="w-full text-left text-xs text-neutral-700">
                 <TableHead columns={["Campaign", "Status", "Event", "Conversions", "Views", ""]} />
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-neutral-100">
                   {detail.campaigns.length === 0 ? (
                     <EmptyRow colSpan={6} loading={false} message="No campaigns have referral tracking on." />
                   ) : (
                     detail.campaigns.map((campaign) => (
                       <tr key={campaign.id}>
-                        <td className="px-6 py-4 font-semibold text-stone-800">{campaign.name}</td>
+                        <td className="px-6 py-4 font-semibold text-neutral-800">{campaign.name}</td>
                         <td className="px-6 py-4">
                           <StatusBadge status={campaign.status} />
                         </td>
@@ -731,7 +731,7 @@ function BrandPanel({
                         <td className="px-6 py-4">
                           <button
                             onClick={() => onOpenCampaign({ id: campaign.id, name: campaign.name })}
-                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-stone-200 text-stone-900"
+                            className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-900"
                           >
                             View codes
                           </button>
@@ -746,23 +746,23 @@ function BrandPanel({
 
           <Panel title="Recent requests (last 50)">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-stone-700">
+              <table className="w-full text-left text-xs text-neutral-700">
                 <TableHead columns={["When", "Source", "Result", "Code", "Event", "Reason"]} />
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-neutral-100">
                   {detail.recentRequests.length === 0 ? (
                     <EmptyRow colSpan={6} loading={false} message="No requests in the last 30 days." />
                   ) : (
                     detail.recentRequests.map((request) => (
                       <tr key={request.id} className="align-top">
-                        <td className="px-6 py-4 text-stone-500 whitespace-nowrap">{formatDateTime(request.createdAt)}</td>
+                        <td className="px-6 py-4 text-neutral-500 whitespace-nowrap">{formatDateTime(request.createdAt)}</td>
                         <td className="px-6 py-4">{request.source.replace(/_/g, " ")}</td>
                         <td className="px-6 py-4">
-                          <span className="font-mono text-stone-500 mr-2">{request.statusCode}</span>
+                          <span className="font-mono text-neutral-500 mr-2">{request.statusCode}</span>
                           <StatusBadge status={request.result} />
                         </td>
                         <td className="px-6 py-4 font-mono">{request.code || "—"}</td>
                         <td className="px-6 py-4">{request.eventType || "—"}</td>
-                        <td className="px-6 py-4 text-stone-500 max-w-xs break-words">{request.error || "—"}</td>
+                        <td className="px-6 py-4 text-neutral-500 max-w-xs break-words">{request.error || "—"}</td>
                       </tr>
                     ))
                   )}
@@ -799,7 +799,7 @@ function OverviewTab({
   }, []);
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!stats || !flags) return <p className="text-sm text-stone-400">Loading…</p>;
+  if (!stats || !flags) return <p className="text-sm text-neutral-400">Loading…</p>;
 
   const rejectionShare = stats.requests.last24h ? stats.requests.rejectedLast24h / stats.requests.last24h : null;
 
@@ -813,7 +813,7 @@ function OverviewTab({
             </span>{" "}
             {stats.campaignsNeedingReward === 1 ? "has" : "have"} a referral budget but no creator reward yet. Their sign-ups are recorded and paid once you set one.
           </p>
-          <button onClick={onShowNeedsReward} className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white">
+          <button onClick={onShowNeedsReward} className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-900 text-white">
             Set rewards
           </button>
         </div>
@@ -839,22 +839,22 @@ function OverviewTab({
       </div>
 
       <Panel title={`Campaigns with views but no conversions (${flags.campaignsWithoutConversions.length})`}>
-        <p className="px-6 pt-4 text-[11px] text-stone-500">
+        <p className="px-6 pt-4 text-[11px] text-neutral-500">
           Tracking on for 3+ days and creators are delivering views, but the brand hasn&apos;t reported a single conversion. Check whether the brand is under-reporting or their integration is broken.
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
+          <table className="w-full text-left text-xs text-neutral-700">
             <TableHead columns={["Campaign", "Brand", "Status", "Views delivered", ""]} />
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {flags.campaignsWithoutConversions.length === 0 ? (
                 <EmptyRow colSpan={5} loading={false} message="Nothing flagged." />
               ) : (
                 flags.campaignsWithoutConversions.map((item) => (
                   <tr key={item.campaignId}>
-                    <td className="px-6 py-4 font-semibold text-stone-800">{item.name}</td>
+                    <td className="px-6 py-4 font-semibold text-neutral-800">{item.name}</td>
                     <td className="px-6 py-4">
                       {item.brand.id ? (
-                        <button onClick={() => onOpenBrand(item.brand.id as string)} className="font-semibold text-stone-900 underline underline-offset-2">
+                        <button onClick={() => onOpenBrand(item.brand.id as string)} className="font-semibold text-neutral-900 underline underline-offset-2">
                           {item.brand.name || item.brand.email}
                         </button>
                       ) : (
@@ -868,7 +868,7 @@ function OverviewTab({
                     <td className="px-6 py-4">
                       <button
                         onClick={() => onOpenCampaign({ id: item.campaignId, name: item.name })}
-                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-stone-200 text-stone-900"
+                        className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-900"
                       >
                         View codes
                       </button>
@@ -883,18 +883,18 @@ function OverviewTab({
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Panel title={`Brands with mostly rejected requests (${flags.brandsWithHighRejections.length})`}>
-          <p className="px-6 pt-4 text-[11px] text-stone-500">At least 10 requests in 7 days and half or more rejected — usually a broken signature or unknown codes.</p>
+          <p className="px-6 pt-4 text-[11px] text-neutral-500">At least 10 requests in 7 days and half or more rejected — usually a broken signature or unknown codes.</p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-stone-700">
+            <table className="w-full text-left text-xs text-neutral-700">
               <TableHead columns={["Brand", "Requests (7d)", "Rejected"]} />
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {flags.brandsWithHighRejections.length === 0 ? (
                   <EmptyRow colSpan={3} loading={false} message="Nothing flagged." />
                 ) : (
                   flags.brandsWithHighRejections.map((item) => (
                     <tr key={String(item.brand.id)}>
                       <td className="px-6 py-4">
-                        <button onClick={() => item.brand.id && onOpenBrand(item.brand.id)} className="font-semibold text-stone-900 underline underline-offset-2">
+                        <button onClick={() => item.brand.id && onOpenBrand(item.brand.id)} className="font-semibold text-neutral-900 underline underline-offset-2">
                           {item.brand.name || item.brand.email || "Unknown brand"}
                         </button>
                       </td>
@@ -911,26 +911,26 @@ function OverviewTab({
         </Panel>
 
         <Panel title={`Unused keys (30+ days) (${flags.staleKeys.length})`}>
-          <p className="px-6 pt-4 text-[11px] text-stone-500">Active keys that haven&apos;t signed a request in 30 days. Worth revoking if the brand has moved on.</p>
+          <p className="px-6 pt-4 text-[11px] text-neutral-500">Active keys that haven&apos;t signed a request in 30 days. Worth revoking if the brand has moved on.</p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-stone-700">
+            <table className="w-full text-left text-xs text-neutral-700">
               <TableHead columns={["Key", "Brand", "Last used"]} />
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {flags.staleKeys.length === 0 ? (
                   <EmptyRow colSpan={3} loading={false} message="Nothing flagged." />
                 ) : (
                   flags.staleKeys.map((key) => (
                     <tr key={key.id}>
                       <td className="px-6 py-4">
-                        {key.name && <p className="font-semibold text-stone-900">{key.name}</p>}
+                        {key.name && <p className="font-semibold text-neutral-900">{key.name}</p>}
                         <p className="font-mono">{key.keyId}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <button onClick={() => key.brand.id && onOpenBrand(key.brand.id)} className="font-semibold text-stone-900 underline underline-offset-2">
+                        <button onClick={() => key.brand.id && onOpenBrand(key.brand.id)} className="font-semibold text-neutral-900 underline underline-offset-2">
                           {key.brand.name || key.brand.email || "Unknown brand"}
                         </button>
                       </td>
-                      <td className="px-6 py-4 text-stone-500">{key.lastUsedAt ? formatDateTime(key.lastUsedAt) : `Never (created ${formatDateTime(key.createdAt)})`}</td>
+                      <td className="px-6 py-4 text-neutral-500">{key.lastUsedAt ? formatDateTime(key.lastUsedAt) : `Never (created ${formatDateTime(key.createdAt)})`}</td>
                     </tr>
                   ))
                 )}
@@ -961,9 +961,9 @@ function SearchForm({ placeholder, onSearch, children }: { placeholder: string; 
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
-        className="w-72 max-w-full border border-stone-200 rounded-full px-4 py-2 text-xs text-stone-700 outline-none focus:border-stone-400 bg-white"
+        className="w-72 max-w-full border border-neutral-200 rounded-full px-4 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 bg-white"
       />
-      <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white">
+      <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-900 text-white">
         Search
       </button>
       {children}
@@ -998,23 +998,23 @@ function BrandsTab({ onOpenBrand }: { onOpenBrand: (id: string) => void }) {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Panel title="Brands using referral tracking">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
+          <table className="w-full text-left text-xs text-neutral-700">
             <TableHead columns={["Brand", "Connection", "Keys", "Last request", "Campaigns", "Codes", "Conversions (7d / all)", "Rejected (7d)"]} />
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading || rows.length === 0 ? (
                 <EmptyRow colSpan={8} loading={loading} message="No brands have set up referral tracking yet." />
               ) : (
                 rows.map((brand) => (
-                  <tr key={brand.id} onClick={() => onOpenBrand(brand.id)} className="hover:bg-stone-50/80 cursor-pointer align-top">
+                  <tr key={brand.id} onClick={() => onOpenBrand(brand.id)} className="hover:bg-neutral-50/80 cursor-pointer align-top">
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-stone-800">{brand.companyName || brand.name}</p>
-                      <p className="text-[11px] text-stone-400">{brand.email}</p>
+                      <p className="font-semibold text-neutral-800">{brand.companyName || brand.name}</p>
+                      <p className="text-[11px] text-neutral-400">{brand.email}</p>
                     </td>
                     <td className="px-6 py-4">
-                      {brand.connectedAt ? <StatusBadge status="active" /> : <span className="text-stone-400">Not connected</span>}
+                      {brand.connectedAt ? <StatusBadge status="active" /> : <span className="text-neutral-400">Not connected</span>}
                     </td>
                     <td className="px-6 py-4 font-mono">{brand.activeKeys}</td>
-                    <td className="px-6 py-4 text-stone-500 whitespace-nowrap">{formatDateTime(brand.lastRequestAt)}</td>
+                    <td className="px-6 py-4 text-neutral-500 whitespace-nowrap">{formatDateTime(brand.lastRequestAt)}</td>
                     <td className="px-6 py-4 font-mono">{brand.campaignsTracking}</td>
                     <td className="px-6 py-4 font-mono">{numberFormat.format(brand.codes)}</td>
                     <td className="px-6 py-4 font-mono">
@@ -1079,7 +1079,7 @@ function CampaignsTab({
               type="button"
               onClick={() => setQuery((prev) => ({ ...prev, status, page: 1 }))}
               className={`px-4 py-2 rounded-full text-xs font-semibold capitalize ${
-                query.status === status ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-600"
+                query.status === status ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600"
               }`}
             >
               {status}
@@ -1100,19 +1100,19 @@ function CampaignsTab({
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Panel title="Campaigns with referral tracking">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
+          <table className="w-full text-left text-xs text-neutral-700">
             <TableHead columns={["Campaign", "Brand", "Status", "Counts", "Codes", "Conversions", "Reward · budget", "Views", ""]} />
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading || rows.length === 0 ? (
                 <EmptyRow colSpan={9} loading={loading} message="No campaigns match." />
               ) : (
                 rows.map((campaign) => (
                   <tr key={campaign.id} className="align-top">
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-stone-800">{campaign.name}</p>
-                      <p className="text-[11px] text-stone-400">{campaign.codeSource === "business" ? "Brand's own codes" : "Easily Promote codes"}</p>
+                      <p className="font-semibold text-neutral-800">{campaign.name}</p>
+                      <p className="text-[11px] text-neutral-400">{campaign.codeSource === "business" ? "Brand's own codes" : "Easily Promote codes"}</p>
                     </td>
-                    <td className="px-6 py-4 text-stone-600">{campaign.brand.name || campaign.brand.email || "—"}</td>
+                    <td className="px-6 py-4 text-neutral-600">{campaign.brand.name || campaign.brand.email || "—"}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={campaign.status} />
                     </td>
@@ -1130,11 +1130,11 @@ function CampaignsTab({
                           {campaign.unpaidConversions > 0 && ` · ${numberFormat.format(campaign.unpaidConversions)} unpaid`}
                         </p>
                       ) : (
-                        <p className="font-mono text-stone-800">
+                        <p className="font-mono text-neutral-800">
                           {campaign.rewardPerConversion > 0 ? `₦${numberFormat.format(campaign.rewardPerConversion)} each` : "No reward"}
                         </p>
                       )}
-                      <p className="text-[11px] text-stone-400">
+                      <p className="text-[11px] text-neutral-400">
                         ₦{numberFormat.format(campaign.earnedByCreators)} earned · ₦{numberFormat.format(campaign.poolRemaining)} left of ₦{numberFormat.format(campaign.referralBudget)}
                       </p>
                     </td>
@@ -1145,7 +1145,7 @@ function CampaignsTab({
                           <button
                             onClick={() => onSetReward(campaign)}
                             className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                              campaign.needsReward ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-900"
+                              campaign.needsReward ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-900"
                             }`}
                           >
                             {campaign.rewardPerConversion > 0 ? "Change reward" : "Set reward"}
@@ -1153,7 +1153,7 @@ function CampaignsTab({
                         )}
                         <button
                           onClick={() => onOpenCampaign({ id: campaign.id, name: campaign.name })}
-                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-stone-200 text-stone-900 whitespace-nowrap"
+                          className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white border border-neutral-200 text-neutral-900 whitespace-nowrap"
                         >
                           View codes
                         </button>
@@ -1217,7 +1217,7 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
     }
   };
 
-  const inputClass = "border border-stone-200 rounded-full px-4 py-2 text-xs text-stone-700 outline-none focus:border-stone-400 bg-white";
+  const inputClass = "border border-neutral-200 rounded-full px-4 py-2 text-xs text-neutral-700 outline-none focus:border-neutral-400 bg-white";
 
   return (
     <div className="space-y-4">
@@ -1229,11 +1229,11 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
         className="flex flex-wrap items-end gap-2"
       >
         <div className="flex flex-col gap-1">
-          <label htmlFor="conv-code" className="text-[11px] font-semibold text-stone-500">Code</label>
+          <label htmlFor="conv-code" className="text-[11px] font-semibold text-neutral-500">Code</label>
           <input id="conv-code" value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value.toUpperCase() })} placeholder="e.g. KUDA-TUNDE" className={`${inputClass} font-mono w-44`} />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="conv-event" className="text-[11px] font-semibold text-stone-500">Event</label>
+          <label htmlFor="conv-event" className="text-[11px] font-semibold text-neutral-500">Event</label>
           <select id="conv-event" value={draft.eventType} onChange={(e) => setDraft({ ...draft, eventType: e.target.value })} className={inputClass}>
             <option value="">All events</option>
             {EVENT_TYPES.map((type) => (
@@ -1244,39 +1244,39 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="conv-from" className="text-[11px] font-semibold text-stone-500">From</label>
+          <label htmlFor="conv-from" className="text-[11px] font-semibold text-neutral-500">From</label>
           <input id="conv-from" type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })} className={inputClass} />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="conv-to" className="text-[11px] font-semibold text-stone-500">To</label>
+          <label htmlFor="conv-to" className="text-[11px] font-semibold text-neutral-500">To</label>
           <input id="conv-to" type="date" value={draft.to} onChange={(e) => setDraft({ ...draft, to: e.target.value })} className={inputClass} />
         </div>
-        <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-stone-900 text-white">
+        <button type="submit" className="px-4 py-2 rounded-full text-xs font-semibold bg-neutral-900 text-white">
           Apply filters
         </button>
-        <button type="button" onClick={exportCsv} disabled={downloading} className="px-4 py-2 rounded-full text-xs font-semibold bg-white border border-stone-200 text-stone-900 disabled:opacity-50 ml-auto">
+        <button type="button" onClick={exportCsv} disabled={downloading} className="px-4 py-2 rounded-full text-xs font-semibold bg-white border border-neutral-200 text-neutral-900 disabled:opacity-50 ml-auto">
           {downloading ? "Exporting…" : "Export CSV"}
         </button>
       </form>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Panel title={`Conversions (${numberFormat.format(meta.total)})`}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-stone-700">
+          <table className="w-full text-left text-xs text-neutral-700">
             <TableHead columns={["Occurred", "Brand", "Campaign", "Creator", "Code", "Event", "Counted", "Event ID", "Reward", "Payout", ""]} />
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading || rows.length === 0 ? (
                 <EmptyRow colSpan={11} loading={loading} message="No conversions match these filters." />
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} className="align-top">
-                    <td className="px-6 py-4 text-stone-500 whitespace-nowrap">{formatDateTime(row.occurredAt)}</td>
-                    <td className="px-6 py-4 text-stone-700">{row.brand.name || "—"}</td>
-                    <td className="px-6 py-4 font-semibold text-stone-800">{row.campaign.name || "—"}</td>
+                    <td className="px-6 py-4 text-neutral-500 whitespace-nowrap">{formatDateTime(row.occurredAt)}</td>
+                    <td className="px-6 py-4 text-neutral-700">{row.brand.name || "—"}</td>
+                    <td className="px-6 py-4 font-semibold text-neutral-800">{row.campaign.name || "—"}</td>
                     <td className="px-6 py-4">{row.creator.username ? `@${row.creator.username}` : row.creator.name || "—"}</td>
                     <td className="px-6 py-4 font-mono">{row.code || "—"}</td>
                     <td className="px-6 py-4">{eventLabel(row.eventType)}</td>
-                    <td className="px-6 py-4">{row.counted ? <StatusBadge status="active" /> : <span className="text-stone-400">No</span>}</td>
-                    <td className="px-6 py-4 font-mono text-stone-500 max-w-[180px] truncate" title={row.eventId}>
+                    <td className="px-6 py-4">{row.counted ? <StatusBadge status="active" /> : <span className="text-neutral-400">No</span>}</td>
+                    <td className="px-6 py-4 font-mono text-neutral-500 max-w-[180px] truncate" title={row.eventId}>
                       {row.eventId}
                     </td>
                     <td className="px-6 py-4 font-mono whitespace-nowrap">
@@ -1284,7 +1284,7 @@ function ConversionsTab({ canAct, onAction }: { canAct: boolean; onAction: (acti
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={row.payoutStatus} />
-                      <p className="text-[10px] text-stone-400 mt-1 whitespace-nowrap">
+                      <p className="text-[10px] text-neutral-400 mt-1 whitespace-nowrap">
                         {row.payoutStatus === "pending" && row.availableAt
                           ? `until ${formatDateTime(row.availableAt)}`
                           : row.payoutStatus === "unpaid" && row.unpaidReason
@@ -1356,13 +1356,13 @@ export default function AdminReferralsPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto min-w-0">
-        <header className="pb-6 border-b border-stone-200 mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Referrals</h1>
-          <p className="text-sm text-stone-500 mt-1">
+        <header className="pb-6 border-b border-neutral-200 mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Referrals</h1>
+          <p className="text-sm text-neutral-500 mt-1">
             Referral codes, conversions and brand integrations across the platform.
             {!canAct && canSetReward && " You can set rewards; admins and super admins can disable codes or revoke keys."}
             {!canAct && !canSetReward && " You have view-only access; admins, super admins and finance admins can set rewards."}
@@ -1378,7 +1378,7 @@ export default function AdminReferralsPage() {
               aria-selected={tab === item.value}
               onClick={() => setTab(item.value)}
               className={`px-4 py-2 rounded-full text-xs font-semibold transition-colors ${
-                tab === item.value ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                tab === item.value ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
               }`}
             >
               {item.label}

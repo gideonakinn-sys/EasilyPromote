@@ -25,21 +25,21 @@ export function TopCampaigns({ campaigns }: TopCampaignsProps) {
   };
 
   return (
-    <Card data-reveal className="rounded-2xl border-stone-100 bg-white shadow-none">
+    <Card data-reveal className="rounded-2xl border-neutral-100 bg-white shadow-none">
       <CardHeader className="flex flex-row items-center justify-between p-5 pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-900 tracking-tight">
+        <CardTitle className="text-sm font-semibold text-neutral-900 tracking-tight">
           Top performing campaigns
         </CardTitle>
         <Link
           href="/dashboard/brand/campaigns"
-          className="text-xs font-semibold text-stone-900 underline underline-offset-2"
+          className="text-xs font-semibold text-neutral-900 underline underline-offset-2"
         >
           View all
         </Link>
       </CardHeader>
       <CardContent className="p-2">
         {campaigns.length === 0 ? (
-          <p className="px-3 py-10 text-center text-xs font-medium text-stone-500">
+          <p className="px-3 py-10 text-center text-xs font-medium text-neutral-500">
             No views yet this month.
           </p>
         ) : (
@@ -50,10 +50,10 @@ export function TopCampaigns({ campaigns }: TopCampaignsProps) {
                   onClick={() => openCampaign(c)}
                   className="flex w-full items-center gap-4 rounded-xl px-3 py-3 text-left"
                 >
-                  <span aria-hidden="true" className="w-5 shrink-0 text-xs font-semibold tabular-nums text-stone-400">
+                  <span aria-hidden="true" className="w-5 shrink-0 text-xs font-semibold tabular-nums text-neutral-400">
                     {index + 1}
                   </span>
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-stone-100">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
                     {c.coverImageUrl ? (
                       <Image
                         src={c.coverImageUrl}
@@ -66,19 +66,19 @@ export function TopCampaigns({ campaigns }: TopCampaignsProps) {
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-stone-900">{c.name}</p>
-                    <p className="mt-0.5 truncate text-xs font-medium text-stone-500">
+                    <p className="truncate text-sm font-semibold text-neutral-900">{c.name}</p>
+                    <p className="mt-0.5 truncate text-xs font-medium text-neutral-500">
                       {c.category || "General"} · {objectiveLabel(c.campaignModel, c.objective)}
                     </p>
                   </div>
                   <StatusChip status={c.status} className="hidden sm:inline-flex" />
                   <div className="w-28 shrink-0 text-right">
-                    <p className="text-sm font-semibold tabular-nums text-stone-900">
+                    <p className="text-sm font-semibold tabular-nums text-neutral-900">
                       {formatCompactViews(c.views)}
                     </p>
-                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-stone-100">
+                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-neutral-100">
                       <div
-                        className="h-full rounded-full bg-[#1C1917]"
+                        className="h-full rounded-full bg-[#171717]"
                         style={{ width: `${c.progressPercent}%` }}
                       />
                     </div>

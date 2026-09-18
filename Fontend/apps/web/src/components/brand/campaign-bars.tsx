@@ -23,9 +23,9 @@ export function CampaignBars({ campaigns }: CampaignBarsProps) {
 
   if (data.length === 0) {
     return (
-      <div className="rounded-2xl border border-stone-100 bg-white p-5">
-        <h3 className="text-sm font-semibold text-stone-900">Top campaigns</h3>
-        <p className="mt-4 text-center text-xs font-medium text-stone-500">No campaign views yet.</p>
+      <div className="rounded-2xl border border-neutral-100 bg-white p-5">
+        <h3 className="text-sm font-semibold text-neutral-900">Top campaigns</h3>
+        <p className="mt-4 text-center text-xs font-medium text-neutral-500">No campaign views yet.</p>
       </div>
     );
   }
@@ -34,9 +34,9 @@ export function CampaignBars({ campaigns }: CampaignBarsProps) {
   const barW = Math.min(44, slot * 0.55);
 
   return (
-    <div className="rounded-2xl border border-stone-100 bg-white p-5">
-      <h3 className="text-sm font-semibold text-stone-900">Views per campaign</h3>
-      <p className="mt-0.5 text-xs font-medium text-stone-500">Top campaigns by views delivered.</p>
+    <div className="rounded-2xl border border-neutral-100 bg-white p-5">
+      <h3 className="text-sm font-semibold text-neutral-900">Views per campaign</h3>
+      <p className="mt-0.5 text-xs font-medium text-neutral-500">Top campaigns by views delivered.</p>
 
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -55,8 +55,8 @@ export function CampaignBars({ campaigns }: CampaignBarsProps) {
           const y = PAD.top + innerH - t * innerH;
           return (
             <g key={t}>
-              <line x1={PAD.left} y1={y} x2={WIDTH - PAD.right} y2={y} stroke="#E7E5E4" strokeWidth="1" />
-              <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#A8A29E" fontWeight="500">
+              <line x1={PAD.left} y1={y} x2={WIDTH - PAD.right} y2={y} stroke="#e5e5e5" strokeWidth="1" />
+              <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#a3a3a3" fontWeight="500">
                 {formatCompactViews(Math.round(max * t))}
               </text>
             </g>
@@ -72,7 +72,7 @@ export function CampaignBars({ campaigns }: CampaignBarsProps) {
             <g key={c.id}>
               <rect x={x} y={y} width={barW} height={h} rx={4} fill={`url(#${gradientId})`} />
               {c.views > 0 && (
-                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="10" fill="#78716C" fontWeight="600">
+                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="10" fill="#737373" fontWeight="600">
                   {formatCompactViews(c.views)}
                 </text>
               )}
@@ -81,7 +81,7 @@ export function CampaignBars({ campaigns }: CampaignBarsProps) {
                 y={HEIGHT - PAD.bottom + 16}
                 textAnchor="middle"
                 fontSize="10"
-                fill="#A8A29E"
+                fill="#a3a3a3"
                 fontWeight="500"
               >
                 {label}

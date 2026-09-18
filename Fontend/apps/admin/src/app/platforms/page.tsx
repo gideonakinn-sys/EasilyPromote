@@ -120,13 +120,13 @@ export default function AdminPlatformsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Platform Management</h1>
-          <p className="text-sm text-stone-500 mt-1">Manage the social platforms available to brands and creators</p>
+        <header className="pb-6 border-b border-neutral-200 mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Platform Management</h1>
+          <p className="text-sm text-neutral-500 mt-1">Manage the social platforms available to brands and creators</p>
         </header>
 
         {error && (
@@ -141,8 +141,8 @@ export default function AdminPlatformsPage() {
         )}
 
         {/* Add Platform */}
-        <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm mb-8">
-          <h3 className="text-sm font-bold text-stone-900 mb-4">Add New Platform</h3>
+        <div className="bg-white border border-neutral-200/90 rounded-2xl p-6 shadow-sm mb-8">
+          <h3 className="text-sm font-bold text-neutral-900 mb-4">Add New Platform</h3>
           <div className="flex flex-col md:flex-row gap-3">
             <input
               type="text"
@@ -152,12 +152,12 @@ export default function AdminPlatformsPage() {
                 if (e.key === "Enter") handleAdd();
               }}
               placeholder="Platform name (e.g. TikTok, Instagram, YouTube)"
-              className="flex-1 px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+              className="flex-1 px-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900"
             />
             <button
               onClick={handleAdd}
               disabled={addLoading || !name.trim()}
-              className="px-5 py-2.5 bg-stone-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+              className="px-5 py-2.5 bg-neutral-900 text-white rounded-xl text-xs font-bold shadow-sm transition-all disabled:opacity-50"
             >
               {addLoading ? "Adding..." : "Add Platform"}
             </button>
@@ -165,35 +165,35 @@ export default function AdminPlatformsPage() {
         </div>
 
         {/* Platform List */}
-        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-stone-700">
-              <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+            <table className="w-full text-left text-xs text-neutral-700">
+              <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
                 <tr>
                   <th className="px-6 py-4">Platform</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {loading ? (
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-40" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-24 ml-auto" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-40" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-24 ml-auto" /></td>
                     </tr>
                   ))
                 ) : platforms.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-6 py-12 text-center text-stone-400">
+                      <td colSpan={3} className="px-6 py-12 text-center text-neutral-400">
                         No platforms yet. Add your first platform above.
                       </td>
                     </tr>
                 ) : (
                   platforms.map((p) => (
-                    <tr key={p.id} className="hover:bg-stone-50/80 transition-colors">
-                      <td className="px-6 py-4 font-bold text-stone-900">
+                    <tr key={p.id} className="hover:bg-neutral-50/80 transition-colors">
+                      <td className="px-6 py-4 font-bold text-neutral-900">
                         {editingId === p.id ? (
                           <input
                             type="text"
@@ -204,7 +204,7 @@ export default function AdminPlatformsPage() {
                               if (e.key === "Escape") setEditingId(null);
                             }}
                             autoFocus
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                            className="w-full px-2.5 py-1.5 bg-white border border-neutral-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900"
                           />
                         ) : (
                           p.name
@@ -213,7 +213,7 @@ export default function AdminPlatformsPage() {
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider font-mono ${
-                            p.enabled ? "bg-green-100 text-green-800" : "bg-stone-100 text-stone-500"
+                            p.enabled ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-500"
                           }`}
                         >
                           {p.enabled ? "Active" : "Disabled"}
@@ -225,13 +225,13 @@ export default function AdminPlatformsPage() {
                             <>
                               <button
                                 onClick={() => handleSaveEdit(p)}
-                                className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                                className="px-3.5 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
                               >
                                 Save
                               </button>
                               <button
                                 onClick={() => setEditingId(null)}
-                                className="px-3.5 py-1.5 bg-stone-100 text-stone-600 rounded-lg text-xs font-semibold transition-all"
+                                className="px-3.5 py-1.5 bg-neutral-100 text-neutral-600 rounded-lg text-xs font-semibold transition-all"
                               >
                                 Cancel
                               </button>
@@ -243,7 +243,7 @@ export default function AdminPlatformsPage() {
                                   setEditingId(p.id);
                                   setEditName(p.name);
                                 }}
-                                className="px-3.5 py-1.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                                className="px-3.5 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-lg text-xs font-semibold shadow-sm transition-all"
                               >
                                 Edit
                               </button>
@@ -251,8 +251,8 @@ export default function AdminPlatformsPage() {
                                 onClick={() => handleToggle(p)}
                                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all ${
                                   p.enabled
-                                    ? "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                                    : "bg-stone-900 text-white hover:bg-stone-800"
+                                    ? "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+                                    : "bg-neutral-900 text-white hover:bg-neutral-800"
                                 }`}
                               >
                                 {p.enabled ? "Disable" : "Enable"}

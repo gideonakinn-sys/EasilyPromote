@@ -9,8 +9,8 @@ const STATUS_STYLES: Record<ApplicationStatus, { bg: string; text: string; dot: 
   pending: { bg: "bg-[#FBDFB1]", text: "text-[#693D11]", dot: "bg-[#693D11]" },
   approved: { bg: "bg-[#CBF5E5]", text: "text-[#176448]", dot: "bg-[#176448]" },
   rejected: { bg: "bg-[#F8C9D2]", text: "text-[#710E21]", dot: "bg-[#710E21]" },
-  withdrawn: { bg: "bg-stone-100", text: "text-stone-600", dot: "bg-stone-400" },
-  expired: { bg: "bg-stone-100", text: "text-stone-600", dot: "bg-stone-400" },
+  withdrawn: { bg: "bg-neutral-100", text: "text-neutral-600", dot: "bg-neutral-400" },
+  expired: { bg: "bg-neutral-100", text: "text-neutral-600", dot: "bg-neutral-400" },
 };
 
 interface ApplicationStatusBadgeProps {

@@ -310,12 +310,12 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const stepContent = loadError ? (
     <div className="bg-white border border-red-200 rounded-2xl p-5 space-y-3" role="alert">
-      <p className="text-sm font-medium text-stone-900 font-rethink">We couldn&apos;t load this draft</p>
-      <p className="text-xs text-stone-500 font-medium font-rethink">{loadError}</p>
+      <p className="text-sm font-medium text-neutral-900 font-rethink">We couldn&apos;t load this draft</p>
+      <p className="text-xs text-neutral-500 font-medium font-rethink">{loadError}</p>
       <button
         type="button"
         onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-        className="px-4 py-2 bg-stone-900 text-white rounded-full text-xs font-semibold font-rethink"
+        className="px-4 py-2 bg-neutral-900 text-white rounded-full text-xs font-semibold font-rethink"
       >
         Try again
       </button>
@@ -343,12 +343,12 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   return (
     <div className={cn("w-full h-full", isMobile ? "flex flex-col" : "flex overflow-hidden")}>
       {isMobile && (
-        <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-[#fcfcfc] flex-shrink-0">
+        <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-neutral-200 bg-[#fafafa] flex-shrink-0">
           <button
             type="button"
             onClick={() => setShowExitModal(true)}
             aria-label="Go back"
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
@@ -358,16 +358,16 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
               aria-label="Delete draft"
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200 flex-shrink-0"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-neutral-200 flex-shrink-0"
             >
-              <HugeiconsIcon icon={Delete01Icon} size={14} className="text-stone-600" />
+              <HugeiconsIcon icon={Delete01Icon} size={14} className="text-neutral-600" />
             </button>
           )}
         </header>
       )}
 
       {isMobile && (
-        <nav aria-label="Campaign steps" className="flex items-start justify-between gap-1 px-4 pt-3 pb-4 bg-[#fcfcfc] overflow-x-auto">
+        <nav aria-label="Campaign steps" className="flex items-start justify-between gap-1 px-4 pt-3 pb-4 bg-[#fafafa] overflow-x-auto">
           {WIZARD_STEPS.map(({ step: s, short }) => (
             <button
               key={s}
@@ -380,22 +380,22 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                 {s < step ? (
                   <HugeiconsIcon icon={CheckIcon} size={14} />
                 ) : (
-                  <HugeiconsIcon icon={CircleDashedIcon} size={18} className={step === s ? "text-stone-900" : "text-stone-400"} />
+                  <HugeiconsIcon icon={CircleDashedIcon} size={18} className={step === s ? "text-neutral-900" : "text-neutral-400"} />
                 )}
               </span>
-              <span className={cn("text-[10px] font-medium font-rethink", step === s ? "text-stone-900" : "text-stone-400")}>{short}</span>
+              <span className={cn("text-[10px] font-medium font-rethink", step === s ? "text-neutral-900" : "text-neutral-400")}>{short}</span>
             </button>
           ))}
         </nav>
       )}
 
       {!isMobile && (
-        <div className="w-80 border-r border-stone-100 bg-[#fcfcfc] p-8 flex flex-col justify-between h-full">
+        <div className="w-80 border-r border-neutral-100 bg-[#fafafa] p-8 flex flex-col justify-between h-full">
           <div>
             <button
               type="button"
               onClick={() => setShowExitModal(true)}
-              className="inline-flex items-center gap-2 text-stone-500 text-xs font-medium font-rethink mb-10 block"
+              className="inline-flex items-center gap-2 text-neutral-500 text-xs font-medium font-rethink mb-10 block"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
               Back
@@ -414,10 +414,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     {s < step ? (
                       <HugeiconsIcon icon={CheckIcon} size={14} />
                     ) : (
-                      <HugeiconsIcon icon={CircleDashedIcon} size={16} className={step === s ? "text-stone-900" : "text-stone-500"} />
+                      <HugeiconsIcon icon={CircleDashedIcon} size={16} className={step === s ? "text-neutral-900" : "text-neutral-500"} />
                     )}
                   </span>
-                  <span className={cn("text-sm font-medium font-rethink", step === s ? "text-stone-900" : "text-stone-400")}>
+                  <span className={cn("text-sm font-medium font-rethink", step === s ? "text-neutral-900" : "text-neutral-400")}>
                     {/* Only Content asks where the content goes (SPEC D31). */}
                     {s === 2 && data.objective !== "content" ? "Creator access" : title}
                   </span>
@@ -443,9 +443,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       >
         <div data-reveal key={step} className={cn("flex-1 space-y-8", isMobile ? "w-full" : "w-[380px] mx-auto")}>
           <div className="text-center">
-            <h3 className="font-rethink font-semibold text-xl tracking-tight text-stone-900 text-balance">{heading.title}</h3>
+            <h3 className="font-rethink font-semibold text-xl tracking-tight text-neutral-900 text-balance">{heading.title}</h3>
             {heading.body && (
-              <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-stone-500 font-rethink">{heading.body}</p>
+              <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-neutral-500 font-rethink">{heading.body}</p>
             )}
           </div>
 
@@ -461,12 +461,12 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </ul>
           )}
 
-          <div className={cn("flex gap-4 pt-2", isMobile && "sticky bottom-0 bg-[#fcfcfc] pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+          <div className={cn("flex gap-4 pt-2", isMobile && "sticky bottom-0 bg-[#fafafa] pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
             <button
               type="button"
               onClick={handleSaveDraft}
               disabled={saving || loadingDraft || Boolean(loadError)}
-              className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
+              className="flex-1 py-3 bg-white border border-neutral-200 text-neutral-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save as draft"}
             </button>
@@ -474,7 +474,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               type="button"
               onClick={handleNext}
               disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || (step === 1 && !data.typeChosen)}
-              className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed flex items-center justify-center"
+              className="flex-1 py-3 bg-[#FEB604] text-[#171717] font-semibold text-sm rounded-full border border-neutral-100 font-rethink disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {launching ? <Spinner className="size-4" /> : primaryLabel}
             </button>

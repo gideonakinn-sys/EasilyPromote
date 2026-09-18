@@ -64,10 +64,10 @@ export function LeftPanel({
       </div>
 
       <div data-reveal-left className="space-y-4 w-[430px]">
-        <h2 className="text-4xl font-medium text-stone-900 font-rethink leading-tight tracking-tighter">
+        <h2 className="text-4xl font-medium text-neutral-900 font-rethink leading-tight tracking-tighter">
           {title}
         </h2>
-        <p className="text-sm font-medium text-stone-900/80 leading-relaxed font-rethink tracking-[-0.01em]">
+        <p className="text-sm font-medium text-neutral-900/80 leading-relaxed font-rethink tracking-[-0.01em]">
           {description}
         </p>
       </div>

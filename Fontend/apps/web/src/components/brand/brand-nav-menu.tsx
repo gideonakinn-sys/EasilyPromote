@@ -52,8 +52,8 @@ export function BrandNavMenu({ onNavigate }: BrandNavMenuProps) {
           unoptimized
         />
         <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-stone-900">{user?.name || "User"}</span>
-          <span className="block truncate text-xs font-medium text-stone-500">{user?.email || ""}</span>
+          <span className="block truncate text-sm font-semibold text-neutral-900">{user?.name || "User"}</span>
+          <span className="block truncate text-xs font-medium text-neutral-500">{user?.email || ""}</span>
         </span>
       </button>
 
@@ -66,15 +66,15 @@ export function BrandNavMenu({ onNavigate }: BrandNavMenuProps) {
           }}
           className={cn(
             "flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium",
-            isActive(item) ? "bg-stone-100 text-stone-900" : "text-stone-600"
+            isActive(item) ? "bg-neutral-100 text-neutral-900" : "text-neutral-600"
           )}
         >
-          <HugeiconsIcon icon={item.icon} size={18} className={isActive(item) ? "text-stone-900" : "text-stone-400"} />
+          <HugeiconsIcon icon={item.icon} size={18} className={isActive(item) ? "text-neutral-900" : "text-neutral-400"} />
           {item.label}
         </button>
       ))}
 
-      <div className="my-2 h-px bg-stone-100" />
+      <div className="my-2 h-px bg-neutral-100" />
 
       <button
         onClick={() => {
@@ -82,9 +82,9 @@ export function BrandNavMenu({ onNavigate }: BrandNavMenuProps) {
           localStorage.removeItem("ep-draft-autosave");
           router.push("/dashboard/brand/create-campaign");
         }}
-        className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold text-stone-900"
+        className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold text-neutral-900"
       >
-        <HugeiconsIcon icon={Add01Icon} size={18} className="text-stone-400" />
+        <HugeiconsIcon icon={Add01Icon} size={18} className="text-neutral-400" />
         New campaign
       </button>
     </div>

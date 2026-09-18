@@ -83,9 +83,9 @@ export function NotificationsMenu() {
     <button
       onClick={() => (isMobile ? setListOpen(true) : setOpen(true))}
       aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
-      className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white border border-stone-200"
+      className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white border border-neutral-200"
     >
-      <HugeiconsIcon icon={BellIcon} size={16} className="text-stone-600" />
+      <HugeiconsIcon icon={BellIcon} size={16} className="text-neutral-600" />
       {unread > 0 && (
         <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
           {unread > 9 ? "9+" : unread}
@@ -97,11 +97,11 @@ export function NotificationsMenu() {
   const list = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between px-1">
-        <span className="text-sm font-semibold text-stone-900">Notifications</span>
+        <span className="text-sm font-semibold text-neutral-900">Notifications</span>
         {items.some((n) => !n.read) && (
           <button
             onClick={markAll}
-            className="text-xs font-semibold text-stone-900 underline underline-offset-2"
+            className="text-xs font-semibold text-neutral-900 underline underline-offset-2"
           >
             Mark all read
           </button>
@@ -109,9 +109,9 @@ export function NotificationsMenu() {
       </div>
       <DropdownMenuSeparator />
       {loading && items.length === 0 ? (
-        <p className="px-1 py-4 text-center text-xs font-medium text-stone-500">Loading…</p>
+        <p className="px-1 py-4 text-center text-xs font-medium text-neutral-500">Loading…</p>
       ) : items.length === 0 ? (
-        <p className="px-1 py-6 text-center text-xs font-medium text-stone-500">You&apos;re all caught up.</p>
+        <p className="px-1 py-6 text-center text-xs font-medium text-neutral-500">You&apos;re all caught up.</p>
       ) : (
         <ul className="flex flex-col">
           {items.slice(0, 12).map((n) => (
@@ -120,16 +120,16 @@ export function NotificationsMenu() {
                 onClick={() => openItem(n)}
                 className={cn(
                   "flex w-full flex-col items-start gap-0.5 rounded-xl px-3 py-2.5 text-left",
-                  n.read ? "opacity-60" : "bg-stone-50"
+                  n.read ? "opacity-60" : "bg-neutral-50"
                 )}
               >
                 <span className="flex w-full items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-stone-900">{n.title}</span>
-                  <span className="shrink-0 text-[10px] font-medium text-stone-400">
+                  <span className="text-sm font-semibold text-neutral-900">{n.title}</span>
+                  <span className="shrink-0 text-[10px] font-medium text-neutral-400">
                     {formatWhen(n.createdAt)}
                   </span>
                 </span>
-                <span className="text-xs font-medium leading-relaxed text-stone-500">{n.body}</span>
+                <span className="text-xs font-medium leading-relaxed text-neutral-500">{n.body}</span>
               </button>
             </li>
           ))}

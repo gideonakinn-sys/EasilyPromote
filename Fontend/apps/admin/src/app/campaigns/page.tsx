@@ -365,14 +365,14 @@ export default function AdminCampaignsPage() {
     list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-stone-200 mb-6 gap-4">
+        <header className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Campaign Moderation</h1>
-            <p className="text-sm text-stone-500 mt-1">Review, approve, pause, or cancel platform campaigns</p>
+            <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Campaign Moderation</h1>
+            <p className="text-sm text-neutral-500 mt-1">Review, approve, pause, or cancel platform campaigns</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -381,7 +381,7 @@ export default function AdminCampaignsPage() {
               placeholder="Search campaigns or brand..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900 w-64"
+              className="px-4 py-2 bg-white border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900 w-64"
             />
           </div>
         </header>
@@ -396,8 +396,8 @@ export default function AdminCampaignsPage() {
               onClick={() => setSelectedStatus(st)}
               className={`px-4 py-2 rounded-xl text-xs font-semibold capitalize whitespace-nowrap transition-all ${
                 selectedStatus === st
-                  ? "bg-stone-900 text-white shadow-sm"
-                  : "bg-white border border-stone-200 text-stone-600 hover:bg-stone-100"
+                  ? "bg-neutral-900 text-white shadow-sm"
+                  : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
               }`}
             >
               {st === "pending_approval" ? "Pending Approval" : st.replace("_", " ")}
@@ -406,10 +406,10 @@ export default function AdminCampaignsPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-stone-700">
-              <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+            <table className="w-full text-left text-xs text-neutral-700">
+              <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
                 <tr>
                   <th className="px-6 py-4">Campaign</th>
                   <th className="px-6 py-4">Brand</th>
@@ -420,55 +420,55 @@ export default function AdminCampaignsPage() {
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-neutral-100">
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i} className="animate-pulse">
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-40" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-28" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-24" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-20" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-32" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-12 ml-auto" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-40" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-24" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-20" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-32" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-12 ml-auto" /></td>
                     </tr>
                   ))
                 ) : campaigns.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-stone-400">
+                    <td colSpan={7} className="px-6 py-12 text-center text-neutral-400">
                       No campaigns found for this filter.
                     </td>
                   </tr>
                 ) : (
                   campaigns.map((c) => (
-                    <tr key={c.id} className="hover:bg-stone-50/80 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-stone-900">
+                    <tr key={c.id} className="hover:bg-neutral-50/80 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-neutral-900">
                         <div className="flex items-center gap-3">
                           {c.coverImageUrl ? (
-                            <img src={c.coverImageUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-stone-200" />
+                            <img src={c.coverImageUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-neutral-200" />
                           ) : (
-                            <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center font-bold text-stone-400">
+                            <div className="w-10 h-10 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-neutral-400">
                               {c.name.substring(0, 1)}
                             </div>
                           )}
                           <div>
-                            <p className="font-bold text-sm text-stone-900">{c.name}</p>
-                            <span className="text-[10px] text-stone-400 uppercase font-mono">{c.category || "General"}</span>
+                            <p className="font-bold text-sm text-neutral-900">{c.name}</p>
+                            <span className="text-[10px] text-neutral-400 uppercase font-mono">{c.category || "General"}</span>
                           </div>
                         </div>
                       </td>
 
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-stone-900">{c.brand?.name || "Unknown Brand"}</p>
-                        <p className="text-[11px] text-stone-400">{c.brand?.email}</p>
+                        <p className="font-semibold text-neutral-900">{c.brand?.name || "Unknown Brand"}</p>
+                        <p className="text-[11px] text-neutral-400">{c.brand?.email}</p>
                       </td>
 
                       <td className="px-6 py-4">
-                        <p className="font-bold text-stone-900">{formatCurrency(c.budget)}</p>
-                        <p className="text-[11px] text-stone-500">
+                        <p className="font-bold text-neutral-900">{formatCurrency(c.budget)}</p>
+                        <p className="text-[11px] text-neutral-500">
                           {c.hybridBonus ? "Base Pool" : "Creator Pool"}: {formatCurrency(c.creatorPool)}
                         </p>
-                        {c.hybridBonus && <p className="text-[11px] text-stone-500">Bonus Pool: {formatCurrency(c.hybridBonus.pool)}</p>}
+                        {c.hybridBonus && <p className="text-[11px] text-neutral-500">Bonus Pool: {formatCurrency(c.hybridBonus.pool)}</p>}
                       </td>
 
                       <td className="px-6 py-4">
@@ -476,21 +476,21 @@ export default function AdminCampaignsPage() {
                           className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
                             (c.creatorCount ?? 0) > 0
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : "bg-stone-100 text-stone-400"
+                              : "bg-neutral-100 text-neutral-400"
                           }`}
                         >
                           {c.creatorCount ?? 0} creators
                         </span>
-                        <p className="text-[10px] text-stone-400 mt-1">{c.category || "General"} niche</p>
+                        <p className="text-[10px] text-neutral-400 mt-1">{c.category || "General"} niche</p>
                       </td>
 
                       <td className="px-6 py-4">
                         <div className="w-36">
-                          <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700 mb-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-700 mb-1">
                             <span>{c.viewsDelivered.toLocaleString()}</span>
-                            <span className="text-stone-400">{c.targetViews ? `/ ${c.targetViews.toLocaleString()}` : "no views target"}</span>
+                            <span className="text-neutral-400">{c.targetViews ? `/ ${c.targetViews.toLocaleString()}` : "no views target"}</span>
                           </div>
-                          <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
+                          <div className="w-full bg-neutral-100 rounded-full h-1.5 overflow-hidden">
                             <div
                               className="bg-[#FEB604] h-1.5 rounded-full transition-all"
                               style={{ width: `${c.progressPercent}%` }}
@@ -512,7 +512,7 @@ export default function AdminCampaignsPage() {
                               ? "bg-blue-100 text-blue-800"
                               : c.status === "cancelled"
                               ? "bg-red-100 text-red-800"
-                              : "bg-stone-100 text-stone-600"
+                              : "bg-neutral-100 text-neutral-600"
                           }`}
                         >
                           {c.status.replace("_", " ")}
@@ -525,7 +525,7 @@ export default function AdminCampaignsPage() {
                             setSelectedCampaign(c);
                             fetchCampaignDetail(c.id);
                           }}
-                          className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                          className="px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
                         >
                           Inspect & Manage
                         </button>
@@ -540,53 +540,53 @@ export default function AdminCampaignsPage() {
 
         {/* Campaign Detail Modal */}
         {selectedCampaign && (
-          <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-stone-200 font-rethink">
-              <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-6">
+          <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-neutral-200 font-rethink">
+              <div className="flex items-center justify-between pb-4 border-b border-neutral-200 mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-stone-900">{selectedCampaign.name}</h3>
-                  <p className="text-xs text-stone-500">Brand: {selectedCampaign.brand?.name} ({selectedCampaign.brand?.email})</p>
+                  <h3 className="text-xl font-bold text-neutral-900">{selectedCampaign.name}</h3>
+                  <p className="text-xs text-neutral-500">Brand: {selectedCampaign.brand?.name} ({selectedCampaign.brand?.email})</p>
                 </div>
                 <button
                   onClick={closeCampaign}
-                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 font-bold"
+                  className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-600 font-bold"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="space-y-6 text-xs text-stone-700">
+              <div className="space-y-6 text-xs text-neutral-700">
                 {/* Financial Summary */}
-                <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                <div className="grid grid-cols-3 gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">{selectedCampaign.hybridBonus ? "Base Budget" : "Total Budget"}</span>
-                    <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.budget)}</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block">{selectedCampaign.hybridBonus ? "Base Budget" : "Total Budget"}</span>
+                    <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.budget)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block">
                       {selectedCampaign.hybridBonus ? "Base Pool" : "Creator Pool"} ({sharePercent(selectedCampaign.creatorPool, selectedCampaign.budget)})
                     </span>
-                    <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.creatorPool)}</span>
+                    <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.creatorPool)}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-stone-400 block">Platform Fee ({sharePercent(selectedCampaign.platformFee, selectedCampaign.budget)})</span>
-                    <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.platformFee)}</span>
+                    <span className="text-[10px] uppercase font-bold text-neutral-400 block">Platform Fee ({sharePercent(selectedCampaign.platformFee, selectedCampaign.budget)})</span>
+                    <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.platformFee)}</span>
                   </div>
                 </div>
 
                 {selectedCampaign.hybridBonus && (
-                  <div className="grid grid-cols-3 gap-4 bg-stone-50 p-4 rounded-xl border border-stone-200">
+                  <div className="grid grid-cols-3 gap-4 bg-neutral-50 p-4 rounded-xl border border-neutral-200">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Pool</span>
-                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.pool)}</span>
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">Bonus Pool</span>
+                      <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.hybridBonus.pool)}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Fee</span>
-                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.platformFee)}</span>
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">Bonus Fee</span>
+                      <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.hybridBonus.platformFee)}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-stone-400 block">Bonus Left</span>
-                      <span className="text-base font-bold text-stone-900">{formatCurrency(selectedCampaign.hybridBonus.poolRemaining)}</span>
+                      <span className="text-[10px] uppercase font-bold text-neutral-400 block">Bonus Left</span>
+                      <span className="text-base font-bold text-neutral-900">{formatCurrency(selectedCampaign.hybridBonus.poolRemaining)}</span>
                     </div>
                   </div>
                 )}
@@ -597,8 +597,8 @@ export default function AdminCampaignsPage() {
 
                 {/* Content Brief */}
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Content Brief</h4>
-                  <p className="p-4 bg-white border border-stone-200 rounded-xl leading-relaxed text-stone-800">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Content Brief</h4>
+                  <p className="p-4 bg-white border border-neutral-200 rounded-xl leading-relaxed text-neutral-800">
                     {selectedCampaign.contentBrief || "No brief specified."}
                   </p>
                 </div>
@@ -613,15 +613,15 @@ export default function AdminCampaignsPage() {
                 )}
 
                 {/* Platform Metrics per Creator */}
-                <div className="pt-4 border-t border-stone-200">
+                <div className="pt-4 border-t border-neutral-200">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">Platform Metrics</h4>
-                    <span className="text-[11px] text-stone-400">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500">Platform Metrics</h4>
+                    <span className="text-[11px] text-neutral-400">
                       Total {selectedCampaign.viewsDelivered.toLocaleString()} {selectedCampaign.targetViews ? `/ ${selectedCampaign.targetViews.toLocaleString()} views` : "views · no views target"}
                     </span>
                   </div>
 
-                  <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden mb-4">
+                  <div className="w-full bg-neutral-100 rounded-full h-1.5 overflow-hidden mb-4">
                     <div
                       className="bg-[#FEB604] h-1.5 rounded-full transition-all"
                       style={{ width: `${selectedCampaign.progressPercent || 0}%` }}
@@ -633,37 +633,37 @@ export default function AdminCampaignsPage() {
                       {campaignDetail.submissions.map((sub) => {
                         const postedPlatforms = sub.postedPlatforms || [];
                         return (
-                          <div key={sub.id || sub._id || sub.creatorHandle} className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+                          <div key={sub.id || sub._id || sub.creatorHandle} className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div>
-                                <p className="text-sm font-bold text-stone-900">
+                                <p className="text-sm font-bold text-neutral-900">
                                   {sub.creatorId?.name || sub.creatorHandle || "Creator"}
                                 </p>
-                                <p className="text-[11px] text-stone-400">@{sub.creatorHandle} · {sub.status}</p>
+                                <p className="text-[11px] text-neutral-400">@{sub.creatorHandle} · {sub.status}</p>
                                 <TermsAcceptedText
                                   accepted={
                                     sub.creatorId?._id ? acceptedTermsByCreator(campaignDetail.slots).get(sub.creatorId._id) : null
                                   }
                                 />
                               </div>
-                              <span className="text-sm font-bold text-stone-900">
+                              <span className="text-sm font-bold text-neutral-900">
                                 {(sub.viewsDelivered ?? 0).toLocaleString()} views
                               </span>
                             </div>
 
                             {postedPlatforms.length === 0 ? (
-                              <p className="text-[11px] text-stone-400">No platform links yet.</p>
+                              <p className="text-[11px] text-neutral-400">No platform links yet.</p>
                             ) : (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 {postedPlatforms.map((pp) => (
                                   <div
                                     key={pp.platform}
-                                    className="bg-white border border-stone-200 rounded-lg px-3 py-2"
+                                    className="bg-white border border-neutral-200 rounded-lg px-3 py-2"
                                   >
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-1">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-1">
                                       {pp.platform}
                                     </p>
-                                    <div className="flex gap-3 text-xs font-semibold text-stone-700">
+                                    <div className="flex gap-3 text-xs font-semibold text-neutral-700">
                                       <span>{pp.views || 0} views</span>
                                       <span>{pp.likes || 0} likes</span>
                                       <span>{pp.comments || 0} comments</span>
@@ -687,7 +687,7 @@ export default function AdminCampaignsPage() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-stone-400">
+                    <p className="text-[11px] text-neutral-400">
                       {campaignDetail ? "No submissions yet." : "Loading submissions..."}
                     </p>
                   )}
@@ -695,19 +695,19 @@ export default function AdminCampaignsPage() {
 
                 {/* Target Platforms */}
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Platforms</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-2">Platforms</h4>
                   <div className="flex gap-2 flex-wrap">
                     {(editPlatforms.length > 0 ? editPlatforms : selectedCampaign.platforms || ["TikTok", "Instagram"]).map((p) => (
                       <span
                         key={p}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 border border-stone-200 rounded-full font-semibold text-stone-700"
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-neutral-100 border border-neutral-200 rounded-full font-semibold text-neutral-700"
                       >
                         {p}
                         <button
                           type="button"
                           onClick={() => setEditPlatforms((prev) => prev.filter((x) => x !== p))}
                           aria-label={`Remove ${p}`}
-                          className="text-stone-400 hover:text-red-500"
+                          className="text-neutral-400 hover:text-red-500"
                         >
                           ✕
                         </button>
@@ -722,7 +722,7 @@ export default function AdminCampaignsPage() {
                           }
                           e.target.value = "";
                         }}
-                        className="px-3 py-1 bg-white border border-stone-200 rounded-full text-xs font-semibold text-stone-600 focus:outline-none"
+                        className="px-3 py-1 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-600 focus:outline-none"
                       >
                         <option value="">+ Add platform</option>
                         {platformOptions
@@ -733,23 +733,23 @@ export default function AdminCampaignsPage() {
                       </select>
                     </div>
                   </div>
-                  <p className="text-[11px] text-stone-400 mt-2">
+                  <p className="text-[11px] text-neutral-400 mt-2">
                     Removing a platform here also removes it from the campaign target platforms. Click "Save Campaign Updates" to persist.
                   </p>
                 </div>
 
                 {/* Edit Campaign Details */}
-                <div className="pt-4 border-t border-stone-200">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Edit Campaign Details</h4>
+                <div className="pt-4 border-t border-neutral-200">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">Edit Campaign Details</h4>
 
                   <div className="space-y-4">
                     {/* What are you promoting? */}
                     <div>
-                      <label className="font-bold text-stone-700 block mb-1.5">What are you promoting?</label>
+                      <label className="font-bold text-neutral-700 block mb-1.5">What are you promoting?</label>
                       <select
                         value={editCategory}
                         onChange={(e) => setEditCategory(e.target.value)}
-                        className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
+                        className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-white"
                       >
                         {industryOptions.map((ind) => (
                           <option key={ind} value={ind}>{ind}</option>
@@ -759,7 +759,7 @@ export default function AdminCampaignsPage() {
 
                     {/* Number of placements */}
                     <div>
-                      <label className="font-bold text-stone-700 block mb-1.5">
+                      <label className="font-bold text-neutral-700 block mb-1.5">
                         Number of placements
                       </label>
                       <input
@@ -768,9 +768,9 @@ export default function AdminCampaignsPage() {
                         max={100}
                         value={editSlotCount}
                         onChange={(e) => setEditSlotCount(Number(e.target.value))}
-                        className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 bg-white"
+                        className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 bg-white"
                       />
-                      <p className="text-xs text-stone-500 mt-1">
+                      <p className="text-xs text-neutral-500 mt-1">
                         Each placement splits target views and creator pool equally. Available placements
                         are rebuilt to this count on save.
                       </p>
@@ -778,7 +778,7 @@ export default function AdminCampaignsPage() {
 
                     {/* Content styles */}
                     <div>
-                      <label className="font-bold text-stone-700 block mb-1.5">Preferred content styles</label>
+                      <label className="font-bold text-neutral-700 block mb-1.5">Preferred content styles</label>
                       <div className="flex gap-2 mb-2">
                         <input
                           type="text"
@@ -794,7 +794,7 @@ export default function AdminCampaignsPage() {
                             }
                           }}
                           placeholder="Add a custom style..."
-                          className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                          className="flex-1 px-3 py-2 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900"
                         />
                         <button
                           type="button"
@@ -806,7 +806,7 @@ export default function AdminCampaignsPage() {
                               setCustomStyleInput("");
                             }
                           }}
-                          className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold"
+                          className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold"
                         >
                           Add
                         </button>
@@ -819,8 +819,8 @@ export default function AdminCampaignsPage() {
                             onClick={() => setEditContentStyle((prev) => toggleItem(prev, style))}
                             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                               editContentStyle.includes(style)
-                                ? "bg-stone-900 text-white"
-                                : "bg-stone-100 text-stone-600 border border-stone-200"
+                                ? "bg-neutral-900 text-white"
+                                : "bg-neutral-100 text-neutral-600 border border-neutral-200"
                             }`}
                           >
                             {style}
@@ -831,7 +831,7 @@ export default function AdminCampaignsPage() {
                           .map((style) => (
                             <span
                               key={style}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-stone-900 text-white text-xs font-semibold"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-neutral-900 text-white text-xs font-semibold"
                             >
                               {style}
                               <button
@@ -848,7 +848,7 @@ export default function AdminCampaignsPage() {
 
                     {/* Niches */}
                     <div>
-                      <label className="font-bold text-stone-700 block mb-1.5">Target niches</label>
+                      <label className="font-bold text-neutral-700 block mb-1.5">Target niches</label>
                       <div className="flex gap-2 mb-2">
                         <input
                           type="text"
@@ -864,7 +864,7 @@ export default function AdminCampaignsPage() {
                             }
                           }}
                           placeholder="Add a custom niche..."
-                          className="flex-1 px-3 py-2 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-stone-900"
+                          className="flex-1 px-3 py-2 border border-neutral-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-neutral-900"
                         />
                         <button
                           type="button"
@@ -876,7 +876,7 @@ export default function AdminCampaignsPage() {
                               setCustomNicheInput("");
                             }
                           }}
-                          className="px-4 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold"
+                          className="px-4 py-2 bg-neutral-900 text-white rounded-xl text-xs font-bold"
                         >
                           Add
                         </button>
@@ -889,8 +889,8 @@ export default function AdminCampaignsPage() {
                             onClick={() => setEditNiches((prev) => toggleItem(prev, niche))}
                             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                               editNiches.includes(niche)
-                                ? "bg-stone-900 text-white"
-                                : "bg-stone-100 text-stone-600 border border-stone-200"
+                                ? "bg-neutral-900 text-white"
+                                : "bg-neutral-100 text-neutral-600 border border-neutral-200"
                             }`}
                           >
                             {niche}
@@ -901,7 +901,7 @@ export default function AdminCampaignsPage() {
                           .map((niche) => (
                             <span
                               key={niche}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-stone-900 text-white text-xs font-semibold"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-neutral-900 text-white text-xs font-semibold"
                             >
                               {niche}
                               <button
@@ -923,7 +923,7 @@ export default function AdminCampaignsPage() {
                     <button
                       onClick={handleSaveEdit}
                       disabled={saveLoading}
-                      className="w-full px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                      className="w-full px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                     >
                       {saveLoading ? "Saving..." : "Save Campaign Updates"}
                     </button>
@@ -931,8 +931,8 @@ export default function AdminCampaignsPage() {
                 </div>
 
                 {/* Moderation Actions */}
-                <div className="pt-4 border-t border-stone-200">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Admin Actions</h4>
+                <div className="pt-4 border-t border-neutral-200">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-500 mb-3">Admin Actions</h4>
 
                   {selectedCampaign.statusNote && (
                     <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
@@ -944,7 +944,7 @@ export default function AdminCampaignsPage() {
                   )}
 
                   <div className="mb-3">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block mb-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-1">
                       Note / Reason for status change
                     </label>
                     <textarea
@@ -952,7 +952,7 @@ export default function AdminCampaignsPage() {
                       value={statusNote}
                       onChange={(e) => setStatusNote(e.target.value)}
                       placeholder="Required when rejecting or cancelling a campaign — sent to the brand..."
-                      className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900 text-xs"
+                      className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 text-xs"
                     />
                   </div>
 
@@ -1015,14 +1015,14 @@ export default function AdminCampaignsPage() {
                       <button
                         onClick={handleDeleteCampaign}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                        className="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-bold text-xs shadow-sm transition-all disabled:opacity-50"
                       >
                         Delete Campaign
                       </button>
                     )}
                   </div>
                   {!canMoveMoney && selectedCampaign.status !== "cancelled" && campaignDetail?.campaign?.hasPayments === true && (
-                    <p className="mt-3 text-[11px] font-medium text-stone-500">
+                    <p className="mt-3 text-[11px] font-medium text-neutral-500">
                       Cancelling a paid campaign sends refunds, so only finance admins and super admins can do it.
                     </p>
                   )}

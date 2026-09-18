@@ -68,10 +68,10 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
   };
 
   return (
-    <div className="space-y-10">
-      <div className="space-y-8">
+    <div className="space-y-12">
+      <div className="space-y-10">
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+          <div className="w-20 h-20 bg-neutral-100 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
             {data.coverImageUrl ? (
               <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
             ) : (
@@ -80,19 +80,19 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
           </div>
           <div className="flex-1 space-y-2">
             <span className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-stone-500 font-rethink">Campaign Cover</span>
+              <span className="text-xs font-medium text-neutral-500 font-rethink">Campaign Cover</span>
               <InfoTooltip text="Shown to creators in the marketplace. 1200×630px recommended, up to 10MB." />
             </span>
             <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
             {uploading ? (
-              <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress}>
-                <div className="h-full bg-stone-900 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
+              <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress}>
+                <div className="h-full bg-neutral-900 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
               </div>
             ) : (
               <button
                 type="button"
                 onClick={() => coverInputRef.current?.click()}
-                className="px-4 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-900 font-rethink"
+                className="px-4 py-1.5 bg-white border border-neutral-200 rounded-full text-xs font-medium text-neutral-900 font-rethink"
               >
                 {data.coverImageUrl ? "Change image" : "Upload image"}
               </button>
@@ -119,9 +119,9 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
                 {data.category ? (
                   <span>{data.category}</span>
                 ) : (
-                  <span className="text-stone-400">Select your industry</span>
+                  <span className="text-neutral-400">Select your industry</span>
                 )}
-                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
@@ -129,7 +129,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
                 <DropdownMenuItem
                   key={category}
                   onSelect={() => update({ category })}
-                  className={cn("font-medium", data.category === category ? "text-stone-900" : "text-stone-700")}
+                  className={cn("font-medium", data.category === category ? "text-neutral-900" : "text-neutral-700")}
                 >
                   {category}
                 </DropdownMenuItem>
@@ -140,7 +140,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
       </div>
 
       <div className="space-y-4">
-        <p className="text-sm font-medium text-stone-500 font-rethink leading-relaxed">
+        <p className="text-sm font-medium text-neutral-900 font-rethink leading-relaxed">
           Pick the campaign type that fits your goal — it decides how creators are paid and what you pay for.
         </p>
 
@@ -156,11 +156,11 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
                 onClick={() => update({ ...applyCampaignType(option.value), typeChosen: true })}
                 className={cn(
                   "w-full text-left px-4 py-4 rounded-2xl border bg-white transition-colors",
-                  selected ? "border-stone-900" : "border-stone-200"
+                  selected ? "border-neutral-900" : "border-neutral-200"
                 )}
               >
-                <span className="block text-sm font-semibold text-stone-900 font-rethink">{option.title}</span>
-                <span className="block mt-1 text-xs font-medium text-stone-500 font-rethink leading-relaxed">{option.body}</span>
+                <span className="block text-sm font-semibold text-neutral-900 font-rethink">{option.title}</span>
+                <span className="block mt-1 text-xs font-medium text-neutral-500 font-rethink leading-relaxed">{option.body}</span>
               </button>
             );
           })}

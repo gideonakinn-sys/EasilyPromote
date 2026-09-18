@@ -24,7 +24,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-[10rem] overflow-hidden rounded-xl bg-white border border-stone-200 font-rethink text-stone-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "z-50 min-w-[10rem] overflow-hidden rounded-xl bg-white border border-neutral-200 font-rethink text-neutral-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -45,7 +45,7 @@ function DropdownMenuItem({
       data-inset={inset ? "true" : undefined}
       data-variant={variant}
       className={cn(
-        "relative flex items-center gap-2 select-none rounded-lg px-3 py-2 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-stone-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex items-center gap-2 select-none rounded-lg px-3 py-2 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         variant === "destructive" && "text-red-600 focus:bg-red-50",
         inset && "pl-8",
         className
@@ -65,7 +65,7 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex items-center gap-2 select-none rounded-lg py-2 pl-8 pr-3 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-stone-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex items-center gap-2 select-none rounded-lg py-2 pl-8 pr-3 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       checked={checked}
@@ -96,7 +96,7 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex items-center gap-2 select-none rounded-lg py-2 pl-8 pr-3 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-stone-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex items-center gap-2 select-none rounded-lg py-2 pl-8 pr-3 text-sm font-medium outline-none transition-colors cursor-pointer focus:bg-neutral-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       {...props}
@@ -120,7 +120,7 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset ? "true" : undefined}
-      className={cn("px-3 py-2 text-xs font-medium text-stone-500", inset && "pl-8", className)}
+      className={cn("px-3 py-2 text-xs font-medium text-neutral-500", inset && "pl-8", className)}
       {...props}
     />
   );
@@ -133,14 +133,14 @@ function DropdownMenuSeparator({
   return (
     <DropdownMenuPrimitive.Separator
       data-slot="dropdown-menu-separator"
-      className={cn("my-1 h-px bg-stone-100", className)}
+      className={cn("my-1 h-px bg-neutral-100", className)}
       {...props}
     />
   );
 }
 
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
-  return <span className={cn("ml-auto text-xs tracking-widest text-stone-500", className)} {...props} />;
+  return <span className={cn("ml-auto text-xs tracking-widest text-neutral-500", className)} {...props} />;
 }
 
 function DropdownMenuSub({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Sub>) {
@@ -158,7 +158,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset ? "true" : undefined}
       className={cn(
-        "flex cursor-pointer items-center gap-2 select-none rounded-lg px-3 py-2 text-sm font-medium outline-none focus:bg-stone-100 data-[state=open]:bg-stone-100",
+        "flex cursor-pointer items-center gap-2 select-none rounded-lg px-3 py-2 text-sm font-medium outline-none focus:bg-neutral-100 data-[state=open]:bg-neutral-100",
         inset && "pl-8",
         className
       )}
@@ -178,7 +178,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "z-50 min-w-[10rem] overflow-hidden rounded-xl bg-white border border-stone-200 font-rethink text-stone-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "z-50 min-w-[10rem] overflow-hidden rounded-xl bg-white border border-neutral-200 font-rethink text-neutral-900 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className
       )}
       {...props}

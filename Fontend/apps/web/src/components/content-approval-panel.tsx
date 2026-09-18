@@ -29,12 +29,12 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full min-w-0 px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink";
+  "w-full min-w-0 px-4 py-3 bg-white border border-neutral-200 rounded-full text-sm font-medium text-neutral-900 placeholder-neutral-300 focus:outline-none focus:border-neutral-400 font-rethink";
 const textareaClass =
-  "w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 font-rethink resize-none min-h-[88px]";
+  "w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-medium text-neutral-900 placeholder-neutral-300 focus:outline-none focus:border-neutral-400 font-rethink resize-none min-h-[88px]";
 const primaryButtonClass = "w-full py-3 rounded-full font-semibold text-sm border font-rethink";
-const enabledClass = "bg-[#FEB604] text-stone-900 border-stone-100";
-const disabledClass = "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed";
+const enabledClass = "bg-[#FEB604] text-neutral-900 border-neutral-100";
+const disabledClass = "bg-neutral-200 text-neutral-400 border-neutral-200 cursor-not-allowed";
 
 const isLink = (value: string) => /^https?:\/\/\S+$/i.test(value.trim());
 
@@ -67,7 +67,7 @@ interface FieldLabelProps {
 
 function FieldLabel({ htmlFor, children }: FieldLabelProps) {
   return (
-    <label htmlFor={htmlFor} className="text-xs font-medium text-stone-500 font-rethink">
+    <label htmlFor={htmlFor} className="text-xs font-medium text-neutral-500 font-rethink">
       {children}
     </label>
   );
@@ -83,10 +83,10 @@ function CaptionRequirements({ hashtags, referralCode }: CaptionRequirementsProp
   if (hashtags.length === 0 && !referralCode) return null;
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium text-stone-500">Your caption must include</p>
+      <p className="text-xs font-medium text-neutral-500">Your caption must include</p>
       <div className="flex flex-wrap gap-1.5">
         {hashtags.map((tag) => (
-          <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-stone-100 text-stone-700">
+          <span key={tag} className="px-2 py-0.5 rounded-full text-[10px] font-medium font-rethink bg-neutral-100 text-neutral-700">
             {displayHashtag(tag)}
           </span>
         ))}
@@ -161,7 +161,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
           onChange={(e) => setVideoUrl(e.target.value)}
           className={inputClass}
         />
-        <p className="text-xs font-medium text-stone-400 font-rethink">A link the brand can open to watch your video.</p>
+        <p className="text-xs font-medium text-neutral-400 font-rethink">A link the brand can open to watch your video.</p>
       </div>
       <div className="space-y-1.5">
         <FieldLabel htmlFor="content-caption">Caption</FieldLabel>
@@ -197,8 +197,8 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
     <div className="space-y-5 font-rethink">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <h4 className="font-medium text-sm text-stone-900">Content Approval</h4>
-          <p className="text-xs font-medium text-stone-500">Goes to the {DESTINATION_LABELS[approval.destination]}</p>
+          <h4 className="font-medium text-sm text-neutral-900">Content Approval</h4>
+          <p className="text-xs font-medium text-neutral-500">Goes to the {DESTINATION_LABELS[approval.destination]}</p>
         </div>
         {status && <ContentStatusBadge status={status} />}
       </div>
@@ -218,7 +218,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
           <Notice title="Changes Requested" tone="stopped">
             {latestRequest?.notes || "The brand asked for changes."}
           </Notice>
-          <p className="text-xs font-medium text-stone-500">
+          <p className="text-xs font-medium text-neutral-500">
             {approval.changeRequestsLeft > 0
               ? `The brand can ask for changes ${approval.changeRequestsLeft} more time${approval.changeRequestsLeft === 1 ? "" : "s"}.`
               : "This is the last round. After this the brand approves or rejects."}
@@ -236,7 +236,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
           <button
             type="button"
             onClick={() => setAppealOpen(true)}
-            className={cn(primaryButtonClass, "bg-white text-stone-900 border-stone-200")}
+            className={cn(primaryButtonClass, "bg-white text-neutral-900 border-neutral-200")}
           >
             Appeal Rejection
           </button>
@@ -248,7 +248,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
       )}
 
       {approval.autoApproved && status !== "new" && status !== null && (
-        <p className="text-xs font-medium text-stone-500">
+        <p className="text-xs font-medium text-neutral-500">
           The brand didn&apos;t respond within 72 hours, so your content was approved automatically.
         </p>
       )}
@@ -280,16 +280,16 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
             />
           </div>
           {approval.licence && (
-            <label className="flex items-start gap-3 bg-white border border-stone-200 rounded-2xl p-3 cursor-pointer">
+            <label className="flex items-start gap-3 bg-white border border-neutral-200 rounded-2xl p-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={acceptRights}
                 onChange={(e) => setAcceptRights(e.target.checked)}
-                className="mt-0.5 accent-stone-900"
+                className="mt-0.5 accent-neutral-900"
               />
               <span className="space-y-1">
-                <span className="block text-xs font-medium text-stone-500">Usage Rights</span>
-                <span className="block text-sm font-medium text-stone-900 leading-relaxed">{approval.licence}</span>
+                <span className="block text-xs font-medium text-neutral-500">Usage Rights</span>
+                <span className="block text-sm font-medium text-neutral-900 leading-relaxed">{approval.licence}</span>
               </span>
             </label>
           )}
@@ -324,7 +324,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
                   onClick={() => setPostPlatform(p)}
                   className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-semibold border",
-                    postPlatform === p ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                    postPlatform === p ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-700 border-neutral-200"
                   )}
                 >
                   {PLATFORM_LABELS[p] || p}
@@ -357,7 +357,7 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
             />
             <CaptionRequirements hashtags={requiredHashtags} referralCode={referralCode} />
             {campaign.referral && !referralCode && (
-              <p className="text-xs font-medium text-stone-500">Your referral code isn&apos;t ready yet. Post once it appears here.</p>
+              <p className="text-xs font-medium text-neutral-500">Your referral code isn&apos;t ready yet. Post once it appears here.</p>
             )}
           </div>
           <button
@@ -400,17 +400,17 @@ export function ContentApprovalPanel({ campaign, approval, onChanged }: ContentA
 
       {approval.changeRequests.length > 0 && (
         <div className="space-y-3">
-          <h5 className="text-xs font-medium text-stone-500">Feedback History</h5>
+          <h5 className="text-xs font-medium text-neutral-500">Feedback History</h5>
           {approval.changeRequests.map((request) => (
-            <div key={request.round} className="bg-stone-100 rounded-[16px] p-3 space-y-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs font-medium text-stone-500">
+            <div key={request.round} className="bg-neutral-100 rounded-[16px] p-3 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-xs font-medium text-neutral-500">
                 <span>
                   Round {request.round} of {approval.maxChangeRequests}
                 </span>
                 <span>{formatContentDate(request.requestedAt)}</span>
               </div>
-              <p className="text-sm font-medium text-stone-900 leading-relaxed">{request.notes}</p>
-              <p className="text-xs font-medium text-stone-500">
+              <p className="text-sm font-medium text-neutral-900 leading-relaxed">{request.notes}</p>
+              <p className="text-xs font-medium text-neutral-500">
                 {request.resubmittedAt ? `You resubmitted ${formatContentDate(request.resubmittedAt)}` : "Waiting for your update"}
               </p>
             </div>

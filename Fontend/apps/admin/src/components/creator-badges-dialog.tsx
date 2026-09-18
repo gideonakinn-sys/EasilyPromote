@@ -100,10 +100,10 @@ function CheckLine({ check }: { check: Check }) {
   }
   return (
     <li className="flex items-baseline justify-between gap-3 text-[11px] font-medium">
-      <span className={cn(check.skipped ? "text-stone-400" : check.pass ? "text-green-700" : "text-red-700")}>
+      <span className={cn(check.skipped ? "text-neutral-400" : check.pass ? "text-green-700" : "text-red-700")}>
         {check.skipped ? "–" : check.pass ? "✓" : "✗"} {check.label}
       </span>
-      <span className="text-stone-500 text-right">
+      <span className="text-neutral-500 text-right">
         {check.skipped ? check.skipped : `${formatValue(check.value)} (needs ${formatValue(check.need)})`}
       </span>
     </li>
@@ -211,26 +211,26 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4 font-rethink" onClick={() => !busy && onClose()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4 font-rethink" onClick={() => !busy && onClose()}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="creator-badges-heading"
-        className="bg-white border border-stone-200 rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-5"
+        className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h3 id="creator-badges-heading" className="font-medium text-lg text-stone-900">
+            <h3 id="creator-badges-heading" className="font-medium text-lg text-neutral-900">
               {creatorName}: Badges &amp; Ratings
             </h3>
-            <p className="text-xs font-medium text-stone-500">
+            <p className="text-xs font-medium text-neutral-500">
               {report
                 ? `${report.rating.count} visible brand rating${report.rating.count === 1 ? "" : "s"}${report.rating.average !== null ? `, average ${report.rating.average.toFixed(2)}` : ""} · badges checked ${formatDate(report.evaluatedAt)}`
                 : "Loading…"}
             </p>
           </div>
-          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full text-xs font-semibold">
+          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full text-xs font-semibold">
             Close
           </button>
         </div>
@@ -241,7 +241,7 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
               key={value}
               type="button"
               onClick={() => setTab(value)}
-              className={cn("px-4 py-2 rounded-full text-xs font-semibold", tab === value ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-600")}
+              className={cn("px-4 py-2 rounded-full text-xs font-semibold", tab === value ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-600")}
             >
               {value === "badges" ? "Badges" : `Ratings${ratings ? ` (${ratings.length})` : ""}`}
             </button>
@@ -258,27 +258,27 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
               </p>
             )}
             <div className="flex justify-end">
-              <button type="button" onClick={recalculate} disabled={busy} className="px-3 py-1.5 bg-white border border-stone-200 text-stone-800 rounded-full text-xs font-semibold disabled:opacity-50">
+              <button type="button" onClick={recalculate} disabled={busy} className="px-3 py-1.5 bg-white border border-neutral-200 text-neutral-800 rounded-full text-xs font-semibold disabled:opacity-50">
                 Recalculate Now
               </button>
             </div>
             {(report?.items || []).map((item) => (
-              <div key={item.badge} className="border border-stone-200 rounded-2xl p-4 space-y-3" data-badge={item.badge}>
+              <div key={item.badge} className="border border-neutral-200 rounded-2xl p-4 space-y-3" data-badge={item.badge}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-stone-900">{item.label}</p>
-                      <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", item.held ? "bg-green-100 text-green-800" : "bg-stone-100 text-stone-600")}>
+                      <p className="text-sm font-medium text-neutral-900">{item.label}</p>
+                      <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium", item.held ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600")}>
                         {item.held ? "Held" : "Not Held"}
                       </span>
                     </div>
-                    <p className="text-[11px] font-medium text-stone-500 mt-0.5">{item.description}</p>
-                    <p className={cn("text-[11px] font-medium mt-1", item.override?.source === "migration" ? "text-amber-700" : "text-stone-700")}>
+                    <p className="text-[11px] font-medium text-neutral-500 mt-0.5">{item.description}</p>
+                    <p className={cn("text-[11px] font-medium mt-1", item.override?.source === "migration" ? "text-amber-700" : "text-neutral-700")}>
                       {sourceText(item)}
                       {item.override && !item.earnedByRules && item.override.mode === "grant" ? " (the rules don't give it)" : ""}
                       {item.override && item.earnedByRules && item.override.mode === "revoke" ? " (the rules give it)" : ""}
                     </p>
-                    {item.override?.note && <p className="text-[11px] font-medium text-stone-500 mt-0.5">Note: {item.override.note}</p>}
+                    {item.override?.note && <p className="text-[11px] font-medium text-neutral-500 mt-0.5">Note: {item.override.note}</p>}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     {(["auto", "grant", "revoke"] as const).map((mode) => {
@@ -291,7 +291,7 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
                           onClick={() => setEditing({ item, mode })}
                           className={cn(
                             "px-2.5 py-1 rounded-full text-[11px] font-semibold border disabled:opacity-60",
-                            current === mode ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-700 border-stone-200"
+                            current === mode ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-700 border-neutral-200"
                           )}
                         >
                           {mode === "auto" ? "Automatic" : mode === "grant" ? "Grant" : "Revoke"}
@@ -303,7 +303,7 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
                 {item.evaluation ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium text-stone-500">Minimum Sample {item.evaluation.minimumsMet ? "(met)" : "(not met)"}</p>
+                      <p className="text-[10px] font-medium text-neutral-500">Minimum Sample {item.evaluation.minimumsMet ? "(met)" : "(not met)"}</p>
                       <ul className="space-y-1">
                         {item.evaluation.minimums.map((check) => (
                           <CheckLine key={check.label} check={check} />
@@ -311,7 +311,7 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
                       </ul>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-medium text-stone-500">{item.evaluation.stage === "keep" ? "To Keep It (lower bar)" : "To Earn It"}</p>
+                      <p className="text-[10px] font-medium text-neutral-500">{item.evaluation.stage === "keep" ? "To Keep It (lower bar)" : "To Earn It"}</p>
                       <ul className="space-y-1">
                         {item.evaluation.checks.map((check) => (
                           <CheckLine key={check.label} check={check} />
@@ -320,7 +320,7 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
                     </div>
                   </div>
                 ) : (
-                  <p className="text-[11px] font-medium text-stone-400">Not checked yet. Press Recalculate Now.</p>
+                  <p className="text-[11px] font-medium text-neutral-400">Not checked yet. Press Recalculate Now.</p>
                 )}
               </div>
             ))}
@@ -330,19 +330,19 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
         {tab === "ratings" && (
           <div className="space-y-3">
             {ratings === null ? (
-              <p className="text-xs font-medium text-stone-400">Loading ratings…</p>
+              <p className="text-xs font-medium text-neutral-400">Loading ratings…</p>
             ) : ratings.length === 0 ? (
-              <p className="text-xs font-medium text-stone-500">No brand has rated this creator yet.</p>
+              <p className="text-xs font-medium text-neutral-500">No brand has rated this creator yet.</p>
             ) : (
               ratings.map((r) => (
-                <div key={r.id} className={cn("border rounded-2xl p-4 space-y-2", r.hidden ? "border-red-200 bg-red-50/40" : "border-stone-200")} data-rating={r.id}>
+                <div key={r.id} className={cn("border rounded-2xl p-4 space-y-2", r.hidden ? "border-red-200 bg-red-50/40" : "border-neutral-200")} data-rating={r.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-stone-900">
+                      <p className="text-sm font-medium text-neutral-900">
                         {"★".repeat(r.score)}
-                        <span className="text-stone-300">{"★".repeat(5 - r.score)}</span> <span className="text-xs text-stone-500">{r.score}/5</span>
+                        <span className="text-neutral-300">{"★".repeat(5 - r.score)}</span> <span className="text-xs text-neutral-500">{r.score}/5</span>
                       </p>
-                      <p className="text-[11px] font-medium text-stone-500">
+                      <p className="text-[11px] font-medium text-neutral-500">
                         {r.brand.name} · {r.campaign.name} · {formatDate(r.createdAt)}
                       </p>
                     </div>
@@ -352,17 +352,17 @@ export function CreatorBadgesDialog({ creatorId, creatorName, onClose, onChanged
                       disabled={busy}
                       className={cn(
                         "px-3 py-1.5 rounded-full text-xs font-semibold border shrink-0",
-                        r.hidden ? "bg-white text-stone-800 border-stone-200" : "bg-red-50 text-red-700 border-red-200"
+                        r.hidden ? "bg-white text-neutral-800 border-neutral-200" : "bg-red-50 text-red-700 border-red-200"
                       )}
                     >
                       {r.hidden ? "Unhide" : "Hide"}
                     </button>
                   </div>
-                  {r.comment && <p className="text-xs font-medium text-stone-700 leading-relaxed">&ldquo;{r.comment}&rdquo;</p>}
+                  {r.comment && <p className="text-xs font-medium text-neutral-700 leading-relaxed">&ldquo;{r.comment}&rdquo;</p>}
                   {r.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {r.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 rounded-full bg-stone-100 text-[10px] font-medium text-stone-600">
+                        <span key={tag} className="px-2 py-0.5 rounded-full bg-neutral-100 text-[10px] font-medium text-neutral-600">
                           {TAG_LABELS[tag] || tag}
                         </span>
                       ))}
@@ -442,14 +442,14 @@ interface NoteModalProps {
 function NoteModal({ title, description, noteLabel, confirmLabel, danger, requireNote, busy, onCancel, onConfirm }: NoteModalProps) {
   const [note, setNote] = React.useState("");
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-950/40 px-4" onClick={(e) => { e.stopPropagation(); if (!busy) onCancel(); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="note-modal-heading" className="bg-white border border-stone-200 rounded-3xl p-8 max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-        <h4 id="note-modal-heading" className="font-medium text-lg text-stone-900">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-neutral-950/40 px-4" onClick={(e) => { e.stopPropagation(); if (!busy) onCancel(); }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="note-modal-heading" className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-md w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+        <h4 id="note-modal-heading" className="font-medium text-lg text-neutral-900">
           {title}
         </h4>
-        <p className="text-xs text-stone-500 font-medium leading-relaxed">{description}</p>
+        <p className="text-xs text-neutral-500 font-medium leading-relaxed">{description}</p>
         <div className="space-y-1.5">
-          <label htmlFor="note-modal-note" className="text-[11px] font-medium text-stone-500">
+          <label htmlFor="note-modal-note" className="text-[11px] font-medium text-neutral-500">
             {noteLabel}
           </label>
           <textarea
@@ -457,18 +457,18 @@ function NoteModal({ title, description, noteLabel, confirmLabel, danger, requir
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-900 focus:outline-none focus:border-stone-400 resize-none min-h-[88px]"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-medium text-neutral-900 focus:outline-none focus:border-neutral-400 resize-none min-h-[88px]"
           />
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={onCancel} disabled={busy} className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-semibold text-xs disabled:opacity-50">
+          <button type="button" onClick={onCancel} disabled={busy} className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-semibold text-xs disabled:opacity-50">
             Cancel
           </button>
           <button
             type="button"
             onClick={() => onConfirm(note.trim())}
             disabled={busy || (requireNote && !note.trim())}
-            className={cn("flex-1 py-2.5 rounded-full font-semibold text-xs text-white disabled:opacity-50", danger ? "bg-red-600" : "bg-stone-900")}
+            className={cn("flex-1 py-2.5 rounded-full font-semibold text-xs text-white disabled:opacity-50", danger ? "bg-red-600" : "bg-neutral-900")}
           >
             {busy ? "Saving…" : confirmLabel}
           </button>

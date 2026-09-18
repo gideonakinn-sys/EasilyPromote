@@ -129,17 +129,17 @@ export default function AdminVerificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="pb-6 border-b border-stone-200 mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Verifications & Creator Moderation</h1>
-          <p className="text-sm text-stone-500 mt-1">Audit creator video submissions, verify metrics, and resolve appeals</p>
+        <header className="pb-6 border-b border-neutral-200 mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Verifications & Creator Moderation</h1>
+          <p className="text-sm text-neutral-500 mt-1">Audit creator video submissions, verify metrics, and resolve appeals</p>
         </header>
 
         {/* Navigation Tabs */}
-        <div className="flex gap-2 border-b border-stone-200 mb-6">
+        <div className="flex gap-2 border-b border-neutral-200 mb-6">
           {[
             { key: "pending", label: "Pending Review" },
             { key: "appeals", label: "Creator Appeals" },
@@ -151,8 +151,8 @@ export default function AdminVerificationsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 ${
                 activeTab === tab.key
-                  ? "border-[#FEB604] text-stone-900"
-                  : "border-transparent text-stone-400 hover:text-stone-700"
+                  ? "border-[#FEB604] text-neutral-900"
+                  : "border-transparent text-neutral-400 hover:text-neutral-700"
               }`}
             >
               {tab.label}
@@ -161,9 +161,9 @@ export default function AdminVerificationsPage() {
         </div>
 
         {/* Submissions List */}
-        <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs text-stone-700">
-            <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+        <div className="bg-white border border-neutral-200/90 rounded-2xl shadow-sm overflow-hidden">
+          <table className="w-full text-left text-xs text-neutral-700">
+            <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
               <tr>
                 <th className="px-6 py-4">Creator</th>
                 <th className="px-6 py-4">Campaign</th>
@@ -173,35 +173,35 @@ export default function AdminVerificationsPage() {
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-neutral-100">
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-28" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-36" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-48" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-16" /></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-stone-200 rounded w-20 ml-auto" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-28" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-36" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-48" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-16" /></td>
+                    <td className="px-6 py-4"><div className="h-4 bg-neutral-200 rounded w-20 ml-auto" /></td>
                   </tr>
                 ))
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
+                  <td colSpan={6} className="px-6 py-12 text-center text-neutral-400">
                     No submissions in this queue.
                   </td>
                 </tr>
               ) : (
                 submissions.map((sub) => (
-                  <tr key={sub.id} className="hover:bg-stone-50/80 transition-colors">
-                    <td className="px-6 py-4 font-bold text-stone-900">
+                  <tr key={sub.id} className="hover:bg-neutral-50/80 transition-colors">
+                    <td className="px-6 py-4 font-bold text-neutral-900">
                       <div>
                         <p className="text-sm">{sub.creatorName}</p>
-                        <span className="text-[11px] text-stone-400 font-mono">@{sub.creatorHandle}</span>
+                        <span className="text-[11px] text-neutral-400 font-mono">@{sub.creatorHandle}</span>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4 font-semibold text-stone-800">
+                    <td className="px-6 py-4 font-semibold text-neutral-800">
                       <div>
                         <p>{sub.campaignName}</p>
                         <Link
@@ -222,7 +222,7 @@ export default function AdminVerificationsPage() {
                           <span>▶ View Submission Link</span>
                         </button>
                       ) : (
-                        <span className="text-stone-400 italic">No link provided</span>
+                        <span className="text-neutral-400 italic">No link provided</span>
                       )}
                     </td>
 
@@ -245,7 +245,7 @@ export default function AdminVerificationsPage() {
                           : sub.status === "approved" || sub.status === "posted" || sub.status === "awaiting_post"
                           ? "bg-green-100 text-green-800"
                           : sub.status === "rejected"
-                          ? "bg-stone-200 text-stone-700"
+                          ? "bg-neutral-200 text-neutral-700"
                           : "bg-amber-100 text-amber-800"
                       }`}>
                         {sub.status}
@@ -260,7 +260,7 @@ export default function AdminVerificationsPage() {
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => setSelectedSubmission(sub)}
-                        className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                        className="px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
                       >
                         Inspect
                       </button>
@@ -274,25 +274,25 @@ export default function AdminVerificationsPage() {
 
         {/* Modal */}
         {selectedSubmission && (
-          <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink">
-            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-stone-200">
-              <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-6">
+          <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink">
+            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-neutral-200">
+              <div className="flex items-center justify-between pb-4 border-b border-neutral-200 mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-stone-900">Submission Verification</h3>
-                  <p className="text-xs text-stone-500">Creator: @{selectedSubmission.creatorHandle}</p>
+                  <h3 className="text-xl font-bold text-neutral-900">Submission Verification</h3>
+                  <p className="text-xs text-neutral-500">Creator: @{selectedSubmission.creatorHandle}</p>
                 </div>
                 <button
                   onClick={() => setSelectedSubmission(null)}
-                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-600 font-bold"
+                  className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-600 font-bold"
                 >
                   ✕
                 </button>
               </div>
 
               <div className="space-y-4 text-xs">
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
-                  <span className="font-bold text-stone-700 block mb-1">Campaign:</span>
-                  <span className="text-stone-900 text-sm font-semibold">{selectedSubmission.campaignName}</span>
+                <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200">
+                  <span className="font-bold text-neutral-700 block mb-1">Campaign:</span>
+                  <span className="text-neutral-900 text-sm font-semibold">{selectedSubmission.campaignName}</span>
                 </div>
 
                 {selectedSubmission.appealReason && (
@@ -303,25 +303,25 @@ export default function AdminVerificationsPage() {
                 )}
 
                 <div>
-                  <label className="font-bold text-stone-700 block mb-1">Admin Notes / Feedback</label>
+                  <label className="font-bold text-neutral-700 block mb-1">Admin Notes / Feedback</label>
                   <textarea
                     rows={3}
                     value={adminNotes}
                     onChange={(e) => setAdminNotes(e.target.value)}
                     placeholder="Enter internal notes or feedback..."
-                    className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900"
+                    className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
 
                 {selectedSubmission.status !== "approved" && (
                   <div>
-                    <label className="font-bold text-stone-700 block mb-1">Rejection Reason (required to reject)</label>
+                    <label className="font-bold text-neutral-700 block mb-1">Rejection Reason (required to reject)</label>
                     <input
                       type="text"
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
                       placeholder="e.g., Content violates brief guidelines..."
-                      className="w-full p-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-stone-900"
+                      className="w-full p-3 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900"
                     />
                     {!rejectReason.trim() && (
                       <p className="mt-1 text-[11px] text-red-600 font-medium">A reason is required before you can reject this submission.</p>
@@ -329,7 +329,7 @@ export default function AdminVerificationsPage() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-stone-200 flex justify-end gap-3">
+                <div className="pt-4 border-t border-neutral-200 flex justify-end gap-3">
                   {selectedSubmission.status === "appealed" ? (
                     <>
                       <button
@@ -374,20 +374,20 @@ export default function AdminVerificationsPage() {
         {/* Video Preview Modal */}
         {previewUrl && (
           <div
-            className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink"
+            className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 font-rethink"
             onClick={() => setPreviewUrl(null)}
           >
             <div
-              className="bg-stone-950 rounded-2xl border border-stone-800 max-w-3xl w-full overflow-hidden"
+              className="bg-neutral-950 rounded-2xl border border-neutral-800 max-w-3xl w-full overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between px-5 py-3 border-b border-stone-800">
-                <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800">
+                <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">
                   Submission Preview
                 </span>
                 <button
                   onClick={() => setPreviewUrl(null)}
-                  className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-300 font-bold"
+                  className="w-8 h-8 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center text-neutral-300 font-bold"
                 >
                   ✕
                 </button>

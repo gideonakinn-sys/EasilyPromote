@@ -43,16 +43,16 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-stone-500">{label}</span>
+      <span className="mb-1.5 block text-xs font-medium text-neutral-500">{label}</span>
       {children}
     </label>
   );
 }
 
 const inputClass =
-  "w-full rounded-full border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-900 placeholder-stone-400 outline-none focus:border-stone-400";
+  "w-full rounded-full border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-900 placeholder-neutral-400 outline-none focus:border-neutral-400";
 const textareaClass =
-  "w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium text-stone-900 placeholder-stone-400 outline-none focus:border-stone-400";
+  "w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-900 placeholder-neutral-400 outline-none focus:border-neutral-400";
 
 export function SettingsView() {
   useBrandGuard();
@@ -150,10 +150,10 @@ export function SettingsView() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h2 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">
+        <h2 className="font-rethink font-semibold text-lg text-neutral-900 tracking-tight">
           Settings
         </h2>
-        <p className="mt-1 text-xs font-medium text-stone-500">Your company profile and workspace details.</p>
+        <p className="mt-1 text-xs font-medium text-neutral-500">Your company profile and workspace details.</p>
       </div>
 
       {loading ? (
@@ -162,18 +162,18 @@ export function SettingsView() {
           <Skeleton className="h-64 rounded-2xl" />
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-stone-100 bg-white p-8 text-center">
-          <p className="text-sm font-medium text-stone-900">Settings didn&apos;t load</p>
-          <p className="mt-1 text-xs font-medium text-stone-500">{error}</p>
+        <div className="rounded-2xl border border-neutral-100 bg-white p-8 text-center">
+          <p className="text-sm font-medium text-neutral-900">Settings didn&apos;t load</p>
+          <p className="mt-1 text-xs font-medium text-neutral-500">{error}</p>
         </div>
       ) : (
         profile && (
           <>
             {/* Verification */}
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 bg-white p-5">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-100 bg-white p-5">
               <div>
-                <p className="text-sm font-semibold text-stone-900">Verification</p>
-                <p className="mt-0.5 text-xs font-medium text-stone-500">
+                <p className="text-sm font-semibold text-neutral-900">Verification</p>
+                <p className="mt-0.5 text-xs font-medium text-neutral-500">
                   {profile.verificationStatus === "verified"
                     ? "Your business is verified."
                     : profile.verificationStatus === "rejected"
@@ -184,7 +184,7 @@ export function SettingsView() {
               <span
                 className={cn(
                   "rounded-full px-2.5 py-1 text-[11px] font-medium capitalize",
-                  VERIFICATION_STYLES[profile.verificationStatus] || "bg-stone-100 text-stone-600"
+                  VERIFICATION_STYLES[profile.verificationStatus] || "bg-neutral-100 text-neutral-600"
                 )}
               >
                 {profile.verificationStatus}
@@ -192,15 +192,15 @@ export function SettingsView() {
             </div>
 
             {/* Company profile */}
-            <div className="rounded-2xl border border-stone-100 bg-white p-5">
-              <h3 className="mb-4 text-sm font-semibold text-stone-900">Company profile</h3>
+            <div className="rounded-2xl border border-neutral-100 bg-white p-5">
+              <h3 className="mb-4 text-sm font-semibold text-neutral-900">Company profile</h3>
 
               <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-stone-100">
+                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-neutral-100">
                   {form.logo ? (
                     <Image src={form.logo} alt="Company logo" width={56} height={56} className="h-full w-full object-cover" unoptimized />
                   ) : (
-                    <span className="text-lg font-semibold text-stone-400">
+                    <span className="text-lg font-semibold text-neutral-400">
                       {(form.companyName || "C")[0]?.toUpperCase()}
                     </span>
                   )}
@@ -209,7 +209,7 @@ export function SettingsView() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-900 disabled:opacity-50"
+                  className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-900 disabled:opacity-50"
                 >
                   {uploading ? "Uploading…" : form.logo ? "Change logo" : "Upload logo"}
                 </button>
@@ -244,29 +244,29 @@ export function SettingsView() {
               <button
                 onClick={handleSave}
                 disabled={saving || !form.companyName.trim()}
-                className="mt-6 rounded-full bg-[#FEB604] px-6 py-2.5 text-sm font-semibold text-[#1C1917] border border-stone-100 disabled:bg-stone-200 disabled:text-stone-400"
+                className="mt-6 rounded-full bg-[#FEB604] px-6 py-2.5 text-sm font-semibold text-[#171717] border border-neutral-100 disabled:bg-neutral-200 disabled:text-neutral-400"
               >
                 {saving ? "Saving…" : "Save changes"}
               </button>
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 bg-white p-5">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-100 bg-white p-5">
               <div className="flex items-center gap-3">
-                <HugeiconsIcon icon={Link01Icon} size={18} className="text-stone-400" />
+                <HugeiconsIcon icon={Link01Icon} size={18} className="text-neutral-400" />
                 <div>
-                  <p className="text-sm font-semibold text-stone-900">Referral tracking</p>
-                  <p className="mt-0.5 text-xs font-medium text-stone-500">Webhook keys and conversion settings.</p>
+                  <p className="text-sm font-semibold text-neutral-900">Referral tracking</p>
+                  <p className="mt-0.5 text-xs font-medium text-neutral-500">Webhook keys and conversion settings.</p>
                 </div>
               </div>
               <button
                 onClick={() => router.push("/dashboard/brand/settings/referral")}
-                className="rounded-full border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-900"
+                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-900"
               >
                 Manage
               </button>
             </div>
 
-            <p className="text-xs font-medium text-stone-500">
+            <p className="text-xs font-medium text-neutral-500">
               Contact: {profile.contactName || "—"} · {profile.contactEmail || "—"}
             </p>
 
@@ -276,8 +276,8 @@ export function SettingsView() {
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={Logout01Icon} size={18} className="text-red-500" />
                   <div>
-                    <p className="text-sm font-semibold text-stone-900">Account</p>
-                    <p className="mt-0.5 text-xs font-medium text-stone-500">Sign out of your brand workspace.</p>
+                    <p className="text-sm font-semibold text-neutral-900">Account</p>
+                    <p className="mt-0.5 text-xs font-medium text-neutral-500">Sign out of your brand workspace.</p>
                   </div>
                 </div>
                 <button

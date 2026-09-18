@@ -3,7 +3,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { STATUS_LABELS } from "../../lib/brand";
 
 const STATUS_STYLES: Record<string, string> = {
-  draft: "bg-stone-100 text-stone-600",
+  draft: "bg-neutral-100 text-neutral-600",
   pending_payment: "bg-amber-50 text-amber-700",
   under_review: "bg-blue-50 text-blue-700",
   live: "bg-[#CBF5E5] text-[#176448]",
@@ -22,7 +22,7 @@ export function StatusChip({ status, className }: StatusChipProps) {
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium capitalize",
-        STATUS_STYLES[status] || "bg-stone-100 text-stone-600",
+        STATUS_STYLES[status] || "bg-neutral-100 text-neutral-600",
         className
       )}
     >

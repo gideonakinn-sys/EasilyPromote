@@ -41,7 +41,7 @@ export function CreatorRatings({ campaignId }: CreatorRatingsProps) {
 
   if (error) {
     return (
-      <div className="border border-stone-200 rounded-2xl p-4 font-rethink">
+      <div className="border border-neutral-200 rounded-2xl p-4 font-rethink">
         <p className="text-xs font-medium text-red-600">{error}</p>
       </div>
     );
@@ -49,23 +49,23 @@ export function CreatorRatings({ campaignId }: CreatorRatingsProps) {
   if (!data || data.creators.length === 0) return null;
 
   return (
-    <div className="border border-stone-200 rounded-2xl p-4 space-y-4 font-rethink" data-testid="creator-ratings">
+    <div className="border border-neutral-200 rounded-2xl p-4 space-y-4 font-rethink" data-testid="creator-ratings">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-stone-900">Rate Your Creators</h3>
+          <h3 className="text-sm font-medium text-neutral-900">Rate Your Creators</h3>
           {data.toRate > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#FEB604] text-stone-950">{data.toRate} To Rate</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#FEB604] text-neutral-950">{data.toRate} To Rate</span>
           )}
         </div>
-        <p className="text-xs font-medium text-stone-500 leading-relaxed">
+        <p className="text-xs font-medium text-neutral-500 leading-relaxed">
           How was working with them? Other brands see each creator&apos;s average, never who rated or what you wrote.
         </p>
       </div>
 
-      <div className="divide-y divide-stone-100">
+      <div className="divide-y divide-neutral-100">
         {data.creators.map((creator) => (
           <div key={creator.creatorId} className="flex items-center gap-3 py-3">
-            <div className="w-9 h-9 rounded-full bg-stone-200 overflow-hidden flex items-center justify-center text-xs font-medium text-stone-600 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-neutral-200 overflow-hidden flex items-center justify-center text-xs font-medium text-neutral-600 shrink-0">
               {creator.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={creator.avatar} alt="" className="w-full h-full object-cover" />
@@ -74,8 +74,8 @@ export function CreatorRatings({ campaignId }: CreatorRatingsProps) {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-stone-900 truncate">{creator.name}</p>
-              <p className="text-[11px] font-medium text-stone-500 truncate">
+              <p className="text-sm font-medium text-neutral-900 truncate">{creator.name}</p>
+              <p className="text-[11px] font-medium text-neutral-500 truncate">
                 {creator.rating?.hidden
                   ? "Your rating was hidden by our team"
                   : creator.rating
@@ -94,7 +94,7 @@ export function CreatorRatings({ campaignId }: CreatorRatingsProps) {
                     key={star}
                     icon={StarIcon}
                     size={12}
-                    className={cn(star <= creator.rating!.score ? "text-[#D97706] fill-[#FEB604]" : "text-stone-300 fill-transparent")}
+                    className={cn(star <= creator.rating!.score ? "text-[#D97706] fill-[#FEB604]" : "text-neutral-300 fill-transparent")}
                   />
                 ))}
               </span>
@@ -105,7 +105,7 @@ export function CreatorRatings({ campaignId }: CreatorRatingsProps) {
                 onClick={() => setRating(creator)}
                 className={cn(
                   "px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 border",
-                  creator.rating ? "bg-white text-stone-900 border-stone-200" : "bg-[#FEB604] text-stone-950 border-stone-100"
+                  creator.rating ? "bg-white text-neutral-900 border-neutral-200" : "bg-[#FEB604] text-neutral-950 border-neutral-100"
                 )}
               >
                 {creator.rating ? "Edit" : "Rate"}
@@ -180,7 +180,7 @@ function RateCreatorModal({ campaignId, creator, tags, onClose, onSaved }: RateC
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-stone-900/40 backdrop-blur-sm flex items-center justify-center px-6"
+      className="fixed inset-0 z-[100] bg-neutral-900/40 backdrop-blur-sm flex items-center justify-center px-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="rate-creator-title"
@@ -188,10 +188,10 @@ function RateCreatorModal({ campaignId, creator, tags, onClose, onSaved }: RateC
     >
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 font-rethink" onClick={(e) => e.stopPropagation()}>
         <div className="space-y-1 text-center">
-          <h3 id="rate-creator-title" className="font-medium text-base text-stone-900">
+          <h3 id="rate-creator-title" className="font-medium text-base text-neutral-900">
             {creator.rating ? `Change Your Rating Of ${creator.name}` : `Rate ${creator.name}`}
           </h3>
-          <p className="text-xs text-stone-500 font-medium leading-relaxed">
+          <p className="text-xs text-neutral-500 font-medium leading-relaxed">
             You can change it for 7 days. The creator sees their average, never who rated or your comment.
           </p>
         </div>
@@ -208,7 +208,7 @@ function RateCreatorModal({ campaignId, creator, tags, onClose, onSaved }: RateC
               aria-pressed={selected.includes(tag.value)}
               className={cn(
                 "px-3 py-1.5 rounded-full text-xs font-medium border",
-                selected.includes(tag.value) ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200"
+                selected.includes(tag.value) ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-600 border-neutral-200"
               )}
             >
               {tag.label}
@@ -217,7 +217,7 @@ function RateCreatorModal({ campaignId, creator, tags, onClose, onSaved }: RateC
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="rate-creator-comment" className="text-xs font-medium text-stone-500">
+          <label htmlFor="rate-creator-comment" className="text-xs font-medium text-neutral-500">
             Comment (Optional)
           </label>
           <textarea
@@ -227,23 +227,23 @@ function RateCreatorModal({ campaignId, creator, tags, onClose, onSaved }: RateC
             maxLength={COMMENT_MAX}
             disabled={busy}
             placeholder="What went well, or what could be better?"
-            className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-900 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none min-h-[88px]"
+            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-medium text-neutral-900 placeholder-neutral-300 focus:outline-none focus:border-neutral-400 resize-none min-h-[88px]"
           />
-          <p className="text-[10px] font-medium text-stone-400 text-right">
+          <p className="text-[10px] font-medium text-neutral-400 text-right">
             {comment.length}/{COMMENT_MAX}
           </p>
         </div>
 
         {error && <p className="text-xs font-medium text-red-600 text-center">{error}</p>}
         <div className="flex gap-3 pt-1">
-          <button type="button" onClick={onClose} disabled={busy} className="flex-1 py-2.5 bg-stone-100 text-stone-900 font-semibold text-sm rounded-full disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={busy} className="flex-1 py-2.5 bg-neutral-100 text-neutral-900 font-semibold text-sm rounded-full disabled:opacity-50">
             Cancel
           </button>
           <button
             type="button"
             onClick={save}
             disabled={busy || score < 1}
-            className="flex-1 py-2.5 font-semibold text-sm rounded-full border bg-[#FEB604] text-stone-900 border-stone-100 disabled:opacity-50"
+            className="flex-1 py-2.5 font-semibold text-sm rounded-full border bg-[#FEB604] text-neutral-900 border-neutral-100 disabled:opacity-50"
           >
             {busy ? "Saving…" : creator.rating ? "Save Rating" : "Submit Rating"}
           </button>

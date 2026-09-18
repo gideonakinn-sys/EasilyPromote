@@ -189,13 +189,13 @@ export default function PayoutRunPage() {
   const balanceShort = run && run.paystackBalance !== null && run.paystackBalance < selectedTotal;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex font-rethink">
+    <div className="min-h-screen bg-[#fafafa] flex font-rethink">
       <Sidebar />
 
       <main className="flex-1 p-8 overflow-y-auto min-w-0">
-        <header className="pb-6 border-b border-stone-200 mb-6">
-          <h1 className="text-2xl font-bold text-stone-900 tracking-tight">Weekly Payout Run</h1>
-          <p className="text-sm text-stone-500 mt-1">
+        <header className="pb-6 border-b border-neutral-200 mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Weekly Payout Run</h1>
+          <p className="text-sm text-neutral-500 mt-1">
             {run
               ? `Withdrawals requested before ${payoutDay(run.dueBefore)}, grouped by campaign. Requests made since then are paid on ${payoutDay(run.nextPayoutDate)}.`
               : "Creators withdraw once a week per campaign; everything due is paid here in one run."}
@@ -206,27 +206,27 @@ export default function PayoutRunPage() {
 
         {run && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-5">
-              <span className="text-xs font-semibold text-stone-500 block mb-1">Due now</span>
-              <span className="text-2xl font-bold text-stone-900">{naira(run.totals.amount)}</span>
-              <span className="text-[11px] text-stone-400 block mt-1">{run.totals.count} withdrawal{run.totals.count === 1 ? "" : "s"}</span>
+            <div className="bg-white border border-neutral-200/90 rounded-2xl p-5">
+              <span className="text-xs font-semibold text-neutral-500 block mb-1">Due now</span>
+              <span className="text-2xl font-bold text-neutral-900">{naira(run.totals.amount)}</span>
+              <span className="text-[11px] text-neutral-400 block mt-1">{run.totals.count} withdrawal{run.totals.count === 1 ? "" : "s"}</span>
             </div>
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-5">
-              <span className="text-xs font-semibold text-stone-500 block mb-1">Paystack fees (est.)</span>
-              <span className="text-2xl font-bold text-stone-900">{naira(run.totals.estimatedFees)}</span>
-              <span className="text-[11px] text-stone-400 block mt-1">Covered by the platform fee</span>
+            <div className="bg-white border border-neutral-200/90 rounded-2xl p-5">
+              <span className="text-xs font-semibold text-neutral-500 block mb-1">Paystack fees (est.)</span>
+              <span className="text-2xl font-bold text-neutral-900">{naira(run.totals.estimatedFees)}</span>
+              <span className="text-[11px] text-neutral-400 block mt-1">Covered by the platform fee</span>
             </div>
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-5">
-              <span className="text-xs font-semibold text-stone-500 block mb-1">Paystack balance</span>
-              <span className={`text-2xl font-bold ${balanceShort ? "text-red-600" : "text-stone-900"}`}>
+            <div className="bg-white border border-neutral-200/90 rounded-2xl p-5">
+              <span className="text-xs font-semibold text-neutral-500 block mb-1">Paystack balance</span>
+              <span className={`text-2xl font-bold ${balanceShort ? "text-red-600" : "text-neutral-900"}`}>
                 {run.paystackBalance === null ? "Unavailable" : naira(run.paystackBalance)}
               </span>
-              <span className="text-[11px] text-stone-400 block mt-1">{balanceShort ? "Doesn't cover the selected payouts" : "Funds every transfer"}</span>
+              <span className="text-[11px] text-neutral-400 block mt-1">{balanceShort ? "Doesn't cover the selected payouts" : "Funds every transfer"}</span>
             </div>
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-5">
-              <span className="text-xs font-semibold text-stone-500 block mb-1">Next run</span>
-              <span className="text-2xl font-bold text-stone-900">{naira(run.upcoming.amount)}</span>
-              <span className="text-[11px] text-stone-400 block mt-1">
+            <div className="bg-white border border-neutral-200/90 rounded-2xl p-5">
+              <span className="text-xs font-semibold text-neutral-500 block mb-1">Next run</span>
+              <span className="text-2xl font-bold text-neutral-900">{naira(run.upcoming.amount)}</span>
+              <span className="text-[11px] text-neutral-400 block mt-1">
                 {run.upcoming.count} requested for {payoutDay(run.nextPayoutDate)}
               </span>
             </div>
@@ -257,16 +257,16 @@ export default function PayoutRunPage() {
         )}
 
         {run && run.groups.length > 0 && (
-          <div className="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 bg-[#FAFAF9] py-2">
-            <span className="text-sm text-stone-600">
-              {selected.size} selected · <span className="font-semibold text-stone-900">{naira(selectedTotal)}</span> · est. fees {naira(selectedFees)}
+          <div className="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 bg-[#fafafa] py-2">
+            <span className="text-sm text-neutral-600">
+              {selected.size} selected · <span className="font-semibold text-neutral-900">{naira(selectedTotal)}</span> · est. fees {naira(selectedFees)}
             </span>
             <div className="flex items-center gap-3">
-              {!canPay && <span className="text-[11px] text-stone-500">Only finance admins and super admins can pay or reject</span>}
+              {!canPay && <span className="text-[11px] text-neutral-500">Only finance admins and super admins can pay or reject</span>}
               <button
                 onClick={() => setConfirmIds([...selected])}
                 disabled={selected.size === 0 || !canPay}
-                className="px-5 py-2.5 rounded-full text-xs font-semibold bg-green-600 text-white disabled:bg-stone-200 disabled:text-stone-400"
+                className="px-5 py-2.5 rounded-full text-xs font-semibold bg-green-600 text-white disabled:bg-neutral-200 disabled:text-neutral-400"
               >
                 Pay selected
               </button>
@@ -275,11 +275,11 @@ export default function PayoutRunPage() {
         )}
 
         {loading ? (
-          <p className="text-sm text-stone-400">Loading…</p>
+          <p className="text-sm text-neutral-400">Loading…</p>
         ) : run && run.groups.length === 0 ? (
-          <div className="bg-white border border-dashed border-stone-300 rounded-2xl p-10 text-center">
-            <p className="text-sm font-semibold text-stone-900">Nothing due right now</p>
-            <p className="text-xs text-stone-500 mt-1">
+          <div className="bg-white border border-dashed border-neutral-300 rounded-2xl p-10 text-center">
+            <p className="text-sm font-semibold text-neutral-900">Nothing due right now</p>
+            <p className="text-xs text-neutral-500 mt-1">
               {run.upcoming.count > 0
                 ? `${run.upcoming.count} withdrawal${run.upcoming.count === 1 ? " is" : "s are"} due on ${payoutDay(run.nextPayoutDate)}.`
                 : "New requests show up here once their payout day arrives."}
@@ -290,11 +290,11 @@ export default function PayoutRunPage() {
             {run?.groups.map((group) => {
               const allSelected = group.lines.every((line) => selected.has(line.id));
               return (
-                <section key={group.campaignId || group.campaignName} className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden">
-                  <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+                <section key={group.campaignId || group.campaignName} className="bg-white border border-neutral-200/90 rounded-2xl overflow-hidden">
+                  <div className="p-4 bg-neutral-50 border-b border-neutral-200 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h2 className="font-bold text-sm text-stone-900">{group.campaignName}</h2>
-                      <p className="text-[11px] text-stone-500">
+                      <h2 className="font-bold text-sm text-neutral-900">{group.campaignName}</h2>
+                      <p className="text-[11px] text-neutral-500">
                         {group.brandName} · {group.campaignStatus || "unknown"} · views escrow {naira(group.viewsEscrow)} · referral budget{" "}
                         {naira(group.referralEscrow)}
                         {(group.fixedEscrow ?? 0) > 0 && ` · fixed pay owed ${naira(group.fixedEscrow ?? 0)}`}
@@ -302,18 +302,18 @@ export default function PayoutRunPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="text-xs text-stone-600">
+                      <span className="text-xs text-neutral-600">
                         {naira(group.amount)} · est. fees {naira(group.estimatedFees)}
                       </span>
-                      <label className="flex items-center gap-2 text-xs font-semibold text-stone-700">
-                        <input type="checkbox" checked={allSelected} onChange={() => toggleGroup(group)} className="w-4 h-4 accent-stone-900" />
+                      <label className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
+                        <input type="checkbox" checked={allSelected} onChange={() => toggleGroup(group)} className="w-4 h-4 accent-neutral-900" />
                         Select campaign
                       </label>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-stone-700">
-                      <thead className="bg-stone-50 border-b border-stone-200 font-bold uppercase tracking-wider text-[10px] text-stone-500">
+                    <table className="w-full text-left text-xs text-neutral-700">
+                      <thead className="bg-neutral-50 border-b border-neutral-200 font-bold uppercase tracking-wider text-[10px] text-neutral-500">
                         <tr>
                           <th className="px-6 py-3 w-10"><span className="sr-only">Select</span></th>
                           <th className="px-6 py-3">Creator</th>
@@ -327,7 +327,7 @@ export default function PayoutRunPage() {
                           <th className="px-6 py-3"><span className="sr-only">Actions</span></th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-stone-100">
+                      <tbody className="divide-y divide-neutral-100">
                         {group.lines.map((line) => (
                           <tr key={line.id} className="align-top">
                             <td className="px-6 py-4">
@@ -336,21 +336,21 @@ export default function PayoutRunPage() {
                                 aria-label={`Pay ${line.creatorName}`}
                                 checked={selected.has(line.id)}
                                 onChange={() => toggleLine(line.id)}
-                                className="w-4 h-4 accent-stone-900"
+                                className="w-4 h-4 accent-neutral-900"
                               />
                             </td>
                             <td className="px-6 py-4">
-                              <p className="font-semibold text-stone-800">{line.creatorName}</p>
+                              <p className="font-semibold text-neutral-800">{line.creatorName}</p>
                               {line.attempts > 0 && <p className="text-[11px] text-amber-700">{line.attempts} earlier attempt{line.attempts === 1 ? "" : "s"}</p>}
-                              {line.adminNotes && <p className="text-[11px] text-stone-400 max-w-xs">{line.adminNotes}</p>}
+                              {line.adminNotes && <p className="text-[11px] text-neutral-400 max-w-xs">{line.adminNotes}</p>}
                             </td>
                             <td className="px-6 py-4 font-mono">{naira(line.viewsAmount)}</td>
                             <td className="px-6 py-4 font-mono">{naira(line.referralAmount)}</td>
                             <td className="px-6 py-4 font-mono">{naira(line.fixedAmount ?? 0)}</td>
                             <td className="px-6 py-4 font-mono">{naira(line.bonusAmount ?? 0)}</td>
-                            <td className="px-6 py-4 font-mono font-bold text-stone-900">{naira(line.amount)}</td>
-                            <td className="px-6 py-4 font-mono text-stone-500">{naira(line.estimatedFee)}</td>
-                            <td className="px-6 py-4 text-stone-500 whitespace-nowrap">
+                            <td className="px-6 py-4 font-mono font-bold text-neutral-900">{naira(line.amount)}</td>
+                            <td className="px-6 py-4 font-mono text-neutral-500">{naira(line.estimatedFee)}</td>
+                            <td className="px-6 py-4 text-neutral-500 whitespace-nowrap">
                               {new Date(line.requestedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                             </td>
                             <td className="px-6 py-4">
@@ -380,21 +380,21 @@ export default function PayoutRunPage() {
 
       {confirmIds && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4"
           onClick={() => !approving && setConfirmIds(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="pay-run-heading"
-            className="bg-white border border-stone-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
+            className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-1.5">
-              <h3 id="pay-run-heading" className="font-medium text-lg text-stone-900">
+              <h3 id="pay-run-heading" className="font-medium text-lg text-neutral-900">
                 Pay {confirmIds.length} withdrawal{confirmIds.length === 1 ? "" : "s"}?
               </h3>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 {naira(selectedTotal)} goes to creators&apos; bank accounts through Paystack, one transfer per campaign withdrawal.
                 Estimated Paystack fees of {naira(selectedFees)} are recorded against each campaign.
               </p>
@@ -407,7 +407,7 @@ export default function PayoutRunPage() {
                 type="button"
                 onClick={() => setConfirmIds(null)}
                 disabled={approving}
-                className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-medium text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-medium text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -426,7 +426,7 @@ export default function PayoutRunPage() {
 
       {rejectLine && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-sm px-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/40 backdrop-blur-sm px-4"
           onClick={() => !rejecting && setRejectLine(null)}
         >
           <form
@@ -435,18 +435,18 @@ export default function PayoutRunPage() {
             aria-labelledby="reject-heading"
             onSubmit={reject}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-stone-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
+            className="bg-white border border-neutral-200 rounded-3xl p-8 max-w-sm w-full space-y-5"
           >
             <div className="space-y-1.5">
-              <h3 id="reject-heading" className="font-medium text-lg text-stone-900">
+              <h3 id="reject-heading" className="font-medium text-lg text-neutral-900">
                 Reject {rejectLine.creatorName}&apos;s {naira(rejectLine.amount)}?
               </h3>
-              <p className="text-xs text-stone-500 font-medium leading-relaxed">
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 Nothing is paid. The creator is told why and can withdraw from this campaign again this week.
               </p>
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="reject-note" className="text-xs font-medium text-stone-500">
+              <label htmlFor="reject-note" className="text-xs font-medium text-neutral-500">
                 Reason (required)
               </label>
               <textarea
@@ -455,7 +455,7 @@ export default function PayoutRunPage() {
                 onChange={(e) => setRejectNote(e.target.value)}
                 rows={3}
                 maxLength={1000}
-                className="w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:border-stone-400 resize-none"
+                className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-900 focus:outline-none focus:border-neutral-400 resize-none"
                 placeholder="e.g. Views under review for fraud"
               />
               {rejectError && <p className="text-xs text-red-600 font-medium">{rejectError}</p>}
@@ -465,7 +465,7 @@ export default function PayoutRunPage() {
                 type="button"
                 onClick={() => setRejectLine(null)}
                 disabled={rejecting}
-                className="flex-1 py-2.5 bg-stone-50 border border-stone-200 text-stone-600 rounded-full font-medium text-xs disabled:opacity-50"
+                className="flex-1 py-2.5 bg-neutral-50 border border-neutral-200 text-neutral-600 rounded-full font-medium text-xs disabled:opacity-50"
               >
                 Cancel
               </button>
