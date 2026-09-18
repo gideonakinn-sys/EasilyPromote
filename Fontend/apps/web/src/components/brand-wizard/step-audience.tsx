@@ -3,10 +3,11 @@
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { countMatchingCreators, getToken, type MatchCount } from "../../lib/api";
-import { ChipGroup, Field, ListInput, StepHeading, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
+import { ChipGroup, Field, ListInput, OptionCard, StepHeading, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import { AudienceLocationSelect } from "../audience-location-select";
 import { canonicalAudienceLocation } from "../../lib/audience-locations";
 import {
+  ACCESS_OPTIONS,
   AGE_RANGE_OPTIONS,
   BADGE_OPTIONS,
   CREATOR_CATEGORIES,
@@ -259,6 +260,21 @@ export function StepAudience({ data, update }: StepAudienceProps) {
             maxLength={40}
           />
         </Field>
+      </div>
+
+      <div className="space-y-6">
+        <StepHeading title="How should creators join?" body="Creator Access decides whether anyone who meets your requirements can join, or creators apply and you pick." />
+        <div className="space-y-3" role="radiogroup" aria-label="Creator access">
+          {ACCESS_OPTIONS.map((option) => (
+            <OptionCard
+              key={option.value}
+              title={option.title}
+              body={option.body}
+              selected={data.creatorAccess === option.value}
+              onSelect={() => update({ creatorAccess: option.value })}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="space-y-6">

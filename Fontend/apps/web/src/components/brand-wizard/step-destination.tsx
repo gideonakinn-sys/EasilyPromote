@@ -4,7 +4,6 @@ import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { ChipGroup, Field, OptionCard, StepHeading, TEXT_INPUT_CLASS, TEXTAREA_CLASS } from "./wizard-fields";
 import {
-  ACCESS_OPTIONS,
   DESTINATION_OPTIONS,
   MAX_ADDITIONAL_TERMS,
   USAGE_DURATION_OPTIONS,
@@ -184,20 +183,6 @@ export function StepDestination({ data, update }: StepDestinationProps) {
           )}
         </div>
       )}
-
-      <div className="space-y-4">
-        <div className="space-y-3" role="radiogroup" aria-label="Creator access">
-          {ACCESS_OPTIONS.map((option) => (
-            <OptionCard
-              key={option.value}
-              title={option.title}
-              body={option.body}
-              selected={data.creatorAccess === option.value}
-              onSelect={() => update({ creatorAccess: option.value })}
-            />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

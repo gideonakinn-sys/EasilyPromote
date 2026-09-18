@@ -14,12 +14,19 @@ export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] = [
   { step: 1, title: "Campaign type", short: "Type" },
-  { step: 2, title: "Destination and access", short: "Access" },
+  { step: 2, title: "Destination", short: "Destination" },
   { step: 3, title: "Audience and creators", short: "Audience" },
   { step: 4, title: "Pay and budget", short: "Budget" },
   { step: 5, title: "Brief", short: "Brief" },
   { step: 6, title: "Review and launch", short: "Launch" },
 ];
+
+// Only Content campaigns ask where the content goes (SPEC D31), so for every other type the
+// Destination step is skipped and the wizard shows five steps. Numeric ids are kept stable so
+// saved drafts and the backend's wizardStep 1-6 contract are unaffected.
+export function activeWizardSteps(data: Pick<WizardData, "objective">): (typeof WIZARD_STEPS)[number][] {
+  return asksContentDestination(data) ? WIZARD_STEPS : WIZARD_STEPS.filter(({ step }) => step !== 2);
+}
 
 // The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
 // Hybrid is views and sign-ups together; Sign-ups alone is a referral budget with no views target
@@ -402,9 +409,7 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
         body: "",
       };
     case 2:
-      return asksContentDestination(data)
-        ? { title: "Where should the content go?", body: "Choose where approved content ends up." }
-        : { title: "How do creators get in?", body: "This is your Creator Access. You can use either with any objective." };
+      return { title: "Where should the content go?", body: "Choose where approved content ends up." };
     case 3:
       return {
         title: "Who do you want to reach?",

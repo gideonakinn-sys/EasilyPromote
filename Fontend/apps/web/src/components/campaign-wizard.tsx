@@ -23,6 +23,7 @@ import { StepLaunch } from "./brand-wizard/step-launch";
 import {
   INITIAL_WIZARD_DATA,
   WIZARD_STEPS,
+  activeWizardSteps,
   campaignPayload,
   isObjectiveAvailable,
   pricingPayload,
@@ -81,6 +82,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const connection = useReferralConnection(referral && step === LAST_STEP);
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];
+  // The steps a campaign actually shows: Destination drops out except for Content campaigns.
+  const steps = activeWizardSteps(data);
   // Step 1: Continue stays off until a type, name, cover image and industry are all set.
   const stepOneReady =
     step !== 1 ||
@@ -115,7 +118,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     apiRequest<SavedCampaign>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((saved) => {
         const loaded = wizardDataFromCampaign(saved);
-        const resume = savedWizardStep(saved) || resumeStep(loaded);
+        let resume = savedWizardStep(saved) || resumeStep(loaded);
+        // A draft saved on the old Destination-and-access step 2 of a non-content campaign has no
+        // Destination step anymore; open it at the next step that still exists and needs something.
+        if (!activeWizardSteps(loaded).some(({ step: s }) => s === resume)) resume = resumeStep(loaded);
         setData(loaded);
         setSavedObjective(saved.campaignObjective || null);
         setStep(resume);
@@ -135,7 +141,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       const restored: WizardData = { ...INITIAL_WIZARD_DATA, ...parsed.data, brief: { ...INITIAL_WIZARD_DATA.brief, ...parsed.data.brief } };
       // A restored wizard already had its type picked.
       restored.typeChosen = parsed.data.typeChosen ?? true;
-      const restoredStep = parsed.step && parsed.step >= 1 && parsed.step <= LAST_STEP ? parsed.step : 1;
+      const restoredStep = parsed.step && activeWizardSteps(restored).some(({ step: s }) => s === parsed.step) ? parsed.step : 1;
       setData(restored);
       setStep(restoredStep);
       setFurthestStep(restoredStep);
@@ -282,7 +288,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       setTouched((prev) => ({ ...prev, [step]: true }));
       return;
     }
-    goTo((step + 1) as WizardStep);
+    const nextActive = steps.find(({ step: s }) => s > step);
+    if (nextActive) goTo(nextActive.step);
   };
 
   const handleDiscard = () => {
@@ -372,7 +379,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
       {isMobile && (
         <nav aria-label="Campaign steps" className="flex items-start justify-between gap-1 px-4 pt-3 pb-4 bg-[#fafafa] overflow-x-auto">
-          {WIZARD_STEPS.map(({ step: s, short }) => (
+          {steps.map(({ step: s, short }) => (
             <button
               key={s}
               type="button"
@@ -387,7 +394,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <HugeiconsIcon icon={CircleDashedIcon} size={18} className={step === s ? "text-neutral-900" : "text-neutral-400"} />
                 )}
               </span>
-              <span className={cn("text-[10px] font-medium font-rethink", step === s ? "text-neutral-900" : "text-neutral-400")}>{short}</span>
+              <span className={cn("text-[10px] font-medium font-rethink", s < step ? "text-green-600" : step === s ? "text-neutral-900" : "text-neutral-400")}>{short}</span>
             </button>
           ))}
         </nav>
@@ -406,7 +413,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </button>
 
             <nav aria-label="Campaign steps" className="space-y-7">
-              {WIZARD_STEPS.map(({ step: s, title }) => (
+              {steps.map(({ step: s, title }) => (
                 <button
                   key={s}
                   type="button"
@@ -421,9 +428,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                       <HugeiconsIcon icon={CircleDashedIcon} size={16} className={step === s ? "text-neutral-900" : "text-neutral-500"} />
                     )}
                   </span>
-                  <span className={cn("text-sm font-medium font-rethink", step === s ? "text-neutral-900" : "text-neutral-400")}>
-                    {/* Only Content asks where the content goes (SPEC D31). */}
-                    {s === 2 && data.objective !== "content" ? "Creator access" : title}
+                  <span className={cn("text-sm font-medium font-rethink", s < step ? "text-green-600" : step === s ? "text-neutral-900" : "text-neutral-400")}>
+                    {title}
                   </span>
                 </button>
               ))}
