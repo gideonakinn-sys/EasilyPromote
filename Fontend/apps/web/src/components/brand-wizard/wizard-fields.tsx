@@ -57,7 +57,8 @@ interface OptionCardProps {
   onSelect: () => void;
 }
 
-// A radio-style choice with a title and a plain explanation.
+// A radio-style choice with a title and a plain explanation. Selection is shown by the border
+// (like the Campaign type cards); the circle indicator is deliberately not used.
 export function OptionCard({ title, body, selected, disabled, badge, onSelect }: OptionCardProps) {
   return (
     <button
@@ -68,22 +69,15 @@ export function OptionCard({ title, body, selected, disabled, badge, onSelect }:
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "w-full text-left px-4 py-3.5 rounded-2xl border bg-white transition-colors",
+        "w-full text-left px-4 py-4 rounded-2xl border bg-white transition-colors",
         selected ? "border-neutral-900" : "border-neutral-200",
         disabled && "bg-neutral-50 cursor-not-allowed"
       )}
     >
       <span className="flex items-center justify-between gap-3">
-        <span className={cn("text-sm font-medium font-rethink", disabled ? "text-neutral-400" : "text-neutral-900")}>{title}</span>
-        {badge ? (
+        <span className={cn("text-sm font-semibold font-rethink", disabled ? "text-neutral-400" : "text-neutral-900")}>{title}</span>
+        {badge && (
           <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-500 text-[10px] font-medium font-rethink shrink-0">{badge}</span>
-        ) : (
-          <span
-            className={cn("w-4 h-4 rounded-full border flex items-center justify-center shrink-0", selected ? "border-neutral-900" : "border-neutral-300")}
-            aria-hidden="true"
-          >
-            {selected && <span className="w-2 h-2 rounded-full bg-neutral-900" />}
-          </span>
         )}
       </span>
       <span className={cn("block text-xs font-medium font-rethink mt-1 leading-relaxed", disabled ? "text-neutral-400" : "text-neutral-500")}>{body}</span>

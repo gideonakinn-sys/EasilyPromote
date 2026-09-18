@@ -1,15 +1,21 @@
 "use client";
 
 import * as React from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "@ep/ui/components/dropdown-menu";
 import { ChipGroup, Field, OptionCard, StepHeading, TEXT_INPUT_CLASS, TEXTAREA_CLASS, toggleValue } from "./wizard-fields";
 import {
   ACCESS_OPTIONS,
-  BADGE_OPTIONS,
   CREATOR_CATEGORIES,
   DESTINATION_OPTIONS,
   MAX_ADDITIONAL_TERMS,
-  RANK_OPTIONS,
   USAGE_DURATION_OPTIONS,
   USAGE_EXCLUSIVITY_OPTIONS,
   USAGE_RIGHTS_TEXT,
@@ -162,7 +168,7 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-8">
         <StepHeading title="Eligibility requirements" body="Leave any field blank to allow everyone." />
 
         <Field label="Minimum Followers" htmlFor="min-followers" hint="Typical range: 2,000–10,000">
@@ -191,46 +197,28 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
         </Field>
 
         <Field label="Content categories" hint="Only creators who post in these categories can take part.">
-          <ChipGroup
-            label="Content categories"
-            options={CREATOR_CATEGORIES.map((category) => ({ value: category, label: category }))}
-            selected={data.categories}
-            onToggle={(value) => update({ categories: toggleValue(data.categories, value) })}
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={cn(TEXT_INPUT_CLASS, "flex items-center justify-between gap-2 text-left")}>
+                <span className={cn("truncate", data.categories.length === 0 && "text-neutral-300")}>
+                  {data.categories.length ? data.categories.join(" · ") : "Select categories"}
+                </span>
+                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400 shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
+              {CREATOR_CATEGORIES.map((category) => (
+                <DropdownMenuCheckboxItem
+                  key={category}
+                  checked={data.categories.includes(category)}
+                  onCheckedChange={() => update({ categories: toggleValue(data.categories, category) })}
+                >
+                  {category}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </Field>
-
-        <Field label="Minimum Rank" tooltip="Rank reflects a creator's track record on past campaigns.">
-          <ChipGroup
-            label="Minimum Rank"
-            options={RANK_OPTIONS}
-            selected={[data.minRank]}
-            onToggle={(value) => update({ minRank: value })}
-          />
-        </Field>
-
-        <Field label="Required Badges" tooltip="Earned by creators through past campaign performance.">
-          <ChipGroup
-            label="Required Badges"
-            options={BADGE_OPTIONS}
-            selected={data.requiredBadges}
-            onToggle={(value) => update({ requiredBadges: toggleValue(data.requiredBadges, value) })}
-          />
-        </Field>
-
-        <label className="flex items-start gap-3 bg-white border border-neutral-200 rounded-2xl p-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={data.verifiedOnly}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ verifiedOnly: e.target.checked })}
-            className="mt-0.5 h-4 w-4 accent-neutral-900"
-          />
-          <span className="space-y-0.5">
-            <span className="block text-sm font-medium text-neutral-900 font-rethink">Verified Creators Only</span>
-            <span className="block text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
-              Only creators with a connected social account whose identity our team has checked.
-            </span>
-          </span>
-        </label>
       </div>
 
       {data.objective === "content" && (

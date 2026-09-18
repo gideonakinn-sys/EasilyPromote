@@ -464,6 +464,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
   }
   if (step === 3) {
+    if (data.categories.length === 0) problems.push("Choose at least one content category.");
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
     const engagement = data.minEngagementRate.trim();
     if (engagement && !(Number(engagement) >= 0 && Number(engagement) <= 100)) problems.push("Engagement rate must be from 0 to 100.");

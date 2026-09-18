@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Alert02Icon, ChevronDownIcon } from "@hugeicons/core-free-icons";
+import { ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import {
   DropdownMenu,
@@ -10,11 +10,10 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@ep/ui/components/dropdown-menu";
-import { countMatchingCreators, getToken, type MatchCount } from "../../lib/api";
 import { ChipGroup, Field, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import { AudienceLocationSelect } from "../audience-location-select";
 import { canonicalAudienceLocation } from "../../lib/audience-locations";
-import { AGE_RANGE_OPTIONS, PLATFORM_OPTIONS, targetingPayload, type WizardData } from "./wizard-state";
+import { AGE_RANGE_OPTIONS, PLATFORM_OPTIONS, type WizardData } from "./wizard-state";
 
 interface StepAudienceProps {
   data: WizardData;
@@ -23,75 +22,10 @@ interface StepAudienceProps {
 
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
-// Ticket 11: how many creators could join with these settings, updated a moment after the brand
-// stops changing them. Interests and age only rank creators, so they don't change it.
-function LiveMatchCount({ data }: { data: WizardData }) {
-  const key = JSON.stringify(targetingPayload(data));
-  const [result, setResult] = React.useState<MatchCount | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [failed, setFailed] = React.useState(false);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const timer = window.setTimeout(() => {
-      countMatchingCreators(JSON.parse(key) as Record<string, unknown>, getToken() || undefined)
-        .then((res) => {
-          if (cancelled) return;
-          setResult(res);
-          setFailed(false);
-        })
-        .catch(() => {
-          if (!cancelled) setFailed(true);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 600);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [key]);
-
-  const text = failed
-    ? "We couldn't count matching creators right now."
-    : result
-      ? result.fewerThan
-        ? "Fewer than 10 creators match."
-        : `${result.label}.`
-      : "Counting matching creators…";
-
-  const low = Boolean(result?.fewerThan);
-  return (
-    <div
-      className={cn(
-        "sticky top-0 z-10 rounded-full border pl-3 pr-4 py-2.5 flex items-center gap-2.5",
-        low ? "bg-amber-50 border-amber-200" : "bg-neutral-50 border-neutral-200"
-      )}
-      aria-live="polite"
-    >
-      {low && <HugeiconsIcon icon={Alert02Icon} size={16} className="text-amber-700 shrink-0" />}
-      <p className={cn("text-xs font-medium font-rethink leading-snug", low ? "text-amber-800" : "text-neutral-900")}>
-        {text}
-      </p>
-      {loading && (
-        <span
-          className={cn("ml-auto text-[11px] font-medium font-rethink shrink-0", low ? "text-amber-600" : "text-neutral-400")}
-        >
-          Updating
-        </span>
-      )}
-    </div>
-  );
-}
-
 export function StepAudience({ data, update }: StepAudienceProps) {
   return (
     <div className="space-y-10">
-      <LiveMatchCount data={data} />
-
-      <div className="space-y-6">
+      <div className="space-y-8">
         <Field label="Platforms" hint="Choose where your customers spend time. Creators must have an account on at least one to take part.">
           <ChipGroup
             label="Platforms"

@@ -81,12 +81,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const connection = useReferralConnection(referral && step === LAST_STEP);
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];
+  // Continue stays enabled only once the current step has nothing missing.
+  const canContinue = problems.length === 0;
   // The wizard is always: Campaign type > Audience > Creators > Pay and budget > Brief > Launch.
   const steps = WIZARD_STEPS;
-  // Step 1: Continue stays off until a type, name, cover image and industry are all set.
-  const stepOneReady =
-    step !== 1 ||
-    (data.typeChosen && Boolean(data.name.trim()) && Boolean(data.coverImageUrl) && Boolean(data.category.trim()));
 
   const update = useCallback((patch: Partial<WizardData>) => {
     isModified.current = true;
@@ -444,7 +442,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
       <div
         ref={scrollRef}
-        className={cn("flex-1 flex flex-col", isMobile ? "p-5" : "p-12 overflow-y-auto overflow-x-hidden h-full")}
+        className={cn("flex-1 flex flex-col", isMobile ? "p-5" : "px-12 pt-12 overflow-y-auto overflow-x-hidden h-full")}
         data-lenis-prevent
       >
         <div data-reveal key={step} className={cn("flex-1 space-y-8", isMobile ? "w-full" : "w-[380px] mx-auto")}>
@@ -467,7 +465,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </ul>
           )}
 
-          <div className={cn("flex gap-4 pt-2", isMobile && "sticky bottom-0 bg-[#fafafa] pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+          <div className={cn("flex gap-4 sticky bottom-0 z-10 bg-[#fafafa]", isMobile ? "pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5" : "pt-4 pb-4")}>
             <button
               type="button"
               onClick={handleSaveDraft}
@@ -479,7 +477,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <button
               type="button"
               onClick={handleNext}
-              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || !stepOneReady}
+              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || !canContinue}
               className="flex-1 py-3 bg-[#FEB604] text-[#171717] font-semibold text-sm rounded-full border border-neutral-100 font-rethink disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {launching ? <Spinner className="size-4" /> : primaryLabel}
