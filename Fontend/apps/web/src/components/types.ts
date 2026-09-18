@@ -379,6 +379,18 @@ export interface CampaignBrief {
   keyMessages?: string[];
   productInfo?: string;
   approvalRequirements?: string;
+  // Rich-text creator brief and the type-conditional settings from the wizard.
+  creatorBrief?: string;
+  briefMode?: "write" | "upload";
+  keyMessage?: string;
+  contentTypes?: string[];
+  toneDosDonts?: string;
+  referenceFiles?: { url: string; name: string }[];
+  deliverablesQuantity?: string;
+  deliverablesLength?: string;
+  submissionDeadline?: string;
+  usageRightsChoice?: "campaign" | "paid_ads" | "anywhere";
+  disputeWindow?: "" | "24h" | "48h" | "72h";
 }
 
 // The Campaign v2 setup as GET /campaigns/:id returns it.

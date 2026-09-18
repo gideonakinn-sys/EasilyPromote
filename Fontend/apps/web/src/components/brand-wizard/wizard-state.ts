@@ -209,6 +209,20 @@ export interface WizardBrief {
   keyMessages: string[];
   productInfo: string;
   approvalRequirements: string;
+  // Rich text creator brief, with a PDF alternative and a small AI entry point.
+  creatorBrief: string;
+  briefMode: "write" | "upload";
+  keyMessage: string;
+  contentTypes: string[];
+  toneDosDonts: string;
+  referenceFiles: { url: string; name: string }[];
+  // Content campaigns only.
+  deliverablesQuantity: string;
+  deliverablesLength: string;
+  submissionDeadline: string;
+  usageRightsChoice: "campaign" | "paid_ads" | "anywhere";
+  // Views campaigns only.
+  disputeWindow: "" | "24h" | "48h" | "72h";
 }
 
 export interface WizardData {
@@ -283,6 +297,17 @@ export const EMPTY_BRIEF: WizardBrief = {
   keyMessages: [],
   productInfo: "",
   approvalRequirements: "",
+  creatorBrief: "",
+  briefMode: "write",
+  keyMessage: "",
+  contentTypes: [],
+  toneDosDonts: "",
+  referenceFiles: [],
+  deliverablesQuantity: "1",
+  deliverablesLength: "",
+  submissionDeadline: "",
+  usageRightsChoice: "campaign",
+  disputeWindow: "24h",
 };
 
 // The share a hard age or gender filter asks for when the brand doesn't change it (matches the API).
@@ -436,7 +461,7 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
     }
     case 5:
       return {
-        title: "Your brief",
+        title: "Write the brief",
         body: "Everything a creator needs to make the content. Creators see this before they join or apply.",
       };
     default:
@@ -494,9 +519,11 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     }
   }
   if (step === 5) {
-    if (!data.brief.summary.trim()) problems.push("Tell creators what the campaign is about.");
+    const briefProvided = data.brief.briefMode !== "upload" ? data.brief.summary.trim() : Boolean(data.scriptUrl);
+    if (!briefProvided) problems.push("Write a brief or upload a brief PDF.");
+    if (data.brief.contentTypes.length === 0) problems.push("Choose at least one content type.");
     if (data.brief.soundUrl.trim() && !isUrl(data.brief.soundUrl.trim())) problems.push("The sound link must be a full web address.");
-    if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference videos must be full web addresses.");
+    if (data.brief.referenceVideos.some((link) => !isUrl(link))) problems.push("Reference links must be full web addresses.");
   }
   return problems;
 }
@@ -583,11 +610,25 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
           keyMessages: list(brief.keyMessages),
           productInfo: brief.productInfo || "",
           approvalRequirements: brief.approvalRequirements || "",
+          creatorBrief: brief.creatorBrief || brief.summary || "",
+          briefMode: brief.briefMode === "upload" ? "upload" : "write",
+          keyMessage: brief.keyMessage || list(brief.keyMessages)[0] || "",
+          contentTypes: list(brief.contentTypes),
+          toneDosDonts: brief.toneDosDonts || brief.tone || "",
+          referenceFiles: Array.isArray(brief.referenceFiles) ? brief.referenceFiles.map((f) => ({ url: String(f?.url || ""), name: String(f?.name || "Reference") })) : [],
+          deliverablesQuantity: String(brief.deliverablesQuantity ?? "1"),
+          deliverablesLength: brief.deliverablesLength || "",
+          submissionDeadline: brief.submissionDeadline || "",
+          usageRightsChoice: brief.usageRightsChoice === "paid_ads" || brief.usageRightsChoice === "anywhere" ? brief.usageRightsChoice : "campaign",
+          disputeWindow: brief.disputeWindow === "48h" || brief.disputeWindow === "72h" ? brief.disputeWindow : "24h",
         }
       : {
           ...EMPTY_BRIEF,
           summary: saved.contentBrief || "",
+          creatorBrief: saved.contentBrief || "",
+          keyMessage: saved.keyMessageCta || "",
           keyMessages: saved.keyMessageCta ? [saved.keyMessageCta] : [],
+          toneDosDonts: saved.whatToAvoid || "",
           donts: saved.whatToAvoid ? [saved.whatToAvoid] : [],
         },
     scriptUrl: saved.scriptUrl || "",
@@ -687,19 +728,30 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     ...targetingPayload(data),
     brief: {
       summary: brief.summary.trim() || undefined,
+      creatorBrief: brief.creatorBrief.trim() || undefined,
+      briefMode: brief.briefMode,
+      keyMessage: brief.keyMessage.trim() || undefined,
+      contentTypes: brief.contentTypes,
+      toneDosDonts: brief.toneDosDonts.trim() || undefined,
+      referenceFiles: brief.referenceFiles.map((file) => ({ url: file.url, name: file.name })),
+      deliverablesQuantity: brief.deliverablesQuantity.trim() || undefined,
+      deliverablesLength: brief.deliverablesLength.trim() || undefined,
+      submissionDeadline: brief.submissionDeadline || undefined,
+      usageRightsChoice: brief.usageRightsChoice,
+      disputeWindow: brief.disputeWindow || undefined,
       dos: brief.dos,
       donts: brief.donts,
       hashtags: brief.hashtags,
       soundUrl: brief.soundUrl.trim() || undefined,
       referenceVideos: brief.referenceVideos,
-      tone: brief.tone.trim() || undefined,
-      keyMessages: brief.keyMessages,
+      tone: (brief.toneDosDonts.trim() || brief.tone.trim()) || undefined,
+      keyMessages: brief.keyMessage.trim() ? [brief.keyMessage.trim()] : brief.keyMessages,
       productInfo: brief.productInfo.trim() || undefined,
       approvalRequirements: brief.approvalRequirements.trim() || undefined,
     },
     // Screens built before the campaign engine still read these.
     contentBrief: brief.summary.trim(),
-    keyMessageCta: brief.keyMessages.join(" · "),
+    keyMessageCta: (brief.keyMessage.trim() || brief.keyMessages.join(" · ")).trim(),
     whatToAvoid: brief.donts.join(" · "),
     platforms: data.platforms,
     niches: [...data.otherNiches, ...data.categories],
