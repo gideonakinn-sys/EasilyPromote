@@ -2,22 +2,19 @@
 
 import * as React from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "@ep/ui/components/dropdown-menu";
 import { countMatchingCreators, getToken, type MatchCount } from "../../lib/api";
-import { ChipGroup, Field, ListInput, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
+import { ChipGroup, Field, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import { AudienceLocationSelect } from "../audience-location-select";
 import { canonicalAudienceLocation } from "../../lib/audience-locations";
-import {
-  AGE_RANGE_OPTIONS,
-  GENDER_OPTIONS,
-  PLATFORM_OPTIONS,
-  ageFilterActive,
-  genderFilterActive,
-  specificGenders,
-  targetingPayload,
-  type WizardData,
-} from "./wizard-state";
+import { AGE_RANGE_OPTIONS, PLATFORM_OPTIONS, targetingPayload, type WizardData } from "./wizard-state";
 
 interface StepAudienceProps {
   data: WizardData;
@@ -27,8 +24,7 @@ interface StepAudienceProps {
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 // Ticket 11: how many creators could join with these settings, updated a moment after the brand
-// stops changing them. Interests only rank creators, so they don't change it; age and gender do
-// only when the brand makes them required.
+// stops changing them. Interests and age only rank creators, so they don't change it.
 function LiveMatchCount({ data }: { data: WizardData }) {
   const key = JSON.stringify(targetingPayload(data));
   const [result, setResult] = React.useState<MatchCount | null>(null);
@@ -62,7 +58,7 @@ function LiveMatchCount({ data }: { data: WizardData }) {
     ? "We couldn't count matching creators right now."
     : result
       ? result.fewerThan
-        ? "Fewer than 10 creators match — try widening location or lowering follower minimums."
+        ? "Fewer than 10 creators match."
         : `${result.label}.`
       : "Counting matching creators…";
 
@@ -90,77 +86,13 @@ function LiveMatchCount({ data }: { data: WizardData }) {
   );
 }
 
-interface HardFilterProps {
-  id: string;
-  label: string;
-  body: string;
-  on: boolean;
-  share: string;
-  showShare: boolean;
-  shareHint: string;
-  onToggle: (on: boolean) => void;
-  onShareChange: (share: string) => void;
-}
-
-// A "Required" switch that turns an age or gender preference into a requirement, with the share
-// of a creator's audience that has to match.
-function HardFilter({ id, label, body, on, share, showShare, shareHint, onToggle, onShareChange }: HardFilterProps) {
-  return (
-    <div className="bg-white border border-neutral-200 rounded-2xl p-4 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <span className="space-y-0.5">
-          <span id={`${id}-label`} className="block text-sm font-medium text-neutral-900 font-rethink">
-            {label}
-          </span>
-          <span className="block text-xs text-neutral-500 font-medium font-rethink leading-relaxed">{body}</span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-labelledby={`${id}-label`}
-          onClick={() => onToggle(!on)}
-          className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-neutral-900" : "bg-neutral-200")}
-        >
-          <span
-            aria-hidden="true"
-            className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-5")}
-          />
-        </button>
-      </div>
-      {showShare && (
-        <Field label="Minimum Audience Share" htmlFor={`${id}-share`} hint={shareHint}>
-          <div className="relative">
-            <input
-              id={`${id}-share`}
-              inputMode="numeric"
-              placeholder="50"
-              value={share}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onShareChange(digitsOnly(e.target.value).slice(0, 3))}
-              className={cn(TEXT_INPUT_CLASS, "pr-10")}
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">%</span>
-          </div>
-        </Field>
-      )}
-    </div>
-  );
-}
-
 export function StepAudience({ data, update }: StepAudienceProps) {
-  // "Everyone" and a specific gender don't go together.
-  const toggleGender = (value: string) => {
-    if (value === "all") return update({ genders: ["all"] });
-    const next = toggleValue(data.genders.filter((gender) => gender !== "all"), value);
-    update({ genders: next.length ? next : ["all"] });
-  };
-
   return (
     <div className="space-y-10">
       <LiveMatchCount data={data} />
 
       <div className="space-y-6">
-        <Field label="Platforms" hint="Creators need an account on at least one of these.">
+        <Field label="Platforms" hint="Choose where your customers spend time. Creators must have an account on at least one to take part.">
           <ChipGroup
             label="Platforms"
             options={PLATFORM_OPTIONS}
@@ -169,7 +101,11 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           />
         </Field>
 
-        <Field label="Audience Locations" htmlFor="audience-locations" hint="Where a creator's followers are, not where the creator lives.">
+        <Field
+          label="Where are your customers?"
+          htmlFor="audience-locations"
+          hint="We'll match you with creators whose followers are mostly based here."
+        >
           <div className="space-y-2">
             <AudienceLocationSelect
               id="audience-locations"
@@ -221,60 +157,28 @@ export function StepAudience({ data, update }: StepAudienceProps) {
           </Field>
         )}
 
-        <Field label="Age">
-          <ChipGroup
-            label="Age"
-            options={AGE_RANGE_OPTIONS.map((range) => ({ value: range, label: range }))}
-            selected={data.ageRanges}
-            onToggle={(value) => update({ ageRanges: toggleValue(data.ageRanges, value) })}
-          />
-          <HardFilter
-            id="require-age"
-            label="Required"
-            body={data.ageRanges.length ? "Only creators whose audience is mostly in these age ranges can take part." : "Pick at least one age range to require it."}
-            on={data.requireAgeMatch}
-            share={data.minAgeShare}
-            showShare={ageFilterActive(data)}
-            shareHint="For example, 50 means at least 50% of a creator's followers are in the age ranges above."
-            onToggle={(requireAgeMatch) => update({ requireAgeMatch })}
-            onShareChange={(minAgeShare) => update({ minAgeShare })}
-          />
-        </Field>
-
-        <Field label="Gender">
-          <ChipGroup label="Gender" options={GENDER_OPTIONS} selected={data.genders} onToggle={toggleGender} />
-          <HardFilter
-            id="require-gender"
-            label="Required"
-            body={
-              specificGenders(data.genders).length
-                ? "Only creators whose audience is mostly the genders above can take part."
-                : "Pick a gender other than Everyone to require it."
-            }
-            on={data.requireGenderMatch}
-            share={data.minGenderShare}
-            showShare={genderFilterActive(data)}
-            shareHint="For example, 50 means at least 50% of a creator's followers are the genders above."
-            onToggle={(requireGenderMatch) => update({ requireGenderMatch })}
-            onShareChange={(minGenderShare) => update({ minGenderShare })}
-          />
-        </Field>
-
-        {(data.requireAgeMatch || data.requireGenderMatch) && (
-          <p className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-xs text-amber-800 font-medium font-rethink leading-relaxed">
-            Audience age and gender are self-reported by creators, and many haven&apos;t added them yet. Requiring them may shrink the number of creators who can take part.
-          </p>
-        )}
-
-        <Field label="Interests" htmlFor="audience-interests">
-          <ListInput
-            id="audience-interests"
-            items={data.interests}
-            onChange={(interests) => update({ interests })}
-            placeholder="Skincare"
-            maxItems={20}
-            maxLength={40}
-          />
+        <Field label="Customer age range" hint="The age range of the customers you're trying to reach.">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={cn(TEXT_INPUT_CLASS, "flex items-center justify-between gap-2 text-left")}>
+                <span className={cn("truncate", data.ageRanges.length === 0 && "text-neutral-300")}>
+                  {data.ageRanges.length ? data.ageRanges.join(" · ") : "Select age ranges"}
+                </span>
+                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400 shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
+              {AGE_RANGE_OPTIONS.map((range) => (
+                <DropdownMenuCheckboxItem
+                  key={range}
+                  checked={data.ageRanges.includes(range)}
+                  onCheckedChange={() => update({ ageRanges: toggleValue(data.ageRanges, range) })}
+                >
+                  {range}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </Field>
       </div>
     </div>

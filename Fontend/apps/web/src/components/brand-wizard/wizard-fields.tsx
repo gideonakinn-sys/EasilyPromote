@@ -92,7 +92,7 @@ export function OptionCard({ title, body, selected, disabled, badge, onSelect }:
 }
 
 interface ChipGroupProps {
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: string | { src: string } }[];
   selected: string[];
   onToggle: (value: string) => void;
   label: string;
@@ -103,6 +103,7 @@ export function ChipGroup({ options, selected, onToggle, label }: ChipGroupProps
     <div className="flex flex-wrap gap-2" role="group" aria-label={label}>
       {options.map((option) => {
         const isSelected = selected.includes(option.value);
+        const iconSrc = option.icon ? (typeof option.icon === "string" ? option.icon : option.icon.src) : null;
         return (
           <button
             key={option.value}
@@ -111,9 +112,15 @@ export function ChipGroup({ options, selected, onToggle, label }: ChipGroupProps
             onClick={() => onToggle(option.value)}
             className={cn(
               "px-4 py-2 rounded-full text-sm font-medium font-rethink transition-colors",
+              option.icon && "inline-flex items-center gap-2",
               isSelected ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 border border-neutral-200"
             )}
           >
+            {iconSrc && (
+              <span className="flex items-center justify-center w-4 h-4 rounded-sm bg-white shrink-0 overflow-hidden" aria-hidden="true">
+                <img src={iconSrc} alt="" className="w-3.5 h-3.5 object-contain" loading="lazy" />
+              </span>
+            )}
             {option.label}
           </button>
         );

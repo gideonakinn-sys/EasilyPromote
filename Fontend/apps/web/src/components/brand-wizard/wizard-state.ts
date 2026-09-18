@@ -8,6 +8,11 @@ import type {
 } from "../types";
 import { MIN_REFERRAL_BUDGET } from "../../lib/referral";
 import type { CampaignUsageRights, UsageRightsDuration, UsageRightsExclusivity, UsageRightsType } from "../types";
+import tiktokLogo from "@ep/ui/assets/Tiktok.jpeg";
+import instagramLogo from "@ep/ui/assets/Instagram.svg";
+import youtubeLogo from "@ep/ui/assets/youtube.svg";
+import facebookLogo from "@ep/ui/assets/facebook.png";
+import xLogo from "@ep/ui/assets/X.jpeg";
 
 // The five setup steps, then review and payment.
 export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
@@ -100,21 +105,21 @@ export const ACCESS_OPTIONS: { value: CreatorAccess; title: string; body: string
   {
     value: "open_call",
     title: "Open Call",
-    body: "Any creator who meets your requirements can join straight away. Good when you want to move fast.",
+    body: "Anyone who meets your requirements joins immediately.",
   },
   {
     value: "application_required",
     title: "Application Required",
-    body: "Creators apply and you choose who takes part. Good when you want to pick each creator yourself.",
+    body: "Creators apply; you approve each one.",
   },
 ];
 
 export const PLATFORM_OPTIONS = [
-  { value: "tiktok", label: "TikTok" },
-  { value: "instagram", label: "Instagram" },
-  { value: "youtube", label: "YouTube" },
-  { value: "facebook", label: "Facebook" },
-  { value: "twitter", label: "X (Twitter)" },
+  { value: "tiktok", label: "TikTok", icon: tiktokLogo },
+  { value: "instagram", label: "Instagram", icon: instagramLogo },
+  { value: "youtube", label: "YouTube", icon: youtubeLogo },
+  { value: "facebook", label: "Facebook", icon: facebookLogo },
+  { value: "twitter", label: "X (Twitter)", icon: xLogo },
 ];
 
 export const AGE_RANGE_OPTIONS = ["13-17", "18-24", "25-34", "35-44", "45-54", "55+"];
@@ -404,7 +409,7 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
     case 2:
       return {
         title: "Who do you want to reach?",
-        body: "Set the audience this campaign should reach.",
+        body: "Tell us about the customers you want this campaign to reach.",
       };
     case 3:
       return {
@@ -457,10 +462,6 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (data.platforms.length === 0) problems.push("Choose at least one platform.");
     const share = data.minLocationShare.trim();
     if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
-    const ageShare = data.minAgeShare.trim();
-    if (ageFilterActive(data) && (wholeNumber(ageShare) === null || Number(ageShare) > 100)) problems.push("The required age share must be a whole number from 0 to 100.");
-    const genderShare = data.minGenderShare.trim();
-    if (genderFilterActive(data) && (wholeNumber(genderShare) === null || Number(genderShare) > 100)) problems.push("The required gender share must be a whole number from 0 to 100.");
   }
   if (step === 3) {
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");

@@ -190,16 +190,16 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
           </div>
         </Field>
 
-        <Field label="Creator Categories">
+        <Field label="Content categories" hint="Only creators who post in these categories can take part.">
           <ChipGroup
-            label="Creator Categories"
+            label="Content categories"
             options={CREATOR_CATEGORIES.map((category) => ({ value: category, label: category }))}
             selected={data.categories}
             onToggle={(value) => update({ categories: toggleValue(data.categories, value) })}
           />
         </Field>
 
-        <Field label="Minimum Rank">
+        <Field label="Minimum Rank" tooltip="Rank reflects a creator's track record on past campaigns.">
           <ChipGroup
             label="Minimum Rank"
             options={RANK_OPTIONS}
