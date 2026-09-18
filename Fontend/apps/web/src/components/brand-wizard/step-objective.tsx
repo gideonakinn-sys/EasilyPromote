@@ -71,7 +71,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
     <div className="space-y-12">
       <div className="space-y-10">
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 bg-neutral-100 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+          <div className="w-20 h-20 bg-neutral-100 border border-neutral-200 rounded-2xl overflow-hidden flex items-center justify-center shrink-0">
             {data.coverImageUrl ? (
               <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
             ) : (
@@ -119,7 +119,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
                 {data.category ? (
                   <span>{data.category}</span>
                 ) : (
-                  <span className="text-neutral-400">Select your industry</span>
+                  <span className="text-neutral-300">Select your industry</span>
                 )}
                 <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400" />
               </button>
