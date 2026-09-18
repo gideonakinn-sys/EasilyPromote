@@ -4,13 +4,11 @@ import * as React from "react";
 import { SummaryRow } from "./wizard-fields";
 import {
   ACCESS_OPTIONS,
-  BADGE_OPTIONS,
   BONUS_METRIC_OPTIONS,
   DESTINATION_OPTIONS,
   GENDER_OPTIONS,
   OBJECTIVE_OPTIONS,
   PLATFORM_OPTIONS,
-  RANK_OPTIONS,
   USAGE_RIGHTS_TEXT,
   USAGE_DURATION_OPTIONS,
   isWorldwide,
@@ -73,7 +71,6 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
     },
     creatorEligibility: {
       minFollowers: data.minFollowers ? Number(data.minFollowers) : undefined,
-      minEngagementRate: data.minEngagementRate ? Number(data.minEngagementRate) : undefined,
       categories: data.categories,
       verifiedOnly: data.verifiedOnly,
       minRank: data.minRank || undefined,
@@ -255,11 +252,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
 
       <Section title="Creator Eligibility">
         <SummaryRow label="Minimum Followers" value={eligibility.minFollowers ? eligibility.minFollowers.toLocaleString() : "Any"} />
-        <SummaryRow label="Minimum Engagement" value={eligibility.minEngagementRate ? `${eligibility.minEngagementRate}%` : "Any"} />
         <SummaryRow label="Categories" value={joined(eligibility.categories) || "Any"} />
-        <SummaryRow label="Rank" value={eligibility.minRank ? labelFor(RANK_OPTIONS, eligibility.minRank) : "Any rank"} />
-        <SummaryRow label="Badges" value={joined(eligibility.requiredBadges?.map((value) => labelFor(BADGE_OPTIONS, value))) || "None needed"} />
-        <SummaryRow label="Verified Creators Only" value={eligibility.verifiedOnly ? "Yes" : "No"} />
       </Section>
 
       <Section title="Brief">

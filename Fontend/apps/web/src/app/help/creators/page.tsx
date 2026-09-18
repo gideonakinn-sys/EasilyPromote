@@ -124,7 +124,7 @@ const SECTIONS: HelpSection[] = [
                 "You already have 3 active placements. A placement stops counting once its work is complete.",
                 "Not enough of your audience is in the locations the brand targets.",
                 "You don't have an account on the platforms the brand wants.",
-                "The campaign needs more followers, a higher engagement rate, a category, verification, a rank or a badge you don't have yet.",
+                "The campaign needs more followers or content categories you don't have yet.",
                 "No places are left.",
               ]}
             />

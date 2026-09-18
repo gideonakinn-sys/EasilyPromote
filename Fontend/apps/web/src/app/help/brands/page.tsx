@@ -247,7 +247,7 @@ const SECTIONS: HelpSection[] = [
               items={[
                 "Audience location, when you set a minimum share. Without a minimum share, your locations don't stop anyone. They decide which creators we recommend your campaign to and how applicants are ordered.",
                 "Platforms: the creator needs an account on one of them.",
-                "Minimum followers, minimum engagement rate, categories, verified creators only, minimum rank and required badges.",
+                "Minimum followers and content categories.",
               ]}
             />
             <HelpText>Age and gender never stop anyone. They only help order creators by how well their audience matches.</HelpText>

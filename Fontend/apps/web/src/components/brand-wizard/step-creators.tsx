@@ -153,7 +153,7 @@ function CustomTermsForm({ data, update }: StepCreatorsProps) {
 export function StepCreators({ data, update }: StepCreatorsProps) {
   return (
     <div className="space-y-10">
-      <div className="space-y-6">
+      <div className="space-y-3">
         <StepHeading title="Who can join" body="" />
         <div className="space-y-3" role="radiogroup" aria-label="Creator access">
           {ACCESS_OPTIONS.map((option) => (
@@ -168,32 +168,19 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
         </div>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-3">
         <StepHeading title="Eligibility requirements" body="Leave any field blank to allow everyone." />
 
-        <Field label="Minimum Followers" htmlFor="min-followers" hint="Typical range: 2,000–10,000">
+        <div className="space-y-8">
+        <Field label="Minimum Followers" htmlFor="min-followers" hint="Typical range: 2,000–10,000.">
           <input
             id="min-followers"
             inputMode="numeric"
             placeholder="5000"
             value={data.minFollowers}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ minFollowers: digitsOnly(e.target.value) })}
-            className={TEXT_INPUT_CLASS}
+            className={cn(TEXT_INPUT_CLASS, "tabular-nums")}
           />
-        </Field>
-
-        <Field label="Minimum Engagement Rate" htmlFor="min-engagement" hint="Typical range: 2–5%">
-          <div className="relative">
-            <input
-              id="min-engagement"
-              inputMode="decimal"
-              placeholder="3"
-              value={data.minEngagementRate}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ minEngagementRate: e.target.value.replace(/[^\d.]/g, "") })}
-              className={cn(TEXT_INPUT_CLASS, "pr-10")}
-            />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">%</span>
-          </div>
         </Field>
 
         <Field label="Content categories" hint="Only creators who post in these categories can take part.">
@@ -219,10 +206,11 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </Field>
+        </div>
       </div>
 
       {data.objective === "content" && (
-        <div className="space-y-6">
+        <div className="space-y-3">
           <StepHeading title="Where should the content go?" body="Choose where approved content ends up." />
           <div className="space-y-3" role="radiogroup" aria-label="Content destination">
             {DESTINATION_OPTIONS.map((option) => (
@@ -237,7 +225,7 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
           </div>
 
           {grantsUsageRights(data.contentDestination) && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <StepHeading title="Usage rights" body="How you can use the content creators send you." />
               <div className="space-y-3" role="radiogroup" aria-label="Usage rights">
                 {USAGE_RIGHTS_TYPE_OPTIONS.map((option) => (
