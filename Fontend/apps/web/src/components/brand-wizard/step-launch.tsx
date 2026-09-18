@@ -76,7 +76,9 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
           <Image src={launchCampaign} alt="" width={56} height={56} className="object-contain" />
         </div>
         <p className="font-rethink text-xs text-neutral-600 leading-normal">
-          {hybrid
+          {data.creatorAccess === "application_required"
+            ? "When your campaign is live, creators apply and you approve them from your dashboard before they create content. Creators are paid from your budget as their results are verified."
+            : hybrid
             ? "Creators are paid your base for each deliverable you approve, and a bonus from your pool as their results are verified. Unused base and bonus are refunded when the campaign ends."
             : isContent
             ? "Creators are paid your rate for each deliverable you approve. Unused budget is refunded when the campaign ends, minus payment fees."

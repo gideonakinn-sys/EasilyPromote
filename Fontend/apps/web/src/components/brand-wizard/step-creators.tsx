@@ -166,6 +166,11 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
             />
           ))}
         </div>
+        {data.creatorAccess === "application_required" && (
+          <p className="bg-neutral-100 rounded-2xl px-4 py-3 text-xs text-neutral-600 font-medium font-rethink leading-relaxed">
+            Once the campaign is live, creators apply and you approve each one.
+          </p>
+        )}
       </div>
 
       <div className="space-y-3">

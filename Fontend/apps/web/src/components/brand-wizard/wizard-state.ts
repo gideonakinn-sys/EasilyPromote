@@ -224,6 +224,7 @@ export interface WizardBrief {
 
 export interface WizardData {
   name: string;
+  description: string;
   category: string;
   coverImageUrl: string;
   objective: CampaignObjective;
@@ -316,6 +317,7 @@ export const genderFilterActive = (data: WizardData) => data.requireGenderMatch 
 
 export const INITIAL_WIZARD_DATA: WizardData = {
   name: "",
+  description: "",
   category: "",
   coverImageUrl: "",
   objective: "content",
@@ -533,6 +535,7 @@ export function resumeStep(data: WizardData): WizardStep {
 // A saved campaign as GET /campaigns/:id returns it, including fields from the older wizard.
 export interface SavedCampaign extends Partial<CampaignSetup> {
   name?: string;
+  description?: string;
   category?: string;
   coverImageUrl?: string;
   targetViews?: number;
@@ -560,6 +563,7 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
   return {
     ...INITIAL_WIZARD_DATA,
     name: saved.name || "",
+    description: saved.description || "",
     category: saved.category || INITIAL_WIZARD_DATA.category,
     coverImageUrl: saved.coverImageUrl || "",
     // The API derives every campaign's objective, including older drafts', so it's never re-derived here.
@@ -707,6 +711,7 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
   const { campaignObjective, ...pricing } = pricingPayload(data);
   return {
     name: data.name.trim(),
+    description: data.description.trim() || undefined,
     category: data.category,
     coverImageUrl: data.coverImageUrl || undefined,
     ...(campaignObjective !== savedObjective && { campaignObjective }),

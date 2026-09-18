@@ -14,7 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
-import { Field, TEXT_INPUT_CLASS } from "./wizard-fields";
+import { Field, TEXT_INPUT_CLASS, TEXTAREA_CLASS } from "./wizard-fields";
 import {
   CAMPAIGN_TYPES,
   applyCampaignType,
@@ -80,7 +80,7 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
           </div>
           <div className="flex-1 space-y-2">
             <span className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-neutral-500 font-rethink">Campaign Cover</span>
+              <span className="text-xs font-medium text-neutral-900 font-rethink">Campaign Cover</span>
               <InfoTooltip text="Shown to creators in the marketplace. 1200×630px recommended, up to 10MB." />
             </span>
             <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
@@ -109,6 +109,17 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
             value={data.name}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ name: e.target.value })}
             className={TEXT_INPUT_CLASS}
+          />
+        </Field>
+
+        <Field label="About this campaign" htmlFor="campaign-description" hint="A short description creators see before they join.">
+          <textarea
+            id="campaign-description"
+            maxLength={600}
+            placeholder="e.g. Skincare for people who never skip their night routine."
+            value={data.description}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => update({ description: e.target.value })}
+            className={cn(TEXTAREA_CLASS, "min-h-[76px]")}
           />
         </Field>
 

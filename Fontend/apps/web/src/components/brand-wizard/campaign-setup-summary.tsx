@@ -27,6 +27,7 @@ import type { CampaignUsageRights } from "../types";
 
 export interface SetupSummaryInput {
   campaignObjective: CampaignObjective | null;
+  description?: string;
   contentPay: ContentPay | null;
   hybridBonus?: HybridBonus | null;
   targetViews?: number;
@@ -57,6 +58,7 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
   const isContent = data.objective === "content";
   return {
     campaignObjective: data.objective,
+    description: data.description.trim(),
     contentPay: isContent ? { ratePerDeliverable: Number(data.ratePerDeliverable) || 0, deliverables: Number(data.deliverables) || 0 } : null,
     hybridBonus:
       isContent && data.payShape === "hybrid"
@@ -184,6 +186,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
       <Section title="Objective and Pay">
         {setup.campaignObjective && <SummaryRow label="Campaign Type" value={campaignType} />}
         <SummaryRow label="Objective" value={objective?.title || "Not set"} />
+        <BriefText label="About" text={setup.description || undefined} />
         {setup.campaignObjective === "clicks" && (
           <SummaryRow
             label="Destination Link"

@@ -152,7 +152,7 @@ router.get("/", protect, async (req, res, next) => {
 
 router.post("/", protect, authorizeRoles("business"), async (req, res, next) => {
   try {
-    const { coverImageUrl, name, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral, objective } = req.body;
+    const { coverImageUrl, name, description, category, targetViews, contentBrief, keyMessageCta, whatToAvoid, goal, competitors, uniqueSellingPoint, funFact, platforms, contentStyle, niches, scriptUrl, scriptFileName, referral, objective } = req.body;
 
     const setup = resolveCampaignSetup(req.body);
     if (setup.error) return sendSetupError(res, setup);
@@ -179,6 +179,7 @@ router.post("/", protect, authorizeRoles("business"), async (req, res, next) => 
       businessId: req.user._id,
       coverImageUrl: coverImageUrl || null,
       name,
+      description: description || null,
       category,
       targetViews: isContent || setup.referralsOnly ? undefined : targetViews,
       ...setup.updates,
@@ -446,6 +447,7 @@ router.patch("/:id", protect, async (req, res, next) => {
     const allowedFields = [
       "coverImageUrl",
       "name",
+      "description",
       "category",
       "startDate",
       "endDate",
