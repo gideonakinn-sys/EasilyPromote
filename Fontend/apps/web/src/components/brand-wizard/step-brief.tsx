@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { CloudUploadIcon, Delete01Icon, File01Icon } from "@hugeicons/core-free-icons";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
-import { Field, ListInput, StepHeading, TEXTAREA_CLASS, TEXT_INPUT_CLASS } from "./wizard-fields";
+import { Field, ListInput, TEXTAREA_CLASS, TEXT_INPUT_CLASS } from "./wizard-fields";
 import type { WizardBrief, WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
@@ -44,9 +44,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
   };
 
   return (
-    <div className="space-y-8">
-      <StepHeading title="Your brief" body="Everything a creator needs to make the content. Creators see this before they join or apply." />
-
+    <div className="space-y-10">
       <Field label="Summary" htmlFor="brief-summary">
         <textarea
           id="brief-summary"

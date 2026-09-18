@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { StepHeading } from "./wizard-fields";
 import { QuoteSummary } from "./step-pay";
 import { CampaignSetupSummary, setupFromWizard } from "./campaign-setup-summary";
 import { actionNoun, isHybrid, tracksConversions, type WizardData } from "./wizard-state";
@@ -26,14 +25,13 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
   const trackedNoun = actionNoun(hybrid ? data.bonusMetric : data.objective, true);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <div className="space-y-4">
         {data.coverImageUrl && (
           <div className="w-[90px] h-[90px] rounded-2xl overflow-hidden border border-stone-200">
             <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
           </div>
         )}
-        <StepHeading title={data.name || "Your campaign"} body="Check everything, then pay to put your campaign live." />
         <span className="inline-flex items-center px-3 py-1 rounded-full bg-stone-200 text-stone-600 text-[11px] font-medium font-rethink">
           {data.category}
         </span>

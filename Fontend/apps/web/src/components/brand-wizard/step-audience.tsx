@@ -143,11 +143,6 @@ export function StepAudience({ data, update }: StepAudienceProps) {
       <LiveMatchCount data={data} />
 
       <div className="space-y-6">
-        <StepHeading
-          title="Who do you want to reach?"
-          body="Audience Targeting describes the people watching. Location and platform must match; age and gender help us rank creators unless you make them required, and interests only rank."
-        />
-
         <Field label="Platforms" hint="Creators need an account on at least one of these.">
           <ChipGroup
             label="Platforms"

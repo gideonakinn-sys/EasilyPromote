@@ -13,6 +13,7 @@ import { apiRequest, getToken, quoteCampaign } from "../lib/api";
 import { useReferralConnection } from "./connect-app-checklist";
 import type { CampaignObjective, CampaignQuote } from "./types";
 import { ConfirmDeleteModal } from "./confirm-delete-modal";
+import { ConfirmExitModal } from "./confirm-exit-modal";
 import { StepObjective } from "./brand-wizard/step-objective";
 import { StepDestination } from "./brand-wizard/step-destination";
 import { StepAudience } from "./brand-wizard/step-audience";
@@ -27,6 +28,7 @@ import {
   pricingPayload,
   resumeStep,
   savedWizardStep,
+  stepHeading,
   stepProblems,
   tracksConversions,
   wizardDataFromCampaign,
@@ -64,6 +66,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [categoryOptions, setCategoryOptions] = useState<string[]>(FALLBACK_CATEGORIES);
   const [quote, setQuote] = useState<CampaignQuote | null>(null);
@@ -126,6 +129,8 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       const parsed = JSON.parse(saved) as { data?: Partial<WizardData>; step?: WizardStep };
       if (!parsed.data) return;
       const restored: WizardData = { ...INITIAL_WIZARD_DATA, ...parsed.data, brief: { ...INITIAL_WIZARD_DATA.brief, ...parsed.data.brief } };
+      // A restored wizard already had its type picked.
+      restored.typeChosen = parsed.data.typeChosen ?? true;
       const restoredStep = parsed.step && parsed.step >= 1 && parsed.step <= LAST_STEP ? parsed.step : 1;
       setData(restored);
       setStep(restoredStep);
@@ -211,6 +216,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const handleSaveDraft = async () => {
     if (saving) return;
+    if (step === 1 && !data.typeChosen) {
+      toast("Choose a campaign type before saving.", "error");
+      return;
+    }
     if (!data.name.trim()) {
       toast("Give your campaign a name before saving.", "error");
       return;
@@ -272,8 +281,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     goTo((step + 1) as WizardStep);
   };
 
-  const handleBack = () => {
-    if (step > 1) goTo((step - 1) as WizardStep);
+  const handleDiscard = () => {
+    setShowExitModal(false);
+    clearAutoSave();
+    onClose();
   };
 
   const handleDelete = async () => {
@@ -295,6 +306,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const primaryLabel =
     step < LAST_STEP ? "Continue" : needsConnection ? "Connect your app to launch" : "Pay and launch campaign";
+  const heading = stepHeading(data, step);
 
   const stepContent = loadError ? (
     <div className="bg-white border border-red-200 rounded-2xl p-5 space-y-3" role="alert">
@@ -331,16 +343,16 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   return (
     <div className={cn("w-full h-full", isMobile ? "flex flex-col" : "flex overflow-hidden")}>
       {isMobile && (
-        <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-stone-50 flex-shrink-0">
+        <header className="flex items-center gap-3 px-5 pt-[env(safe-area-inset-top)] h-14 border-b border-stone-200 bg-[#fcfcfc] flex-shrink-0">
           <button
             type="button"
-            onClick={step === 1 ? onClose : handleBack}
+            onClick={() => setShowExitModal(true)}
             aria-label="Go back"
             className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-200"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <h3 className="font-rethink font-medium text-base text-stone-900 truncate flex-1">{draftId ? "Edit draft" : "Create a campaign"}</h3>
+          <div className="flex-1" />
           {campaignId && (
             <button
               type="button"
@@ -355,7 +367,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       )}
 
       {isMobile && (
-        <nav aria-label="Campaign steps" className="flex items-start justify-between gap-1 px-4 pt-3 pb-4 bg-stone-50 overflow-x-auto">
+        <nav aria-label="Campaign steps" className="flex items-start justify-between gap-1 px-4 pt-3 pb-4 bg-[#fcfcfc] overflow-x-auto">
           {WIZARD_STEPS.map(({ step: s, short }) => (
             <button
               key={s}
@@ -378,15 +390,15 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       )}
 
       {!isMobile && (
-        <div className="w-80 border-r border-stone-100 bg-stone-50 p-8 flex flex-col justify-between h-full">
+        <div className="w-80 border-r border-stone-100 bg-[#fcfcfc] p-8 flex flex-col justify-between h-full">
           <div>
             <button
               type="button"
-              onClick={data.name.trim() && !loadError && !loadingDraft ? handleSaveDraft : onClose}
-              disabled={saving}
-              className="text-stone-500 text-xs font-medium font-rethink mb-10 block disabled:opacity-50"
+              onClick={() => setShowExitModal(true)}
+              className="inline-flex items-center gap-2 text-stone-500 text-xs font-medium font-rethink mb-10 block"
             >
-              {saving ? "Saving…" : "Save and close"}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+              Back
             </button>
 
             <nav aria-label="Campaign steps" className="space-y-7">
@@ -415,9 +427,6 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
           </div>
 
           <div className="space-y-3">
-            <p className="text-xs text-stone-400 font-medium font-rethink">
-              {step < LAST_STEP ? `Step ${step} of 5` : "Ready to launch"}
-            </p>
             {campaignId && (
               <button type="button" onClick={() => setShowDeleteConfirm(true)} className="text-xs font-medium text-red-500 font-rethink">
                 Delete draft
@@ -432,13 +441,14 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         className={cn("flex-1 flex flex-col", isMobile ? "p-5" : "p-12 overflow-y-auto overflow-x-hidden h-full")}
         data-lenis-prevent
       >
-        {!isMobile && (
-          <div className="text-center mb-8">
-            <h3 className="font-rethink font-medium tracking-tight text-lg text-stone-900">{draftId ? "Edit draft" : "Create a campaign"}</h3>
-          </div>
-        )}
-
         <div data-reveal key={step} className={cn("flex-1 space-y-8", isMobile ? "w-full" : "w-[380px] mx-auto")}>
+          <div className="text-center">
+            <h3 className="font-rethink font-semibold text-xl tracking-tight text-stone-900 text-balance">{heading.title}</h3>
+            {heading.body && (
+              <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-stone-500 font-rethink">{heading.body}</p>
+            )}
+          </div>
+
           {stepContent}
 
           {!loadError && touched[step] && problems.length > 0 && (
@@ -451,21 +461,19 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             </ul>
           )}
 
-          <div className={cn("flex gap-4 pt-2", isMobile && "sticky bottom-0 bg-stone-50 pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
-            {(isMobile || step > 1) && (
-              <button
-                type="button"
-                onClick={isMobile ? handleSaveDraft : handleBack}
-                disabled={saving || loadingDraft || Boolean(loadError)}
-                className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
-              >
-                {isMobile ? (saving ? "Saving…" : "Save and close") : "Back"}
-              </button>
-            )}
+          <div className={cn("flex gap-4 pt-2", isMobile && "sticky bottom-0 bg-[#fcfcfc] pt-3 pb-[env(safe-area-inset-bottom)] -mx-5 px-5 z-10")}>
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={saving || loadingDraft || Boolean(loadError)}
+              className="flex-1 py-3 bg-white border border-stone-200 text-stone-900 font-semibold text-sm rounded-full font-rethink disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save as draft"}
+            </button>
             <button
               type="button"
               onClick={handleNext}
-              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection)}
+              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || (step === 1 && !data.typeChosen)}
               className="flex-1 py-3 bg-[#FEB604] text-[#1C1917] font-semibold text-sm rounded-full border border-stone-100 font-rethink disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {launching ? <Spinner className="size-4" /> : primaryLabel}
@@ -481,6 +489,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         busy={deleting}
         onCancel={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmExitModal
+        open={showExitModal}
+        busy={saving}
+        onSaveDraft={handleSaveDraft}
+        onDiscard={handleDiscard}
       />
     </div>
   );

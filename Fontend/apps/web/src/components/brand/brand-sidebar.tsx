@@ -33,11 +33,8 @@ export function BrandSidebar() {
 
   return (
     <aside className="hidden md:flex sticky top-0 h-dvh w-64 flex-shrink-0 flex-col border-r border-stone-100 bg-stone-50 px-4 py-6">
-      <Link href="/dashboard/brand" className="flex items-center gap-2.5 px-2">
+      <Link href="/dashboard/brand" className="flex items-center gap-2.5 px-2" aria-label="EasilyPromote brand dashboard">
         <Image src={logoPrimary} alt="EasilyPromote" width={32} height={32} priority />
-        <span className="inline-flex items-center rounded-full bg-[#FEB604]/20 px-2.5 py-1 text-[11px] font-medium leading-none text-amber-900">
-          Brand
-        </span>
       </Link>
 
       <nav className="mt-10 flex flex-col gap-1" aria-label="Brand workspace">

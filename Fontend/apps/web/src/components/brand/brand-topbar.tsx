@@ -24,7 +24,7 @@ export function BrandTopbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 border-b border-stone-100 bg-white">
+    <header className="sticky top-0 z-40 h-16 border-b border-stone-100 bg-[#fcfcfc]">
       <div className="flex h-full items-center justify-between gap-3 px-5 md:px-8">
         {/* Mobile: hamburger */}
         <div className="flex items-center gap-2 md:hidden">

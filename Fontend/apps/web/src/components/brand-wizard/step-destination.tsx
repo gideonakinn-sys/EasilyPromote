@@ -147,7 +147,6 @@ export function StepDestination({ data, update }: StepDestinationProps) {
     <div className="space-y-10">
       {asksDestination && (
       <div className="space-y-4">
-        <StepHeading title="Where should the content go?" body="Choose where approved content ends up." />
         <div className="space-y-3" role="radiogroup" aria-label="Content destination">
           {DESTINATION_OPTIONS.map((option) => (
             <OptionCard
@@ -187,7 +186,6 @@ export function StepDestination({ data, update }: StepDestinationProps) {
       )}
 
       <div className="space-y-4">
-        <StepHeading title="How do creators get in?" body="This is your Creator Access. You can use either with any objective." />
         <div className="space-y-3" role="radiogroup" aria-label="Creator access">
           {ACCESS_OPTIONS.map((option) => (
             <OptionCard

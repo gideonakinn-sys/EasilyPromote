@@ -6,7 +6,6 @@ import { Suspense } from "react";
 import { CampaignWizard } from "../../../../../components/campaign-wizard";
 import { CampaignSuccess } from "../../../../../components/campaign-success";
 import { useIsMobile } from "@ep/ui/hooks/use-is-mobile";
-import { Drawer, DrawerContent } from "../../../../../components/ui/drawer";
 import { Skeleton } from "../../../../../components/ui/skeleton";
 import { isAuthenticated, apiRequest, getToken } from "../../../../../lib/api";
 
@@ -53,8 +52,8 @@ function CreateCampaignContent() {
 
   if (verifying) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center p-10">
-        <div className="w-full max-w-[520px] bg-white border border-stone-200 rounded-3xl p-8 space-y-6">
+      <div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center p-10">
+        <div className="w-full max-w-[520px] bg-white border border-stone-100 rounded-3xl p-8 space-y-6">
           <div className="space-y-3">
             <Skeleton className="h-7 w-1/2" />
             <Skeleton className="h-4 w-2/3" />
@@ -77,7 +76,7 @@ function CreateCampaignContent() {
 
   if (isMobile) {
     return (
-      <div className="h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
+      <div className="h-screen bg-[#fcfcfc] text-stone-900 flex flex-col font-rethink">
         <div className="flex-1 overflow-y-auto" data-lenis-prevent>
           <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} isMobile />
         </div>
@@ -86,19 +85,15 @@ function CreateCampaignContent() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-rethink">
-      <Drawer open={true} dismissible={false}>
-        <DrawerContent className="overflow-clip bg-stone-50">
-          <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
-        </DrawerContent>
-      </Drawer>
+    <div className="min-h-screen bg-[#fcfcfc] text-stone-900 flex flex-col font-rethink">
+      <CampaignWizard onClose={handleClose} onSuccess={handleSuccess} draftId={effectiveDraftId} />
     </div>
   );
 }
 
 export default function CreateCampaignPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-stone-50 flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#fcfcfc] flex items-center justify-center"><Skeleton className="h-6 w-40" /></div>}>
       <CreateCampaignContent />
     </Suspense>
   );

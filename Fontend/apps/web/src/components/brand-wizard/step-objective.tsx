@@ -7,14 +7,21 @@ import { ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
+import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@ep/ui/components/dropdown-menu";
-import { Field, OptionCard, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
-import { OBJECTIVE_CATEGORIES, isDestinationUrl, objectiveAfterToggle, selectedObjectiveCategories, type WizardData } from "./wizard-state";
+import { Field, TEXT_INPUT_CLASS } from "./wizard-fields";
+import {
+  CAMPAIGN_TYPES,
+  applyCampaignType,
+  isDestinationUrl,
+  selectedCampaignType,
+  type WizardData,
+} from "./wizard-state";
 import { getToken } from "../../lib/api";
 
 import emptyCampaignCover from "@ep/ui/assets/empty campaign cover.png";
@@ -61,83 +68,104 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
   };
 
   return (
-    <div className="space-y-8">
-      <StepHeading title="What do you want from this campaign?" body="Your objective decides how creators are paid and what you pay for." />
+    <div className="space-y-10">
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+            {data.coverImageUrl ? (
+              <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
+            ) : (
+              <Image src={emptyCampaignCover} alt="" width={48} height={48} className="object-contain" unoptimized />
+            )}
+          </div>
+          <div className="flex-1 space-y-2">
+            <span className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-stone-500 font-rethink">Campaign Cover</span>
+              <InfoTooltip text="Shown to creators in the marketplace. 1200×630px recommended, up to 10MB." />
+            </span>
+            <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+            {uploading ? (
+              <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress}>
+                <div className="h-full bg-stone-900 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="px-4 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-900 font-rethink"
+              >
+                {data.coverImageUrl ? "Change image" : "Upload image"}
+              </button>
+            )}
+          </div>
+        </div>
 
-      <div className="flex items-center gap-4">
-        <div className="w-20 h-20 bg-stone-100 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
-          {data.coverImageUrl ? (
-            <img src={data.coverImageUrl} alt="Campaign cover" className="w-full h-full object-cover" />
-          ) : (
-            <Image src={emptyCampaignCover} alt="" width={48} height={48} className="object-contain" unoptimized />
-          )}
-        </div>
-        <div className="flex-1 space-y-2">
-          <p className="text-xs font-medium text-stone-900 font-rethink">Campaign Cover</p>
-          <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
-          {uploading ? (
-            <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progress}>
-              <div className="h-full bg-stone-900 rounded-full transition-all duration-150" style={{ width: `${progress}%` }} />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => coverInputRef.current?.click()}
-              className="px-4 py-1.5 bg-white border border-stone-200 rounded-full text-xs font-medium text-stone-900 font-rethink"
-            >
-              {data.coverImageUrl ? "Change image" : "Upload image"}
-            </button>
-          )}
-          <p className="text-[10px] font-medium text-stone-400 font-rethink">The image creators see first. Up to 10MB.</p>
-        </div>
+        <Field label="Campaign Name" htmlFor="campaign-name" tooltip="The name creators see for this campaign">
+          <input
+            id="campaign-name"
+            type="text"
+            placeholder="e.g. Detty December Giveaway"
+            maxLength={120}
+            value={data.name}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ name: e.target.value })}
+            className={TEXT_INPUT_CLASS}
+          />
+        </Field>
+
+        <Field label="Industry" tooltip="The industry your brand is in" hint="Helps us match you with the right creators.">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={cn(TEXT_INPUT_CLASS, "text-left flex items-center justify-between")}>
+                {data.category ? (
+                  <span>{data.category}</span>
+                ) : (
+                  <span className="text-stone-400">Select your industry</span>
+                )}
+                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
+              {categoryOptions.map((category) => (
+                <DropdownMenuItem
+                  key={category}
+                  onSelect={() => update({ category })}
+                  className={cn("font-medium", data.category === category ? "text-stone-900" : "text-stone-700")}
+                >
+                  {category}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Field>
       </div>
 
-      <Field label="Campaign Name" htmlFor="campaign-name" tooltip="The name creators see for this campaign">
-        <input
-          id="campaign-name"
-          type="text"
-          placeholder="Summer lookbook"
-          maxLength={120}
-          value={data.name}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ name: e.target.value })}
-          className={TEXT_INPUT_CLASS}
-        />
-      </Field>
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-stone-500 font-rethink leading-relaxed">
+          Pick the campaign type that fits your goal — it decides how creators are paid and what you pay for.
+        </p>
 
-      <Field label="Industry" tooltip="The industry your brand is in">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={cn(TEXT_INPUT_CLASS, "text-left flex items-center justify-between")}>
-              <span>{data.category}</span>
-              <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-stone-400" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
-            {categoryOptions.map((category) => (
-              <DropdownMenuItem
-                key={category}
-                onSelect={() => update({ category })}
-                className={cn("font-medium", data.category === category ? "text-stone-900" : "text-stone-700")}
+        <div className="flex flex-col gap-3" role="radiogroup" aria-label="Campaign type">
+          {CAMPAIGN_TYPES.map((option) => {
+            const selected = data.typeChosen && selectedCampaignType(data) === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => update({ ...applyCampaignType(option.value), typeChosen: true })}
+                className={cn(
+                  "w-full text-left px-4 py-4 rounded-2xl border bg-white transition-colors",
+                  selected ? "border-stone-900" : "border-stone-200"
+                )}
               >
-                {category}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </Field>
-
-      <fieldset className="space-y-3" aria-label="Objective">
-        <legend className="text-xs font-medium text-stone-500 font-rethink mb-3">Objective · pick Views and Referrals together for Hybrid</legend>
-        {OBJECTIVE_CATEGORIES.map((option) => (
-          <OptionCard
-            key={option.value}
-            title={option.title}
-            body={option.body}
-            selected={selectedObjectiveCategories(data).includes(option.value)}
-            onSelect={() => update(objectiveAfterToggle(data, option.value))}
-          />
-        ))}
-      </fieldset>
+                <span className="block text-sm font-semibold text-stone-900 font-rethink">{option.title}</span>
+                <span className="block mt-1 text-xs font-medium text-stone-500 font-rethink leading-relaxed">{option.body}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {data.objective === "clicks" && (
         <Field

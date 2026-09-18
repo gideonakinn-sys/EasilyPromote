@@ -7,9 +7,9 @@ import { cn } from "@ep/ui/lib/utils";
 import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 
 export const TEXT_INPUT_CLASS =
-  "w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0";
+  "w-full px-4 py-3 bg-white border border-stone-200 rounded-full text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0";
 export const TEXTAREA_CLASS =
-  "w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium tracking-[-0.01em] placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[88px]";
+  "w-full px-4 py-3 bg-white border border-stone-200 rounded-xl text-sm font-rethink font-medium placeholder-stone-300 focus:outline-none focus:border-stone-400 focus:ring-0 resize-none min-h-[88px]";
 
 interface FieldProps {
   label: string;
@@ -29,7 +29,7 @@ export function Field({ label, htmlFor, hint, tooltip, children }: FieldProps) {
         {tooltip && <InfoTooltip text={tooltip} />}
       </div>
       {children}
-      {hint && <p className="text-[11px] text-stone-400 font-medium font-rethink leading-relaxed">{hint}</p>}
+      {hint && <p className="text-xs text-stone-400 font-medium font-rethink leading-relaxed">{hint}</p>}
     </div>
   );
 }
@@ -42,7 +42,7 @@ interface StepHeadingProps {
 export function StepHeading({ title, body }: StepHeadingProps) {
   return (
     <div className="space-y-1">
-      <h4 className="font-rethink font-medium text-lg text-stone-900 tracking-tight">{title}</h4>
+      <h4 className="font-rethink font-semibold text-lg text-stone-900 tracking-tight">{title}</h4>
       <p className="font-rethink text-xs text-stone-500 font-medium leading-relaxed">{body}</p>
     </div>
   );
@@ -206,7 +206,7 @@ export function SummaryRow({ label, value }: { label: string; value: React.React
   return (
     <div className="flex justify-between items-start gap-4 text-xs font-rethink">
       <span className="font-medium text-stone-500 shrink-0">{label}</span>
-      <span className="font-medium text-stone-800 text-right">{value}</span>
+      <span className="font-medium text-stone-800 text-right tabular-nums">{value}</span>
     </div>
   );
 }

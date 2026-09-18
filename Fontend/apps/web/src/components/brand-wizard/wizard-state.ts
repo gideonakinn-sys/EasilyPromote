@@ -13,7 +13,7 @@ import type { CampaignUsageRights, UsageRightsDuration, UsageRightsExclusivity, 
 export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] = [
-  { step: 1, title: "Objective", short: "Objective" },
+  { step: 1, title: "Campaign type", short: "Type" },
   { step: 2, title: "Destination and access", short: "Access" },
   { step: 3, title: "Audience and creators", short: "Audience" },
   { step: 4, title: "Pay and budget", short: "Budget" },
@@ -21,54 +21,42 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
   { step: 6, title: "Review and launch", short: "Launch" },
 ];
 
-// The four campaign types brands pick from. Views and Referrals can be picked together, which is
-// Hybrid: a views target plus a referral budget (the API's sign-ups objective). Referrals alone is
-// referrals only (SPEC D31): a referral budget and no views target.
-export type ObjectiveCategory = "views" | "content" | "referrals" | "hybrid";
+// The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
+// Hybrid is views and sign-ups together; Sign-ups alone is a referral budget with no views target
+// (SPEC D31); Content stands alone.
+export type CampaignType = "views" | "signups" | "content" | "hybrid";
 
-export const OBJECTIVE_CATEGORIES: { value: ObjectiveCategory; title: string; body: string }[] = [
-  { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver." },
-  { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve." },
-  {
-    value: "referrals",
-    title: "Referrals",
-    body: "Pay only for sign-ups tracked with a code for each creator. No views target.",
-  },
-  { value: "hybrid", title: "Hybrid", body: "Views and referrals together: pay for the views creators deliver and for every sign-up." },
+export const CAMPAIGN_TYPES: { value: CampaignType; title: string; body: string }[] = [
+  { value: "views", title: "Boost Visibility", body: "Get creators talking about your brand. Pay per view." },
+  { value: "signups", title: "Drive Sign-ups", body: "Turn creator audiences into users via referral codes." },
+  { value: "content", title: "Get Content Made", body: "Commission creators to produce content for your page." },
+  { value: "hybrid", title: "Boost & Convert", body: "Get visibility and sign-ups in one campaign." },
 ];
 
 type ObjectiveChoice = Pick<WizardData, "objective" | "includeViews">;
 
-export function selectedObjectiveCategories({ objective, includeViews }: ObjectiveChoice): ObjectiveCategory[] {
-  if (!objective) return [];
-  if (objective === "content") return ["content"];
-  if (objective === "views") return ["views"];
-  if (REFERRAL_OBJECTIVE_VALUES.includes(objective)) return includeViews ? ["views", "referrals", "hybrid"] : ["referrals"];
-  return [];
+// The single card a brand has picked, given the underlying objective and whether views come with it.
+export function selectedCampaignType({ objective, includeViews }: ObjectiveChoice): CampaignType | null {
+  if (objective === "content") return "content";
+  if (!usesReferralBudget(objective)) return "views";
+  return includeViews ? "hybrid" : "signups";
 }
 
-// Multi-select: Content stands alone and clears the others. Views and Referrals combine into Hybrid;
-// Referrals alone is referrals only. Unticking one half of Hybrid leaves the other.
-export function objectiveAfterToggle({ objective, includeViews }: ObjectiveChoice, category: ObjectiveCategory): ObjectiveChoice {
-  const referral = REFERRAL_OBJECTIVE_VALUES.includes(objective);
-  const referralObjective = referral ? objective : "signups";
-  switch (category) {
+// Writing a picked card back into the objective and views-flag that drive every later step.
+export function applyCampaignType(
+  type: CampaignType
+): ObjectiveChoice {
+  switch (type) {
     case "content":
       return { objective: "content", includeViews: true };
     case "views":
-      if (!referral) return { objective: "views", includeViews: true };
-      // Hybrid loses its views (referrals only), or referrals only gains them (Hybrid).
-      return { objective, includeViews: !includeViews };
-    case "referrals":
-      if (!referral) return { objective: "signups", includeViews: objective === "views" };
-      // Unticking Referrals from Hybrid leaves Views; referrals only stays picked.
-      return includeViews ? { objective: "views", includeViews: true } : { objective, includeViews: false };
+      return { objective: "views", includeViews: true };
+    case "signups":
+      return { objective: "signups", includeViews: false };
     case "hybrid":
-      return { objective: referralObjective, includeViews: true };
+      return { objective: "signups", includeViews: true };
   }
 }
-
-const REFERRAL_OBJECTIVE_VALUES: CampaignObjective[] = ["signups", "downloads", "leads", "sales", "clicks"];
 
 export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body: string; available: boolean }[] = [
   { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve.", available: true },
@@ -226,6 +214,8 @@ export interface WizardData {
   // Referral objectives only: whether a views target comes with the referral budget (Hybrid) or not
   // (referrals only, SPEC D31). Ignored for Views and Content.
   includeViews: boolean;
+  // Step 1 (Campaign type): whether the brand has picked one of the four cards yet.
+  typeChosen: boolean;
   contentDestination: ContentDestination;
   creatorAccess: CreatorAccess;
   locations: string[];
@@ -302,10 +292,11 @@ export const genderFilterActive = (data: WizardData) => data.requireGenderMatch 
 
 export const INITIAL_WIZARD_DATA: WizardData = {
   name: "",
-  category: "Music",
+  category: "",
   coverImageUrl: "",
   objective: "content",
   includeViews: true,
+  typeChosen: false,
   contentDestination: "creator_page",
   creatorAccess: "open_call",
   locations: [],
@@ -401,10 +392,57 @@ export function referralBudgetValue(data: WizardData): number {
   return Math.round(Number(data.referralBudget) || 0);
 }
 
+// The centralized heading for each wizard step. Sub-sections inside a step keep their own
+// smaller headings; this is the one shown in the wizard's page header.
+export function stepHeading(data: WizardData, step: WizardStep): { title: string; body: string } {
+  switch (step) {
+    case 1:
+      return {
+        title: "Set up your campaign",
+        body: "",
+      };
+    case 2:
+      return asksContentDestination(data)
+        ? { title: "Where should the content go?", body: "Choose where approved content ends up." }
+        : { title: "How do creators get in?", body: "This is your Creator Access. You can use either with any objective." };
+    case 3:
+      return {
+        title: "Who do you want to reach?",
+        body: "Audience Targeting describes the people watching. Location and platform must match; age and gender help us rank creators unless you make them required, and interests only rank.",
+      };
+    case 4: {
+      const hybrid = isHybrid(data);
+      const isContent = data.objective === "content";
+      const referral = usesReferralBudget(data.objective);
+      const views = hasViewsTarget(data);
+      const noun = actionNoun(data.objective, true);
+      let body = "You choose how many views you want. The price comes from our price table.";
+      if (hybrid) {
+        body = "You set a base for each deliverable you approve and fund a bonus pool. Our fee is added on top of both, so creators get exactly your base and bonus.";
+      } else if (isContent) {
+        body = "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate.";
+      } else if (referral && !views) {
+        body = `You fund a referral budget and creators are paid only for each verified ${noun}, at a reward our team sets. There's no views target.`;
+      } else if (referral) {
+        body = `You fund a budget and our team sets what creators earn per ${noun}.`;
+      }
+      return { title: "What you'll pay", body };
+    }
+    case 5:
+      return {
+        title: "Your brief",
+        body: "Everything a creator needs to make the content. Creators see this before they join or apply.",
+      };
+    default:
+      return { title: data.name || "Your campaign", body: "Check everything, then pay to put your campaign live." };
+  }
+}
+
 // Returns what's missing on a step, or an empty list when it's complete.
 export function stepProblems(data: WizardData, step: WizardStep): string[] {
   const problems: string[] = [];
   if (step === 1) {
+    if (!data.typeChosen) problems.push("Choose a campaign type to continue.");
     if (!data.name.trim()) problems.push("Give your campaign a name.");
     if (!data.coverImageUrl) problems.push("Upload a cover image.");
     if (!isObjectiveAvailable(data.objective)) problems.push("Choose an objective that's available now.");
@@ -500,6 +538,8 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     coverImageUrl: saved.coverImageUrl || "",
     // The API derives every campaign's objective, including older drafts', so it's never re-derived here.
     objective: saved.campaignObjective || INITIAL_WIZARD_DATA.objective,
+    // A resumed draft was already typed, so the step-1 picker starts "chosen".
+    typeChosen: true,
     // A saved referral campaign with no views target is referrals only (SPEC D31).
     includeViews: saved.campaignObjective && usesReferralBudget(saved.campaignObjective) ? (saved.targetViews || 0) > 0 : true,
     contentDestination: saved.contentDestination || "creator_page",

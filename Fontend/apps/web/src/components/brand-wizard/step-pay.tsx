@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
-import { Field, OptionCard, StepHeading, TEXT_INPUT_CLASS } from "./wizard-fields";
+import { Field, OptionCard, TEXT_INPUT_CLASS } from "./wizard-fields";
 import {
   BONUS_METRIC_OPTIONS,
   MAX_DELIVERABLES,
@@ -87,7 +87,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
           if (digits && Number(digits) >= MIN_VIEWS) onChange(Number(digits));
         }}
         onBlur={() => setInput(views.toLocaleString())}
-        className={TEXT_INPUT_CLASS}
+        className={cn(TEXT_INPUT_CLASS, "tabular-nums")}
       />
       <div className="flex gap-2">
         {PRESET_VIEWS.map((preset) => (
@@ -97,7 +97,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
             aria-pressed={views === preset}
             onClick={() => onChange(preset)}
             className={cn(
-              "flex-1 py-2 rounded-full text-xs font-medium font-rethink transition-colors",
+              "flex-1 py-2 rounded-full text-xs font-medium font-rethink tabular-nums transition-colors",
               views === preset ? "bg-stone-900 text-white" : "bg-stone-100 text-stone-600"
             )}
           >
@@ -120,7 +120,7 @@ function NairaInput({ id, value, placeholder, onChange }: { id: string; value: s
         placeholder={placeholder}
         value={value}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(digitsOnly(e.target.value))}
-        className={cn(TEXT_INPUT_CLASS, "pl-8")}
+        className={cn(TEXT_INPUT_CLASS, "pl-8 tabular-nums")}
       />
     </div>
   );
@@ -142,22 +142,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
   const views = hasViewsTarget(data);
 
   return (
-    <div className="space-y-8">
-      <StepHeading
-        title="What you'll pay"
-        body={
-          hybrid
-            ? "You set a base for each deliverable you approve and fund a bonus pool. Our fee is added on top of both, so creators get exactly your base and bonus."
-            : isContent
-            ? "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate."
-            : referral && !views
-              ? `You fund a referral budget and creators are paid only for each verified ${unitNoun}, at a reward our team sets. There's no views target.`
-            : referral
-              ? `You fund a budget and our team sets what creators earn per ${unitNoun}.`
-              : "You choose how many views you want. The price comes from our price table."
-        }
-      />
-
+    <div className="space-y-10">
       {isContent && (
         <Field label="How Creators Are Paid">
           <div role="radiogroup" aria-label="How creators are paid" className="grid grid-cols-1 md:grid-cols-2 gap-2">
