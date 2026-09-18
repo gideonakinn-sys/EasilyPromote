@@ -7,7 +7,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@ep/ui/components/dropdown-menu";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
-import { ChipGroup, Field, ListInput, TEXTAREA_CLASS, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
+import { ChipGroup, Field, ListInput, StepHeading, TEXTAREA_CLASS, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import { PLATFORM_OPTIONS, type WizardBrief, type WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
@@ -17,8 +17,6 @@ interface StepBriefProps {
 }
 
 const withHash = (value: string) => (value.startsWith("#") ? value : `#${value}`).replace(/\s+/g, "");
-
-const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 
 const BRIEF_PLACEHOLDER = "e.g. Film a 30s morning skincare routine featuring the serum. Casual, natural light, talk to camera…";
 
@@ -124,19 +122,14 @@ export function StepBrief({ data, update }: StepBriefProps) {
           </div>
 
           {brief.briefMode === "write" ? (
-            <div className="space-y-1.5">
-              <textarea
-                id="brief-creator"
-                maxLength={4000}
-                placeholder={BRIEF_PLACEHOLDER}
-                value={brief.summary}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBrief({ summary: e.target.value })}
-                className={cn(TEXTAREA_CLASS, "min-h-[160px]")}
-              />
-              <span className="px-1 text-[11px] font-medium text-neutral-400 font-rethink" aria-live="polite">
-                {countWords(brief.summary).toLocaleString()} words
-              </span>
-            </div>
+            <textarea
+              id="brief-creator"
+              maxLength={4000}
+              placeholder={BRIEF_PLACEHOLDER}
+              value={brief.summary}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBrief({ summary: e.target.value })}
+              className={cn(TEXTAREA_CLASS, "min-h-[160px]")}
+            />
           ) : (
             <div className="space-y-2">
               <input ref={scriptInputRef} type="file" accept=".pdf" onChange={handleScriptUpload} className="hidden" />
@@ -181,7 +174,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="What type of content?" hint="Pick the formats creators should make for each platform you chose.">
+      <Field label="What type of content?" tooltip="Pick the formats creators should make for each platform you chose.">
         <div className="space-y-4">
           {data.platforms.length === 0 ? (
             <p className="text-xs font-medium text-neutral-400 font-rethink">Choose platforms on the Audience step first.</p>
@@ -191,7 +184,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
               if (!group) return null;
               return (
                 <div key={platform} className="space-y-2">
-                  <p className="text-sm font-semibold text-neutral-900 font-rethink tracking-tight">{platformLabel(platform)}</p>
+                  <StepHeading title={platformLabel(platform)} body="" />
                   <ChipGroup
                     label={`${platformLabel(platform)} content types`}
                     options={group}
@@ -216,14 +209,17 @@ export function StepBrief({ data, update }: StepBriefProps) {
         />
       </Field>
 
-      <Field label="Reference content" htmlFor="brief-references" hint="Links to examples you like.">
-        <ListInput
+      <Field label="Reference content" htmlFor="brief-references">
+        <input
           id="brief-references"
-          items={brief.referenceVideos}
-          onChange={(referenceVideos) => setBrief({ referenceVideos })}
-          placeholder="https://www.instagram.com/reel/…"
-          maxItems={10}
+          type="url"
           maxLength={500}
+          placeholder="https://www.instagram.com/reel/…"
+          value={brief.referenceVideos[0] ?? ""}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setBrief({ referenceVideos: e.target.value.trim() ? [e.target.value] : [] })
+          }
+          className={TEXT_INPUT_CLASS}
         />
       </Field>
 
@@ -309,7 +305,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
         <>
           <Field
             label="How long can you flag content after it's submitted?"
-            hint="After this window, submitted content is confirmed and creators are paid based on views."
+            tooltip="After this window, submitted content is confirmed and creators are paid based on views."
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
