@@ -215,7 +215,6 @@ export interface WizardBrief {
   contentTypes: string[];
   toneDosDonts: string;
   // Content campaigns only.
-  deliverablesQuantity: string;
   deliverablesLength: string;
   submissionDeadline: string;
   usageRightsChoice: "campaign" | "paid_ads" | "anywhere";
@@ -299,7 +298,6 @@ export const EMPTY_BRIEF: WizardBrief = {
   keyMessage: "",
   contentTypes: [],
   toneDosDonts: "",
-  deliverablesQuantity: "1",
   deliverablesLength: "",
   submissionDeadline: "",
   usageRightsChoice: "campaign",
@@ -610,7 +608,6 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
           keyMessage: brief.keyMessage || list(brief.keyMessages)[0] || "",
           contentTypes: list(brief.contentTypes),
           toneDosDonts: brief.toneDosDonts || brief.tone || "",
-          deliverablesQuantity: String(brief.deliverablesQuantity ?? "1"),
           deliverablesLength: brief.deliverablesLength || "",
           submissionDeadline: brief.submissionDeadline || "",
           usageRightsChoice: brief.usageRightsChoice === "paid_ads" || brief.usageRightsChoice === "anywhere" ? brief.usageRightsChoice : "campaign",
@@ -725,7 +722,6 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
       keyMessage: brief.keyMessage.trim() || undefined,
       contentTypes: brief.contentTypes,
       toneDosDonts: brief.toneDosDonts.trim() || undefined,
-      deliverablesQuantity: brief.deliverablesQuantity.trim() || undefined,
       deliverablesLength: brief.deliverablesLength.trim() || undefined,
       submissionDeadline: brief.submissionDeadline || undefined,
       usageRightsChoice: brief.usageRightsChoice,
@@ -735,7 +731,7 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
       hashtags: brief.hashtags,
       soundUrl: brief.soundUrl.trim() || undefined,
       referenceVideos: brief.referenceVideos,
-      tone: (brief.toneDosDonts.trim() || brief.tone.trim()) || undefined,
+      tone: brief.tone.trim() || undefined,
       keyMessages: brief.keyMessage.trim() ? [brief.keyMessage.trim()] : brief.keyMessages,
       productInfo: brief.productInfo.trim() || undefined,
       approvalRequirements: brief.approvalRequirements.trim() || undefined,

@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenu
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
 import { ChipGroup, Field, ListInput, StepHeading, TEXTAREA_CLASS, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
-import { PLATFORM_OPTIONS, type WizardBrief, type WizardData } from "./wizard-state";
+import { MAX_DELIVERABLES, PLATFORM_OPTIONS, type WizardBrief, type WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
 interface StepBriefProps {
@@ -101,7 +101,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
 
   return (
     <div className="space-y-8">
-      <Field label="Creator Brief" hint={brief.briefMode === "write" ? "Include the format, length, and key message." : undefined}>
+      <Field label="Creator Brief" htmlFor="brief-creator" hint={brief.briefMode === "write" ? "Include the format, length, and key message." : undefined}>
         <div className="space-y-3">
           <div className="inline-flex rounded-full bg-neutral-100 p-1" role="tablist" aria-label="How you write the brief">
             {(["write", "upload"] as const).map((mode) => (
@@ -163,8 +163,9 @@ export function StepBrief({ data, update }: StepBriefProps) {
         </div>
       </Field>
 
-      <Field label="Key message" tooltip="The main thing you want viewers to take away or do — your CTA, if you have one.">
+      <Field label="Key message" htmlFor="brief-key-message" tooltip="The main thing you want viewers to take away or do — your CTA, if you have one.">
         <input
+          id="brief-key-message"
           type="text"
           maxLength={200}
           placeholder="e.g. Try the serum before bed"
@@ -239,20 +240,24 @@ export function StepBrief({ data, update }: StepBriefProps) {
         <>
           <Field label="Deliverables" hint="How many pieces of content creators will submit.">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Quantity">
+              <Field label="Quantity" htmlFor="brief-deliverables-qty">
                 <input
+                  id="brief-deliverables-qty"
                   type="text"
                   inputMode="numeric"
                   maxLength={3}
-                  value={brief.deliverablesQuantity}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setBrief({ deliverablesQuantity: e.target.value.replace(/\D/g, "") || "1" })
-                  }
+                  placeholder="10"
+                  value={data.deliverables}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 3);
+                    update({ deliverables: digits && Number(digits) > MAX_DELIVERABLES ? String(MAX_DELIVERABLES) : digits });
+                  }}
                   className={cn(TEXT_INPUT_CLASS, "tabular-nums")}
                 />
               </Field>
-              <Field label="Approx. length">
+              <Field label="Approx. length" htmlFor="brief-deliverables-length">
                 <input
+                  id="brief-deliverables-length"
                   type="text"
                   maxLength={40}
                   placeholder="30–60 sec"
@@ -268,6 +273,7 @@ export function StepBrief({ data, update }: StepBriefProps) {
             <input
               id="brief-deadline"
               type="date"
+              min={new Date().toISOString().slice(0, 10)}
               value={brief.submissionDeadline}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBrief({ submissionDeadline: e.target.value })}
               className={TEXT_INPUT_CLASS}

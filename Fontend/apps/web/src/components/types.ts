@@ -384,7 +384,6 @@ export interface CampaignBrief {
   keyMessage?: string;
   contentTypes?: string[];
   toneDosDonts?: string;
-  deliverablesQuantity?: string;
   deliverablesLength?: string;
   submissionDeadline?: string;
   usageRightsChoice?: "campaign" | "paid_ads" | "anywhere";

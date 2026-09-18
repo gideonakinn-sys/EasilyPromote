@@ -61,7 +61,8 @@ const setupSchema = z.object({
   creatorEligibility: creatorEligibilitySchema.optional(),
   brief: z
     .object({
-      summary: shortText(2000).optional(),
+      // The wizard's Creator Brief text area allows 4000 characters.
+      summary: shortText(4000).optional(),
       dos: textList(10, 300).optional(),
       donts: textList(10, 300).optional(),
       // Campaign engine: content approval (ticket 07): a hashtag is one word (hyphens allowed),
@@ -81,6 +82,15 @@ const setupSchema = z.object({
       keyMessages: textList(10, 300).optional(),
       productInfo: shortText(1000).optional(),
       approvalRequirements: shortText(500).optional(),
+      // Write-the-brief step: persisted so drafts restore exactly where the brand left them.
+      briefMode: z.enum(["write", "upload"]).optional(),
+      keyMessage: shortText(300).optional(),
+      contentTypes: z.array(shortText(50)).max(20).optional(),
+      toneDosDonts: shortText(2000).optional(),
+      deliverablesLength: shortText(40).optional(),
+      submissionDeadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "The deadline must be a date (YYYY-MM-DD)").optional(),
+      usageRightsChoice: z.enum(["campaign", "paid_ads", "anywhere"]).optional(),
+      disputeWindow: z.enum(["24h", "48h", "72h"]).optional(),
     })
     .optional(),
   // M8 batch 7: clicks campaigns redirect to this URL (SPEC D29).
