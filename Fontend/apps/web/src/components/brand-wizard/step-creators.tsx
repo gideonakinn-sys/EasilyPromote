@@ -57,7 +57,7 @@ function CustomTermsForm({ data, update }: StepCreatorsProps) {
       </Field>
 
       <div className="space-y-2">
-        <p className="text-xs font-medium text-neutral-500 font-rethink">Exclusivity</p>
+        <p className="text-xs font-medium text-neutral-900 font-rethink">Exclusivity</p>
         <div className="space-y-3" role="radiogroup" aria-label="Exclusivity">
           {USAGE_EXCLUSIVITY_OPTIONS.map((option) => (
             <OptionCard

@@ -23,7 +23,7 @@ export function Field({ label, htmlFor, hint, tooltip, children }: FieldProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
-        <label htmlFor={htmlFor} className="text-xs font-medium text-neutral-500 font-rethink">
+        <label htmlFor={htmlFor} className="text-xs font-medium text-neutral-900 font-rethink">
           {label}
         </label>
         {tooltip && <InfoTooltip text={tooltip} />}
@@ -172,7 +172,7 @@ export function ListInput({ id, items, onChange, placeholder, maxItems, maxLengt
           disabled={!value.trim() || full}
           className={cn(
             "shrink-0 px-5 py-3 rounded-full text-sm font-semibold font-rethink transition-colors",
-            value.trim() && !full ? "bg-[#FEB604] text-[#171717]" : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
+            value.trim() && !full ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-400 cursor-not-allowed"
           )}
         >
           Add

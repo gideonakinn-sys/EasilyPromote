@@ -209,13 +209,11 @@ export interface WizardBrief {
   keyMessages: string[];
   productInfo: string;
   approvalRequirements: string;
-  // Rich text creator brief, with a PDF alternative and a small AI entry point.
-  creatorBrief: string;
+  // Whether the brand wrote the brief inline or uploaded a PDF instead.
   briefMode: "write" | "upload";
   keyMessage: string;
   contentTypes: string[];
   toneDosDonts: string;
-  referenceFiles: { url: string; name: string }[];
   // Content campaigns only.
   deliverablesQuantity: string;
   deliverablesLength: string;
@@ -297,12 +295,10 @@ export const EMPTY_BRIEF: WizardBrief = {
   keyMessages: [],
   productInfo: "",
   approvalRequirements: "",
-  creatorBrief: "",
   briefMode: "write",
   keyMessage: "",
   contentTypes: [],
   toneDosDonts: "",
-  referenceFiles: [],
   deliverablesQuantity: "1",
   deliverablesLength: "",
   submissionDeadline: "",
@@ -610,12 +606,10 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
           keyMessages: list(brief.keyMessages),
           productInfo: brief.productInfo || "",
           approvalRequirements: brief.approvalRequirements || "",
-          creatorBrief: brief.creatorBrief || brief.summary || "",
           briefMode: brief.briefMode === "upload" ? "upload" : "write",
           keyMessage: brief.keyMessage || list(brief.keyMessages)[0] || "",
           contentTypes: list(brief.contentTypes),
           toneDosDonts: brief.toneDosDonts || brief.tone || "",
-          referenceFiles: Array.isArray(brief.referenceFiles) ? brief.referenceFiles.map((f) => ({ url: String(f?.url || ""), name: String(f?.name || "Reference") })) : [],
           deliverablesQuantity: String(brief.deliverablesQuantity ?? "1"),
           deliverablesLength: brief.deliverablesLength || "",
           submissionDeadline: brief.submissionDeadline || "",
@@ -625,7 +619,6 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
       : {
           ...EMPTY_BRIEF,
           summary: saved.contentBrief || "",
-          creatorBrief: saved.contentBrief || "",
           keyMessage: saved.keyMessageCta || "",
           keyMessages: saved.keyMessageCta ? [saved.keyMessageCta] : [],
           toneDosDonts: saved.whatToAvoid || "",
@@ -728,12 +721,10 @@ export function campaignPayload(data: WizardData, { savedObjective, wizardStep }
     ...targetingPayload(data),
     brief: {
       summary: brief.summary.trim() || undefined,
-      creatorBrief: brief.creatorBrief.trim() || undefined,
       briefMode: brief.briefMode,
       keyMessage: brief.keyMessage.trim() || undefined,
       contentTypes: brief.contentTypes,
       toneDosDonts: brief.toneDosDonts.trim() || undefined,
-      referenceFiles: brief.referenceFiles.map((file) => ({ url: file.url, name: file.name })),
       deliverablesQuantity: brief.deliverablesQuantity.trim() || undefined,
       deliverablesLength: brief.deliverablesLength.trim() || undefined,
       submissionDeadline: brief.submissionDeadline || undefined,

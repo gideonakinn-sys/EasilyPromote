@@ -379,13 +379,11 @@ export interface CampaignBrief {
   keyMessages?: string[];
   productInfo?: string;
   approvalRequirements?: string;
-  // Rich-text creator brief and the type-conditional settings from the wizard.
-  creatorBrief?: string;
+  // Whether the brief was written inline or uploaded as a PDF.
   briefMode?: "write" | "upload";
   keyMessage?: string;
   contentTypes?: string[];
   toneDosDonts?: string;
-  referenceFiles?: { url: string; name: string }[];
   deliverablesQuantity?: string;
   deliverablesLength?: string;
   submissionDeadline?: string;
