@@ -14,18 +14,12 @@ export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] = [
   { step: 1, title: "Campaign type", short: "Type" },
-  { step: 2, title: "Destination", short: "Destination" },
-  { step: 3, title: "Audience and creators", short: "Audience" },
+  { step: 2, title: "Audience", short: "Audience" },
+  { step: 3, title: "Creators", short: "Creators" },
   { step: 4, title: "Pay and budget", short: "Budget" },
   { step: 5, title: "Brief", short: "Brief" },
   { step: 6, title: "Review and launch", short: "Launch" },
 ];
-
-// The wizard is always five steps: Campaign type > Audience and creators > Pay and budget >
-// Brief > Review and launch. Where content goes and usage rights live inside the Audience step
-// (step 3), so the old Destination step (2) never shows. Numeric ids are kept stable so saved
-// drafts and the backend's wizardStep 1-6 contract are unaffected.
-export const ACTIVE_WIZARD_STEPS = WIZARD_STEPS.filter(({ step }) => step !== 2);
 
 // The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
 // Hybrid is views and sign-ups together; Sign-ups alone is a referral budget with no views target
@@ -155,7 +149,7 @@ export const RANK_OPTIONS = [
   { value: "rank3", label: "Rank 3 or higher" },
   { value: "rank4", label: "Rank 4 or higher" },
   { value: "rank5", label: "Rank 5 or higher" },
-  { value: "elite", label: "Elite" },
+  { value: "elite", label: "Elite only" },
 ];
 
 export const BADGE_OPTIONS = [
@@ -407,10 +401,15 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
         title: "Set up your campaign",
         body: "",
       };
-    case 3:
+    case 2:
       return {
         title: "Who do you want to reach?",
-        body: "Audience Targeting describes the people watching. Location and platform must match; age and gender help us rank creators unless you make them required, and interests only rank.",
+        body: "Set the audience this campaign should reach.",
+      };
+    case 3:
+      return {
+        title: "Who can take part?",
+        body: "Decide how creators join and the requirements they must meet.",
       };
     case 4: {
       const hybrid = isHybrid(data);
@@ -454,7 +453,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
       else if (!isDestinationUrl(data.destinationUrl)) problems.push("The destination link must start with http:// or https://.");
     }
   }
-  if (step === 3) {
+  if (step === 2) {
     if (data.platforms.length === 0) problems.push("Choose at least one platform.");
     const share = data.minLocationShare.trim();
     if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
@@ -462,10 +461,12 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (ageFilterActive(data) && (wholeNumber(ageShare) === null || Number(ageShare) > 100)) problems.push("The required age share must be a whole number from 0 to 100.");
     const genderShare = data.minGenderShare.trim();
     if (genderFilterActive(data) && (wholeNumber(genderShare) === null || Number(genderShare) > 100)) problems.push("The required gender share must be a whole number from 0 to 100.");
+  }
+  if (step === 3) {
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
     const engagement = data.minEngagementRate.trim();
     if (engagement && !(Number(engagement) >= 0 && Number(engagement) <= 100)) problems.push("Engagement rate must be from 0 to 100.");
-    // Content campaigns answer destination and usage rights here on the Audience step.
+    // Content campaigns answer destination and usage rights here on the Creators step.
     if (asksContentDestination(data)) problems.push(...usageRightsProblems(data));
   }
   if (step === 4) {
@@ -482,7 +483,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
         if (!cap) problems.push("Set the most one creator can earn in bonus, in whole naira.");
         else if (pool && cap > pool) problems.push("A creator's bonus cap can't be more than the bonus pool.");
         if (data.bonusMetric === "views" && data.contentDestination === "brand_page") {
-          problems.push("A views bonus needs creators to post on their own page. Choose creator page or both in step 2, or a sign-up or download bonus.");
+          problems.push("A views bonus needs creators to post on their own page. Choose creator page or both on the Creators step, or a sign-up or download bonus.");
         }
       }
     } else {
@@ -502,7 +503,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
 
 // Where a draft saved without a wizard step picks up: the first step that still needs something.
 export function resumeStep(data: WizardData): WizardStep {
-  for (const { step } of ACTIVE_WIZARD_STEPS) {
+  for (const { step } of WIZARD_STEPS) {
     if (step < 6 && stepProblems(data, step).length > 0) return step;
   }
   return 6;

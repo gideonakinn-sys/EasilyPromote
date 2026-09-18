@@ -19,9 +19,9 @@ const SECTIONS: HelpSection[] = [
             <HelpText>Open your dashboard and choose Create Campaign. The setup has six steps:</HelpText>
             <HelpList
               items={[
-                "Objective: what you want from the campaign.",
-                "Destination and access: where the content ends up, and how creators get in.",
-                "Audience and creators: who you want to reach and who can take part.",
+                "Campaign type: what you want from the campaign — visibility, sign-ups, content, or both.",
+                "Audience: who you want to reach.",
+                "Creators: how creators get in, and who can take part.",
                 "Pay and budget: what creators earn and what you pay.",
                 "Brief: everything creators need to make the content.",
                 "Review and launch: check the summary and pay.",
