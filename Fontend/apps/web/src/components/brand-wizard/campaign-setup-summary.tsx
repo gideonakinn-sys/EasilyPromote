@@ -6,7 +6,6 @@ import {
   ACCESS_OPTIONS,
   BONUS_METRIC_OPTIONS,
   DESTINATION_OPTIONS,
-  GENDER_OPTIONS,
   OBJECTIVE_OPTIONS,
   PLATFORM_OPTIONS,
   USAGE_RIGHTS_TEXT,
@@ -20,7 +19,6 @@ import {
   ageFilterActive,
   genderFilterActive,
   DEFAULT_HARD_FILTER_SHARE,
-  specificGenders,
   type WizardData,
 } from "./wizard-state";
 import type { AudienceTargeting, CampaignBrief, CampaignObjective, ContentDestination, ContentPay, CreatorAccess, CreatorEligibility, HybridBonus } from "../types";
@@ -41,10 +39,19 @@ export interface SetupSummaryInput {
   destinationUrl?: string | null;
   // Custom usage-rights terms (SPEC D30); missing or standard shows the standard licence.
   usageRights?: CampaignUsageRights | null;
+  // A brief uploaded as a PDF instead of written inline.
+  scriptUrl?: string | null;
+  scriptFileName?: string | null;
 }
 
 const labelFor = (options: { value: string; label: string }[], value: string) => options.find((option) => option.value === value)?.label || value;
 const joined = (values: string[] | undefined) => (values && values.length ? values.join(", ") : null);
+
+const BRIEF_USAGE_RIGHTS = [
+  { value: "campaign", label: "Campaign use only" },
+  { value: "paid_ads", label: "Can be used in brand's paid ads" },
+  { value: "anywhere", label: "Can be used anywhere, indefinitely." },
+];
 
 export function setupFromWizard(data: WizardData): SetupSummaryInput {
   const isContent = data.objective === "content";
@@ -79,6 +86,8 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
     brief: data.brief,
     destinationUrl: data.objective === "clicks" ? data.destinationUrl.trim() : undefined,
     usageRights: asksContentDestination(data) ? usageRightsPayload(data) : null,
+    scriptUrl: data.scriptUrl || null,
+    scriptFileName: data.scriptFileName || null,
   };
 }
 
@@ -168,7 +177,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
   // Destination and usage rights are only a Content campaign's (SPEC D31).
   const isContent = setup.campaignObjective === "content";
   // Referral objectives are Hybrid with a views target and referrals only without one (SPEC D31).
-  const campaignType = isContent ? "Content" : !referral ? "Views" : (setup.targetViews || 0) > 0 ? "Hybrid" : "Referrals";
+  const campaignType = isContent ? "Content" : !referral ? "Views" : (setup.targetViews || 0) > 0 ? "Hybrid" : "Sign-ups";
 
   return (
     <div className="space-y-6">
@@ -234,38 +243,34 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
               : "Anywhere"
           }
         />
-        <SummaryRow label="Age" value={joined(targeting.ageRanges) || "Any"} />
-        {targeting.requireAgeMatch && joined(targeting.ageRanges) && (
-          <SummaryRow label="Age Requirement" value={`Required: at least ${targeting.minAgeShare ?? DEFAULT_HARD_FILTER_SHARE}% aged ${joined(targeting.ageRanges)}`} />
-        )}
-        <SummaryRow label="Gender" value={joined(targeting.genders?.map((value) => labelFor(GENDER_OPTIONS, value))) || "Everyone"} />
-        {targeting.requireGenderMatch && specificGenders(targeting.genders || []).length > 0 && (
-          <SummaryRow
-            label="Gender Requirement"
-            value={`Required: at least ${targeting.minGenderShare ?? DEFAULT_HARD_FILTER_SHARE}% ${specificGenders(targeting.genders || [])
-              .map((value) => labelFor(GENDER_OPTIONS, value).toLowerCase())
-              .join(" or ")}`}
-          />
-        )}
-        <SummaryRow label="Interests" value={joined(targeting.interests) || "Any"} />
+        <SummaryRow label="Customer age range" value={joined(targeting.ageRanges) || "Any"} />
       </Section>
 
       <Section title="Creator Eligibility">
         <SummaryRow label="Minimum Followers" value={eligibility.minFollowers ? eligibility.minFollowers.toLocaleString() : "Any"} />
-        <SummaryRow label="Categories" value={joined(eligibility.categories) || "Any"} />
+        <SummaryRow label="Content categories" value={joined(eligibility.categories) || "Any"} />
       </Section>
 
       <Section title="Brief">
         <BriefText label="Summary" text={brief.summary} />
+        {setup.scriptUrl && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-500 font-rethink">Brief PDF</p>
+            <a href={setup.scriptUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
+              {setup.scriptFileName || "View brief"}
+            </a>
+          </div>
+        )}
+        <BriefText label="Key Message" text={brief.keyMessage} />
+        <BriefText label="Content Types" text={joined(brief.contentTypes) || undefined} />
         <BriefList label="Do's" items={brief.dos} />
         <BriefList label="Don'ts" items={brief.donts} />
-        <BriefList label="Key Messages" items={brief.keyMessages} />
         <BriefText label="Hashtags" text={joined(brief.hashtags) || undefined} />
-        <BriefText label="Tone" text={brief.tone} />
+        <BriefText label="Tone, do's & don'ts" text={brief.toneDosDonts || brief.tone} />
         <BriefText label="Sound" text={brief.soundUrl} link />
         {brief.referenceVideos && brief.referenceVideos.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-neutral-500 font-rethink">Reference Videos</p>
+            <p className="text-xs font-medium text-neutral-500 font-rethink">Reference Content</p>
             {brief.referenceVideos.map((link) => (
               <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
                 {link}
@@ -273,9 +278,17 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
             ))}
           </div>
         )}
+        {isContent && brief.usageRightsChoice && (
+          <SummaryRow label="Brief Usage Rights" value={labelFor(BRIEF_USAGE_RIGHTS, brief.usageRightsChoice)} />
+        )}
+        {isContent && brief.deliverablesLength && <BriefText label="Deliverables Approx. Length" text={brief.deliverablesLength} />}
+        {isContent && brief.submissionDeadline && <BriefText label="Submission Deadline" text={brief.submissionDeadline} />}
+        {!isContent && setup.campaignObjective === "views" && brief.disputeWindow && (
+          <SummaryRow label="Dispute Window" value={brief.disputeWindow} />
+        )}
         <BriefText label="Product Info" text={brief.productInfo} />
         <BriefText label="Approval Requirements" text={brief.approvalRequirements} />
-        {!brief.summary && <p className="text-xs text-neutral-400 font-medium font-rethink">No brief yet.</p>}
+        {!brief.summary && !setup.scriptUrl && <p className="text-xs text-neutral-400 font-medium font-rethink">No brief yet.</p>}
       </Section>
     </div>
   );
