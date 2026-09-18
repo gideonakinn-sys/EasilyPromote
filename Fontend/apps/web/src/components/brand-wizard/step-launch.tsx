@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { QuoteSummary } from "./step-pay";
+import { QuoteSummary, payVariant } from "./step-pay";
 import { CampaignSetupSummary, setupFromWizard } from "./campaign-setup-summary";
 import { actionNoun, isHybrid, tracksConversions, type WizardData } from "./wizard-state";
 import type { CampaignQuote } from "../types";
@@ -37,7 +37,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
         </span>
       </div>
 
-      <QuoteSummary quote={quote} loading={quoteLoading} error={quoteError} />
+      <QuoteSummary variant={payVariant(data)} quote={quote} loading={quoteLoading} error={quoteError} />
 
       <CampaignSetupSummary setup={setupFromWizard(data)} />
 

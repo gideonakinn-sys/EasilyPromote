@@ -422,7 +422,7 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
       const referral = usesReferralBudget(data.objective);
       const views = hasViewsTarget(data);
       const noun = actionNoun(data.objective, true);
-      let body = "You choose how many views you want. The price comes from our price table.";
+      let body = "Set how many views you want — we'll calculate the cost automatically.";
       if (hybrid) {
         body = "You set a base for each deliverable you approve and fund a bonus pool. Our fee is added on top of both, so creators get exactly your base and bonus.";
       } else if (isContent) {

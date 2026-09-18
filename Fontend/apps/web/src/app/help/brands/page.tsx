@@ -82,7 +82,7 @@ const SECTIONS: HelpSection[] = [
               items={[
                 "Content: you set what creators earn for each approved deliverable, in whole naira.",
                 "Sign-ups and downloads: you fund a referral budget. Our team sets the reward creators earn per sign-up or download. You can't set it.",
-                "Views: the price comes from our price table. You choose how many views you want.",
+                "Views: you choose how many views you want and the cost is calculated automatically.",
               ]}
             />
           </>

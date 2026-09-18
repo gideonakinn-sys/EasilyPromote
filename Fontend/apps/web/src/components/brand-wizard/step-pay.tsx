@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
+import { InfoTooltip } from "@ep/ui/components/info-tooltip";
 import { Field, OptionCard, TEXT_INPUT_CLASS } from "./wizard-fields";
 import {
   BONUS_METRIC_OPTIONS,
@@ -24,28 +25,54 @@ const formatCompact = (value: number) =>
 
 const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
+const PLATFORM_FEE_TOOLTIP = "Covers payment processing, creator matching, and dispute support.";
+
+// Which cost rows the breakdown should show, by campaign type.
+export type PayVariant = "views" | "signups" | "hybrid" | "content";
+
+export function payVariant(data: Pick<WizardData, "objective" | "payShape" | "includeViews">): PayVariant {
+  if (data.objective === "content") return "content";
+  if (!usesReferralBudget(data.objective)) return "views";
+  return hasViewsTarget(data) ? "hybrid" : "signups";
+}
+
 interface QuoteSummaryProps {
+  variant: PayVariant;
   quote: CampaignQuote | null;
   loading: boolean;
   error: string;
 }
 
-// Numbers come from the API's calculator, the same one checkout charges with.
-export function QuoteSummary({ quote, loading, error }: QuoteSummaryProps) {
-  // Hybrid quotes carry the bonus pool in place of a performance budget.
-  const hybrid = quote?.bonusPool !== undefined;
-  // A referrals-only quote (SPEC D31) buys no views, so it has no creator budget to show.
-  const referralsOnly = !hybrid && quote?.creatorBudget === 0 && (quote?.performanceBudget || 0) > 0;
-  const rows: { label: string; value: number | undefined }[] = [
-    ...(referralsOnly ? [] : [{ label: hybrid ? "Base Budget" : "Creator Budget", value: quote?.creatorBudget }]),
-    hybrid ? { label: "Bonus Pool", value: quote?.bonusPool } : { label: "Performance Budget", value: quote?.performanceBudget },
-    { label: "Platform Fee", value: quote?.platformFee },
-  ];
+// Numbers come from the API's calculator, the same one checkout charges with. The rows follow the
+// campaign type: Views and Content pay the creator budget, sign-ups pay a performance budget,
+// Hybrid shows both.
+export function QuoteSummary({ variant, quote, loading, error }: QuoteSummaryProps) {
+  const hybridBonus = quote?.bonusPool !== undefined;
+  const rows: { label: string; value: number | undefined; tooltip?: string }[] =
+    variant === "signups"
+      ? [
+          { label: "Performance Budget", value: quote?.performanceBudget },
+          { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
+        ]
+      : variant === "hybrid"
+        ? [
+            { label: "Creator Budget", value: quote?.creatorBudget },
+            { label: "Performance Budget", value: quote?.performanceBudget },
+            { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
+          ]
+        : [
+            { label: "Creator Budget", value: quote?.creatorBudget },
+            ...(variant === "content" && hybridBonus ? [{ label: "Bonus Pool", value: quote?.bonusPool }] : []),
+            { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
+          ];
   return (
     <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2 text-xs font-rethink" aria-live="polite" aria-busy={loading}>
       {rows.map((row) => (
         <div key={row.label} className="flex justify-between gap-3">
-          <span className="font-medium text-neutral-500">{row.label}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="font-medium text-neutral-500">{row.label}</span>
+            {row.tooltip && <InfoTooltip text={row.tooltip} />}
+          </span>
           <span className={cn("font-medium tabular-nums", loading ? "text-neutral-300" : "text-neutral-900")}>
             {quote ? formatNaira(row.value) : "—"}
           </span>
@@ -75,7 +102,7 @@ function ViewsPicker({ views, onChange }: ViewsPickerProps) {
   }, [views]);
 
   return (
-    <Field label="Target Views" htmlFor="target-views" hint={`${MIN_VIEWS.toLocaleString()} views minimum. The price comes from our price table.`}>
+    <Field label="Target Views" htmlFor="target-views" hint={`${MIN_VIEWS.toLocaleString()} views minimum. You can enter any amount above that — cost updates automatically.`}>
       <input
         id="target-views"
         type="text"
@@ -140,6 +167,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
   const unitNoun = actionNoun(data.objective);
   const hybrid = isContent && data.payShape === "hybrid";
   const views = hasViewsTarget(data);
+  const variant = payVariant(data);
 
   return (
     <div className="space-y-10">
@@ -249,7 +277,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
         </Field>
       )}
 
-      <QuoteSummary quote={quote} loading={quoteLoading} error={quoteError} />
+      <QuoteSummary variant={variant} quote={quote} loading={quoteLoading} error={quoteError} />
     </div>
   );
 }
