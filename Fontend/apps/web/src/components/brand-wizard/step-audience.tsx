@@ -24,8 +24,7 @@ const digitsOnly = (value: string) => value.replace(/\D/g, "");
 
 export function StepAudience({ data, update }: StepAudienceProps) {
   return (
-    <div className="space-y-10">
-      <div className="space-y-8">
+    <div className="space-y-12">
         <Field label="Platforms" hint="Choose where your customers spend time. Creators must have an account on at least one to take part.">
           <ChipGroup
             label="Platforms"
@@ -114,7 +113,6 @@ export function StepAudience({ data, update }: StepAudienceProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </Field>
-      </div>
     </div>
   );
 }
