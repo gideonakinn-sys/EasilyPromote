@@ -445,6 +445,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
     if (!data.typeChosen) problems.push("Choose a campaign type to continue.");
     if (!data.name.trim()) problems.push("Give your campaign a name.");
     if (!data.coverImageUrl) problems.push("Upload a cover image.");
+    if (!data.category.trim()) problems.push("Choose your industry.");
     if (!isObjectiveAvailable(data.objective)) problems.push("Choose an objective that's available now.");
     if (data.objective === "clicks") {
       if (!data.destinationUrl.trim()) problems.push("Add the destination link people go to when they click.");

@@ -81,6 +81,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
   const connection = useReferralConnection(referral && step === LAST_STEP);
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];
+  // Step 1: Continue stays off until a type, name, cover image and industry are all set.
+  const stepOneReady =
+    step !== 1 ||
+    (data.typeChosen && Boolean(data.name.trim()) && Boolean(data.coverImageUrl) && Boolean(data.category.trim()));
 
   const update = useCallback((patch: Partial<WizardData>) => {
     isModified.current = true;
@@ -473,7 +477,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
             <button
               type="button"
               onClick={handleNext}
-              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || (step === 1 && !data.typeChosen)}
+              disabled={loadingDraft || Boolean(loadError) || launching || (step === LAST_STEP && needsConnection) || !stepOneReady}
               className="flex-1 py-3 bg-[#FEB604] text-[#171717] font-semibold text-sm rounded-full border border-neutral-100 font-rethink disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {launching ? <Spinner className="size-4" /> : primaryLabel}
