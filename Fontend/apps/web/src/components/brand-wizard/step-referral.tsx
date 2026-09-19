@@ -30,8 +30,8 @@ export function StepReferral({ connection }: StepReferralProps) {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2">
+    <div className="space-y-10">
+      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-neutral-900 font-rethink">Referral tracking</p>
           <span
@@ -48,10 +48,6 @@ export function StepReferral({ connection }: StepReferralProps) {
           When someone signs up using a creator&apos;s code, your server tells us — that&apos;s how conversions are counted and
           creators are paid. Each creator gets a unique code, e.g. {status?.codePrefix || "BRAND"}-TUNDE.
         </p>
-      </div>
-
-      <div className="space-y-3">
-        <StepHeading title="Understand how referral tracking works" body="" />
         <a
           href="/dashboard/brand/settings/referral"
           target="_blank"
@@ -62,7 +58,7 @@ export function StepReferral({ connection }: StepReferralProps) {
         </a>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-5">
         <StepHeading
           title="Connect your app"
           body="Generate a signing key, then send the rest to your developer — two quick checks."

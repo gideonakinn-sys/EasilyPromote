@@ -41,7 +41,7 @@ interface StepHeadingProps {
 
 export function StepHeading({ title, body }: StepHeadingProps) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <h4 className="font-rethink font-semibold text-base text-neutral-900 tracking-tight">{title}</h4>
       {body && <p className="font-rethink text-xs text-neutral-500 font-medium leading-relaxed">{body}</p>}
     </div>
