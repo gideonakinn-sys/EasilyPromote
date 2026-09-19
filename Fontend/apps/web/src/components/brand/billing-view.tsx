@@ -67,7 +67,7 @@ export function BillingView() {
         { label: "Deposited", value: formatNaira(stats.money.deposited) },
         { label: "Paid to creators", value: formatNaira(stats.money.released) },
         { label: "Refunded", value: formatNaira(stats.money.refunded) },
-        { label: "In escrow", value: formatNaira(stats.money.escrowBalance) },
+        { label: "On hold", value: formatNaira(stats.money.escrowBalance) },
       ]
     : [];
 
@@ -80,7 +80,7 @@ export function BillingView() {
         <h2 className="font-rethink font-semibold text-lg text-neutral-900 tracking-tight">
           Billing & payments
         </h2>
-        <p className="mt-1 text-xs font-medium text-neutral-500">Money in, money out, and what&apos;s held in escrow.</p>
+        <p className="mt-1 text-xs font-medium text-neutral-500">Money in, money out, and what&apos;s on hold while payments clear.</p>
       </div>
 
       {loading && !stats ? (

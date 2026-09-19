@@ -18,14 +18,14 @@ export function ConnectAppChecklist({ status, hasKey }: { status: ReferralStatus
       label: "Your app checks a code",
       detail: verification?.codeCheckAt
         ? `Received ${formatWhen(verification.codeCheckAt).toLowerCase()}`
-        : "Waiting for your server to call the code check",
+        : "Waiting for your app to check a code with us",
       done: Boolean(verification?.codeCheckAt),
     },
     {
       label: "Your app sends a test conversion",
       detail: verification?.conversionAt
         ? `Received ${formatWhen(verification.conversionAt).toLowerCase()}`
-        : 'Waiting for a conversion with "test": true from your server',
+        : "Waiting for a test sign-up from your app",
       done: Boolean(verification?.conversionAt),
     },
   ];

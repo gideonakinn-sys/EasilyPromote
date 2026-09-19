@@ -215,7 +215,7 @@ export const PAY_SHAPE_OPTIONS: { value: ContentPayShape; title: string; body: s
 ];
 
 export const BONUS_METRIC_OPTIONS: { value: BonusMetric; title: string; body: string }[] = [
-  { value: "views", title: "Views", body: "Creators earn per 1,000 verified views on their live post, at our price table's rate." },
+  { value: "views", title: "Views", body: "Creators earn per 1,000 verified views on their live post. You'll see the exact amount when you set your views budget." },
   { value: "signups", title: "Sign-ups", body: "Creators earn per sign-up with their code. Our team sets the reward." },
   { value: "downloads", title: "Downloads", body: "Creators earn per app install with their code. Our team sets the reward." },
 ];
@@ -487,7 +487,7 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
       } else if (referral && !views) {
         body =
           data.objective === "signups"
-            ? "Fund a budget, and creators earn a reward for every verified sign-up they bring in. Unused budget is refunded when the campaign ends."
+            ? "Fund a budget, and creators earn a reward for every verified sign-up they bring in."
             : `You fund a referral budget and creators are paid only for each verified ${noun}, at a reward our team sets. There's no views target.`;
       } else if (referral) {
         body = `You fund a budget and our team sets what creators earn per ${noun}.`;

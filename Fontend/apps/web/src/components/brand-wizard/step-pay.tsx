@@ -206,7 +206,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
             </div>
           </Field>
           <Field
-            label="Number of Deliverables"
+            label="Deliverables"
             htmlFor="deliverables"
             hint={`Each deliverable is one Placement a creator can take. Up to ${MAX_DELIVERABLES}.`}
           >
@@ -248,7 +248,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
           </Field>
           <p className="bg-neutral-100 rounded-2xl px-4 py-3 text-xs text-neutral-600 font-medium font-rethink">
             {data.bonusMetric === "views"
-              ? "The bonus per 1,000 views comes from our price table."
+              ? "The bonus per 1,000 views is calculated from your view target."
               : `Bonus per ${actionNoun(data.bonusMetric)} is set by our team. Your app needs to be connected before you pay.`}
           </p>
         </>

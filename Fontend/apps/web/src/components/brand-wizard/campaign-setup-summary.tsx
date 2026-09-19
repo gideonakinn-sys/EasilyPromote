@@ -211,7 +211,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
                 <SummaryRow label="Bonus Cap Per Creator" value={formatNaira(setup.hybridBonus.capPerCreator)} />
                 <SummaryRow
                   label={setup.hybridBonus.metric === "views" ? "Bonus Per 1,000 Views" : "Bonus Per Conversion"}
-                  value={setup.hybridBonus.ratePerThousandViews ? formatNaira(setup.hybridBonus.ratePerThousandViews) : setup.hybridBonus.metric === "views" ? "From our price table" : "Set by our team"}
+                  value={setup.hybridBonus.ratePerThousandViews ? formatNaira(setup.hybridBonus.ratePerThousandViews) : setup.hybridBonus.metric === "views" ? "Calculated from your views" : "Set by our team"}
                 />
               </>
             )}

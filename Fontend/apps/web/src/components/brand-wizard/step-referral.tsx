@@ -45,8 +45,8 @@ export function StepReferral({ connection }: StepReferralProps) {
           </span>
         </div>
         <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
-          When someone signs up using a creator&apos;s code, your server tells us — that&apos;s how conversions are counted and
-          creators are paid. Each creator gets a unique code, e.g. {status?.codePrefix || "BRAND"}-TUNDE.
+          We count it automatically and the creator is paid from your budget. Each creator gets a unique code, e.g.{" "}
+          {status?.codePrefix || "BRAND"}-TUNDE.
         </p>
         <a
           href="/dashboard/brand/settings/referral"
@@ -70,14 +70,14 @@ export function StepReferral({ connection }: StepReferralProps) {
         )}
 
         <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2">
-          <p className="text-xs font-medium text-neutral-500 font-rethink">Webhook URL</p>
+          <p className="text-xs font-medium text-neutral-500 font-rethink">Tracking URL</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 min-w-0 font-mono text-xs text-neutral-900 bg-neutral-100 px-3 py-2 rounded-lg break-all">
               {webhookUrl || "…"}
             </code>
             <button
               type="button"
-              onClick={() => copy(webhookUrl, "Webhook URL")}
+              onClick={() => copy(webhookUrl, "Tracking URL")}
               disabled={!webhookUrl}
               className="shrink-0 px-3 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 disabled:opacity-50"
             >
@@ -85,7 +85,7 @@ export function StepReferral({ connection }: StepReferralProps) {
             </button>
           </div>
           <p className="text-[11px] text-neutral-500 font-medium font-rethink leading-relaxed">
-            Your app posts conversions here, signed with your key.
+            Your app sends sign-ups here. Give this to your developer.
           </p>
         </div>
 

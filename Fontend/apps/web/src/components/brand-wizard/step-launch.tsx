@@ -80,7 +80,7 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection, 
         </div>
         <p className="font-rethink text-xs text-neutral-600 leading-normal">
           {referral && !connection.verified
-            ? "Your webhook isn't connected yet, so you can't publish this campaign. Connect it on the Referral tracking step to pay and launch."
+            ? "Your referral tracking isn't connected yet, so you can't publish this campaign. Connect it on the Referral tracking step to pay and launch."
             : data.creatorAccess === "application_required"
             ? "When your campaign is live, creators apply and you approve them from your dashboard before they create content. Creators are paid from your budget as their results are verified."
             : hybrid
