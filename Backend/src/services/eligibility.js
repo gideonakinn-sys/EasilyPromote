@@ -38,18 +38,7 @@ function evaluateEligibility(profile, campaign) {
     : accounts;
   const platformNames = targetPlatforms.map((p) => PLATFORM_NAMES[p] || p);
 
-  const targetLocations = targeting.locations || [];
-  const hasLocationData = Boolean(profile.audience && profile.audience.locations && profile.audience.locations.length);
-  // With no minimum share, targeted locations only rank creators.
-  if (targetLocations.length && targeting.minLocationShare > 0) {
-    const minShare = targeting.minLocationShare;
-    const share = locationShare(profile, targeting);
-    if (!hasLocationData) {
-      fail("audienceLocation", `Add your audience locations to join campaigns targeting ${listWithOr(targetLocations)}`);
-    } else if (share < minShare) {
-      fail("audienceLocation", `Needs at least ${minShare}% of your audience in ${listWithOr(targetLocations)} (you have ${share}%)`);
-    }
-  }
+  // Targeted locations only rank creators (D8); they never block.
 
   if (targetPlatforms.length && accountsOnTarget.length === 0) {
     fail("platform", `Needs a connected ${listWithOr(platformNames)} account`);

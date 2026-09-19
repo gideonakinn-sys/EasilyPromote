@@ -18,7 +18,7 @@ const creator = (overrides = {}, connectedPlatforms = ["tiktok"]) => ({
   connectedPlatforms,
 });
 
-test("location share, platform, verification and eligibility rules are hard requirements; age, gender and interests never change the count", () => {
+test("platform, verification and eligibility rules are hard requirements; age, gender, location and interests never change the count", () => {
   const pool = [
     creator(),
     creator({ audience: { locations: [{ name: "Abuja", percentage: 90 }] } }),
@@ -28,8 +28,7 @@ test("location share, platform, verification and eligibility rules are hard requ
     creator({}, []), // no connected account
   ];
   assert.equal(countEligible(pool, {}), 4);
-  assert.equal(countEligible(pool, { audienceTargeting: { locations: ["Lagos"], minLocationShare: 50 } }), 3);
-  // Targeted locations without a minimum share only rank.
+  // Targeted locations only rank, so they never change the count.
   assert.equal(countEligible(pool, { audienceTargeting: { locations: ["Lagos"] } }), 4);
   assert.equal(countEligible(pool, { audienceTargeting: { platforms: ["instagram"] } }), 1);
   assert.equal(countEligible(pool, { creatorEligibility: { verifiedOnly: true } }), 1);

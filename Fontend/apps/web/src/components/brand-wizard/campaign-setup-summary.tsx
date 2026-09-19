@@ -70,7 +70,6 @@ export function setupFromWizard(data: WizardData): SetupSummaryInput {
     creatorAccess: data.creatorAccess,
     audienceTargeting: {
       locations: data.locations,
-      minLocationShare: data.minLocationShare ? Number(data.minLocationShare) : undefined,
       ageRanges: data.ageRanges,
       genders: data.genders,
       interests: data.interests,
@@ -240,11 +239,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         <SummaryRow label="Platforms" value={joined(targeting.platforms?.map((value) => labelFor(PLATFORM_OPTIONS, value))) || "Any"} />
         <SummaryRow
           label="Locations"
-          value={
-            joined(targeting.locations)
-              ? `${joined(targeting.locations)}${targeting.minLocationShare ? ` (at least ${targeting.minLocationShare}% of followers)` : ""}`
-              : "Anywhere"
-          }
+          value={joined(targeting.locations) || "Anywhere"}
         />
         <SummaryRow label="Customer age range" value={joined(targeting.ageRanges) || "Any"} />
       </Section>

@@ -124,7 +124,7 @@ function keysOf(campaign) {
     const terms = campaignTerms(campaign);
     const targeting = campaign.audienceTargeting || {};
     const rules = campaign.creatorEligibility || {};
-    const join = JSON.stringify([targeting.locations, targeting.minLocationShare, targeting.platforms, rules]);
+    const join = JSON.stringify([targeting.locations, targeting.platforms, rules]);
     keys = {
       id: String(campaign._id),
       brand: campaign.businessId ? String(campaign.businessId) : null,

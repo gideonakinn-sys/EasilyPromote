@@ -1,5 +1,5 @@
 // Creator Eligibility: can this creator join or apply, why not, and how well do they match?
-// Location, platform and verification are hard requirements; age, gender and interests only rank (D8).
+// Platform and verification are hard requirements; age, gender, location and interests only rank (D8).
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { evaluateEligibility } = require("../../src/services/eligibility");
@@ -24,30 +24,30 @@ function creator(overrides = {}) {
   };
 }
 
-const lagosCampaign = { audienceTargeting: { locations: ["Lagos"], minLocationShare: 50 }, creatorEligibility: {} };
+const lagosCampaign = { audienceTargeting: { locations: ["Lagos"] }, creatorEligibility: {} };
 
-test("audience location decides, not where the creator lives", () => {
+test("audience location only ranks creators; the bigger share matches better", () => {
   const abujaCreator = creator({ city: "Abuja", state: "FCT", audience: { source: "self_reported", locations: [{ name: "Lagos", percentage: 80 }, { name: "Abuja", percentage: 15 }] } });
   const lagosCreator = creator({ audience: { source: "self_reported", locations: [{ name: "Lagos", percentage: 10 }, { name: "London", percentage: 70 }] } });
 
-  assert.equal(evaluateEligibility(abujaCreator, lagosCampaign).eligible, true);
-
-  const result = evaluateEligibility(lagosCreator, lagosCampaign);
-  assert.equal(result.eligible, false);
-  assert.deepEqual(result.failures, [{ criterion: "audienceLocation", message: "Needs at least 50% of your audience in Lagos (you have 10%)" }]);
+  const onTarget = evaluateEligibility(abujaCreator, lagosCampaign);
+  const lowShare = evaluateEligibility(lagosCreator, lagosCampaign);
+  assert.equal(onTarget.eligible, true);
+  assert.equal(lowShare.eligible, true, "a low location share never blocks, it only ranks");
+  assert.ok(onTarget.matchScore > lowShare.matchScore);
 });
 
 test("the location share counts every targeted location together, ignoring letter case", () => {
-  const campaign = { audienceTargeting: { locations: ["Lagos", "Abuja"], minLocationShare: 50 }, creatorEligibility: {} };
+  const campaign = { audienceTargeting: { locations: ["Lagos", "Abuja"] }, creatorEligibility: {} };
   const split = creator({ audience: { source: "self_reported", locations: [{ name: "lagos", percentage: 30 }, { name: "ABUJA", percentage: 25 }] } });
   assert.equal(evaluateEligibility(split, campaign).eligible, true);
+  assert.equal(evaluateEligibility(split, campaign).matchScore, 55);
 });
 
-test("a creator with no audience data can't join a location-targeted campaign", () => {
+test("a creator with no audience data can still join a location-targeted campaign", () => {
   const result = evaluateEligibility(creator({ audience: undefined }), lagosCampaign);
-  assert.equal(result.eligible, false);
-  assert.equal(result.failures[0].criterion, "audienceLocation");
-  assert.match(result.failures[0].message, /Add your audience locations/);
+  assert.equal(result.eligible, true);
+  assert.deepEqual(result.failures, []);
 });
 
 test("each creator eligibility rule explains itself when it isn't met", () => {
@@ -77,7 +77,7 @@ test("each creator eligibility rule explains itself when it isn't met", () => {
 
 test("a creator who meets every rule is eligible with no failures", () => {
   const campaign = {
-    audienceTargeting: { locations: ["Lagos"], minLocationShare: 50, platforms: ["tiktok"] },
+    audienceTargeting: { locations: ["Lagos"], platforms: ["tiktok"] },
     creatorEligibility: { verifiedOnly: true, minFollowers: 10000, minEngagementRate: 5, categories: ["Music"], minRank: "rank2" },
   };
   assert.deepEqual(evaluateEligibility(creator(), campaign).failures, []);
@@ -113,8 +113,8 @@ test("a follower minimum asks for the missing count instead of saying the creato
   ]);
 });
 
-test("targeting locations with no minimum share only ranks; platform names ignore letter case", () => {
-  const campaign = { audienceTargeting: { locations: ["Lagos"], minLocationShare: 0, platforms: ["TikTok"] }, creatorEligibility: {} };
+test("targeted locations only rank; platform names ignore letter case", () => {
+  const campaign = { audienceTargeting: { locations: ["Lagos"], platforms: ["TikTok"] }, creatorEligibility: {} };
   const result = evaluateEligibility(creator({ audience: undefined }), campaign);
   assert.deepEqual(result.failures, []);
 });

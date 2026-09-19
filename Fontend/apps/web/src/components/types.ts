@@ -347,7 +347,6 @@ export interface HybridBonus {
 
 export interface AudienceTargeting {
   locations?: string[];
-  minLocationShare?: number;
   ageRanges?: string[];
   genders?: string[];
   interests?: string[];

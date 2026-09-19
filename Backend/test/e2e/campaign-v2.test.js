@@ -22,7 +22,7 @@ const contentCampaign = {
   contentPay: { ratePerDeliverable: 15000, deliverables: 10 },
   contentDestination: "both",
   creatorAccess: "application_required",
-  audienceTargeting: { locations: ["Lagos"], minLocationShare: 50, ageRanges: ["18-24", "25-34"], genders: ["female"], interests: ["fashion"], platforms: ["tiktok", "instagram"] },
+  audienceTargeting: { locations: ["Lagos"], ageRanges: ["18-24", "25-34"], genders: ["female"], interests: ["fashion"], platforms: ["tiktok", "instagram"] },
   creatorEligibility: { minFollowers: 5000, minEngagementRate: 3, categories: ["Fashion", "Lifestyle"], verifiedOnly: true, minRank: "rank2", requiredBadges: [] },
   brief: {
     summary: "Style three looks from the summer drop",

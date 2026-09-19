@@ -40,15 +40,15 @@ test("brands see a rounded count of creators who could join, never who they are"
   assert.deepEqual(everyone.body, { count: 10, fewerThan: false, label: "About 10 creators match" });
   assert.deepEqual(Object.keys(everyone.body).sort(), ["count", "fewerThan", "label"]);
 
-  const lagos = await count(brand, { audienceTargeting: { locations: ["Lagos"], minLocationShare: 50 } });
+  const lagos = await count(brand, { audienceTargeting: { locations: ["Lagos"] } });
   assert.deepEqual(lagos.body, { count: 10, fewerThan: false, label: "About 10 creators match" });
 
   // Age and gender only rank (D8): same count.
-  const ranked = await count(brand, { audienceTargeting: { locations: ["Lagos"], minLocationShare: 50, ageRanges: ["18-24"], genders: ["female"] } });
+  const ranked = await count(brand, { audienceTargeting: { locations: ["Lagos"], ageRanges: ["18-24"], genders: ["female"] } });
   assert.deepEqual(ranked.body, lagos.body);
 
   // A small result isn't given exactly.
-  const verified = await count(brand, { audienceTargeting: { locations: ["Lagos"], minLocationShare: 50 }, creatorEligibility: { verifiedOnly: true } });
+  const verified = await count(brand, { audienceTargeting: { locations: ["Lagos"] }, creatorEligibility: { verifiedOnly: true } });
   assert.deepEqual(verified.body, { count: 10, fewerThan: true, label: "Fewer than 10 creators match" });
 
   const nobody = await count(brand, { audienceTargeting: { platforms: ["youtube"] } });
@@ -65,7 +65,7 @@ test("only brands can ask, the settings are validated, and a brand is rate-limit
   assert.equal((await count(creator, {})).status, 403);
 
   const brand = await harness.registerBrand();
-  const invalid = await count(brand, { audienceTargeting: { minLocationShare: 140 } });
+  const invalid = await count(brand, { audienceTargeting: { ageRanges: ["18-24"], minAgeShare: 101 } });
   assert.equal(invalid.status, 400);
   const badPlatform = await count(brand, { audienceTargeting: { platforms: ["myspace"] } });
   assert.equal(badPlatform.status, 400);

@@ -236,7 +236,6 @@ export interface WizardData {
   contentDestination: ContentDestination;
   creatorAccess: CreatorAccess;
   locations: string[];
-  minLocationShare: string;
   ageRanges: string[];
   genders: string[];
   interests: string[];
@@ -326,7 +325,6 @@ export const INITIAL_WIZARD_DATA: WizardData = {
   contentDestination: "creator_page",
   creatorAccess: "open_call",
   locations: [],
-  minLocationShare: "",
   ageRanges: [],
   genders: ["all"],
   interests: [],
@@ -481,8 +479,6 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
   }
   if (step === 2) {
     if (data.platforms.length === 0) problems.push("Choose at least one platform.");
-    const share = data.minLocationShare.trim();
-    if (share && (wholeNumber(share) === null || Number(share) > 100)) problems.push("Audience share must be a whole number from 0 to 100.");
   }
   if (step === 3) {
     if (data.categories.length === 0) problems.push("Choose at least one content category.");
@@ -575,7 +571,6 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     contentDestination: saved.contentDestination || "creator_page",
     creatorAccess: saved.creatorAccess || "open_call",
     locations: list(targeting.locations),
-    minLocationShare: targeting.minLocationShare !== undefined ? String(targeting.minLocationShare) : "",
     ageRanges: list(targeting.ageRanges),
     genders: targeting.genders?.length ? targeting.genders : ["all"],
     interests: list(targeting.interests),
@@ -679,7 +674,6 @@ export function targetingPayload(data: WizardData): { audienceTargeting: Record<
   return {
     audienceTargeting: {
       locations: data.locations,
-      minLocationShare: optionalWhole(data.minLocationShare),
       ageRanges: data.ageRanges,
       genders: data.genders,
       interests: data.interests,

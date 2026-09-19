@@ -280,8 +280,6 @@ const campaignSchema = new mongoose.Schema(
     },
     audienceTargeting: {
       locations: { type: [String], default: undefined },
-      // Share of a creator's audience that must be in the locations above, combined.
-      minLocationShare: Number,
       ageRanges: { type: [String], default: undefined },
       genders: { type: [String], default: undefined },
       interests: { type: [String], default: undefined },

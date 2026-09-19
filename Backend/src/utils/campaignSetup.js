@@ -20,7 +20,6 @@ const textList = (maxItems, maxLength) => z.array(shortText(maxLength).min(1)).m
 
 const audienceTargetingSchema = z.object({
   locations: textList(10, 60).optional(),
-  minLocationShare: z.number().int().min(0).max(100).optional(),
   ageRanges: z.array(z.enum(AGE_RANGES)).optional(),
   genders: z.array(z.enum(["all", "female", "male", "other"])).optional(),
   interests: textList(20, 40).optional(),
