@@ -124,7 +124,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="space-y-3">
       <h5 className="text-xs font-medium text-neutral-500 font-rethink">{title}</h5>
-      <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-3">{children}</div>
+      <div className="bg-white border border-neutral-200 rounded-[18px] p-6 space-y-6">{children}</div>
     </section>
   );
 }
@@ -132,9 +132,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function BriefList({ label, items }: { label: string; items: string[] | undefined }) {
   if (!items || items.length === 0) return null;
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <p className="text-xs font-medium text-neutral-500 font-rethink">{label}</p>
-      <ul className="space-y-1">
+      <ul className="space-y-2">
         {items.map((item) => (
           <li key={item} className="text-sm font-medium text-neutral-900 font-rethink leading-relaxed break-words">
             {item}
@@ -148,7 +148,7 @@ function BriefList({ label, items }: { label: string; items: string[] | undefine
 function BriefText({ label, text, link }: { label: string; text: string | undefined; link?: boolean }) {
   if (!text) return null;
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <p className="text-xs font-medium text-neutral-500 font-rethink">{label}</p>
       {link ? (
         <a href={text} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
@@ -252,7 +252,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
       <Section title="Brief">
         <BriefText label="Summary" text={brief.summary} />
         {setup.scriptUrl && (
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className="text-xs font-medium text-neutral-500 font-rethink">Brief PDF</p>
             <a href={setup.scriptUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
               {setup.scriptFileName || "View brief"}
@@ -267,7 +267,7 @@ export function CampaignSetupSummary({ setup }: CampaignSetupSummaryProps) {
         <BriefText label="Tone, do's & don'ts" text={brief.toneDosDonts || brief.tone} />
         <BriefText label="Sound" text={brief.soundUrl} link />
         {brief.referenceVideos && brief.referenceVideos.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className="text-xs font-medium text-neutral-500 font-rethink">Reference Content</p>
             {brief.referenceVideos.map((link) => (
               <a key={link} href={link} target="_blank" rel="noopener noreferrer" className="block text-sm font-medium text-neutral-900 font-rethink underline underline-offset-2 break-all">
