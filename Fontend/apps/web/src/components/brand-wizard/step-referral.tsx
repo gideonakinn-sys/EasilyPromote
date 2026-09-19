@@ -58,7 +58,7 @@ export function StepReferral({ connection }: StepReferralProps) {
         </a>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-6">
         <StepHeading
           title="Connect your app"
           body="Generate a signing key, then send the rest to your developer — two quick checks."

@@ -31,7 +31,7 @@ export function ConnectAppChecklist({ status, hasKey }: { status: ReferralStatus
   ];
 
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-5">
       {items.map((item) => (
         <li key={item.label} className="flex items-start gap-3">
           <span
