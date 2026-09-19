@@ -20,12 +20,14 @@ import { StepCreators } from "./brand-wizard/step-creators";
 import { StepPay } from "./brand-wizard/step-pay";
 import { StepBrief } from "./brand-wizard/step-brief";
 import { StepReferral } from "./brand-wizard/step-referral";
+import { StepContentRights } from "./brand-wizard/step-content-rights";
 import { StepLaunch } from "./brand-wizard/step-launch";
 import {
   INITIAL_WIZARD_DATA,
   WIZARD_STEPS,
   activeWizardSteps,
   campaignPayload,
+  stepTitle,
   isObjectiveAvailable,
   pricingPayload,
   resumeStep,
@@ -344,7 +346,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       {step === 3 && <StepCreators data={data} update={update} />}
       {step === 4 && <StepPay data={data} update={update} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} />}
       {step === 5 && <StepBrief data={data} update={update} />}
-      {step === 6 && <StepReferral connection={connection} />}
+      {step === 6 && (data.objective === "content" ? <StepContentRights data={data} update={update} /> : <StepReferral connection={connection} />)}
       {step === LAST_STEP && (
         <StepLaunch data={data} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} connection={connection} onOpenReferralStep={() => goTo(6)} />
       )}
@@ -394,7 +396,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                   <HugeiconsIcon icon={CircleDashedIcon} size={18} className={step === s ? "text-neutral-900" : "text-neutral-400"} />
                 )}
               </span>
-              <span className={cn("text-[10px] font-medium font-rethink", s < step ? "text-green-600" : step === s ? "text-neutral-900" : "text-neutral-400")}>{short}</span>
+              <span className={cn("text-[10px] font-medium font-rethink", s < step ? "text-green-600" : step === s ? "text-neutral-900" : "text-neutral-400")}>{stepTitle(data, s).short}</span>
             </button>
           ))}
         </nav>
@@ -429,7 +431,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
                     )}
                   </span>
                   <span className={cn("text-sm font-medium font-rethink", s < step ? "text-green-600" : step === s ? "text-neutral-900" : "text-neutral-400")}>
-                    {title}
+                    {stepTitle(data, s).title}
                   </span>
                 </button>
               ))}

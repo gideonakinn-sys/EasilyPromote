@@ -27,11 +27,21 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
   { step: 7, title: "Review and launch", short: "Launch" },
 ];
 
-// The referral step (6) only appears for campaigns that count conversions (Sign-ups, Hybrid);
-// Views and Content jump straight from the Brief to Review. Numeric ids are kept stable so saved
-// drafts and the backend's wizardStep 1-7 contract are unaffected.
+// Step 6 is the pre-review setup step: it's the referral webhook for campaigns that count
+// conversions (Sign-ups, Hybrid), content rights for Content, and hidden for Views. Numeric ids
+// are kept stable so saved drafts and the backend's wizardStep 1-7 contract are unaffected.
 export function activeWizardSteps(data: Pick<WizardData, "objective">): (typeof WIZARD_STEPS)[number][] {
-  return usesReferralBudget(data.objective) ? WIZARD_STEPS : WIZARD_STEPS.filter(({ step }) => step !== 6);
+  return usesReferralBudget(data.objective) || data.objective === "content"
+    ? WIZARD_STEPS
+    : WIZARD_STEPS.filter(({ step }) => step !== 6);
+}
+
+// The sidebar label for step 6 changes with the campaign: Content picks up a rights step, the
+// conversion campaigns the referral setup step.
+export function stepTitle(data: Pick<WizardData, "objective">, step: WizardStep): { title: string; short: string } {
+  if (step === 6 && data.objective === "content") return { title: "Content rights", short: "Rights" };
+  const meta = WIZARD_STEPS.find((entry) => entry.step === step);
+  return { title: meta?.title || "Review and launch", short: meta?.short || "Launch" };
 }
 
 // The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
@@ -46,7 +56,7 @@ export const CAMPAIGN_TYPES: { value: CampaignType; title: string; body: string 
   { value: "hybrid", title: "Boost & Convert", body: "Get visibility and sign-ups in one campaign." },
 ];
 
-type ObjectiveChoice = Pick<WizardData, "objective" | "includeViews">;
+type ObjectiveChoice = Pick<WizardData, "objective" | "includeViews"> & { creatorAccess?: WizardData["creatorAccess"] };
 
 // The single card a brand has picked, given the underlying objective and whether views come with it.
 export function selectedCampaignType({ objective, includeViews }: ObjectiveChoice): CampaignType | null {
@@ -56,12 +66,13 @@ export function selectedCampaignType({ objective, includeViews }: ObjectiveChoic
 }
 
 // Writing a picked card back into the objective and views-flag that drive every later step.
+// Content is application-only: it reads as a commission, not an open role.
 export function applyCampaignType(
   type: CampaignType
 ): ObjectiveChoice {
   switch (type) {
     case "content":
-      return { objective: "content", includeViews: true };
+      return { objective: "content", includeViews: true, creatorAccess: "application_required" };
     case "views":
       return { objective: "views", includeViews: true };
     case "signups":
@@ -470,13 +481,18 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
         body: "Everything a creator needs to make the content. Creators see this before they join or apply.",
       };
     case 6:
-      return {
-        title: "Set up referral tracking",
-        body:
-          data.objective === "signups"
-            ? "Connect your app so every verified sign-up is counted and creators are paid from your budget."
-            : "Connect your app so every conversion is counted and creators are paid from your budget.",
-      };
+      return data.objective === "content"
+        ? {
+            title: "Content rights",
+            body: "Decide where finished content goes and how you can use it.",
+          }
+        : {
+            title: "Set up referral tracking",
+            body:
+              data.objective === "signups"
+                ? "Connect your app so every verified sign-up is counted and creators are paid from your budget."
+                : "Connect your app so every conversion is counted and creators are paid from your budget.",
+          };
     default:
       return { title: data.name || "Your campaign", body: "Check everything, then pay to put your campaign live." };
   }
@@ -502,9 +518,9 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
   if (step === 3) {
     if (data.categories.length === 0) problems.push("Choose at least one content category.");
     if (data.minFollowers.trim() && wholeNumber(data.minFollowers) === null) problems.push("Minimum followers must be a whole number.");
-    // Content campaigns answer destination and usage rights here on the Creators step.
-    if (asksContentDestination(data)) problems.push(...usageRightsProblems(data));
   }
+  // Content campaigns answer destination and usage rights on their Content rights step.
+  if (step === 6 && data.objective === "content") problems.push(...usageRightsProblems(data));
   if (step === 4) {
     if (data.objective === "content") {
       const rate = wholeNumber(data.ratePerDeliverable);
@@ -588,7 +604,7 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     // A saved referral campaign with no views target is referrals only (SPEC D31).
     includeViews: saved.campaignObjective && usesReferralBudget(saved.campaignObjective) ? (saved.targetViews || 0) > 0 : true,
     contentDestination: saved.contentDestination || "creator_page",
-    creatorAccess: saved.creatorAccess || "open_call",
+    creatorAccess: saved.campaignObjective === "content" ? "application_required" : (saved.creatorAccess || "open_call"),
     locations: list(targeting.locations),
     ageRanges: list(targeting.ageRanges),
     genders: targeting.genders?.length ? targeting.genders : ["all"],
