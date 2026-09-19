@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { ConnectAppChecklist, useReferralConnection } from "../connect-app-checklist";
-import { buildDeveloperMessage, codeFormatText, formatWhen } from "../../lib/referral";
+import { buildDeveloperMessage } from "../../lib/referral";
 import { StepHeading } from "./wizard-fields";
 
 interface StepReferralProps {
@@ -45,21 +45,13 @@ export function StepReferral({ connection }: StepReferralProps) {
           </span>
         </div>
         <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
-          {connection.verified
-            ? `Connected ${formatWhen(status?.verification?.verifiedAt).toLowerCase()}.`
-            : "When someone signs up with a creator's code, your server tells us — that's how conversions are counted and creators are paid."}
+          When someone signs up using a creator&apos;s code, your server tells us — that&apos;s how conversions are counted and
+          creators are paid. Each creator gets a unique code, e.g. {status?.codePrefix || "BRAND"}-TUNDE.
         </p>
-        {status?.codePrefix && (
-          <p className="bg-neutral-50 rounded-xl px-3 py-2 text-xs font-medium text-neutral-900 font-rethink leading-relaxed">
-            {codeFormatText(status.codePrefix)}
-          </p>
-        )}
       </div>
 
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
-          Understand how referral tracking works, then connect your app step by step.
-        </p>
+        <StepHeading title="Understand how referral tracking works" body="" />
         <a
           href="/dashboard/brand/settings/referral"
           target="_blank"
@@ -73,7 +65,7 @@ export function StepReferral({ connection }: StepReferralProps) {
       <div className="space-y-3">
         <StepHeading
           title="Connect your app"
-          body="A developer adds two small requests to your app. The checklist ticks itself as each one arrives."
+          body="Generate a signing key, then send the rest to your developer — two quick checks."
         />
         {connection.loading ? (
           <p className="text-xs text-neutral-500 font-medium font-rethink">Checking your connection…</p>
@@ -97,8 +89,7 @@ export function StepReferral({ connection }: StepReferralProps) {
             </button>
           </div>
           <p className="text-[11px] text-neutral-500 font-medium font-rethink leading-relaxed">
-            Conversions are POSTed here, signed with your key. When a user enters a code, your app checks it against your validate
-            URL.
+            Your app posts conversions here, signed with your key.
           </p>
         </div>
 
