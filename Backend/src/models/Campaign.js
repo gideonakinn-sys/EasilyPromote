@@ -152,7 +152,7 @@ const campaignSchema = new mongoose.Schema(
     wizardStep: {
       type: Number,
       min: 1,
-      max: 6,
+      max: 7,
     },
     // ── Campaign engine (ADR 0001): new fields beside the older ones below. ──
     campaignObjective: {
