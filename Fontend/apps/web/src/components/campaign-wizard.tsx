@@ -346,7 +346,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       {step === 5 && <StepBrief data={data} update={update} />}
       {step === 6 && <StepReferral connection={connection} />}
       {step === LAST_STEP && (
-        <StepLaunch data={data} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} connection={connection} />
+        <StepLaunch data={data} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} connection={connection} onOpenReferralStep={() => goTo(6)} />
       )}
     </>
   );

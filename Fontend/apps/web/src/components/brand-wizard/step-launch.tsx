@@ -17,9 +17,10 @@ interface StepLaunchProps {
   quoteLoading: boolean;
   quoteError: string;
   connection: ReturnType<typeof useReferralConnection>;
+  onOpenReferralStep?: () => void;
 }
 
-export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }: StepLaunchProps) {
+export function StepLaunch({ data, quote, quoteLoading, quoteError, connection, onOpenReferralStep }: StepLaunchProps) {
   const referral = tracksConversions(data);
   const isContent = data.objective === "content";
   const hybrid = isHybrid(data);
@@ -62,14 +63,13 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
               : "Referral tracking isn't connected yet — set it up before you pay so creators are tracked and paid."}
           </p>
           {!connection.verified && (
-            <a
-              href="/dashboard/brand/settings/referral"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={onOpenReferralStep}
               className="block text-xs font-semibold text-neutral-900 underline underline-offset-2"
             >
               Set up referral tracking
-            </a>
+            </button>
           )}
         </div>
       )}
@@ -79,7 +79,9 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
           <Image src={launchCampaign} alt="" width={56} height={56} className="object-contain" />
         </div>
         <p className="font-rethink text-xs text-neutral-600 leading-normal">
-          {data.creatorAccess === "application_required"
+          {referral && !connection.verified
+            ? "Your webhook isn't connected yet, so you can't publish this campaign. Connect it on the Referral tracking step to pay and launch."
+            : data.creatorAccess === "application_required"
             ? "When your campaign is live, creators apply and you approve them from your dashboard before they create content. Creators are paid from your budget as their results are verified."
             : hybrid
             ? "Creators are paid your base for each deliverable you approve, and a bonus from your pool as their results are verified. Unused base and bonus are refunded when the campaign ends."
