@@ -152,7 +152,8 @@ export function codeFormatText(prefix: string | undefined): string {
 }
 
 export function formatNaira(value: number | null | undefined): string {
-  return `₦${(value || 0).toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
+  // Whole naira only: the product charges and refunds in whole amounts.
+  return `₦${Math.round(value || 0).toLocaleString("en-NG")}`;
 }
 
 export interface ReferralSettings {

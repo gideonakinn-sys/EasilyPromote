@@ -447,11 +447,14 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
       } else if (isContent) {
         body = "You set what creators earn for each deliverable you approve. Our fee is added on top, so creators get exactly your rate.";
       } else if (referral && !views) {
-        body = `You fund a referral budget and creators are paid only for each verified ${noun}, at a reward our team sets. There's no views target.`;
+        body =
+          data.objective === "signups"
+            ? "Fund a budget, and creators earn a reward for every verified sign-up they bring in. Unused budget is refunded when the campaign ends."
+            : `You fund a referral budget and creators are paid only for each verified ${noun}, at a reward our team sets. There's no views target.`;
       } else if (referral) {
         body = `You fund a budget and our team sets what creators earn per ${noun}.`;
       }
-      return { title: "What you'll pay", body };
+      return { title: referral && !views && data.objective === "signups" ? "Set your sign-up budget" : "What you'll pay", body };
     }
     case 5:
       return {

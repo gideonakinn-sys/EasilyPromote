@@ -51,13 +51,13 @@ export function QuoteSummary({ variant, quote, loading, error }: QuoteSummaryPro
   const rows: { label: string; value: number | undefined; tooltip?: string }[] =
     variant === "signups"
       ? [
-          { label: "Performance Budget", value: quote?.performanceBudget },
+          { label: "Referral Budget", value: quote?.performanceBudget },
           { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
         ]
       : variant === "hybrid"
         ? [
             { label: "Creator Budget", value: quote?.creatorBudget },
-            { label: "Performance Budget", value: quote?.performanceBudget },
+            { label: "Referral Budget", value: quote?.performanceBudget },
             { label: "Platform Fee", value: quote?.platformFee, tooltip: PLATFORM_FEE_TOOLTIP },
           ]
         : [
@@ -258,7 +258,7 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
       {views && <ViewsPicker views={data.views} onChange={(views) => update({ views })} />}
 
       {referral && (
-        <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. ${views ? "Paid together with your views." : "This is what you pay; what isn't earned is refunded when the campaign ends."}`}>
+        <Field label="Referral Budget" htmlFor="referral-budget" hint={`Minimum ${formatNaira(MIN_REFERRAL_BUDGET)}. ${views ? "Paid together with your views." : "You're only charged for sign-ups you get — anything unused is refunded at the end."}`}>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400 font-rethink" aria-hidden="true">₦</span>
             <input
