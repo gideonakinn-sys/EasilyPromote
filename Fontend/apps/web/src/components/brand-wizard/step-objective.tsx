@@ -18,6 +18,7 @@ import { Field, TEXT_INPUT_CLASS, TEXTAREA_CLASS } from "./wizard-fields";
 import {
   CAMPAIGN_TYPES,
   applyCampaignType,
+  contentFieldsReset,
   isDestinationUrl,
   selectedCampaignType,
   type WizardData,
@@ -164,7 +165,14 @@ export function StepObjective({ data, update, categoryOptions }: StepObjectivePr
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                onClick={() => update({ ...applyCampaignType(option.value), typeChosen: true })}
+                onClick={() => {
+                  const patch: Partial<WizardData> = { ...applyCampaignType(option.value), typeChosen: true };
+                  // Leaving Content resets the application-only + content-rights fields.
+                  if (data.typeChosen && data.objective === "content" && option.value !== "content") {
+                    Object.assign(patch, contentFieldsReset(data.brief));
+                  }
+                  update(patch);
+                }}
                 className={cn(
                   "w-full text-left px-4 py-4 rounded-2xl border bg-white transition-colors",
                   selected ? "border-neutral-900" : "border-neutral-200"

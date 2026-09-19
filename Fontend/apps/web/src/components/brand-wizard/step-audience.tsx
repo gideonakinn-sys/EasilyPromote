@@ -16,7 +16,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
   const ageOptionsLeft = AGE_RANGE_OPTIONS.filter((range) => !data.ageRanges.includes(range));
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       <Field label="Platforms" hint="Choose where your customers spend time. Creators must have an account on at least one to take part.">
         <ChipGroup
           label="Platforms"

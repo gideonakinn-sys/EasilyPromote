@@ -196,7 +196,11 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
         .catch((err: unknown) => {
           if (cancelled) return;
           setQuote(null);
-          setQuoteError(err instanceof Error ? err.message : "We couldn't work out the price. Try again.");
+          const message = err instanceof Error ? err.message : "We couldn't work out the price. Try again.";
+          // A fetch that never reached the API tells the brand nothing useful on its own.
+          setQuoteError(/failed to fetch|networkerror|load failed/i.test(message)
+            ? "We couldn't reach the price service — check that the API is running."
+            : message);
         })
         .finally(() => {
           if (!cancelled) setQuoteLoading(false);
@@ -491,6 +495,9 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
               {launching ? <Spinner className="size-4" /> : primaryLabel}
             </button>
           </div>
+          {step < LAST_STEP && !canContinue && !loadingDraft && !loadError && (
+            <p className="text-xs text-neutral-400 font-medium text-center font-rethink">Finish the required fields above to continue.</p>
+          )}
           {launchError && <p className="text-xs text-red-600 font-medium text-center font-rethink" role="alert">{launchError}</p>}
         </div>
       </div>

@@ -82,6 +82,25 @@ export function applyCampaignType(
   }
 }
 
+// Leaving Content for another type: Content is application-only and owns the content-rights
+// fields, so reset those instead of carrying them into a Views or conversion campaign. The brief
+// text the brand has already written is preserved.
+export function contentFieldsReset(brief: WizardBrief): Partial<WizardData> {
+  return {
+    creatorAccess: "open_call",
+    contentDestination: "creator_page",
+    usageRightsType: "standard",
+    usageDuration: "perpetual",
+    usageExclusivity: "none",
+    usageExclusivityPeriod: "",
+    usagePaidAds: true,
+    usageWorldwide: true,
+    usageTerritories: "",
+    usageAdditionalTerms: "",
+    brief: { ...brief, deliverablesLength: "", submissionDeadline: "", usageRightsChoice: "campaign" },
+  };
+}
+
 export const OBJECTIVE_OPTIONS: { value: CampaignObjective; title: string; body: string; available: boolean }[] = [
   { value: "content", title: "Content", body: "Pay creators a set amount for each video you approve.", available: true },
   { value: "views", title: "Views", body: "Creators post about you and you pay for the views they deliver.", available: true },
@@ -535,7 +554,7 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
         if (!cap) problems.push("Set the most one creator can earn in bonus, in whole naira.");
         else if (pool && cap > pool) problems.push("A creator's bonus cap can't be more than the bonus pool.");
         if (data.bonusMetric === "views" && data.contentDestination === "brand_page") {
-          problems.push("A views bonus needs creators to post on their own page. Choose creator page or both on the Creators step, or a sign-up or download bonus.");
+          problems.push("A views bonus needs creators to post on their own page. Choose creator page or both on the Content rights step, or a sign-up or download bonus.");
         }
       }
     } else {
@@ -611,7 +630,9 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
     interests: list(targeting.interests),
     platforms: targeting.platforms?.length ? targeting.platforms : list(saved.platforms),
     minFollowers: eligibility.minFollowers !== undefined ? String(eligibility.minFollowers) : "",
-    minEngagementRate: eligibility.minEngagementRate !== undefined ? String(eligibility.minEngagementRate) : "",
+    // The engagement-rate input was removed from the wizard; never restore a value the brand can't
+// see or clear, so it can't silently keep filtering creators.
+    minEngagementRate: "",
     categories: eligibility.categories?.length
       ? eligibility.categories
       : list(saved.niches).filter((niche) => CREATOR_CATEGORIES.includes(niche)),

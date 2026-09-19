@@ -91,7 +91,8 @@ Next.js 15 (App Router) + React 19 · Tailwind 3.4 + CSS variables · shadcn/ui 
 - `font-rethink` on all text; root font 13px (org `html { font-size: 13px }`).
 - `tracking-tight` only for headings > 16px; labels are **title case** (never uppercase/wider).
 - Mobile-first `md:`; pill buttons (`rounded-full`), textareas `rounded-xl`.
-- Shell bg is `neutral-50` (`#fafafa`); cards white with `border-neutral-100`. Data figures use `tabular-nums`; accent color `#FEB604`, ink `#171717` (neutral-900).
+- Shell bg is `neutral-50` (`#fafafa`); wizard cards white with `border-neutral-200` (review cards `p-6 space-y-6`). Data figures use `tabular-nums`; accent color `#FEB604`, ink `#171717` (neutral-900).
+- **Wizard conventions**: field labels `neutral-900` (helpers stay `neutral-400`, 12px); `StepHeading` = `text-base` semibold `neutral-900` heading + optional 12px `neutral-500` body (`space-y-2`); `OptionCard` (dotless, border-only selection); full-width native-select **pickers** ("Add another…" placeholder → removable dark pills) for multi-choice lists; field rhythm `space-y-8`, sections `space-y-10`; Continue disabled until `stepProblems(step)` is empty.
 - Icons: `<HugeiconsIcon icon={XIcon} size={16} className="text-neutral-500" />`; 12–14 inline, 16 standard, 20 mobile. Color always via `className`.
 
 ### Data / feedback
@@ -113,10 +114,13 @@ Next.js 15 (App Router) + React 19 · Tailwind 3.4 + CSS variables · shadcn/ui 
 
 ## Campaign Wizard v2 (`/dashboard/brand/create-campaign`)
 
-Six steps (`WIZARD_STEPS` in `brand-wizard/wizard-state.ts`): 1 Campaign type, 2 Access/destination, 3 Audience, 4 Pay, 5 Brief, 6 Review/launch.
-- Step 1 = four single-select cards (Boost Visibility / Drive Sign-ups / Get Content Made / Boost & Convert); selection gated by `typeChosen` (Continue disabled until chosen) and drives fields in later steps via `CAMPAIGN_TYPES`/`applyCampaignType`.
+Seven steps (`WIZARD_STEPS` in `brand-wizard/wizard-state.ts`): 1 Campaign type, 2 Audience, 3 Creators, 4 Pay and budget, 5 Brief, 6 Content rights **or** Referral tracking, 7 Review and launch.
+- **Step 6 is type-dependent** (`activeWizardSteps` + `stepTitle(data, step)` in `wizard-state.ts`): Content shows **Content rights** (destination + usage rights); Sign-ups/Hybrid show **Referral tracking** (webhook setup); Views hides step 6. Numeric ids stay 1–7 so saved drafts and the backend `wizardStep` contract are untouched.
+- Audience = Platforms, "Where are your customers?", Customer age range (full-width native-select pickers that drop removable pills). Creators = eligibility only for Content (Content is **application-only** — `creatorAccess` forced to `application_required`); other types also show "Who can join" (Open Call / Application Required).
+- **Continue gating** uses `stepProblems(data, step)` — the button stays off until a step is complete (no click-to-reveal errors; a neutral hint line appears when disabled). `resumeStep`/`savedWizardStep` clamps put old drafts on a valid active step.
+- **Pay**: type-aware `QuoteSummary` rows; `formatNaira` rounds to whole naira; referral/conversion campaigns can't pay until the webhook is connected (`needsConnection` gates the Review button; the backend `/pay` route also refuses).
 - Footer = `[Save as draft] [Continue]`; **Back** opens a save/discard `ConfirmExitModal`. Per-step headings come from `stepHeading(data, step)`.
-- Objective is immutable once a campaign leaves `draft`/`pending_payment` (API rejects edits after that).
+- Objective is immutable once a campaign leaves `draft`/`pending_payment` (API rejects edits after that); switching away from Content resets the application/content-rights fields (`contentFieldsReset`).
 
 ## Campaign Status Flow
 
