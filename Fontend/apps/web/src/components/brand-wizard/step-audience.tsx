@@ -73,7 +73,7 @@ export function StepAudience({ data, update }: StepAudienceProps) {
             }}
             disabled={ageOptionsLeft.length === 0}
             className={cn(
-              "appearance-none bg-white border border-neutral-200 rounded-full px-4 py-3 text-sm font-medium font-rethink text-neutral-950 focus:outline-none focus:border-neutral-300 disabled:bg-neutral-100 cursor-pointer",
+              "appearance-none w-full bg-white border border-neutral-200 rounded-full px-4 py-3 text-sm font-medium font-rethink text-neutral-950 focus:outline-none focus:border-neutral-300 disabled:bg-neutral-100 cursor-pointer",
               data.ageRanges.length === 0 && "text-neutral-400"
             )}
           >

@@ -1,15 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ChevronDownIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@ep/ui/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
-} from "@ep/ui/components/dropdown-menu";
 import { ChipGroup, Field, OptionCard, StepHeading, TEXT_INPUT_CLASS, TEXTAREA_CLASS, toggleValue } from "./wizard-fields";
 import {
   ACCESS_OPTIONS,
@@ -188,28 +180,51 @@ export function StepCreators({ data, update }: StepCreatorsProps) {
           />
         </Field>
 
-        <Field label="Content categories" hint="Only creators who post in these categories can take part.">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className={cn(TEXT_INPUT_CLASS, "flex items-center justify-between gap-2 text-left")}>
-                <span className={cn("truncate", data.categories.length === 0 && "text-neutral-300")}>
-                  {data.categories.length ? data.categories.join(" · ") : "Select categories"}
-                </span>
-                <HugeiconsIcon icon={ChevronDownIcon} size={16} className="text-neutral-400 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] max-h-56 overflow-y-auto">
-              {CREATOR_CATEGORIES.map((category) => (
-                <DropdownMenuCheckboxItem
-                  key={category}
-                  checked={data.categories.includes(category)}
-                  onCheckedChange={() => update({ categories: toggleValue(data.categories, category) })}
-                >
+        <Field label="Content categories" htmlFor="content-categories" hint="Only creators who post in these categories can take part.">
+          <div className="space-y-2">
+            <select
+              id="content-categories"
+              value=""
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                const value = e.target.value;
+                if (value) update({ categories: toggleValue(data.categories, value) });
+              }}
+              disabled={CREATOR_CATEGORIES.every((category) => data.categories.includes(category))}
+              className={cn(
+                "appearance-none w-full bg-white border border-neutral-200 rounded-full px-4 py-3 text-sm font-medium font-rethink text-neutral-950 focus:outline-none focus:border-neutral-300 disabled:bg-neutral-100 cursor-pointer",
+                data.categories.length === 0 && "text-neutral-400"
+              )}
+            >
+              <option value="" disabled>
+                {CREATOR_CATEGORIES.every((category) => data.categories.includes(category))
+                  ? "All categories added"
+                  : data.categories.length
+                    ? "Add another category"
+                    : "Select a category"}
+              </option>
+              {CREATOR_CATEGORIES.filter((category) => !data.categories.includes(category)).map((category) => (
+                <option key={category} value={category}>
                   {category}
-                </DropdownMenuCheckboxItem>
+                </option>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </select>
+            {data.categories.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {data.categories.map((item) => (
+                  <li key={item}>
+                    <button
+                      type="button"
+                      onClick={() => update({ categories: data.categories.filter((existing) => existing !== item) })}
+                      aria-label={`Remove ${item}`}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-neutral-900 text-white text-xs font-medium font-rethink"
+                    >
+                      {item} ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Field>
         </div>
       </div>
