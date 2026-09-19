@@ -96,6 +96,7 @@ Next.js 15 (App Router) + React 19 · Tailwind 3.4 + CSS variables · shadcn/ui 
 
 ### Data / feedback
 - `useToast()` → `toast("Message", "error" | "success")`; error state `const [error, setError] = useState("")` + inline render; `Skeleton` for loading; reveal animations via `data-reveal` (+ `useStaggerReveal(step)` for lists).
+- **User-facing dashboard copy: consult `content-guidelines.md` before writing or changing** (labels, helpers, tooltips, empty states, errors, buttons, wizard steps).
 
 ### API / Auth
 - `apiRequest<T>(endpoint, { method, body, token })` from `lib/api`; uploads use raw `fetch` + `FormData` to `POST /api/upload/image` (field `"file"`).
