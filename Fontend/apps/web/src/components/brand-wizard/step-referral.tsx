@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@ep/ui/lib/utils";
 import { useToast } from "@ep/ui/components/toast";
 import { ConnectAppChecklist, useReferralConnection } from "../connect-app-checklist";
-import { DEVELOPER_DOCS_URL, REFERRAL_HOW_IT_WORKS, buildDeveloperMessage, codeFormatText, formatWhen } from "../../lib/referral";
+import { buildDeveloperMessage, codeFormatText, formatWhen } from "../../lib/referral";
 import { StepHeading } from "./wizard-fields";
 
 interface StepReferralProps {
@@ -46,37 +46,28 @@ export function StepReferral({ connection }: StepReferralProps) {
         </div>
         <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
           {connection.verified
-            ? `Connected ${formatWhen(status?.verification?.verifiedAt).toLowerCase()}. ${codeFormatText(status?.codePrefix)}`
+            ? `Connected ${formatWhen(status?.verification?.verifiedAt).toLowerCase()}.`
             : "When someone signs up with a creator's code, your server tells us — that's how conversions are counted and creators are paid."}
         </p>
-        {!connection.verified && status?.codePrefix && (
-          <p className="bg-neutral-50 rounded-xl px-3 py-2 text-xs text-neutral-600 font-medium font-rethink leading-relaxed">
+        {status?.codePrefix && (
+          <p className="bg-neutral-50 rounded-xl px-3 py-2 text-xs font-medium text-neutral-900 font-rethink leading-relaxed">
             {codeFormatText(status.codePrefix)}
           </p>
         )}
       </div>
 
       <div className="space-y-3">
-        <StepHeading
-          title="What it's about"
-          body="Your app sends one signed request whenever someone converts with a creator's code. Set it up once and it works for every campaign."
-        />
-        <ol className="space-y-3">
-          {REFERRAL_HOW_IT_WORKS.map((item, index) => (
-            <li key={item.title} className="flex gap-3">
-              <span
-                className="shrink-0 w-6 h-6 rounded-full bg-[#FEB604] text-[#171717] text-xs font-semibold flex items-center justify-center"
-                aria-hidden="true"
-              >
-                {index + 1}
-              </span>
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium text-neutral-900 font-rethink">{item.title}</p>
-                <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">{item.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
+          Understand how referral tracking works, then connect your app step by step.
+        </p>
+        <a
+          href="/dashboard/brand/settings/referral"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block px-4 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 font-rethink"
+        >
+          Read setup guide
+        </a>
       </div>
 
       <div className="space-y-3">
@@ -120,25 +111,6 @@ export function StepReferral({ connection }: StepReferralProps) {
             Send to your developer
           </button>
         )}
-
-        <div className="flex flex-wrap gap-2">
-          <a
-            href="/dashboard/brand/settings/referral"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 bg-[#FEB604] text-[#171717] rounded-full text-xs font-semibold font-rethink border border-neutral-100"
-          >
-            Open setup guide
-          </a>
-          <a
-            href={DEVELOPER_DOCS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 bg-white border border-neutral-200 rounded-full text-xs font-semibold text-neutral-900 font-rethink"
-          >
-            Developer docs
-          </a>
-        </div>
       </div>
     </div>
   );
