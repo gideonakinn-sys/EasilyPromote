@@ -19,10 +19,12 @@ import { StepAudience } from "./brand-wizard/step-audience";
 import { StepCreators } from "./brand-wizard/step-creators";
 import { StepPay } from "./brand-wizard/step-pay";
 import { StepBrief } from "./brand-wizard/step-brief";
+import { StepReferral } from "./brand-wizard/step-referral";
 import { StepLaunch } from "./brand-wizard/step-launch";
 import {
   INITIAL_WIZARD_DATA,
   WIZARD_STEPS,
+  activeWizardSteps,
   campaignPayload,
   isObjectiveAvailable,
   pricingPayload,
@@ -47,7 +49,7 @@ interface CampaignWizardProps {
 // v2: the five-step wizard's shape; drafts autosaved by the older wizard are ignored.
 const DRAFT_STORAGE_KEY = "ep-draft-autosave-v2";
 const FALLBACK_CATEGORIES = ["Music", "Fashion", "Tech", "Food", "Travel", "Fitness", "Beauty", "Gaming"];
-const LAST_STEP: WizardStep = 6;
+const LAST_STEP: WizardStep = 7;
 
 export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: CampaignWizardProps) {
   const { toast } = useToast();
@@ -78,13 +80,13 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
 
   const storageKey = draftId ? `${DRAFT_STORAGE_KEY}-${draftId}` : DRAFT_STORAGE_KEY;
   const referral = tracksConversions(data);
-  const connection = useReferralConnection(referral && step === LAST_STEP);
+  const connection = useReferralConnection(referral && (step === 6 || step === LAST_STEP));
   const needsConnection = referral && !connection.verified;
   const problems = step < LAST_STEP ? stepProblems(data, step) : [];
   // Continue stays enabled only once the current step has nothing missing.
   const canContinue = problems.length === 0;
-  // The wizard is always: Campaign type > Audience > Creators > Pay and budget > Brief > Launch.
-  const steps = WIZARD_STEPS;
+  // Referral campaigns get a setup step for the conversion webhook; Views and Content skip it.
+  const steps = activeWizardSteps(data);
 
   const update = useCallback((patch: Partial<WizardData>) => {
     isModified.current = true;
@@ -115,7 +117,10 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
     apiRequest<SavedCampaign>(`/campaigns/${draftId}`, { token: getToken() || undefined })
       .then((saved) => {
         const loaded = wizardDataFromCampaign(saved);
-        const resume = savedWizardStep(saved) || resumeStep(loaded);
+        let resume = savedWizardStep(saved) || resumeStep(loaded);
+        // A draft saved on a step this campaign doesn't show (e.g. the referral step for a Views
+        // campaign) opens at the first step that still needs something.
+        if (!activeWizardSteps(loaded).some(({ step: s }) => s === resume)) resume = resumeStep(loaded);
         setData(loaded);
         setSavedObjective(saved.campaignObjective || null);
         setStep(resume);
@@ -135,7 +140,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       const restored: WizardData = { ...INITIAL_WIZARD_DATA, ...parsed.data, brief: { ...INITIAL_WIZARD_DATA.brief, ...parsed.data.brief } };
       // A restored wizard already had its type picked.
       restored.typeChosen = parsed.data.typeChosen ?? true;
-      const restoredStep = parsed.step && parsed.step >= 1 && parsed.step <= LAST_STEP ? parsed.step : 1;
+      const restoredStep = parsed.step && activeWizardSteps(restored).some(({ step: s }) => s === parsed.step) ? parsed.step : 1;
       setData(restored);
       setStep(restoredStep);
       setFurthestStep(restoredStep);
@@ -339,6 +344,7 @@ export function CampaignWizard({ onClose, onSuccess, draftId, isMobile }: Campai
       {step === 3 && <StepCreators data={data} update={update} />}
       {step === 4 && <StepPay data={data} update={update} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} />}
       {step === 5 && <StepBrief data={data} update={update} />}
+      {step === 6 && <StepReferral connection={connection} />}
       {step === LAST_STEP && (
         <StepLaunch data={data} quote={quote} quoteLoading={quoteLoading} quoteError={quoteError} connection={connection} />
       )}

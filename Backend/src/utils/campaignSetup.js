@@ -53,7 +53,7 @@ const setupSchema = z.object({
   contentPay: z.object({ ratePerDeliverable: z.number(), deliverables: z.number() }).nullable().optional(),
   // Hybrid pay (ticket 10): what the bonus pays for, its pool and the per-creator cap. null clears it.
   hybridBonus: z.object({ metric: z.string(), pool: z.number(), capPerCreator: z.number() }).nullable().optional(),
-  wizardStep: z.number().int().min(1).max(6).optional(),
+  wizardStep: z.number().int().min(1).max(7).optional(),
   contentDestination: z.enum(["creator_page", "brand_page", "both"]).optional(),
   creatorAccess: z.enum(["open_call", "application_required"]).optional(),
   audienceTargeting: audienceTargetingSchema.optional(),

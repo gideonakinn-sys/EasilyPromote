@@ -15,7 +15,7 @@ import facebookLogo from "@ep/ui/assets/facebook.png";
 import xLogo from "@ep/ui/assets/X.jpeg";
 
 // The five setup steps, then review and payment.
-export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] = [
   { step: 1, title: "Campaign type", short: "Type" },
@@ -23,8 +23,16 @@ export const WIZARD_STEPS: { step: WizardStep; title: string; short: string }[] 
   { step: 3, title: "Creators", short: "Creators" },
   { step: 4, title: "Pay and budget", short: "Budget" },
   { step: 5, title: "Brief", short: "Brief" },
-  { step: 6, title: "Review and launch", short: "Launch" },
+  { step: 6, title: "Referral tracking", short: "Referral" },
+  { step: 7, title: "Review and launch", short: "Launch" },
 ];
+
+// The referral step (6) only appears for campaigns that count conversions (Sign-ups, Hybrid);
+// Views and Content jump straight from the Brief to Review. Numeric ids are kept stable so saved
+// drafts and the backend's wizardStep 1-7 contract are unaffected.
+export function activeWizardSteps(data: Pick<WizardData, "objective">): (typeof WIZARD_STEPS)[number][] {
+  return usesReferralBudget(data.objective) ? WIZARD_STEPS : WIZARD_STEPS.filter(({ step }) => step !== 6);
+}
 
 // The four campaign types brands pick from, first screen of the wizard. They're mutually exclusive:
 // Hybrid is views and sign-ups together; Sign-ups alone is a referral budget with no views target
@@ -461,6 +469,14 @@ export function stepHeading(data: WizardData, step: WizardStep): { title: string
         title: "Write the brief",
         body: "Everything a creator needs to make the content. Creators see this before they join or apply.",
       };
+    case 6:
+      return {
+        title: "Set up referral tracking",
+        body:
+          data.objective === "signups"
+            ? "Connect your app so every verified sign-up is counted and creators are paid from your budget."
+            : "Connect your app so every conversion is counted and creators are paid from your budget.",
+      };
     default:
       return { title: data.name || "Your campaign", body: "Check everything, then pay to put your campaign live." };
   }
@@ -525,10 +541,10 @@ export function stepProblems(data: WizardData, step: WizardStep): string[] {
 
 // Where a draft saved without a wizard step picks up: the first step that still needs something.
 export function resumeStep(data: WizardData): WizardStep {
-  for (const { step } of WIZARD_STEPS) {
-    if (step < 6 && stepProblems(data, step).length > 0) return step;
+  for (const { step } of activeWizardSteps(data)) {
+    if (step < 7 && stepProblems(data, step).length > 0) return step;
   }
-  return 6;
+  return 7;
 }
 
 // A saved campaign as GET /campaigns/:id returns it, including fields from the older wizard.
@@ -637,7 +653,7 @@ export function wizardDataFromCampaign(saved: SavedCampaign): WizardData {
 
 export function savedWizardStep(saved: SavedCampaign): WizardStep | null {
   const step = saved.wizardStep;
-  return typeof step === "number" && step >= 1 && step <= 6 ? (step as WizardStep) : null;
+  return typeof step === "number" && step >= 1 && step <= 7 ? (step as WizardStep) : null;
 }
 
 const optionalWhole = (value: string) => (wholeNumber(value) !== null ? Number(value.trim()) : undefined);

@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { cn } from "@ep/ui/lib/utils";
 import { QuoteSummary, payVariant } from "./step-pay";
 import { CampaignSetupSummary, setupFromWizard } from "./campaign-setup-summary";
 import { actionNoun, isHybrid, tracksConversions, type WizardData } from "./wizard-state";
 import type { CampaignQuote } from "../types";
-import { ConnectAppChecklist, useReferralConnection } from "../connect-app-checklist";
+import { useReferralConnection } from "../connect-app-checklist";
 
 import launchCampaign from "@ep/ui/assets/Lauch campaign.png";
 
@@ -41,35 +42,37 @@ export function StepLaunch({ data, quote, quoteLoading, quoteError, connection }
 
       <CampaignSetupSummary setup={setupFromWizard(data)} />
 
-      {referral &&
-        (connection.verified ? (
-          <p className="bg-[#CBF5E5] text-[#176448] rounded-[18px] px-4 py-3 text-xs font-medium font-rethink leading-relaxed">
-            Your app is connected. Paying puts the campaign live and starts tracking {trackedNoun}.
+      {referral && (
+        <div className="bg-white border border-neutral-200 rounded-[18px] p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-neutral-900 font-rethink">Referral tracking</span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium",
+                connection.verified ? "bg-[#CBF5E5] text-[#176448]" : "bg-neutral-100 text-neutral-600"
+              )}
+            >
+              <span className={cn("w-1.5 h-1.5 rounded-full", connection.verified ? "bg-[#176448]" : "bg-neutral-400")} />
+              {connection.verified ? "Connected" : "Not connected"}
+            </span>
+          </div>
+          <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
+            {connection.verified
+              ? `Connected · codes start with ${connection.status?.codePrefix || "BRAND"}. Paying puts the campaign live and starts tracking ${trackedNoun}.`
+              : "Referral tracking isn't connected yet — set it up before you pay so creators are tracked and paid."}
           </p>
-        ) : (
-          <div className="bg-white border border-amber-200 rounded-[18px] p-4 space-y-4">
-            <div className="space-y-1">
-              <h5 className="text-sm font-medium text-neutral-900 font-rethink">Connect your app to launch</h5>
-              <p className="text-xs text-neutral-500 font-medium font-rethink leading-relaxed">
-                You can&apos;t pay for this campaign until your app is connected, so your budget never waits on setup. Save this draft and
-                finish setup; this checklist updates by itself.
-              </p>
-            </div>
-            {connection.loading ? (
-              <p className="text-xs text-neutral-500 font-medium font-rethink">Checking your app connection…</p>
-            ) : (
-              <ConnectAppChecklist status={connection.status} hasKey={connection.hasKey} />
-            )}
+          {!connection.verified && (
             <a
               href="/dashboard/brand/settings/referral"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block px-4 py-2 bg-neutral-900 text-white rounded-full text-xs font-semibold font-rethink"
+              className="block text-xs font-semibold text-neutral-900 underline underline-offset-2"
             >
-              Open setup guide
+              Set up referral tracking
             </a>
-          </div>
-        ))}
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 bg-[#EBF3FF] border border-dashed border-blue-200 rounded-[20px] py-2 pr-2">
         <div className="flex-shrink-0">
