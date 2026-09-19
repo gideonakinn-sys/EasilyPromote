@@ -7,7 +7,7 @@ import { cn } from "@ep/ui/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@ep/ui/components/dropdown-menu";
 import { useToast } from "@ep/ui/components/toast";
 import { uploadFile } from "@ep/ui/lib/upload";
-import { ChipGroup, Field, ListInput, StepHeading, TEXTAREA_CLASS, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
+import { Field, ListInput, StepHeading, TEXTAREA_CLASS, TEXT_INPUT_CLASS, toggleValue } from "./wizard-fields";
 import { MAX_DELIVERABLES, PLATFORM_OPTIONS, type WizardBrief, type WizardData } from "./wizard-state";
 import { getToken } from "../../lib/api";
 
@@ -183,15 +183,52 @@ export function StepBrief({ data, update }: StepBriefProps) {
             data.platforms.map((platform) => {
               const group = CONTENT_TYPES_BY_PLATFORM[platform];
               if (!group) return null;
+              const remaining = group.filter((option) => !brief.contentTypes.includes(option.value));
+              const picked = group.filter((option) => brief.contentTypes.includes(option.value));
               return (
                 <div key={platform} className="space-y-2">
                   <StepHeading title={platformLabel(platform)} body="" />
-                  <ChipGroup
-                    label={`${platformLabel(platform)} content types`}
-                    options={group}
-                    selected={brief.contentTypes}
-                    onToggle={(value) => setBrief({ contentTypes: toggleValue(brief.contentTypes, value) })}
-                  />
+                  <select
+                    value=""
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      const value = e.target.value;
+                      if (value) setBrief({ contentTypes: toggleValue(brief.contentTypes, value) });
+                    }}
+                    disabled={remaining.length === 0}
+                    className={cn(
+                      "appearance-none w-full bg-white border border-neutral-200 rounded-full px-4 py-3 text-sm font-medium font-rethink text-neutral-950 focus:outline-none focus:border-neutral-300 disabled:bg-neutral-100 cursor-pointer",
+                      picked.length === 0 && "text-neutral-400"
+                    )}
+                  >
+                    <option value="" disabled>
+                      {remaining.length === 0
+                        ? `All ${platformLabel(platform)} types added`
+                        : picked.length > 0
+                          ? "Add another"
+                          : "Select a content type"}
+                    </option>
+                    {remaining.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {picked.length > 0 && (
+                    <ul className="flex flex-wrap gap-2">
+                      {picked.map((option) => (
+                        <li key={option.value}>
+                          <button
+                            type="button"
+                            onClick={() => setBrief({ contentTypes: toggleValue(brief.contentTypes, option.value) })}
+                            aria-label={`Remove ${option.label}`}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-neutral-900 text-white text-xs font-medium font-rethink"
+                          >
+                            {option.label} ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               );
             })

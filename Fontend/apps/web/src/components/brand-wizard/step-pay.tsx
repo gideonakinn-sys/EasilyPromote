@@ -164,7 +164,6 @@ interface StepPayProps {
 export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepPayProps) {
   const isContent = data.objective === "content";
   const referral = usesReferralBudget(data.objective);
-  const unitNoun = actionNoun(data.objective);
   const hybrid = isContent && data.payShape === "hybrid";
   const views = hasViewsTarget(data);
   const variant = payVariant(data);
@@ -270,10 +269,6 @@ export function StepPay({ data, update, quote, quoteLoading, quoteError }: StepP
               className={cn(TEXT_INPUT_CLASS, "pl-8")}
             />
           </div>
-          <p className="bg-neutral-100 rounded-2xl px-4 py-3 text-xs text-neutral-600 font-medium font-rethink">
-            Reward per {unitNoun} is set by our team.
-            {data.objective === "clicks" && " Only valid clicks are paid, and each person's click counts once a day per creator link."}
-          </p>
         </Field>
       )}
 
